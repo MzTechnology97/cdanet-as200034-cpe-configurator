@@ -3,6 +3,15 @@ on:
   push:
     branches:
       - release/v0.1.0-admin-tester
+    paths:
+      - 'android/**'
+      - 'index.html'
+      - 'app.js'
+      - 'styles.css'
+      - 'manifest.webmanifest'
+      - 'sw.js'
+      - 'assets/**'
+      - '.github/workflows/android-apk.yml'
   workflow_dispatch:
 permissions:
   contents: read
@@ -14,8 +23,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: android/package-lock.json
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
