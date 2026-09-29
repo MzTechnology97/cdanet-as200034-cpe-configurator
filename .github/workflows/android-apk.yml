@@ -1,95 +1,80 @@
 name: Build Android Admin Tester APK
-
 on:
   push:
     branches: [release/v0.1.0-admin-tester]
-    paths:
-      - 'android/**'
-      - 'index.html'
-      - 'app.js'
-      - 'styles.css'
-      - 'manifest.webmanifest'
-      - 'sw.js'
-      - 'assets/**'
-      - '.github/workflows/android-apk.yml'
+    paths: ['android/**','index.html','app.js','styles.css','manifest.webmanifest','sw.js','assets/**','.github/workflows/android-apk.yml']
   workflow_dispatch:
-
-permissions:
-  contents: read
-
+permissions: {contents: read}
 concurrency:
   group: android-admin-tester-${{ github.ref }}
   cancel-in-progress: true
-
 jobs:
   apk:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: '22'
-
-      - name: Setup Java
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: '21'
-
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22'}
+      - uses: actions/setup-java@v5
+        with: {distribution: temurin, java-version: '21'}
       - name: Prepare web bundle
         run: |
-          rm -rf android/www
-          mkdir -p android/www/assets
+          rm -rf android/www; mkdir -p android/www/assets
           cp index.html app.js styles.css manifest.webmanifest sw.js android/www/
           cp -R assets/. android/www/assets/
-
       - name: Install Capacitor dependencies
         working-directory: android
-        run: |
-          if [ -f package-lock.json ]; then npm ci; else npm install; fi
-
+        run: if [ -f package-lock.json ]; then npm ci; else npm install; fi
       - name: Create Android native project
         working-directory: android
         run: npx cap add android
-
-      - name: Enable local CPE HTTP management and camera/network permissions
+      - name: Install native diagnostics plugin
         run: |
+          P=android/android/app/src/main/java/it/cdanet/cpe
+          mkdir -p "$P"
+          cat > "$P/NetworkToolsPlugin.java" <<'JAVA'
+          package it.cdanet.cpe;
+          import android.Manifest;import android.content.Context;import android.net.*;import android.net.wifi.*;import android.os.Build;import androidx.annotation.RequiresApi;import com.getcapacitor.*;import com.getcapacitor.annotation.*;import org.json.*;import java.io.*;import java.net.*;import java.util.*;import java.util.concurrent.*;
+          @CapacitorPlugin(name="NetworkTools",permissions={@Permission(alias="location",strings={Manifest.permission.ACCESS_FINE_LOCATION}),@Permission(alias="wifi",strings={Manifest.permission.ACCESS_WIFI_STATE,Manifest.permission.CHANGE_WIFI_STATE}),@Permission(alias="nearby",strings={"android.permission.NEARBY_WIFI_DEVICES"})})
+          public class NetworkToolsPlugin extends Plugin{
+            @PluginMethod public void interfaces(PluginCall c){ConnectivityManager cm=(ConnectivityManager)getContext().getSystemService(Context.CONNECTIVITY_SERVICE);JSObject o=new JSObject();Network n=cm.getActiveNetwork();LinkProperties lp=n==null?null:cm.getLinkProperties(n);if(lp!=null){JSArray a=new JSArray();for(LinkAddress x:lp.getLinkAddresses())a.put(x.toString());o.put("interface",lp.getInterfaceName());o.put("addresses",a);JSArray dns=new JSArray();for(InetAddress x:lp.getDnsServers())dns.put(x.getHostAddress());o.put("dns",dns);if(!lp.getRoutes().isEmpty())for(RouteInfo r:lp.getRoutes())if(r.isDefaultRoute()&&r.getGateway()!=null)o.put("gateway",r.getGateway().getHostAddress());}c.resolve(o);}
+            @PluginMethod public void wifiScan(PluginCall c){WifiManager w=(WifiManager)getContext().getApplicationContext().getSystemService(Context.WIFI_SERVICE);try{w.startScan();JSArray a=new JSArray();for(ScanResult r:w.getScanResults()){JSObject x=new JSObject();x.put("ssid",Build.VERSION.SDK_INT>=33?r.getWifiSsid()==null?"":r.getWifiSsid().toString():r.SSID);x.put("bssid",r.BSSID);x.put("rssi",r.level);x.put("frequencyMHz",r.frequency);x.put("channelWidth",r.channelWidth);a.put(x);}JSObject o=new JSObject();o.put("networks",a);c.resolve(o);}catch(SecurityException e){c.reject("Wi-Fi permission required");}}
+            @PluginMethod public void ping(PluginCall c){String h=c.getString("host");if(h==null){c.reject("host required");return;}getActivity().runOnUiThread(()->{});Executors.newSingleThreadExecutor().execute(()->{try{long t=System.nanoTime();boolean ok=InetAddress.getByName(h).isReachable(1500);JSObject o=new JSObject();o.put("reachable",ok);o.put("ms",(System.nanoTime()-t)/1000000);c.resolve(o);}catch(Exception e){c.reject(e.getMessage());}});}
+            @PluginMethod public void dns(PluginCall c){String h=c.getString("host");try{JSArray a=new JSArray();for(InetAddress x:InetAddress.getAllByName(h))a.put(x.getHostAddress());JSObject o=new JSObject();o.put("addresses",a);c.resolve(o);}catch(Exception e){c.reject(e.getMessage());}}
+            @PluginMethod public void neighbors(PluginCall c){Executors.newSingleThreadExecutor().execute(()->{JSArray a=new JSArray();try{BufferedReader b=new BufferedReader(new FileReader("/proc/net/arp"));String s;b.readLine();while((s=b.readLine())!=null){String[]p=s.trim().split("\\s+");if(p.length>=6){JSObject x=new JSObject();x.put("ip",p[0]);x.put("mac",p[3]);x.put("interface",p[5]);a.put(x);}}b.close();}catch(Exception ignored){}JSObject o=new JSObject();o.put("neighbors",a);c.resolve(o);});}
+            @PluginMethod public void discover(PluginCall c){String prefix=c.getString("prefix");if(prefix==null||!prefix.matches("^(10\\.|192\\.168\\.|172\\.(1[6-9]|2[0-9]|3[01])\\.).*")){c.reject("Only private/local authorized IPv4 prefixes are supported");return;}Executors.newSingleThreadExecutor().execute(()->{JSArray a=new JSArray();try{String base=prefix.substring(0,prefix.lastIndexOf('.')+1);for(int i=1;i<255;i++){InetAddress ip=InetAddress.getByName(base+i);if(ip.isReachable(80)){JSObject x=new JSObject();x.put("ip",ip.getHostAddress());x.put("hostname",ip.getCanonicalHostName());a.put(x);}}JSObject o=new JSObject();o.put("hosts",a);c.resolve(o);}catch(Exception e){c.reject(e.getMessage());}});}
+          }
+          JAVA
+          MAIN=$(find android/android/app/src/main/java -name MainActivity.java | head -1)
+          cat > "$MAIN" <<'JAVA'
+          package it.cdanet.cpe;
+          import android.os.Bundle;import com.getcapacitor.BridgeActivity;
+          public class MainActivity extends BridgeActivity{@Override public void onCreate(Bundle b){registerPlugin(NetworkToolsPlugin.class);super.onCreate(b);}}
+          JAVA
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('android/android/app/src/main/AndroidManifest.xml')
-          s=p.read_text()
+          p=Path('android/android/app/src/main/AndroidManifest.xml');s=p.read_text()
           perms='''<uses-permission android:name="android.permission.INTERNET" />\n<uses-permission android:name="android.permission.CAMERA" />\n<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />\n<uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />\n<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n<uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />\n'''
-          if 'android.permission.CAMERA' not in s:
-              s=s.replace('<application', perms+'<application',1)
-          if 'android:usesCleartextTraffic=' not in s:
-              s=s.replace('<application ', '<application android:usesCleartextTraffic="true" ',1)
+          if 'ACCESS_WIFI_STATE' not in s:s=s.replace('<application',perms+'<application',1)
+          if 'usesCleartextTraffic' not in s:s=s.replace('<application ','<application android:usesCleartextTraffic="true" ',1)
           p.write_text(s)
           PY
-
       - name: Sync Capacitor
         working-directory: android
         run: npx cap sync android
-
       - name: Build debug APK
         working-directory: android/android
         run: ./gradlew --no-daemon assembleDebug
-
       - name: Stage APK artifact
         run: |
-          test -f android/android/app/build/outputs/apk/debug/app-debug.apk
-          cp android/android/app/build/outputs/apk/debug/app-debug.apk CDA-Net-CPE-Configurator-v0.1.2-Admin-Tester.apk
-          sha256sum CDA-Net-CPE-Configurator-v0.1.2-Admin-Tester.apk > CDA-Net-CPE-Configurator-v0.1.2-Admin-Tester.apk.sha256
-
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+          cp android/android/app/build/outputs/apk/debug/app-debug.apk CDA-Net-CPE-Configurator-v0.1.3-Admin-Tester.apk
+          sha256sum CDA-Net-CPE-Configurator-v0.1.3-Admin-Tester.apk > CDA-Net-CPE-Configurator-v0.1.3-Admin-Tester.apk.sha256
+      - uses: actions/upload-artifact@v4
         with:
-          name: CDA-Net-CPE-Configurator-v0.1.2-Admin-Tester
+          name: CDA-Net-CPE-Configurator-v0.1.3-Admin-Tester
           path: |
-            CDA-Net-CPE-Configurator-v0.1.2-Admin-Tester.apk
-            CDA-Net-CPE-Configurator-v0.1.2-Admin-Tester.apk.sha256
+            CDA-Net-CPE-Configurator-v0.1.3-Admin-Tester.apk
+            CDA-Net-CPE-Configurator-v0.1.3-Admin-Tester.apk.sha256
           if-no-files-found: error
           retention-days: 14
