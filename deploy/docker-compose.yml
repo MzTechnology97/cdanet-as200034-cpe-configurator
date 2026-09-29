@@ -1,0 +1,30 @@
+services:
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - appdata:/app/server/data
+      - ${FIRMWARE_HOST_PATH}:/opt/cdanet/firmware/WA-8.7.4.bin:ro
+    expose: ["8787"]
+    networks: [private]
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN}
+    ports: ["443:443","80:80"]
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on: [app]
+    networks: [private]
+networks:
+  private:
+volumes:
+  appdata:
+  caddy_data:
+  caddy_config:
