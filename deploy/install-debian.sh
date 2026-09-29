@@ -56,23 +56,21 @@ ExecStart=/usr/local/sbin/cdanet-cpe-update
 EOF
 cat >/etc/systemd/system/cdanet-cpe-update.timer <<'EOF'
 [Unit]
-Description=CDA Net Docker auto-update
+Description=CDA Net Docker auto-update every 60 seconds
 [Timer]
-OnBootSec=5min
-OnUnitActiveSec=15min
-RandomizedDelaySec=2min
+OnBootSec=30s
+OnUnitActiveSec=60s
+AccuracySec=1s
 Persistent=true
 [Install]
 WantedBy=timers.target
 EOF
 systemctl daemon-reload;systemctl enable --now cdanet-cpe-update.timer
 cd "$APP_DIR/deploy";docker compose --env-file .env build --pull;ADMIN_PASSWORD="$ADMIN_PASSWORD" docker compose --env-file .env up -d --remove-orphans
-# Do not discard bootstrap credential until backend confirms successful DB initialization.
 for i in $(seq 1 30);do state=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' cdanet-cpe-configurator-app-1 2>/dev/null||true);[[ "$state" == healthy ]]&&break;sleep 2;done
-[[ "${state:-}" == healthy ]]||{ echo 'Backend non healthy: credenziale bootstrap non salvata su disco; controllare docker compose logs app.'>&2;exit 1; }
+[[ "${state:-}" == healthy ]]||{ echo 'Backend non healthy: controllare docker compose logs app.'>&2;exit 1; }
 unset ADMIN_PASSWORD ADMIN_PASSWORD2
-# Prove restart without bootstrap password: existing admin DB must be sufficient.
 docker compose --env-file .env up -d --force-recreate app
 for i in $(seq 1 30);do state=$(docker inspect --format='{{if .State.Health}}{{.State.Health.Status}}{{else}}{{.State.Status}}{{end}}' cdanet-cpe-configurator-app-1 2>/dev/null||true);[[ "$state" == healthy ]]&&break;sleep 2;done
 [[ "${state:-}" == healthy ]]||{ echo 'Test restart senza password bootstrap FALLITO.'>&2;exit 1; }
-echo;echo 'INSTALLER CONSOLIDATO: bootstrap Admin e restart senza password verificati.';echo "PWA: https://$APP_DOMAIN";echo "Admin: $ADMIN_USERNAME";echo 'La password Admin non è presente nel file .env. Deploy key privata solo sul server.'
+echo;echo 'INSTALLER CONSOLIDATO: bootstrap Admin e restart senza password verificati.';echo "PWA: https://$APP_DOMAIN";echo "Admin: $ADMIN_USERNAME";echo 'Auto-update repository: ogni 60 secondi.';echo 'MFA non obbligatoria al primo accesso: configurazione prevista successivamente dalla GUI web.'
