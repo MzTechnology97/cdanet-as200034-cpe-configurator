@@ -1,8 +1,8 @@
 name: Build Android Admin Tester APK
+
 on:
   push:
-    branches:
-      - release/v0.1.0-admin-tester
+    branches: [release/v0.1.0-admin-tester]
     paths:
       - 'android/**'
       - 'index.html'
@@ -13,47 +13,85 @@ on:
       - 'assets/**'
       - '.github/workflows/android-apk.yml'
   workflow_dispatch:
+
 permissions:
   contents: read
+
+concurrency:
+  group: android-admin-tester-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   apk:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: '22'
-      - uses: actions/setup-java@v4
+          cache: npm
+          cache-dependency-path: android/package-lock.json
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
         with:
           distribution: temurin
           java-version: '21'
-      - name: Prepare Android web bundle
+          cache: gradle
+
+      - name: Prepare web bundle
         run: |
+          rm -rf android/www
           mkdir -p android/www/assets
           cp index.html app.js styles.css manifest.webmanifest sw.js android/www/
           cp -R assets/. android/www/assets/
-      - name: Install Capacitor
+
+      - name: Install Capacitor dependencies
         working-directory: android
-        run: npm install
-      - name: Create native Android project
+        run: npm ci
+
+      - name: Create Android native project
         working-directory: android
         run: npx cap add android
-      - name: Allow local CPE management traffic in tester build
+
+      - name: Enable local CPE HTTP management and camera/network permissions
         run: |
           python3 - <<'PY'
           from pathlib import Path
           p=Path('android/android/app/src/main/AndroidManifest.xml')
           s=p.read_text()
-          s=s.replace('<application ', '<application android:usesCleartextTraffic="true" ')
+          perms='''<uses-permission android:name="android.permission.INTERNET" />\n<uses-permission android:name="android.permission.CAMERA" />\n<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />\n<uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />\n<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n<uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />\n'''
+          if 'android.permission.CAMERA' not in s:
+              s=s.replace('<application', perms+'<application',1)
+          if 'android:usesCleartextTraffic=' not in s:
+              s=s.replace('<application ', '<application android:usesCleartextTraffic="true" ',1)
           p.write_text(s)
           PY
-      - name: Sync and build debug APK
+
+      - name: Sync Capacitor
         working-directory: android
-        run: npm run build:debug
-      - name: Rename APK
-        run: cp android/android/app/build/outputs/apk/debug/app-debug.apk CDA-Net-CPE-Configurator-v0.1.0-Admin-Tester.apk
-      - uses: actions/upload-artifact@v4
+        run: npx cap sync android
+
+      - name: Build debug APK
+        working-directory: android/android
+        run: ./gradlew --no-daemon assembleDebug
+
+      - name: Stage APK artifact
+        run: |
+          test -f android/android/app/build/outputs/apk/debug/app-debug.apk
+          cp android/android/app/build/outputs/apk/debug/app-debug.apk CDA-Net-CPE-Configurator-v0.1.2-Admin-Tester.apk
+          sha256sum CDA-Net-CPE-Configurator-v0.1.2-Admin-Tester.apk > CDA-Net-CPE-Configurator-v0.1.2-Admin-Tester.apk.sha256
+
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
         with:
-          name: CDA-Net-CPE-Configurator-v0.1.0-Admin-Tester
-          path: CDA-Net-CPE-Configurator-v0.1.0-Admin-Tester.apk
+          name: CDA-Net-CPE-Configurator-v0.1.2-Admin-Tester
+          path: |
+            CDA-Net-CPE-Configurator-v0.1.2-Admin-Tester.apk
+            CDA-Net-CPE-Configurator-v0.1.2-Admin-Tester.apk.sha256
+          if-no-files-found: error
           retention-days: 14
