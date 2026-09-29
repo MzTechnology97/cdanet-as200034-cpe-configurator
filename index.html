@@ -10,14 +10,15 @@
   <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <header><div><strong>CDA Net</strong><span>CPE Configurator</span></div><span class="badge">PRIVATE</span></header>
+  <header><div><strong>CDA Net</strong><span>CPE Configurator</span></div><span class="badge">PRIVATE · v0.1 FIELD TEST</span></header>
   <main>
     <section class="card hero"><p class="eyebrow">airMAX AC · Provisioning</p><h1>Configura una CPE</h1><p>Procedura guidata con anteprima e storico redatto. Le password non vengono salvate.</p></section>
     <form id="configForm" class="card" autocomplete="off">
       <h2>1 · Identificazione</h2>
       <div class="grid">
         <label>Installatore<input id="installer" required placeholder="Nome / ID installatore"></label>
-        <label>Modello CPE<input id="model" required placeholder="es. LiteBeam 5AC"></label>
+        <label>Modello CPE<select id="model" required><option value="">Seleziona modello</option><option>NanoStation Loco 5AC</option><option>NanoStation 5AC</option><option>NanoBeam 5AC</option><option>LiteBeam 5AC</option><option>PowerBeam 5AC</option></select></label>
+        <label>Firmware<select id="firmware" required><option value="8.7.4">8.7.4 · PRODUZIONE</option><option value="8.7.11">8.7.11 · SOLO TEST</option><option value="8.7.25">8.7.25 · SOLO TEST</option></select></label>
         <label>MAC<input id="mac" required inputmode="text" placeholder="AA:BB:CC:DD:EE:FF"></label>
         <label>Seriale<input id="serial" required placeholder="Seriale dispositivo"></label>
       </div>
