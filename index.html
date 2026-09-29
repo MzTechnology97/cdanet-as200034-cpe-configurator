@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="it">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#0b2447">
+  <meta name="robots" content="noindex,nofollow">
+  <title>CDA Net · CPE Configurator</title>
+  <link rel="manifest" href="manifest.webmanifest">
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <header><div><strong>CDA Net</strong><span>CPE Configurator</span></div><span class="badge">PRIVATE</span></header>
+  <main>
+    <section class="card hero"><p class="eyebrow">airMAX AC · Provisioning</p><h1>Configura una CPE</h1><p>Procedura guidata con anteprima e storico redatto. Le password non vengono salvate.</p></section>
+    <form id="configForm" class="card" autocomplete="off">
+      <h2>1 · Identificazione</h2>
+      <div class="grid">
+        <label>Installatore<input id="installer" required placeholder="Nome / ID installatore"></label>
+        <label>Modello CPE<input id="model" required placeholder="es. LiteBeam 5AC"></label>
+        <label>MAC<input id="mac" required inputmode="text" placeholder="AA:BB:CC:DD:EE:FF"></label>
+        <label>Seriale<input id="serial" required placeholder="Seriale dispositivo"></label>
+      </div>
+      <h2>2 · Radio</h2>
+      <div class="grid">
+        <label>Nodo<select id="node" required></select></label>
+        <label>Distretto<select id="district" required></select></label>
+        <label>SSID<input id="ssid" readonly></label>
+        <label>Country<input value="Licensed" readonly></label>
+      </div>
+      <h2>3 · PPPoE</h2>
+      <div class="grid">
+        <label>Username PPPoE<input id="pppoeUser" required autocomplete="off"></label>
+        <label>Password PPPoE<input id="pppoePass" required type="password" autocomplete="new-password"></label>
+      </div>
+      <p class="notice">La password PPPoE resta solo in memoria durante questa sessione e non viene registrata nello storico.</p>
+      <h2>4 · Piano</h2>
+      <div id="plan" class="plan"></div>
+      <div class="actions"><button type="button" id="preview">Aggiorna anteprima</button><button type="submit" class="primary">Registra piano</button></div>
+    </form>
+    <section class="card"><div class="sectionTitle"><h2>Storico locale</h2><button id="clearHistory" class="ghost">Cancella</button></div><div id="history"></div></section>
+  </main>
+  <footer>Uso interno CDA Net · Nessun segreto deve essere inserito nel codice sorgente.</footer>
+  <script src="app.js" defer></script>
+</body>
+</html>
