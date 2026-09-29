@@ -13,8 +13,6 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: server/package-lock.json
       - name: Check frontend JavaScript
         run: node --check app.js && node --check sw.js
       - name: Validate manifest
@@ -23,7 +21,7 @@ jobs:
         run: test -f index.html && test -f styles.css && test -f assets/cda-net-logo.svg && test -f assets/icon.svg
       - name: Install backend dependencies
         working-directory: server
-        run: npm ci
+        run: npm install --ignore-scripts
       - name: Check backend JavaScript
         working-directory: server
         run: node --check src/server.js
