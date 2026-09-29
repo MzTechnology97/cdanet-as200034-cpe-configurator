@@ -1,43 +1,13 @@
 'use strict';
-const $ = (id) => document.getElementById(id);
-const els = {form:$('configForm'),node:$('node'),district:$('district'),ssid:$('ssid'),plan:$('plan'),history:$('history')};
-const PROD_FIRMWARE='8.7.4';
-
-function fillSelect(el, from, to, pad=0){
-  for(let n=from;n<=to;n++){
-    const v=pad?String(n).padStart(pad,'0'):String(n);
-    el.add(new Option(v,v));
-  }
-}
-fillSelect(els.node,2,99);
-fillSelect(els.district,1,99,2);
-
-function currentSSID(){ return `CDA-NET-N${els.node.value}-D${els.district.value}`; }
-function refreshPlan(){
-  els.ssid.value=currentSSID();
-  const user=$('pppoeUser').value.trim() || '—';
-  const fw=$('firmware').value;
-  const fwStatus=fw===PROD_FIRMWARE?'APPROVATO PRODUZIONE':'COMPATIBILITY TEST — non usare in produzione';
-  els.plan.innerHTML=`<ol><li>Verificare modello supportato e firmware <b>${escapeHtml(fw)}</b> — <b>${escapeHtml(fwStatus)}</b>.</li><li>Primo avvio: selezionare <b>Country Licensed</b>.</li><li>Applicare le credenziali dispositivo tramite il provisioning bridge protetto.</li><li>Associare la radio a <b>${escapeHtml(currentSSID())}</b>.</li><li>Impostare modalità router/PPPoE con username <b>${escapeHtml(user)}</b> e password transiente.</li><li>Dopo la connettività, applicare UISP e SNMP esclusivamente tramite secret server-side e verificarne l'esito.</li></ol>`;
-}
-function escapeHtml(s){return String(s).replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));}
-['change','input'].forEach(ev=>{els.form.addEventListener(ev,refreshPlan)});
-$('preview').addEventListener('click',refreshPlan);
-
-function loadHistory(){
-  const rows=JSON.parse(localStorage.getItem('cda-cpe-history')||'[]');
-  if(!rows.length){els.history.innerHTML='<p class="muted">Nessuna configurazione registrata su questo dispositivo.</p>';return;}
-  els.history.innerHTML=rows.map(r=>`<article class="historyRow"><b>${escapeHtml(r.ssid)}</b><span>${escapeHtml(r.model)} · airOS ${escapeHtml(r.firmware||'n/d')} · ${escapeHtml(r.mac)}</span><span>${escapeHtml(r.installer)} · ${new Date(r.at).toLocaleString('it-IT')}</span><small>PPPoE: ${escapeHtml(r.pppoeUser)} · password non salvata</small></article>`).join('');
-}
-els.form.addEventListener('submit',(e)=>{
-  e.preventDefault();
-  if(!els.form.reportValidity()) return;
-  const fw=$('firmware').value;
-  if(fw!==PROD_FIRMWARE && !confirm(`airOS ${fw} è abilitato solo per test di compatibilità e NON per produzione. Registrare comunque questo piano di TEST?`)) return;
-  const row={at:new Date().toISOString(),installer:$('installer').value.trim(),model:$('model').value,firmware:fw,mac:$('mac').value.trim(),serial:$('serial').value.trim(),ssid:currentSSID(),node:els.node.value,district:els.district.value,pppoeUser:$('pppoeUser').value.trim(),status:'planned'};
-  const rows=JSON.parse(localStorage.getItem('cda-cpe-history')||'[]'); rows.unshift(row); localStorage.setItem('cda-cpe-history',JSON.stringify(rows.slice(0,100)));
-  $('pppoePass').value=''; loadHistory(); alert('Piano registrato. Nessuna password è stata salvata.');
-});
-$('clearHistory').addEventListener('click',()=>{if(confirm('Cancellare lo storico locale?')){localStorage.removeItem('cda-cpe-history');loadHistory();}});
-refreshPlan(); loadHistory();
-if('serviceWorker' in navigator) navigator.serviceWorker.register('./sw.js').catch(()=>{});
+const $=id=>document.getElementById(id); const API_BASE=''; let token=null,user=null;
+const form=$('configForm'),node=$('node'),district=$('district'),ssid=$('ssid'),plan=$('plan');
+for(let n=2;n<=99;n++) node.add(new Option(String(n),String(n))); for(let n=1;n<=99;n++){const v=String(n).padStart(2,'0');district.add(new Option(v,v));}
+const esc=s=>String(s).replace(/[&<>'\"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+const currentSSID=()=>`CDA-NET-N${node.value}-D${district.value}`;
+function refresh(){ssid.value=currentSSID();const fw=$('firmware').value,u=$('pppoeUser').value.trim()||'—';plan.innerHTML=`<ol><li>Preflight modello e airOS <b>${esc(fw)}</b>${fw==='8.7.4'?' · produzione':' · SOLO TEST'}.</li><li>Country <b>Licensed</b>.</li><li>Credenziali dispositivo: secret server-side.</li><li>SSID <b>${esc(currentSSID())}</b>.</li><li>PPPoE <b>${esc(u)}</b>; password transiente.</li><li>UISP/SNMP: secret server-side.</li><li>Verifica finale prima di qualsiasi futuro apply.</li></ol>`;}
+async function api(path,options={}){const headers={'Content-Type':'application/json',...(options.headers||{})};if(token)headers.Authorization=`Bearer ${token}`;const r=await fetch(`${API_BASE}${path}`,{...options,headers});const data=await r.json().catch(()=>({}));if(!r.ok)throw new Error(data.error||`HTTP ${r.status}`);return data;}
+$('loginForm').addEventListener('submit',async e=>{e.preventDefault();$('loginStatus').textContent='Accesso in corso…';try{const d=await api('/api/login',{method:'POST',body:JSON.stringify({username:$('loginUser').value.trim(),password:$('loginPass').value})});token=d.token;user=d.user;$('loginPass').value='';$('loginCard').hidden=true;$('sessionCard').hidden=false;form.hidden=false;$('sessionStatus').textContent=`Autenticato: ${user.username} · ruolo ${user.role}. Token mantenuto solo in memoria.`;refresh();}catch{$('loginPass').value='';$('loginStatus').textContent='Accesso non riuscito.';}});
+$('logout').addEventListener('click',()=>{token=null;user=null;form.hidden=true;$('sessionCard').hidden=true;$('loginCard').hidden=false;$('loginStatus').textContent='Sessione terminata.';$('pppoePass').value='';});
+['change','input'].forEach(ev=>form.addEventListener(ev,refresh));$('preview').addEventListener('click',refresh);
+form.addEventListener('submit',async e=>{e.preventDefault();if(!token)return;if(!form.reportValidity())return;const out=$('dryRunResult');out.hidden=false;out.textContent='Dry-run in corso…';const payload={model:$('model').value,firmware:$('firmware').value,mac:$('mac').value.trim(),serial:$('serial').value.trim(),ssid:currentSSID(),pppoeUser:$('pppoeUser').value.trim(),pppoePassword:$('pppoePass').value};try{const d=await api('/api/provision/dry-run',{method:'POST',body:JSON.stringify(payload)});$('pppoePass').value='';out.innerHTML=`<h3>Dry Run OK</h3><p>Firmware: <b>${d.productionApproved?'approvato produzione':'solo compatibility test'}</b></p><ol>${d.plan.map(x=>`<li><b>${esc(x.stage)}</b>: ${esc(x.action)}</li>`).join('')}</ol>${d.warnings.length?`<p class="notice">${d.warnings.map(esc).join(' ')}</p>`:''}`;}catch(err){$('pppoePass').value='';out.textContent=`Dry-run fallito: ${err.message}`;}});
+refresh();if('serviceWorker' in navigator)navigator.serviceWorker.register('./sw.js').catch(()=>{});
