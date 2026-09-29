@@ -1,0 +1,29 @@
+name: Validate PWA and backend
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: server/package-lock.json
+      - name: Check frontend JavaScript
+        run: node --check app.js && node --check sw.js
+      - name: Validate manifest
+        run: node -e "JSON.parse(require('fs').readFileSync('manifest.webmanifest','utf8'))"
+      - name: Verify required PWA assets
+        run: test -f index.html && test -f styles.css && test -f assets/cda-net-logo.svg && test -f assets/icon.svg
+      - name: Install backend dependencies
+        working-directory: server
+        run: npm ci
+      - name: Check backend JavaScript
+        working-directory: server
+        run: node --check src/server.js
