@@ -6,18 +6,18 @@ services:
       dockerfile: deploy/Dockerfile
     restart: unless-stopped
     env_file: .env
+    environment:
+      # Present only during first bootstrap. Normal restarts/updates do not require it.
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
     init: true
     security_opt:
       - no-new-privileges:true
-    cap_drop:
-      - ALL
+    cap_drop: [ALL]
     volumes:
       - appdata:/app/server/data
       - ${FIRMWARE_HOST_PATH}:/opt/cdanet/firmware/WA-8.7.4.bin:ro
-    expose:
-      - "8787"
-    networks:
-      - private
+    expose: ["8787"]
+    networks: [private]
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/api/health"]
       interval: 30s
@@ -26,19 +26,14 @@ services:
       start_period: 20s
     logging:
       driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+      options: {max-size: "10m", max-file: "3"}
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
-    security_opt:
-      - no-new-privileges:true
+    security_opt: ["no-new-privileges:true"]
     environment:
       APP_DOMAIN: ${APP_DOMAIN}
-    ports:
-      - "80:80"
-      - "443:443"
+    ports: ["80:80", "443:443"]
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
@@ -46,13 +41,10 @@ services:
     depends_on:
       app:
         condition: service_healthy
-    networks:
-      - private
+    networks: [private]
     logging:
       driver: json-file
-      options:
-        max-size: "10m"
-        max-file: "3"
+      options: {max-size: "10m", max-file: "3"}
 networks:
   private:
     driver: bridge
