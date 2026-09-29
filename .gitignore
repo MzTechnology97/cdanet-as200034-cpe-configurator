@@ -1,0 +1,11 @@
+.env
+.env.*
+!.env.example
+secrets/
+*.key
+*.pem
+*.p12
+*.pfx
+node_modules/
+dist/
+.DS_Store
