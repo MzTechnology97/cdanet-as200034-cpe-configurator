@@ -7,8 +7,8 @@ services:
     restart: unless-stopped
     env_file: .env
     environment:
-      # Present only during first bootstrap. Normal restarts/updates do not require it.
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      SECRETS_KEY_FILE: /run/secrets/cdanet_master_key
     init: true
     security_opt:
       - no-new-privileges:true
@@ -16,6 +16,7 @@ services:
     volumes:
       - appdata:/app/server/data
       - ${FIRMWARE_HOST_PATH}:/opt/cdanet/firmware/WA-8.7.4.bin:ro
+      - /etc/cdanet-cpe/secrets/master.key:/run/secrets/cdanet_master_key:ro
     expose: ["8787"]
     networks: [private]
     healthcheck:
