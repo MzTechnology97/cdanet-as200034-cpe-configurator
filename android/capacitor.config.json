@@ -1,0 +1,6 @@
+{
+  "appId":"it.cdanet.cpeconfigurator",
+  "appName":"CDA Net CPE Configurator",
+  "webDir":"www",
+  "server":{"androidScheme":"https"}
+}
