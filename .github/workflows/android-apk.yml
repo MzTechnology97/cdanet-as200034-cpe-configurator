@@ -33,8 +33,6 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: '22'
-          cache: npm
-          cache-dependency-path: android/package-lock.json
 
       - name: Setup Java
         uses: actions/setup-java@v4
@@ -52,7 +50,8 @@ jobs:
 
       - name: Install Capacitor dependencies
         working-directory: android
-        run: npm ci
+        run: |
+          if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
       - name: Create Android native project
         working-directory: android
