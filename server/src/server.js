@@ -1,0 +1,32 @@
+import 'dotenv/config';
+import express from 'express';
+import helmet from 'helmet';
+import jwt from 'jsonwebtoken';
+import Database from 'better-sqlite3';
+import { randomBytes, scryptSync, timingSafeEqual } from 'node:crypto';
+import { mkdirSync } from 'node:fs';
+import { dirname } from 'node:path';
+import { z } from 'zod';
+
+const required=['JWT_SECRET','ADMIN_USERNAME','ADMIN_PASSWORD'];
+for(const k of required) if(!process.env[k] || process.env[k].length<8) throw new Error(`Missing/weak ${k}`);
+if(process.env.JWT_SECRET.length<32) throw new Error('JWT_SECRET must be >=32 chars');
+const dbPath=process.env.DB_PATH||'./data/cdanet.sqlite'; mkdirSync(dirname(dbPath),{recursive:true});
+const db=new Database(dbPath); db.pragma('journal_mode = WAL');
+db.exec(`CREATE TABLE IF NOT EXISTS users(id INTEGER PRIMARY KEY,username TEXT UNIQUE NOT NULL,password_hash TEXT NOT NULL,role TEXT NOT NULL CHECK(role IN('admin','installer')),active INTEGER NOT NULL DEFAULT 1,created_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS audits(id INTEGER PRIMARY KEY,created_at TEXT NOT NULL,user_id INTEGER NOT NULL,ssid TEXT NOT NULL,pppoe_user TEXT NOT NULL,model TEXT NOT NULL,mac TEXT NOT NULL,serial TEXT NOT NULL,result TEXT NOT NULL,FOREIGN KEY(user_id) REFERENCES users(id));`);
+const hash=p=>{const s=randomBytes(16).toString('hex');return `${s}:${scryptSync(p,s,64).toString('hex')}`};
+const verify=(p,h)=>{const [s,x]=h.split(':');const a=Buffer.from(x,'hex'),b=scryptSync(p,s,64);return a.length===b.length&&timingSafeEqual(a,b)};
+if(!db.prepare('SELECT 1 FROM users WHERE username=?').get(process.env.ADMIN_USERNAME)) db.prepare('INSERT INTO users(username,password_hash,role,created_at) VALUES(?,?,?,?)').run(process.env.ADMIN_USERNAME,hash(process.env.ADMIN_PASSWORD),'admin',new Date().toISOString());
+const app=express(); app.disable('x-powered-by'); app.use(helmet()); app.use(express.json({limit:'32kb'}));
+app.use((req,res,next)=>{const o=process.env.ALLOWED_ORIGIN;if(o&&req.headers.origin===o) res.set('Access-Control-Allow-Origin',o);res.set('Vary','Origin'); if(req.method==='OPTIONS'){res.set('Access-Control-Allow-Headers','Authorization, Content-Type');res.set('Access-Control-Allow-Methods','GET,POST');return res.sendStatus(204)} next()});
+const auth=(req,res,next)=>{try{const t=(req.headers.authorization||'').replace(/^Bearer /,'');req.user=jwt.verify(t,process.env.JWT_SECRET);next()}catch{return res.status(401).json({error:'unauthorized'})}};
+const admin=(req,res,next)=>req.user.role==='admin'?next():res.status(403).json({error:'forbidden'});
+app.get('/api/health',(req,res)=>res.json({ok:true}));
+app.post('/api/login',(req,res)=>{const b=z.object({username:z.string().min(1).max(80),password:z.string().min(8).max(200)}).safeParse(req.body);if(!b.success)return res.status(400).json({error:'invalid_request'});const u=db.prepare('SELECT * FROM users WHERE username=? AND active=1').get(b.data.username);if(!u||!verify(b.data.password,u.password_hash))return res.status(401).json({error:'invalid_credentials'});res.json({token:jwt.sign({sub:u.id,username:u.username,role:u.role},process.env.JWT_SECRET,{expiresIn:'8h'}),user:{username:u.username,role:u.role}})});
+app.post('/api/users',auth,admin,(req,res)=>{const b=z.object({username:z.string().min(3).max(80).regex(/^[A-Za-z0-9._-]+$/),password:z.string().min(12).max(200)}).safeParse(req.body);if(!b.success)return res.status(400).json({error:'invalid_request'});try{db.prepare('INSERT INTO users(username,password_hash,role,created_at) VALUES(?,?,?,?)').run(b.data.username,hash(b.data.password),'installer',new Date().toISOString());res.status(201).json({ok:true})}catch{return res.status(409).json({error:'username_exists'})}});
+const auditSchema=z.object({ssid:z.string().regex(/^CDA-NET-N(?:[2-9]|[1-9][0-9])-D(?:0[1-9]|[1-9][0-9])$/),pppoeUser:z.string().min(1).max(128),model:z.string().min(1).max(128),mac:z.string().min(11).max(20),serial:z.string().min(1).max(128),result:z.enum(['planned','success','failed'])}).strict();
+app.post('/api/audits',auth,(req,res)=>{const b=auditSchema.safeParse(req.body);if(!b.success)return res.status(400).json({error:'invalid_request'});const x=b.data;db.prepare('INSERT INTO audits(created_at,user_id,ssid,pppoe_user,model,mac,serial,result) VALUES(?,?,?,?,?,?,?,?)').run(new Date().toISOString(),req.user.sub,x.ssid,x.pppoeUser,x.model,x.mac,x.serial,x.result);res.status(201).json({ok:true})});
+app.get('/api/audits',auth,(req,res)=>{const rows=req.user.role==='admin'?db.prepare('SELECT a.*,u.username installer FROM audits a JOIN users u ON u.id=a.user_id ORDER BY a.id DESC LIMIT 500').all():db.prepare('SELECT a.*,u.username installer FROM audits a JOIN users u ON u.id=a.user_id WHERE user_id=? ORDER BY a.id DESC LIMIT 500').all(req.user.sub);res.json(rows)});
+// Intentionally no endpoint that accepts/stores PPPoE passwords or returns deployment secrets.
+app.listen(Number(process.env.PORT||8787),()=>console.log(`CDA Net API listening on ${process.env.PORT||8787}`));
