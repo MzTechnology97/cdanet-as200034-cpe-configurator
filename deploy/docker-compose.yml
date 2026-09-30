@@ -34,7 +34,11 @@ services:
     security_opt: ["no-new-privileges:true"]
     environment:
       APP_DOMAIN: ${APP_DOMAIN}
-    ports: ["80:80", "443:443"]
+      APP_SCHEME: ${APP_SCHEME:-http}
+      APP_LISTEN: ${APP_LISTEN:-:80}
+    ports:
+      - "80:80"
+      - "443:443"
     volumes:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
