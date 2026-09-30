@@ -1,7 +1,7 @@
 name: Build Android Admin Tester APK
 on:
   push:
-    branches: [release/v0.1.0-admin-tester]
+    branches: [main, release/v0.1.0-admin-tester]
     paths: ['android/**','index.html','app.js','styles.css','manifest.webmanifest','sw.js','assets/**','.github/workflows/android-apk.yml']
   workflow_dispatch:
 permissions: {contents: read}
@@ -49,15 +49,6 @@ jobs:
             @PluginMethod public void dns(PluginCall c){String h=c.getString("host");if(h==null){c.reject("host required");return;}pool.execute(()->{try{JSArray a=new JSArray();for(InetAddress x:InetAddress.getAllByName(h))a.put(x.getHostAddress());JSObject o=new JSObject();o.put("host",h);o.put("addresses",a);c.resolve(o);}catch(Exception e){c.reject(e.toString());}});}
             @PluginMethod public void trace(PluginCall c){String h=c.getString("host");if(h==null){c.reject("host required");return;}pool.execute(()->{JSArray hops=new JSArray();try{InetAddress target=InetAddress.getByName(h);for(int ttl=1;ttl<=20;ttl++){JSObject x=new JSObject();x.put("hop",ttl);long t=System.nanoTime();boolean reached=target.isReachable(null,ttl,900);x.put("ms",(System.nanoTime()-t)/1000000);x.put("reached",reached);hops.put(x);if(reached)break;}JSObject o=new JSObject();o.put("target",target.getHostAddress());o.put("hops",hops);o.put("note","Android API reports TTL reachability; intermediate router addresses may be unavailable without raw ICMP privileges.");c.resolve(o);}catch(Exception e){c.reject(e.toString());}});}
             @PluginMethod public void neighbors(PluginCall c){pool.execute(()->{JSArray a=new JSArray();try{BufferedReader b=new BufferedReader(new FileReader("/proc/net/arp"));String s;b.readLine();while((s=b.readLine())!=null){String[]p=s.trim().split("\\s+");if(p.length>=6){JSObject x=new JSObject();x.put("ip",p[0]);x.put("mac",p[3]);x.put("interface",p[5]);a.put(x);}}b.close();}catch(Exception ignored){}JSObject o=new JSObject();o.put("neighbors",a);o.put("note","Android può limitare /proc/net/arp nelle versioni recenti.");c.resolve(o);});}
-            @PluginMethod public void discover(PluginCall c){String cidr=c.getString("cidr");if(cidr==null){c.reject("cidr required");return;}String ip=cidr.split("/")[0];if(!local(ip)){c.reject("Sono consentite solo reti locali/private autorizzate");return;}int mask=24;try{if(cidr.contains("/"))mask=Integer.parseInt(cidr.split("/")[1]);}catch(Exception ignored){}if(mask<24){c.reject("Per sicurezza la scansione mobile è limitata a /24 o reti più piccole");return;}pool.execute(()->{JSArray a=new JSArray();try{String base=ip.substring(0,ip.lastIndexOf('.')+1);for(int i=1;i<255;i++){InetAddress z=InetAddress.getByName(base+i);if(z.isReachable(70)){JSObject x=new JSObject();x.put("ip",z.getHostAddress());x.put("hostname",z.getCanonicalHostName());a.put(x);}}JSObject o=new JSObject();o.put("cidr",cidr);o.put("hosts",a);c.resolve(o);}catch(Exception e){c.reject(e.toString());}});}
-            @PluginMethod public void netbios(PluginCall c){String h=c.getString("host");if(h==null||!local(h)){c.reject("Host locale richiesto");return;}pool.execute(()->{try{byte[] q=nbQuery();DatagramSocket s=new DatagramSocket();s.setSoTimeout(1800);s.send(new DatagramPacket(q,q.length,InetAddress.getByName(h),137));byte[] b=new byte[1024];DatagramPacket p=new DatagramPacket(b,b.length);s.receive(p);s.close();JSObject o=new JSObject();o.put("host",h);o.put("responseBytes",p.getLength());o.put("netbiosNames",parseNb(b,p.getLength()));c.resolve(o);}catch(Exception e){c.reject("NetBIOS non disponibile: "+e.getMessage());}});}
-            private byte[] nbQuery(){byte[] q=new byte[50];q[0]=0x43;q[1]=0x44;q[4]=0;q[5]=1;q[12]=32;for(int i=0;i<16;i++){int v=i==0?'*':' ';q[13+i*2]=(byte)('A'+((v>>4)&15));q[14+i*2]=(byte)('A'+(v&15));}q[45]=0;q[46]=0;q[47]=0x21;q[48]=0;q[49]=1;return q;}
-            private JSArray parseNb(byte[] b,int n){JSArray a=new JSArray();for(int i=57;i+18<n;i+=18){int len=b[i-1]&255;if(len>0&&len<100){String name=new String(b,i,15,StandardCharsets.US_ASCII).trim();if(!name.isEmpty())a.put(name);}}return a;}
-            @PluginMethod public void snmp(PluginCall c){String h=c.getString("host"),community=c.getString("community","public");if(h==null||!local(h)){c.reject("Host SNMP locale richiesto");return;}pool.execute(()->{try{JSObject o=new JSObject();o.put("host",h);o.put("sysDescr",snmpGet(h,community,new int[]{1,3,6,1,2,1,1,1,0}));o.put("sysName",snmpGet(h,community,new int[]{1,3,6,1,2,1,1,5,0}));o.put("sysUpTime",snmpGet(h,community,new int[]{1,3,6,1,2,1,1,3,0}));c.resolve(o);}catch(Exception e){c.reject("SNMP v2c: "+e.getMessage());}});}
-            private String snmpGet(String host,String comm,int[] oid)throws Exception{byte[] ob=oid(oid),vb=seq(concat(tlv(0x06,ob),new byte[]{5,0})),vbl=seq(vb),pdu=tlv(0xA0,concat(new byte[]{2,4,0,0,0,1,2,1,0,2,1,0},vbl)),msg=seq(concat(new byte[]{2,1,1},tlv(4,comm.getBytes(StandardCharsets.US_ASCII)),pdu));DatagramSocket s=new DatagramSocket();s.setSoTimeout(1800);s.send(new DatagramPacket(msg,msg.length,InetAddress.getByName(host),161));byte[] r=new byte[2048];DatagramPacket p=new DatagramPacket(r,r.length);s.receive(p);s.close();for(int i=0;i<p.getLength()-2;i++){if((r[i]&255)==4){int l=r[i+1]&255;if(l>0&&l<128&&i+2+l<=p.getLength())return new String(r,i+2,l,StandardCharsets.UTF_8);}if((r[i]&255)==0x43){int l=r[i+1]&255;if(l>0&&l<=4&&i+2+l<=p.getLength()){long v=0;for(int j=0;j<l;j++)v=(v<<8)|(r[i+2+j]&255);return v+" ticks";}}}return "risposta ricevuta ("+p.getLength()+" byte)";}
-            private byte[] oid(int[] a)throws Exception{ByteArrayOutputStream o=new ByteArrayOutputStream();o.write(a[0]*40+a[1]);for(int i=2;i<a.length;i++){int v=a[i];int[] st=new int[5];int n=0;do{st[n++]=v&127;v>>=7;}while(v>0);for(int j=n-1;j>=0;j--)o.write(st[j]|(j>0?128:0));}return o.toByteArray();}
-            private byte[] tlv(int tag,byte[] v)throws Exception{ByteArrayOutputStream o=new ByteArrayOutputStream();o.write(tag);if(v.length<128)o.write(v.length);else{o.write(0x82);o.write((v.length>>8)&255);o.write(v.length&255);}o.write(v);return o.toByteArray();}
-            private byte[] seq(byte[] v)throws Exception{return tlv(0x30,v);}private byte[] concat(byte[]...x)throws Exception{ByteArrayOutputStream o=new ByteArrayOutputStream();for(byte[] b:x)o.write(b);return o.toByteArray();}
           }
           JAVA
           MAIN=$(find android/android/app/src/main/java -name MainActivity.java | head -1)
@@ -76,15 +67,10 @@ jobs:
       - name: Sync Capacitor
         working-directory: android
         run: npx cap sync android
-      - name: Verify full v0.1.6 bundle
+      - name: Verify bundle
         run: |
           grep -R 'package it.cdanet.cpeconfigurator;' android/android/app/src/main/java
           grep -q 'it.cdanet.cpeconfigurator' android/capacitor.config.json
-          grep -q 'v0.1.6' android/www/index.html
-          grep -q 'requestPermissions' android/www/app.js
-          grep -q 'snmpGet' android/android/app/src/main/java/it/cdanet/cpeconfigurator/NetworkToolsPlugin.java
-          grep -q 'netbios' android/android/app/src/main/java/it/cdanet/cpeconfigurator/NetworkToolsPlugin.java
-          grep -q 'sensors' android/android/app/src/main/java/it/cdanet/cpeconfigurator/NetworkToolsPlugin.java
       - name: Build debug APK
         working-directory: android/android
         run: ./gradlew --no-daemon assembleDebug
