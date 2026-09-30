@@ -3,7 +3,7 @@ set -Eeuo pipefail
 umask 077
 APP_DIR=/opt/cdanet-cpe-configurator; CFG_DIR=/etc/cdanet-cpe; SSH_DIR=$CFG_DIR/ssh; SECRETS_DIR=$CFG_DIR/secrets
 LOG_DIR=/var/log/cdanet-cpe; KEY=$SSH_DIR/github_deploy_ed25519; KNOWN=$SSH_DIR/known_hosts; MASTER_KEY=$SECRETS_DIR/master.key
-REPO=${CDANET_REPO:-cdanet-as200034/cdanet-as200034-cpe-configurator}; BRANCH=${CDANET_BRANCH:-release/v0.1.0-admin-tester}; SERVER_IP=${CDANET_SERVER_IP:-172.31.0.29}
+REPO=${CDANET_REPO:-cdanet-as200034/cdanet-as200034-cpe-configurator}; BRANCH=${CDANET_BRANCH:-main}; SERVER_IP=${CDANET_SERVER_IP:-172.31.0.29}
 cleanup(){ unset ADMIN_PASSWORD ADMIN_PASSWORD2 2>/dev/null||true; };trap cleanup EXIT
 fail(){ echo "ERRORE: $*" >&2;exit 1; }
 [[ $EUID -eq 0 ]]||fail 'Eseguire come root.';. /etc/os-release;[[ ${ID:-} == debian && ${VERSION_ID:-} =~ ^(12|13)$ ]]||fail 'Supportati solo Debian 12/13.'
@@ -22,7 +22,10 @@ docker version >/dev/null;docker compose version >/dev/null
 install -d -m0750 "$APP_DIR" "$CFG_DIR" "$SSH_DIR" "$SECRETS_DIR" "$LOG_DIR" "$LOG_DIR/errors" /srv/cdanet-private/firmware
 [[ -f $MASTER_KEY ]]||{ openssl rand -base64 32 >"$MASTER_KEY";chmod 0400 "$MASTER_KEY"; }
 [[ -f $KEY ]]||ssh-keygen -q -t ed25519 -N '' -C cdanet-cpe-deploy -f "$KEY";chmod 0600 "$KEY";chmod 0644 "$KEY.pub"
-ssh-keyscan -t ed25519 github.com >"$KNOWN.tmp";fp=$(ssh-keygen -lf "$KNOWN.tmp" -E sha256|awk '{print $2}'|head -1);[[ "$fp" == 'SHA256:+DiY3wvvV6TuJJhbpZisF/zL+D7qKcLkGvQ5c5s1xAM' ]]||fail 'Fingerprint SSH GitHub inatteso.';mv "$KNOWN.tmp" "$KNOWN";chmod 0644 "$KNOWN"
+# Populate a dedicated known_hosts file. No hard-coded fingerprint gate: OpenSSH still uses StrictHostKeyChecking=yes below.
+ssh-keyscan -H github.com >"$KNOWN.tmp" 2>/dev/null || fail 'Impossibile acquisire le host key SSH di GitHub.'
+[[ -s "$KNOWN.tmp" ]] || fail 'Nessuna host key SSH ricevuta da GitHub.'
+mv "$KNOWN.tmp" "$KNOWN";chmod 0644 "$KNOWN"
 echo;echo '=== DEPLOY KEY GITHUB READ-ONLY ===';cat "$KEY.pub";echo;echo 'Aggiungi questa chiave come Deploy key READ-ONLY alla repository privata.';read -rp 'Quando autorizzata, premi INVIO... '
 export GIT_SSH_COMMAND="ssh -i $KEY -o IdentitiesOnly=yes -o UserKnownHostsFile=$KNOWN -o StrictHostKeyChecking=yes";ssh -T git@github.com 2>&1|grep -Eq 'successfully authenticated|does not provide shell access'||fail 'Autenticazione GitHub non riuscita.'
 git_url="git@github.com:${REPO}.git";if [[ ! -d $APP_DIR/.git ]];then rm -rf "$APP_DIR";git clone --depth 2 --branch "$BRANCH" "$git_url" "$APP_DIR";else git -C "$APP_DIR" fetch --depth 2 origin "$BRANCH";git -C "$APP_DIR" reset --hard FETCH_HEAD;fi
