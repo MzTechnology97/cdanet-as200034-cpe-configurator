@@ -73,7 +73,7 @@ jobs:
           JAVA
           python3 - <<'PY'
           from pathlib import Path
-          p=Path('android/android/app/src/main/AndroidManifest.xml');s=p.read_text();perms='''<uses-permission android:name="android.permission.INTERNET" />\n<uses-permission android:name="android.permission.CAMERA" />\n<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />\n<uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />\n<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" android:maxSdkVersion="32" />\n<uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" />\n'''
+          p=Path('android/android/app/src/main/AndroidManifest.xml');s=p.read_text();perms='''<uses-permission android:name="android.permission.INTERNET" />\n<uses-permission android:name="android.permission.CAMERA" />\n<uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />\n<uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />\n<uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />\n<uses-permission android:name="android.permission.CHANGE_WIFI_MULTICAST_STATE" />\n<uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n<uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" android:usesPermissionFlags="neverForLocation" />\n'''
           if 'ACCESS_WIFI_STATE' not in s:s=s.replace('<application',perms+'<application',1)
           if 'usesCleartextTraffic' not in s:s=s.replace('<application ','<application android:usesCleartextTraffic="true" ',1)
           p.write_text(s)
@@ -81,6 +81,17 @@ jobs:
       - name: Sync Capacitor
         working-directory: android
         run: npx cap sync android
+      - name: Set Android v0.1.8 metadata
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path('android/android/app/build.gradle')
+          s=p.read_text()
+          import re
+          s=re.sub(r'versionCode\s+\d+', 'versionCode 18', s)
+          s=re.sub(r'versionName\s+["\'][^"\']+["\']', 'versionName "0.1.8"', s)
+          p.write_text(s)
+          PY
       - name: Verify full v0.1.8 bundle
         run: |
           grep -R 'package it.cdanet.cpeconfigurator;' android/android/app/src/main/java
@@ -94,6 +105,8 @@ jobs:
           grep -q 'onvifDiscovery' android/android/app/src/main/java/it/cdanet/cpeconfigurator/NetworkToolsPlugin.java
           grep -q 'hikDiscovery' android/android/app/src/main/java/it/cdanet/cpeconfigurator/NetworkToolsPlugin.java
           grep -q 'cameraProbe' android/android/app/src/main/java/it/cdanet/cpeconfigurator/NetworkToolsPlugin.java
+          grep -q 'versionName "0.1.8"' android/android/app/build.gradle
+          grep -q 'ACCESS_FINE_LOCATION' android/android/app/src/main/AndroidManifest.xml
       - name: Build debug APK
         working-directory: android/android
         run: ./gradlew --no-daemon assembleDebug
