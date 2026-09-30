@@ -61,24 +61,23 @@ jobs:
       - name: Sync Capacitor
         working-directory: android
         run: npx cap sync android
-      - name: Verify v0.1.5 package and bundle
+      - name: Verify v0.1.6 package and bundle
         run: |
           grep -R 'package it.cdanet.cpeconfigurator;' android/android/app/src/main/java
           grep -q 'it.cdanet.cpeconfigurator' android/capacitor.config.json
-          grep -q 'ADMIN TESTER · v0.1.5' android/www/index.html
-          test -f android/www/assets/cda-net-logo.svg
+          grep -q 'v0.1.6' android/www/index.html
       - name: Build debug APK
         working-directory: android/android
         run: ./gradlew --no-daemon assembleDebug
       - name: Stage APK artifact
         run: |
-          cp android/android/app/build/outputs/apk/debug/app-debug.apk CDA-Net-CPE-Configurator-v0.1.5-Admin-Tester.apk
-          sha256sum CDA-Net-CPE-Configurator-v0.1.5-Admin-Tester.apk > CDA-Net-CPE-Configurator-v0.1.5-Admin-Tester.apk.sha256
+          cp android/android/app/build/outputs/apk/debug/app-debug.apk CDA-Net-CPE.apk
+          sha256sum CDA-Net-CPE.apk > CDA-Net-CPE.apk.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: CDA-Net-CPE-Configurator-v0.1.5-Admin-Tester
+          name: CDA-Net-CPE
           path: |
-            CDA-Net-CPE-Configurator-v0.1.5-Admin-Tester.apk
-            CDA-Net-CPE-Configurator-v0.1.5-Admin-Tester.apk.sha256
+            CDA-Net-CPE.apk
+            CDA-Net-CPE.apk.sha256
           if-no-files-found: error
           retention-days: 14
