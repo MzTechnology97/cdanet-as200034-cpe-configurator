@@ -129,7 +129,7 @@ jobs:
           grep -q 'RtspPlayerActivity' android/android/app/src/main/AndroidManifest.xml
           grep -q 'media3-exoplayer-rtsp' android/android/app/build.gradle
           grep -q 'o.put("cidr"' android/android/app/src/main/java/it/cdanet/cpeconfigurator/NetworkToolsPlugin.java
-          grep -q 'versionName "0.1.8"' android/android/app/build.gradle
+          grep -q 'versionName "0.1.9"' android/android/app/build.gradle
           grep -q 'ACCESS_FINE_LOCATION' android/android/app/src/main/AndroidManifest.xml
       - name: Build debug APK
         working-directory: android/android
