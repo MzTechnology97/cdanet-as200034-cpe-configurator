@@ -20,14 +20,13 @@ A browser PWA should not attempt to bypass CORS/TLS protections to automate a CP
 
 ## Current status
 
-v0.2.0 field-test architecture is implemented:
+v0.3.0 introduces one UI with three execution engines:
 
-- HTTPS-capable PWA shell with update-safe service worker.
-- Authenticated backend with Admin/installer roles, encrypted WPA2 secrets and redacted audit history.
-- Admin upload of lab-validated airOS 8.7.4 provisioning profiles per supported model.
-- Android native offline workflow: prepare while online, join the CPE management Wi-Fi, probe `192.168.172.1`, perform first-run activation through the official local airOS UI, then apply the prepared profile over SSH.
-- Native application verifies target firmware, board profile and expected MAC before writing `/tmp/system.cfg`.
-- Configuration is persisted with `cfgmtd -f /tmp/system.cfg -w` before reboot.
+- **Android APK**: uses the native Android diagnostics/provisioning plugin.
+- **PWA Web / Backend CDA Net**: authenticated server-side Ping, DNS, Traceroute, interfaces, neighbor/ARP view, network discovery, SNMP v2c, camera probe, ONVIF/Hikvision discovery, BGP/RIPEstat, Looking Glass, MAC vendor lookup and browser-to-server speed test.
+- **PWA Web / CDA Net Web Bridge**: loopback-only companion for PC field work where the browser cannot access Wi-Fi, ARP, UDP/SNMP, ONVIF/SADP, external SSH/RDP/RTSP handlers or the local CPE directly.
+
+Provisioning is available in both Android and Web Bridge modes. Both prepare the short-lived package while Internet is available, keep it in memory, then apply it locally after the installer joins the CPE management network. Firmware, board profile and expected MAC are verified before writing `system.cfg`, which is persisted with `cfgmtd -f /tmp/system.cfg -w`.
 
 The remaining production gate is hardware validation of one approved airOS 8.7.4 profile per supported model. Firmware 8.7.11/8.7.25 normalization remains blocked until the correct WA/XC image and downgrade procedure have been bench-tested for each board family.
 
