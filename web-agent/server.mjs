@@ -147,11 +147,21 @@ function sshExec(conn,cmd,timeout=10000){
   return new Promise((resolve,reject)=>{conn.exec(cmd,(err,stream)=>{if(err)return reject(err);let out='',errout='',done=false;const t=setTimeout(()=>{if(!done){done=true;stream.close();reject(new Error('Timeout comando CPE'))}},timeout);stream.on('data',d=>out+=d);stream.stderr.on('data',d=>errout+=d);stream.on('close',code=>{if(done)return;done=true;clearTimeout(t);if(code!==0)return reject(new Error('Comando CPE fallito ('+code+'): '+errout.trim()));resolve(out)})})});
 }
 function cfgValue(v){v=String(v??'');if(v.length>4096||/[\r\n\0]/.test(v))throw new Error('Valore configurazione non valido');return v}
-async function provision({backendUrl,token,request}){
+let pendingProvision=null;
+async function fetchProvisionPackage({backendUrl,token,request}){
   if(!/^https?:\/\//i.test(backendUrl||''))throw new Error('Backend URL non valido');
   const br=new URL(backendUrl);if(br.protocol!=='https:'&&!private4((await resolve4(br.hostname))))throw new Error('Backend HTTP consentito solo su rete privata');
   const r=await fetch(backendUrl.replace(/\/$/,'')+'/api/mobile/provision-package',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,'X-CDA-Client':'web-bridge-v0.3'},body:JSON.stringify(request)});
   const p=await r.json();if(!r.ok)throw new Error(p.error||('Backend HTTP '+r.status));if(new Date(p.expiresAt).getTime()<Date.now())throw new Error('Pacchetto provisioning scaduto');
+  return p;
+}
+async function prepareProvision(args){
+  pendingProvision=await fetchProvisionPackage(args);
+  return {ok:true,prepared:true,expiresAt:pendingProvision.expiresAt,factoryIp:pendingProvision.factoryIp,targetFirmware:pendingProvision.targetFirmware,expectedDevice:pendingProvision.expectedDevice,source:'web-bridge',note:'Pacchetto tenuto solo in RAM. Ora puoi collegare il PC alla Wi-Fi management della CPE.'};
+}
+async function applyProvisionPackage(p){
+  if(!p)throw new Error('Nessun provisioning preparato');
+  if(new Date(p.expiresAt).getTime()<Date.now()){pendingProvision=null;throw new Error('Pacchetto provisioning scaduto: riconnetti Internet e preparalo di nuovo')}
   const host=p.factoryIp||'192.168.172.1';if(!private4(host))throw new Error('Target CPE non locale');
   const conn=await sshConnect({host,port:22,username:cfgValue(p.device.username),password:cfgValue(p.device.password)});
   try{
@@ -170,9 +180,11 @@ async function provision({backendUrl,token,request}){
     const sha=createHash('sha256').update(p.profileTemplate||'').digest('hex');if(p.profileSha256&&sha!==p.profileSha256)throw new Error('Hash profilo non valido');
     await new Promise((resolve,reject)=>conn.sftp((err,sftp)=>{if(err)return reject(err);const w=sftp.createWriteStream('/tmp/system.cfg',{mode:0o600});w.on('error',reject);w.on('close',resolve);w.end(Buffer.from(cfg,'utf8'))}));
     await sshExec(conn,'cfgmtd -f /tmp/system.cfg -w',20000);try{await sshExec(conn,'reboot',2500)}catch{}
+    pendingProvision=null;
     return {ok:true,host,stages:['SSH CPE verificato','Firmware '+fw+' verificato','Board e MAC verificati','system.cfg trasferito','Configurazione persistita con cfgmtd','Riavvio CPE richiesto'],source:'web-bridge'};
   }finally{conn.end()}
 }
+async function applyPrepared(){return applyProvisionPackage(pendingProvision)}
 async function tool(action,p){
   if(action==='interfaces'||action==='detectSubnet'||action==='gateway'||action==='dhcp'||action==='topology')return interfaces();
   if(action==='wifiScan')return wifiScan();
@@ -198,7 +210,7 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/health')return send(res,200,{ok:true,service:'cda-net-web-bridge',version:'0.3.0',platform},origin);
   if(req.headers['x-cda-bridge-token']!==TOKEN)return send(res,401,{error:'bridge_unauthorized'},origin);
   try{
-    if(req.method==='POST'&&req.url==='/provision/apply')return send(res,200,await provision(await body(req,1024*1024)),origin);
+    if(req.method==='POST'&&req.url==='/provision/prepare')return send(res,200,await prepareProvision(await body(req,1024*1024)),origin);if(req.method==='POST'&&req.url==='/provision/apply')return send(res,200,await applyPrepared(),origin);
     const m=req.url.match(/^\/tool\/([A-Za-z0-9_-]+)$/);if(req.method==='POST'&&m)return send(res,200,await tool(m[1],await body(req)),origin);
     return send(res,404,{error:'not_found'},origin);
   }catch(e){return send(res,400,{error:e.message||String(e)},origin)}
