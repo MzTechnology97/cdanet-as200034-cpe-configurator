@@ -21,6 +21,11 @@ The first start creates the Admin user from `ADMIN_USERNAME` / `ADMIN_PASSWORD`.
 
 Never commit `.env`. Device admin password, wireless PSK, SNMP community and PPPoE passwords must not be stored in audit records. PPPoE passwords are deliberately rejected by the strict audit schema.
 
-## Next provisioning bridge milestone
+## Web and local bridge architecture
 
-The bridge that actually talks to airOS is not enabled yet. Before implementing it, capture the exact CPE models and airOS AC firmware versions in use and validate the supported management mechanism in a lab CPE. Do not rely on undocumented web-form endpoints in production without version-specific testing. The bridge should only accept a validated high-level provisioning plan, restrict targets to local management networks, prevent arbitrary URL/command injection, enforce short timeouts, redact secrets from logs and return a normalized result.
+The v0.3.0 backend exposes authenticated `/api/tools/*` endpoints for diagnostics that can safely run from the CDA Net server/NMS perspective.
+
+The companion in `web-agent/` is the local bridge for a PC running the PWA. It listens only on loopback, requires a pairing token, enforces private/CGNAT target restrictions for local tools, and keeps provisioning packages and credentials in memory only.
+
+The Android APK continues to use its native plugin and does not require the PC Web Bridge.
+
