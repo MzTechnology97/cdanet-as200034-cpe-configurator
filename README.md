@@ -20,7 +20,16 @@ A browser PWA should not attempt to bypass CORS/TLS protections to automate a CP
 
 ## Current status
 
-Initial secure PWA shell is in place. The UI can generate the allowed SSID set, collect non-secret device metadata and transient PPPoE credentials, preview the intended provisioning plan, and store only a redacted local history. Direct device provisioning is intentionally disabled until the provisioning bridge/API is implemented and validated against the exact airOS version(s).
+v0.2.0 field-test architecture is implemented:
+
+- HTTPS-capable PWA shell with update-safe service worker.
+- Authenticated backend with Admin/installer roles, encrypted WPA2 secrets and redacted audit history.
+- Admin upload of lab-validated airOS 8.7.4 provisioning profiles per supported model.
+- Android native offline workflow: prepare while online, join the CPE management Wi-Fi, probe `192.168.172.1`, perform first-run activation through the official local airOS UI, then apply the prepared profile over SSH.
+- Native application verifies target firmware, board profile and expected MAC before writing `/tmp/system.cfg`.
+- Configuration is persisted with `cfgmtd -f /tmp/system.cfg -w` before reboot.
+
+The remaining production gate is hardware validation of one approved airOS 8.7.4 profile per supported model. Firmware 8.7.11/8.7.25 normalization remains blocked until the correct WA/XC image and downgrade procedure have been bench-tested for each board family.
 
 ## Development
 
