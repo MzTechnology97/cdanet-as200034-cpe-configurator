@@ -4,6 +4,7 @@ import os from 'node:os';
 import net from 'node:net';
 import dgram from 'node:dgram';
 import {execFile} from 'node:child_process';
+import {randomUUID} from 'node:crypto';
 import {promisify} from 'node:util';
 
 const execFileP=promisify(execFile);
@@ -186,11 +187,11 @@ async function macVendor(mac){
   finally{clearTimeout(timer)}
 }
 async function onvifDiscovery(){
-  const xml='<?xml version="1.0" encoding="UTF-8"?><e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope" xmlns:w="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery" xmlns:dn="http://www.onvif.org/ver10/network/wsdl"><e:Header><w:MessageID>uuid:'+crypto.randomUUID()+'</w:MessageID><w:To e:mustUnderstand="true">urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To><w:Action e:mustUnderstand="true">http://schemas.xmlsoap.org/ws:2005:04:discovery/Probe</w:Action></e:Header><e:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types></d:Probe></e:Body></e:Envelope>';
+  const xml='<?xml version="1.0" encoding="UTF-8"?><e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope" xmlns:w="http://schemas.xmlsoap.org/ws/2004/08/addressing" xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery" xmlns:dn="http://www.onvif.org/ver10/network/wsdl"><e:Header><w:MessageID>uuid:'+randomUUID()+'</w:MessageID><w:To e:mustUnderstand="true">urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To><w:Action e:mustUnderstand="true">http://schemas.xmlsoap.org/ws:2005:04:discovery/Probe</w:Action></e:Header><e:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types></d:Probe></e:Body></e:Envelope>';
   const devices=[],seen=new Set();return new Promise((resolve,reject)=>{const s=dgram.createSocket('udp4');s.bind(()=>{try{s.setMulticastTTL(2);s.send(Buffer.from(xml),3702,'239.255.255.250')}catch(e){s.close();reject(e)}});s.on('message',(b,r)=>{if(seen.has(r.address))return;seen.add(r.address);const body=b.toString('utf8'),xaddrs=(body.match(/<[^>]*XAddrs[^>]*>([^<]+)/i)||[])[1]||'';devices.push({ip:r.address,xaddrs})});s.on('error',reject);setTimeout(()=>{s.close();resolve({protocol:'ONVIF WS-Discovery',devices,count:devices.length,source:'backend',note:'Discovery dalla LAN del server CDA Net.'})},3200)})
 }
 async function hikDiscovery(){
-  const payload='<?xml version="1.0" encoding="utf-8"?><Probe><Uuid>'+crypto.randomUUID()+'</Uuid><Types>inquiry</Types></Probe>',devices=[],seen=new Set();
+  const payload='<?xml version="1.0" encoding="utf-8"?><Probe><Uuid>'+randomUUID()+'</Uuid><Types>inquiry</Types></Probe>',devices=[],seen=new Set();
   return new Promise((resolve,reject)=>{const s=dgram.createSocket('udp4');s.bind(()=>{s.setBroadcast(true);s.send(Buffer.from(payload),37020,'255.255.255.255')});s.on('message',(b,r)=>{if(seen.has(r.address))return;seen.add(r.address);const body=b.toString('utf8'),x={ip:r.address};for(const tag of ['DeviceDescription','DeviceSN','MAC','IPv4Address','HttpPort','SoftwareVersion']){const m=body.match(new RegExp('<'+tag+'>([^<]*)</'+tag+'>','i'));if(m)x[tag]=m[1]}devices.push(x)});s.on('error',reject);setTimeout(()=>{s.close();resolve({protocol:'Hikvision discovery',devices,count:devices.length,source:'backend',note:'Discovery dalla LAN del server CDA Net.'})},3200)})
 }
 
