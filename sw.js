@@ -1,4 +1,4 @@
-const CACHE='cda-cpe-pwa-v0.2.1-refresh-1';
+const CACHE='cda-cpe-pwa-v0.3.0-refresh-1';
 const SHELL=['./','./index.html','./styles.css','./app.js','./manifest.webmanifest','./assets/cda-net-logo.svg','./assets/icon.svg'];
 
 self.addEventListener('install',event=>{
