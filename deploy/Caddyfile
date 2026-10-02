@@ -1,4 +1,4 @@
-{$APP_SCHEME:http}://{$APP_DOMAIN:localhost} {
+{$APP_LISTEN::80} {
   encode zstd gzip
   header {
     X-Content-Type-Options "nosniff"
