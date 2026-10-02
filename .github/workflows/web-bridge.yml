@@ -1,0 +1,42 @@
+name: Package Web Bridge
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'web-agent/**'
+      - '.github/workflows/web-bridge.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  package:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Verify Web Bridge
+        working-directory: web-agent
+        run: |
+          node --check server.mjs
+          npm install --package-lock-only --ignore-scripts
+          npm install --omit=dev --ignore-scripts
+          node -e "Promise.all([import('net-snmp'),import('ssh2')]).then(()=>console.log('dependencies ok'))"
+      - name: Package source
+        run: |
+          mkdir -p dist/CDA-Net-Web-Bridge-v0.3.0
+          cp web-agent/package.json web-agent/package-lock.json web-agent/server.mjs web-agent/README.md web-agent/start-windows.ps1 web-agent/start-linux.sh dist/CDA-Net-Web-Bridge-v0.3.0/
+          cd dist
+          zip -r CDA-Net-Web-Bridge-v0.3.0.zip CDA-Net-Web-Bridge-v0.3.0
+          sha256sum CDA-Net-Web-Bridge-v0.3.0.zip > CDA-Net-Web-Bridge-v0.3.0.zip.sha256
+      - uses: actions/upload-artifact@v4
+        with:
+          name: CDA-Net-Web-Bridge-v0.3.0
+          path: |
+            dist/CDA-Net-Web-Bridge-v0.3.0.zip
+            dist/CDA-Net-Web-Bridge-v0.3.0.zip.sha256
+          retention-days: 30
