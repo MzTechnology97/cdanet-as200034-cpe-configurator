@@ -17,3 +17,8 @@ header{padding-top:calc(12px + env(safe-area-inset-top));}
 button.state-warn{background:#fff2d6!important;color:#805a00!important;border-color:#e5be67!important}
 .toolout{background:#fbfaf8}
 @media(max-width:620px){main{padding-bottom:max(110px,calc(80px + env(safe-area-inset-bottom)))}footer{padding-bottom:max(90px,calc(32px + env(safe-area-inset-bottom)))}.metric{padding:13px}.device{align-items:start}.pill{margin-top:3px}}
+
+/* v0.3.0 dual runtime */
+.sourceBadge{display:inline-flex;align-items:center;gap:6px;margin:0 0 10px;padding:5px 9px;border-radius:999px;background:#eef4ff;color:#35557b;font-size:11px;font-weight:750}
+#webBridgePanel{margin-top:26px;padding-top:18px;border-top:1px solid #eceef0}
+@media(min-width:760px){#webBridgePanel .grid{grid-template-columns:2fr 2fr 1fr}}
