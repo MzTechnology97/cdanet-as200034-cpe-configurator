@@ -23,7 +23,7 @@ Il backend accetta profili di provisioning solamente per firmware target 8.7.4.
 5. Esportare `system.cfg`.
 6. Sostituire esclusivamente i valori variabili con i placeholder elencati sotto.
 7. Caricare il file dalla sezione **Backend / Admin**.
-8. Impostare facoltativamente una regex `boardMatch` che identifichi la board attesa da `/etc/board.info`.
+8. Impostare obbligatoriamente una regex `boardMatch` che identifichi la board attesa da `/etc/board.info`.
 9. Provare il profilo su una seconda CPE da laboratorio prima dell'uso in campo.
 
 ## Placeholder supportati
@@ -74,10 +74,10 @@ Il plugin:
 2. limita il target a rete locale e al management IP previsto;
 3. apre SSH con le credenziali runtime;
 4. legge `/etc/version` e `/etc/board.info`;
-5. verifica firmware 8.7.4 e `boardMatch`, se configurato;
+5. verifica firmware 8.7.4, `boardMatch` e MAC della CPE;
 6. sostituisce i placeholder in memoria;
 7. trasferisce `/tmp/system.cfg` via SFTP;
-8. esegue `save`;
+8. persiste la configurazione con `cfgmtd -f /tmp/system.cfg -w`;
 9. richiede il reboot;
 10. elimina il pacchetto preparato dalla memoria.
 
