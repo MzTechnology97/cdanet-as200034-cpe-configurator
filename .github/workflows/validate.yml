@@ -27,7 +27,11 @@ jobs:
         run: npm install --ignore-scripts
       - name: Check backend JavaScript
         working-directory: server
-        run: node --check src/server.js
+        run: |
+          node --check src/server.js
+          node --check src/tools.js
+      - name: Check Web Bridge JavaScript
+        run: node --check web-agent/server.mjs
       - name: Validate Docker Compose
         env:
           FIRMWARE_HOST_PATH: /tmp/WA-8.7.4.bin
