@@ -188,7 +188,7 @@ let pendingProvision=null;
 async function fetchProvisionPackage({backendUrl,token,request}){
   if(!/^https?:\/\//i.test(backendUrl||''))throw new Error('Backend URL non valido');
   const br=new URL(backendUrl);if(br.protocol!=='https:'&&!private4((await resolve4(br.hostname))))throw new Error('Backend HTTP consentito solo su rete privata');
-  const r=await fetch(backendUrl.replace(/\/$/,'')+'/api/mobile/provision-package',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,'X-CDA-Client':'web-bridge-v0.4'},body:JSON.stringify(request)});
+  const r=await fetch(backendUrl.replace(/\/$/,'')+'/api/mobile/provision-package',{method:'POST',headers:{'Content-Type':'application/json','Authorization':'Bearer '+token,'X-CDA-Client':'web-bridge-v0.4.1'},body:JSON.stringify(request)});
   const p=await r.json();if(!r.ok)throw new Error(p.error||('Backend HTTP '+r.status));if(new Date(p.expiresAt).getTime()<Date.now())throw new Error('Pacchetto provisioning scaduto');
   return p;
 }
