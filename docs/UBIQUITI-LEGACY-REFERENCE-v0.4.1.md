@@ -16,7 +16,7 @@ Il kit Windows:
 Lo script airOS:
 1. prepara un `system.cfg`;
 2. imposta Router Mode e WAN wireless;
-3. usa una VLAN WAN e PPPoE;
+3. nel vecchio kit era presente una VLAN WAN, ma non viene usata nel provisioning CDA Net attuale;
 4. configura LAN/DHCP;
 5. imposta le porte HTTP/HTTPS di management;
 6. abilita SSH e servizi di rete previsti dal profilo;
@@ -24,10 +24,11 @@ Lo script airOS:
 8. persiste con `cfgmtd`;
 9. esegue reboot.
 
-## Baseline parametrica v0.4.1
+## Baseline parametrica v0.4.2
+
+La VLAN legacy è esclusa intenzionalmente: PPPoE usa direttamente la WAN wireless.
 
 I valori storici sono diventati configurazione runtime del backend:
-- `CPE_VLAN_ID`
 - `CPE_LAN_IP`, `CPE_LAN_NETMASK`
 - `CPE_DHCP_START`, `CPE_DHCP_END`, `CPE_DHCP_LEASE`
 - `CPE_PPPOE_MTU`, `CPE_PPPOE_MRU`
@@ -49,3 +50,11 @@ Non vengono importati dal kit legacy:
 - regole DMZ legacy senza nuova validazione.
 
 UISP, SNMP e credenziali restano segreti runtime protetti dal backend.
+
+## Policy radio e identità attuale
+
+- Calculate EIRP Limit: disattivato.
+- Automatic Power Control lato Station: attivo.
+- Watchdog: 8.8.8.8.
+- SNMP: community public, contact 172.31.0.7, location derivata dallo username RADIUS.
+- Device Name: COGNOME NOME derivato dallo username RADIUS prima di @cda-net.it.
