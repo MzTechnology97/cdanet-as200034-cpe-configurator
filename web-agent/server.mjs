@@ -210,7 +210,7 @@ async function applyProvisionPackage(p){
       const ms=[...info.matchAll(/^(?:board\.hwaddr|eth0\.macaddr|serialno)=([0-9A-Fa-f:.-]+)$/gim)].map(x=>x[1].replace(/[^0-9a-f]/gi,'').toLowerCase());
       if(!ms.includes(expectedMac))throw new Error('MAC CPE diverso dal MAC atteso');
     }
-    let cfg=String(p.profileTemplate||'');const vars={
+    let cfg=String(p.profileTemplate||'');if(/^(?:vlan\.|ebtables\.sys\.vlan\.)/mi.test(cfg)||/^ppp\.\d+\.devname=ath0\.\d+/mi.test(cfg))throw new Error('Profilo VLAN legacy non consentito');const vars={
       '${SSID}':cfgValue(p.wireless.ssid),'${WPA2_PSK}':cfgValue(p.wireless.password),'${PPPOE_USER}':cfgValue(p.pppoe.username),'${PPPOE_PASSWORD}':cfgValue(p.pppoe.password),
       '${HTTP_PORT}':String(p.management?.httpPort||20080),'${HTTPS_PORT}':String(p.management?.httpsPort||20443),'${UISP_ENROLLMENT}':cfgValue(p.uispEnrollment||''),'${SNMP_COMMUNITY}':cfgValue(p.snmp?.community||p.snmpCommunity||'public'),'${SNMP_CONTACT}':cfgValue(p.snmp?.contact||'172.31.0.7'),'${SNMP_LOCATION}':cfgValue(p.snmp?.location||''),'${DEVICE_NAME}':cfgValue(p.identity?.deviceName||p.snmp?.location||''),
       '${CPE_USERNAME}':cfgValue(p.device.username),'${CPE_PASSWORD}':cfgValue(p.device.password),'${EXPECTED_MAC}':cfgValue(p.expectedDevice?.mac||''),'${EXPECTED_SERIAL}':cfgValue(p.expectedDevice?.serial||''),'${LAN_IP}':cfgValue(p.networkProfile?.lanIp||'192.168.1.254'),'${LAN_NETMASK}':cfgValue(p.networkProfile?.lanNetmask||'255.255.255.0'),
