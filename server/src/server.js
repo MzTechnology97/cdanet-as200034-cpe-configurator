@@ -2,7 +2,6 @@ import 'dotenv/config';import express from'express';import helmet from'helmet';i
 const required=['JWT_SECRET','ADMIN_USERNAME'];for(const k of required)if(!process.env[k]||process.env[k].length<3)throw new Error(`Missing/weak ${k}`);if(process.env.JWT_SECRET.length<32)throw new Error('JWT_SECRET must be >=32 chars');const TARGET_FW='8.7.4',TARGET_SHA256='b959c66ec28d1c26ce0eac9122cc345b1fe92450df74a6cf627f5cb28e83323c',FACTORY_IP='192.168.172.1';
 const intEnv=(name,def,min=1,max=65535)=>{const n=Number(process.env[name]??def);return Number.isInteger(n)&&n>=min&&n<=max?n:def};
 const CPE_NETWORK_PROFILE={
-  vlanId:intEnv('CPE_VLAN_ID',87,1,4094),
   lanIp:process.env.CPE_LAN_IP||'192.168.1.254',
   lanNetmask:process.env.CPE_LAN_NETMASK||'255.255.255.0',
   dhcpStart:process.env.CPE_DHCP_START||'192.168.1.10',
