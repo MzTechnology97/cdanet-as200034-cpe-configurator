@@ -1,4 +1,4 @@
-# Profili airOS per provisioning CDA Net v0.2.0
+# Profili airOS per provisioning CDA Net v0.4.1
 
 ## Scopo
 
@@ -40,6 +40,18 @@ Il backend accetta profili di provisioning solamente per firmware target 8.7.4.
 - `${CPE_PASSWORD}`
 - `${EXPECTED_MAC}`
 - `${EXPECTED_SERIAL}`
+- `${VLAN_ID}`
+- `${LAN_IP}`
+- `${LAN_NETMASK}`
+- `${DHCP_START}`
+- `${DHCP_END}`
+- `${DHCP_LEASE}`
+- `${PPPOE_MTU}`
+- `${PPPOE_MRU}`
+- `${WATCHDOG_HOST}`
+- `${NTP_SERVER}`
+- `${SSH_PORT}`
+- `${DISCOVERY_PORT}`
 
 Il plugin Android rifiuta valori contenenti CR/LF/NUL e rifiuta il profilo se, dopo la sostituzione, rimane un placeholder non valorizzato.
 
@@ -77,7 +89,7 @@ Il plugin:
 5. verifica firmware 8.7.4, `boardMatch` e MAC della CPE;
 6. sostituisce i placeholder in memoria;
 7. trasferisce `/tmp/system.cfg` via SFTP;
-8. persiste la configurazione con `cfgmtd -f /tmp/system.cfg -w`;
+8. persiste la configurazione con `cfgmtd -f /tmp/system.cfg -w -p /etc/` e `sync`;
 9. richiede il reboot;
 10. elimina il pacchetto preparato dalla memoria.
 
