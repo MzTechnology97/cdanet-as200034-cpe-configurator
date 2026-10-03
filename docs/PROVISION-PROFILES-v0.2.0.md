@@ -1,4 +1,4 @@
-# Profili airOS per provisioning CDA Net v0.4.1
+# Profili airOS per provisioning CDA Net v0.4.2
 
 ## Scopo
 
@@ -36,11 +36,13 @@ Il backend accetta profili di provisioning solamente per firmware target 8.7.4.
 - `${HTTPS_PORT}`
 - `${UISP_ENROLLMENT}`
 - `${SNMP_COMMUNITY}`
+- `${SNMP_CONTACT}`
+- `${SNMP_LOCATION}`
+- `${DEVICE_NAME}`
 - `${CPE_USERNAME}`
 - `${CPE_PASSWORD}`
 - `${EXPECTED_MAC}`
 - `${EXPECTED_SERIAL}`
-- `${VLAN_ID}`
 - `${LAN_IP}`
 - `${LAN_NETMASK}`
 - `${DHCP_START}`
@@ -54,6 +56,15 @@ Il backend accetta profili di provisioning solamente per firmware target 8.7.4.
 - `${DISCOVERY_PORT}`
 
 Il plugin Android rifiuta valori contenenti CR/LF/NUL e rifiuta il profilo se, dopo la sostituzione, rimane un placeholder non valorizzato.
+
+La v0.4.2 forza inoltre, indipendentemente dal template:
+- `pwdog.host=8.8.8.8` e watchdog attivo;
+- `snmp.status=enabled`, community `public`, contact `172.31.0.7`;
+- `snmp.location=COGNOME NOME`, derivato dallo username RADIUS/PPPoE prima di `@cda-net.it`;
+- Calculate EIRP Limit disattivato tramite i flag airOS previsti;
+- Automatic Power Control lato Station attivo;
+- Device Name `COGNOME NOME`;
+- nessuna VLAN nel provisioning CDA Net attuale.
 
 ## Segreti
 
