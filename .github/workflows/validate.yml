@@ -30,6 +30,7 @@ jobs:
         run: |
           node --check src/server.js
           node --check src/tools.js
+          node --check src/routeros.js
       - name: Check Web Bridge JavaScript
         run: node --check web-agent/server.mjs
       - name: Validate Docker Compose
