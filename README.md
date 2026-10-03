@@ -20,7 +20,7 @@ A browser PWA should not attempt to bypass CORS/TLS protections to automate a CP
 
 ## Current status
 
-v0.3.0 introduces one UI with three execution engines:
+v0.4.0 introduces one UI with three execution engines:
 
 - **Android APK**: uses the native Android diagnostics/provisioning plugin.
 - **PWA Web / Backend CDA Net**: authenticated server-side Ping, DNS, Traceroute, interfaces, neighbor/ARP view, network discovery, SNMP v2c, camera probe, ONVIF/Hikvision discovery, BGP/RIPEstat, Looking Glass, MAC vendor lookup and browser-to-server speed test.
@@ -29,6 +29,17 @@ v0.3.0 introduces one UI with three execution engines:
 Provisioning is available in both Android and Web Bridge modes. Both prepare the short-lived package while Internet is available, keep it in memory, then apply it locally after the installer joins the CPE management network. Firmware, board profile and expected MAC are verified before writing `system.cfg`, which is persisted with `cfgmtd -f /tmp/system.cfg -w`.
 
 The remaining production gate is hardware validation of one approved airOS 8.7.4 profile per supported model. Firmware 8.7.11/8.7.25 normalization remains blocked until the correct WA/XC image and downgrade procedure have been bench-tested for each board family.
+
+## MikroTik / RouterOS v0.4.0
+
+The unified UI now includes a RouterOS management module compatible with RouterOS 6.x and 7.x over SSH. It exposes CDA Net styled equivalents of Quick Set, CAPsMAN, Interfaces, Wireless, Bridge, PPP, Switch, Mesh, IP, MPLS, Routing, System, Queues, Files, Log, RADIUS and Tools, plus a system dashboard and a read-only terminal.
+
+Execution is dual-runtime:
+- Android APK: direct native JSch session to private/CGNAT RouterOS targets.
+- PWA + Web Bridge: direct local SSH from the installer PC.
+- PWA backend: server-side SSH to allowed targets; public targets remain disabled unless explicitly enabled in protected NOC deployment.
+
+Passwords and RouterOS secrets are not persisted and common secret fields are redacted from returned output. The v0.4.0 terminal intentionally blocks configuration-changing commands until field validation is complete.
 
 ## Development
 
