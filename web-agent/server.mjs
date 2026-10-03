@@ -147,6 +147,42 @@ function sshExec(conn,cmd,timeout=10000){
   return new Promise((resolve,reject)=>{conn.exec(cmd,(err,stream)=>{if(err)return reject(err);let out='',errout='',done=false;const t=setTimeout(()=>{if(!done){done=true;stream.close();reject(new Error('Timeout comando CPE'))}},timeout);stream.on('data',d=>out+=d);stream.stderr.on('data',d=>errout+=d);stream.on('close',code=>{if(done)return;done=true;clearTimeout(t);if(code!==0)return reject(new Error('Comando CPE fallito ('+code+'): '+errout.trim()));resolve(out)})})});
 }
 function cfgValue(v){v=String(v??'');if(v.length>4096||/[\r\n\0]/.test(v))throw new Error('Valore configurazione non valido');return v}
+function roRedact(s=''){return String(s).replace(/((?:password|passwd|secret|private-key|passphrase|shared-secret|authentication-key|encryption-key)\\s*[=:]\\s*)(?:"[^"]*"|'[^']*'|\\S+)/gi,'$1***REDACTED***').replace(/(password|secret)\\s*=\\s*[^\\s]+/gi,'$1=***REDACTED***')}
+const RO_ACTIONS={
+  quickset:[['/system identity print','Identità'],['/system resource print','Risorse'],['/ip address print detail without-paging','Indirizzi IP'],['/ip route print detail without-paging','Routing'],['/ip dhcp-server print detail without-paging','DHCP'],['/interface pppoe-client print detail without-paging','PPPoE'],['/interface wireless print detail without-paging','Wireless']],
+  capsman:[['/caps-man manager print','CAPsMAN Manager'],['/caps-man interface print detail without-paging','CAPsMAN Interfaces'],['/caps-man registration-table print detail without-paging','CAPsMAN Registrazioni']],
+  interfaces:[['/interface print detail without-paging','Interfaces']],
+  wireless:[['/interface wireless print detail without-paging','Wireless v6'],['/interface wireless registration-table print detail without-paging','Registrazioni Wireless'],['/interface wifi print detail without-paging','WiFi RouterOS v7']],
+  bridge:[['/interface bridge print detail without-paging','Bridge'],['/interface bridge port print detail without-paging','Bridge Ports'],['/interface bridge host print detail without-paging','Bridge Hosts']],
+  ppp:[['/ppp active print detail without-paging','PPP Active'],['/interface pppoe-client print detail without-paging','PPPoE Client'],['/interface pppoe-server server print detail without-paging','PPPoE Server']],
+  switch:[['/interface ethernet switch print detail without-paging','Switch'],['/interface ethernet switch port print detail without-paging','Switch Ports']],
+  mesh:[['/interface mesh print detail without-paging','Mesh']],
+  ip:[['/ip address print detail without-paging','IP Addresses'],['/ip arp print detail without-paging','ARP'],['/ip route print detail without-paging','IP Routes'],['/ip dhcp-server lease print detail without-paging','DHCP Leases'],['/ip firewall filter print stats detail without-paging','Firewall Filter'],['/ip firewall nat print stats detail without-paging','Firewall NAT'],['/ip service print detail without-paging','IP Services']],
+  mpls:[['/mpls interface print detail without-paging','MPLS Interfaces'],['/mpls ldp neighbor print detail without-paging','LDP Neighbors'],['/mpls forwarding-table print detail without-paging','MPLS Forwarding']],
+  routing:[['/routing bgp peer print detail without-paging','BGP Peers v6'],['/routing bgp session print detail without-paging','BGP Sessions v7'],['/routing ospf neighbor print detail without-paging','OSPF Neighbors'],['/routing ospf interface print detail without-paging','OSPF Interfaces']],
+  system:[['/system identity print','Identity'],['/system resource print','Resources'],['/system routerboard print','RouterBOARD'],['/system clock print','Clock'],['/system package print without-paging','Packages']],
+  queues:[['/queue simple print stats detail without-paging','Simple Queues'],['/queue tree print stats detail without-paging','Queue Tree']],
+  files:[['/file print detail without-paging','Files']],
+  log:[['/log print without-paging','Log']],
+  radius:[['/radius print detail without-paging','RADIUS']],
+  tools:[['/tool profile duration=2','Profiler'],['/tool bandwidth-server print','Bandwidth Server'],['/ip service print detail without-paging','Management Services']]
+};
+function roKv(text){const o={};for(const line of String(text).split(/\\r?\\n/)){const m=line.match(/^\\s*([A-Za-z0-9_.-]+)\\s*:\\s*(.*)$/);if(m)o[m[1]]=m[2].trim()}return o}
+function roReadonly(cmd){const s=String(cmd||'').trim();if(!s.startsWith('/'))throw new Error('Il comando deve iniziare con /');if(s.length>300)throw new Error('Comando troppo lungo');if(/\\b(add|set|remove|unset|enable|disable|reset|reboot|shutdown|upgrade|install|uninstall|move|make-supout|export|backup|restore|fetch|upload|download|password|secret|user|certificate|script|scheduler)\\b/i.test(s))throw new Error('Terminale RouterOS in sola lettura');if(!/\\b(print|monitor|registration-table|profile|ping|traceroute)\\b/i.test(s))throw new Error('Sono ammessi solo comandi di lettura/diagnostica');return s}
+async function roTry(conn,cmd){try{return roRedact(await sshExec(conn,cmd,9000))}catch(e){return '[non disponibile] '+roRedact(e.message||e)}}
+async function routerOsAction(p){
+  const host=String(p.host||''),port=Number(p.port||22),username=String(p.username||''),password=String(p.password||''),action=String(p.action||'dashboard');
+  const ip=await resolve4(host);if(!private4(ip))throw new Error('Il Web Bridge RouterOS accetta solo target privati/CGNAT');if(!username||!password)throw new Error('Username e password RouterOS richiesti');
+  const conn=await sshConnect({host:ip,port,username,password});
+  try{
+    const identity=await roTry(conn,'/system identity print'),resource=await roTry(conn,'/system resource print'),board=await roTry(conn,'/system routerboard print');
+    const r=roKv(resource),b=roKv(board),id=roKv(identity),summary={identity:id.name||identity.replace(/^name:\\s*/i,'').trim(),version:r.version||'',uptime:r.uptime||'',boardName:r['board-name']||b.model||'',architecture:r['architecture-name']||'',cpu:r.cpu||'',cpuCount:r['cpu-count']||'',cpuFrequency:r['cpu-frequency']||'',cpuLoad:r['cpu-load']||'',freeMemory:r['free-memory']||'',totalMemory:r['total-memory']||'',freeHdd:r['free-hdd-space']||'',totalHdd:r['total-hdd-space']||'',factorySoftware:b['factory-software']||'',currentFirmware:b['current-firmware']||'',upgradeFirmware:b['upgrade-firmware']||''};
+    if(action==='dashboard')return{host:ip,summary,sections:[],source:'routeros-web-bridge'};
+    if(action==='terminal'){const cmd=roReadonly(p.command);return{host:ip,summary,sections:[{title:'Terminale RouterOS',command:cmd,output:await roTry(conn,cmd)}],source:'routeros-web-bridge'};}
+    const defs=RO_ACTIONS[action];if(!defs)throw new Error('Modulo RouterOS non supportato');const sections=[];for(const [cmd,title] of defs)sections.push({title,command:cmd,output:await roTry(conn,cmd)});
+    return{host:ip,summary,sections,source:'routeros-web-bridge'};
+  }finally{conn.end()}
+}
 let pendingProvision=null;
 async function fetchProvisionPackage({backendUrl,token,request}){
   if(!/^https?:\/\//i.test(backendUrl||''))throw new Error('Backend URL non valido');
@@ -210,7 +246,7 @@ const server=http.createServer(async(req,res)=>{
   if(req.method==='GET'&&req.url==='/health')return send(res,200,{ok:true,service:'cda-net-web-bridge',version:'0.3.0',platform},origin);
   if(req.headers['x-cda-bridge-token']!==TOKEN)return send(res,401,{error:'bridge_unauthorized'},origin);
   try{
-    if(req.method==='POST'&&req.url==='/provision/prepare')return send(res,200,await prepareProvision(await body(req,1024*1024)),origin);if(req.method==='POST'&&req.url==='/provision/apply')return send(res,200,await applyPrepared(),origin);
+    if(req.method==='POST'&&req.url==='/provision/prepare')return send(res,200,await prepareProvision(await body(req,1024*1024)),origin);if(req.method==='POST'&&req.url==='/provision/apply')return send(res,200,await applyPrepared(),origin);if(req.method==='POST'&&req.url==='/routeros/action')return send(res,200,await routerOsAction(await body(req,1024*1024)),origin);
     const m=req.url.match(/^\/tool\/([A-Za-z0-9_-]+)$/);if(req.method==='POST'&&m)return send(res,200,await tool(m[1],await body(req)),origin);
     return send(res,404,{error:'not_found'},origin);
   }catch(e){return send(res,400,{error:e.message||String(e)},origin)}
