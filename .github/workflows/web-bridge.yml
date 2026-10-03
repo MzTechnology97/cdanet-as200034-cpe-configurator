@@ -28,15 +28,15 @@ jobs:
           node -e "Promise.all([import('net-snmp'),import('ssh2')]).then(()=>console.log('dependencies ok'))"
       - name: Package source
         run: |
-          mkdir -p dist/CDA-Net-Web-Bridge-v0.4.0
-          cp web-agent/package.json web-agent/package-lock.json web-agent/server.mjs web-agent/README.md web-agent/start-windows.ps1 web-agent/start-linux.sh dist/CDA-Net-Web-Bridge-v0.4.0/
+          mkdir -p dist/CDA-Net-Web-Bridge-v0.4.1
+          cp web-agent/package.json web-agent/package-lock.json web-agent/server.mjs web-agent/README.md web-agent/start-windows.ps1 web-agent/start-linux.sh dist/CDA-Net-Web-Bridge-v0.4.1/
           cd dist
-          zip -r CDA-Net-Web-Bridge-v0.4.0.zip CDA-Net-Web-Bridge-v0.4.0
-          sha256sum CDA-Net-Web-Bridge-v0.4.0.zip > CDA-Net-Web-Bridge-v0.4.0.zip.sha256
+          zip -r CDA-Net-Web-Bridge-v0.4.1.zip CDA-Net-Web-Bridge-v0.4.1
+          sha256sum CDA-Net-Web-Bridge-v0.4.1.zip > CDA-Net-Web-Bridge-v0.4.1.zip.sha256
       - uses: actions/upload-artifact@v4
         with:
-          name: CDA-Net-Web-Bridge-v0.4.0
+          name: CDA-Net-Web-Bridge-v0.4.1
           path: |
-            dist/CDA-Net-Web-Bridge-v0.4.0.zip
-            dist/CDA-Net-Web-Bridge-v0.4.0.zip.sha256
+            dist/CDA-Net-Web-Bridge-v0.4.1.zip
+            dist/CDA-Net-Web-Bridge-v0.4.1.zip.sha256
           retention-days: 30
