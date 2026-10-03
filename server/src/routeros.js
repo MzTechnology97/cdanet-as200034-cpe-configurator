@@ -114,6 +114,7 @@ async function runAction(creds,action,command){
   try{
     const summary=await snapshot(conn);
     if(action==='dashboard')return {host,summary,sections:[],source:'routeros-backend'};
+    if(action==='supout'){const cmd='/system sup-output name=cda-supout.rif';const output=cleanText(await exec(conn,cmd,65000));const files=await tryExec(conn,'/file print detail where name~"cda-supout"');return {host,summary,sections:[{title:'Supout.rif',command:cmd,output:(output||'Generazione completata')+'\n\n'+files}],source:'routeros-backend',note:'Il file diagnostico resta sul router e può contenere informazioni sensibili.'};}
     if(action==='terminal'){const cmd=readonlyCommand(command);return {host,summary,sections:[{title:'Terminale RouterOS',command:cmd,output:await tryExec(conn,cmd)}],source:'routeros-backend'};}
     const defs=ACTIONS[action];if(!defs)throw new Error('Modulo RouterOS non supportato');
     const sections=[];for(const [cmd,title] of defs)sections.push({title,command:cmd,output:await tryExec(conn,cmd)});
