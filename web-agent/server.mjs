@@ -212,13 +212,17 @@ async function applyProvisionPackage(p){
     let cfg=String(p.profileTemplate||'');const vars={
       '${SSID}':cfgValue(p.wireless.ssid),'${WPA2_PSK}':cfgValue(p.wireless.password),'${PPPOE_USER}':cfgValue(p.pppoe.username),'${PPPOE_PASSWORD}':cfgValue(p.pppoe.password),
       '${HTTP_PORT}':String(p.management?.httpPort||20080),'${HTTPS_PORT}':String(p.management?.httpsPort||20443),'${UISP_ENROLLMENT}':cfgValue(p.uispEnrollment||''),'${SNMP_COMMUNITY}':cfgValue(p.snmpCommunity||''),
-      '${CPE_USERNAME}':cfgValue(p.device.username),'${CPE_PASSWORD}':cfgValue(p.device.password),'${EXPECTED_MAC}':cfgValue(p.expectedDevice?.mac||''),'${EXPECTED_SERIAL}':cfgValue(p.expectedDevice?.serial||'')
+      '${CPE_USERNAME}':cfgValue(p.device.username),'${CPE_PASSWORD}':cfgValue(p.device.password),'${EXPECTED_MAC}':cfgValue(p.expectedDevice?.mac||''),'${EXPECTED_SERIAL}':cfgValue(p.expectedDevice?.serial||''),
+      '${VLAN_ID}':String(p.networkProfile?.vlanId||87),'${LAN_IP}':cfgValue(p.networkProfile?.lanIp||'192.168.1.254'),'${LAN_NETMASK}':cfgValue(p.networkProfile?.lanNetmask||'255.255.255.0'),
+      '${DHCP_START}':cfgValue(p.networkProfile?.dhcpStart||'192.168.1.10'),'${DHCP_END}':cfgValue(p.networkProfile?.dhcpEnd||'192.168.1.50'),'${DHCP_LEASE}':String(p.networkProfile?.dhcpLease||600),
+      '${PPPOE_MTU}':String(p.networkProfile?.pppoeMtu||1450),'${PPPOE_MRU}':String(p.networkProfile?.pppoeMru||1450),'${WATCHDOG_HOST}':cfgValue(p.networkProfile?.watchdogHost||'10.0.0.254'),
+      '${NTP_SERVER}':cfgValue(p.networkProfile?.ntpServer||'10.0.0.254'),'${SSH_PORT}':String(p.networkProfile?.sshPort||22),'${DISCOVERY_PORT}':String(p.networkProfile?.discoveryPort||10001)
     };for(const [k,v] of Object.entries(vars))cfg=cfg.split(k).join(v);if(/\$\{[A-Z0-9_]+\}/.test(cfg))throw new Error('Profilo contiene placeholder non valorizzati');if(!cfg.includes('system.cfg.version='))throw new Error('Profilo system.cfg non valido');
     const sha=createHash('sha256').update(p.profileTemplate||'').digest('hex');if(p.profileSha256&&sha!==p.profileSha256)throw new Error('Hash profilo non valido');
     await new Promise((resolve,reject)=>conn.sftp((err,sftp)=>{if(err)return reject(err);const w=sftp.createWriteStream('/tmp/system.cfg',{mode:0o600});w.on('error',reject);w.on('close',resolve);w.end(Buffer.from(cfg,'utf8'))}));
-    await sshExec(conn,'cfgmtd -f /tmp/system.cfg -w',20000);try{await sshExec(conn,'reboot',2500)}catch{}
+    await sshExec(conn,'cfgmtd -f /tmp/system.cfg -w -p /etc/ && sync',25000);try{await sshExec(conn,'reboot',2500)}catch{}
     pendingProvision=null;
-    return {ok:true,host,stages:['SSH CPE verificato','Firmware '+fw+' verificato','Board e MAC verificati','system.cfg trasferito','Configurazione persistita con cfgmtd','Riavvio CPE richiesto'],source:'web-bridge'};
+    return {ok:true,host,stages:['SSH CPE verificato','Firmware '+fw+' verificato','Board e MAC verificati','system.cfg trasferito','Configurazione persistita con cfgmtd su /etc/','Riavvio CPE richiesto'],source:'web-bridge'};
   }finally{conn.end()}
 }
 async function applyPrepared(){return applyProvisionPackage(pendingProvision)}
