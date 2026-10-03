@@ -20,7 +20,7 @@ A browser PWA should not attempt to bypass CORS/TLS protections to automate a CP
 
 ## Current status
 
-v0.4.0 introduces one UI with three execution engines:
+v0.4.1 mantiene una UI unica con tre motori di esecuzione e integra la baseline Ubiquiti CDA Net derivata dal provisioning legacy:
 
 - **Android APK**: uses the native Android diagnostics/provisioning plugin.
 - **PWA Web / Backend CDA Net**: authenticated server-side Ping, DNS, Traceroute, interfaces, neighbor/ARP view, network discovery, SNMP v2c, camera probe, ONVIF/Hikvision discovery, BGP/RIPEstat, Looking Glass, MAC vendor lookup and browser-to-server speed test.
@@ -28,9 +28,9 @@ v0.4.0 introduces one UI with three execution engines:
 
 Provisioning is available in both Android and Web Bridge modes. Both prepare the short-lived package while Internet is available, keep it in memory, then apply it locally after the installer joins the CPE management network. Firmware, board profile and expected MAC are verified before writing `system.cfg`, which is persisted with `cfgmtd -f /tmp/system.cfg -w`.
 
-The remaining production gate is hardware validation of one approved airOS 8.7.4 profile per supported model. Firmware 8.7.11/8.7.25 normalization remains blocked until the correct WA/XC image and downgrade procedure have been bench-tested for each board family.
+Legacy Ubiquiti field scripts were used only as a sanitized reference for VLAN/LAN/DHCP/PPPoE/management defaults; secrets and unsafe HTTP self-update behavior are not imported. See `docs/UBIQUITI-LEGACY-REFERENCE-v0.4.1.md`.\n\nThe remaining production gate is hardware validation of one approved airOS 8.7.4 profile per supported model. Firmware 8.7.11/8.7.25 normalization remains blocked until the correct WA/XC image and downgrade procedure have been bench-tested for each board family.
 
-## MikroTik / RouterOS v0.4.0
+## MikroTik / RouterOS v0.4.x
 
 The unified UI now includes a RouterOS management module compatible with RouterOS 6.x and 7.x over SSH. It exposes CDA Net styled equivalents of Quick Set, CAPsMAN, Interfaces, Wireless, Bridge, PPP, Switch, Mesh, IP, MPLS, Routing, System, Queues, Files, Log, RADIUS and Tools, plus a system dashboard and a read-only terminal.
 
