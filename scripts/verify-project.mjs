@@ -3,8 +3,8 @@ import fs from 'node:fs';
 const read=p=>fs.readFileSync(p,'utf8');
 const fail=[];
 const ok=(cond,msg)=>{if(!cond)fail.push(msg)};
-const version='0.5.0';
-const code=50;
+const version='0.5.1';
+const code=51;
 
 const index=read('index.html');
 const app=read('app.js');
@@ -66,10 +66,10 @@ ok(compose.includes('/opt/cdanet/releases:ro'),'release mount missing');
 
 ok(sw.includes("url.pathname.startsWith('/api/')")&&sw.includes('fetch(req)'),'service worker must never cache API');
 ok(server.includes("loginAttempts")&&server.includes("too_many_attempts"),'login rate limiting missing');
-ok(server.includes("'android-native-v0.5.0'"),'trusted Android v0.5.0 missing');
-ok(server.includes("'web-bridge-v0.5.0'"),'trusted Web Bridge v0.5.0 missing');
+ok(server.includes("'android-native-v0.5.1'"),'trusted Android v0.5.1 missing');
+ok(server.includes("'web-bridge-v0.5.1'"),'trusted Web Bridge v0.5.1 missing');
 ok(web.includes("version:'0.5.0'"),'Web Bridge health version mismatch');
-ok(web.includes("'X-CDA-Client':'web-bridge-v0.5.0'"),'Web Bridge client header mismatch');
+ok(web.includes("'X-CDA-Client':'web-bridge-v0.5.1'"),'Web Bridge client header mismatch');
 
 const forbidden=['CdaNet@CdaNet','CADsystem.it2007','wagqTppuS1H8Lf6owQt5qAzcUmDMZI5g6ApsxO2jz3TYlIob'];
 for(const [name,text] of [['index',index],['app',app],['server',server],['android',android],['web',web],['tools',tools],['routeros',ros]]){
