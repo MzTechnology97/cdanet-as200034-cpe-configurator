@@ -62,7 +62,7 @@ jobs:
             echo $! >/tmp/cdanet-ci/pid
           )
           for i in $(seq 1 40); do curl -fsS http://127.0.0.1:18787/api/health >/tmp/cdanet-ci/health.json && break || sleep .25; done
-          step "health/version"; grep -q '"version":"0.5.0"' /tmp/cdanet-ci/health.json
+          step "health/version"; grep -q '"version":"0.5.1"' /tmp/cdanet-ci/health.json
           step "android update metadata"; curl --fail-with-body -sS http://127.0.0.1:18787/api/mobile/update | tee /tmp/cdanet-ci/update.json | grep -q '"versionCode":999'
           step "android APK download"; curl --fail-with-body -sS http://127.0.0.1:18787/api/mobile/apk -o /tmp/cdanet-ci/download.apk
           test "$(sha256sum /tmp/cdanet-ci/download.apk | awk '{print $1}')" = "$SHA"
