@@ -1,7 +1,7 @@
 {
   "name": "cdanet-cpe-configurator-android",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.5.1",
   "scripts": {
     "sync": "npx cap sync android",
     "build:debug": "npm run sync && cd android && ./gradlew assembleDebug"
