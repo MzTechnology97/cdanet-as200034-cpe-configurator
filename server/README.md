@@ -1,31 +1,31 @@
-# CDA Net provisioning API
+# CDA Net backend v0.5.0
 
-Foundation for authenticated installer accounts and centralized redacted audit history.
+Authenticated control plane for installer accounts, encrypted provisioning data, redacted audit history, network diagnostics and Android updates.
 
 ## Run
 
-1. Install Node.js 20+.
-2. `cd server && npm install`
-3. Copy `.env.example` to `.env` and replace every placeholder with deployment-specific values.
-4. Generate `JWT_SECRET` with a cryptographically secure random generator (32+ bytes).
-5. `npm start`
+1. Node.js 20+.
+2. `cd server && npm install`.
+3. Copy `.env.example` to `.env` and replace deployment placeholders.
+4. Provide a base64-encoded 32-byte master key through `SECRETS_KEY_FILE`.
+5. Use a random `JWT_SECRET` of at least 32 characters.
+6. `npm start`.
 
-The first start creates the Admin user from `ADMIN_USERNAME` / `ADMIN_PASSWORD`. Change/remove bootstrap credentials from the environment after establishing the production account-management procedure.
+The first start creates an Admin only when no Admin exists. Changing `ADMIN_PASSWORD` later does **not** reset an existing database account. Use the Admin UI or `deploy/reset-admin-password.sh`.
 
 ## Roles
 
-- `installer`: may authenticate, create audit entries and read only their own history.
-- `admin`: may additionally create installer accounts and read global history.
+- `installer`: authentication, provisioning, own audit history and authenticated tools.
+- `admin`: installer account management, wireless secrets, airOS profiles and global audit history.
 
-## Secret policy
+## Android update channel
 
-Never commit `.env`. Device admin password, wireless PSK, SNMP community and PPPoE passwords must not be stored in audit records. PPPoE passwords are deliberately rejected by the strict audit schema.
+`ANDROID_RELEASE_DIR` contains an APK and `latest.json`. The backend exposes the release metadata and APK before login so a broken/expired login does not prevent app recovery.
 
-## Web and local bridge architecture
+Only stable-signed APKs should be published. Use `deploy/publish-android-release.sh` to validate SHA-256 and atomically publish metadata.
 
-The v0.3.0 backend exposes authenticated `/api/tools/*` endpoints for diagnostics that can safely run from the CDA Net server/NMS perspective.
+## Security
 
-The companion in `web-agent/` is the local bridge for a PC running the PWA. It listens only on loopback, requires a pairing token, enforces private/CGNAT target restrictions for local tools, and keeps provisioning packages and credentials in memory only.
+Secrets are not returned by audit endpoints. PPPoE passwords stay transient. WPA2 and airOS templates are AES-256-GCM encrypted at rest. Login attempts are rate-limited. Audit retention is enforced from `GDPR_AUDIT_RETENTION_DAYS`.
 
-The Android APK continues to use its native plugin and does not require the PC Web Bridge.
-
+The production PWA origin should be HTTPS. The Android Capacitor origins are separately allow-listed for the native client.
