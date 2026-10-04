@@ -76,7 +76,38 @@ $('saveBackend').onclick=e=>{e.preventDefault();const v=cleanBase($('backendUrl'
 $('testBackend').onclick=async e=>{e.preventDefault();try{const d=await api('/api/health');$('backendState').value='Online · '+(d.version||'OK');$('adminOut').innerHTML=pretty(d)}catch(err){$('backendState').value='Errore';$('adminOut').innerHTML='<b>Backend non raggiungibile:</b> '+esc(err.message||err)}};
 $('saveWireless').onclick=async e=>{e.preventDefault();if(user?.role!=='admin')return alert('Accesso Admin richiesto');const s=$('adminSsid').value.trim(),p=$('adminWpa').value;if(!s||p.length<8)return alert('SSID e WPA2 valida richiesti');try{const d=await api('/api/admin/wireless-networks/'+encodeURIComponent(s),{method:'PUT',body:JSON.stringify({wpa2Password:p})});$('adminWpa').value='';$('adminOut').innerHTML=pretty(d)}catch(err){$('adminWpa').value='';$('adminOut').innerHTML='<b>Errore:</b> '+esc(err.message||err)}};
 $('uploadProfile').onclick=async e=>{e.preventDefault();if(user?.role!=='admin')return alert('Accesso Admin richiesto');const file=$('profileFile').files?.[0];if(!file)return alert('Seleziona un export system.cfg');try{const template=await file.text();const model=$('profileModel').value,boardMatch=$('profileBoardMatch').value.trim();if(boardMatch.length<2)return alert('Inserisci una regex boardMatch validata sulla CPE di laboratorio');const d=await api('/api/admin/provision-profiles/'+encodeURIComponent(model)+'/8.7.4',{method:'PUT',body:JSON.stringify({template,boardMatch})});$('profileFile').value='';$('adminOut').innerHTML=pretty(d)}catch(err){$('adminOut').innerHTML='<b>Errore profilo:</b> '+esc(err.message||err)}};
-$('loadAudits').onclick=async e=>{e.preventDefault();if(user?.role!=='admin')return alert('Accesso Admin richiesto');try{const d=await api('/api/audits');$('adminOut').innerHTML=pretty(d)}catch(err){$('adminOut').innerHTML='<b>Errore storico:</b> '+esc(err.message||err)}};if('serviceWorker'in navigator){navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(reg=>{reg.update().catch(()=>{});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})});}).catch(()=>{});}
+$('loadAudits').onclick=async e=>{e.preventDefault();if(user?.role!=='admin')return alert('Accesso Admin richiesto');try{const d=await api('/api/audits');$('adminOut').innerHTML=pretty(d)}catch(err){$('adminOut').innerHTML='<b>Errore storico:</b> '+esc(err.message||err)}};let nativeBootstrapDone=false,updateInFlight=false,updatePermissionPending=false;
+async function autoNativePermissions(){
+  const n=native();if(!n?.requestPermissions)return;
+  const s=$('autoPermissionState');
+  try{if(s)s.textContent='Permessi Android: richiesta automatica…';const d=await n.requestPermissions();localStorage.setItem('cdaNativePermissions',JSON.stringify(d));if(s)s.textContent='Permessi Android: '+Object.entries(d).map(([k,v])=>k+' '+v).join(' · ');}
+  catch(e){if(s)s.textContent='Permessi Android: '+(e.message||e);}
+}
+function showUpdate(title,text,showRetry=true){const b=$('updateBanner');if(!b)return;b.hidden=false;$('updateTitle').textContent=title;$('updateText').textContent=text;$('updateRetry').hidden=!showRetry;}
+function hideUpdate(){const b=$('updateBanner');if(b)b.hidden=true;}
+async function autoNativeUpdate(force=false){
+  const n=native();if(!n?.checkUpdate||!n?.installUpdate||!apiBase()||updateInFlight)return;
+  const last=Number(sessionStorage.getItem('cdaUpdateCheckAt')||0);if(!force&&Date.now()-last<60000)return;
+  sessionStorage.setItem('cdaUpdateCheckAt',String(Date.now()));updateInFlight=true;
+  try{
+    const info=await n.checkUpdate({backendUrl:apiBase()});
+    if(!info.updateAvailable){updatePermissionPending=false;hideUpdate();return}
+    showUpdate('Aggiornamento '+(info.latestVersionName||''),'Download e verifica automatica in corso…',false);
+    const r=await n.installUpdate({backendUrl:apiBase()});
+    if(r.permissionRequired){updatePermissionPending=true;showUpdate('Autorizza aggiornamenti','Android richiede di consentire “Installa app sconosciute” per CDA Net. Dopo l’autorizzazione l’aggiornamento riparte automaticamente.',true);}
+    else{updatePermissionPending=false;showUpdate('Aggiornamento pronto','Conferma l’installazione nella schermata Android.',false);}
+  }catch(e){showUpdate('Aggiornamento non completato',e.message||String(e),true)}
+  finally{updateInFlight=false}
+}
+async function nativeStartup(){
+  if(nativeBootstrapDone||!native())return;nativeBootstrapDone=true;
+  await autoNativePermissions();
+  await autoNativeUpdate(true);
+}
+$('updateRetry')?.addEventListener('click',()=>autoNativeUpdate(true));
+setTimeout(nativeStartup,500);
+document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible'&&isNativeApp()&&updatePermissionPending)setTimeout(()=>autoNativeUpdate(true),600);});
+if('serviceWorker'in navigator){navigator.serviceWorker.register('./sw.js',{updateViaCache:'none'}).then(reg=>{reg.update().catch(()=>{});document.addEventListener('visibilitychange',()=>{if(document.visibilityState==='visible')reg.update().catch(()=>{})});}).catch(()=>{});}
 (async()=>{try{const n=native();if(n&&$('scanCidr')){const d=await n.interfaces();if(d.cidr||d.subnetCidr)$('scanCidr').value=d.cidr||d.subnetCidr}}catch(_){}})();
 
 // Official electrical-outage service shortcuts
