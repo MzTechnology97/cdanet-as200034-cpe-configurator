@@ -18,7 +18,7 @@ if apk.name!=m['fileName']: raise SystemExit('Nome APK diverso da latest.json')
 print('Release verificata',m['versionName'],sha)
 PY
 install -d -m0755 "$DEST"
-install -m0644 "$APK" "$DEST/$([[ -n "$APK" ]] && basename "$APK")"
+install -m0644 "$APK" "$DEST/$(basename "$APK")"
 install -m0644 "$META" "$DEST/latest.json.new"
 mv -f "$DEST/latest.json.new" "$DEST/latest.json"
 echo "Release pubblicata in $DEST"
