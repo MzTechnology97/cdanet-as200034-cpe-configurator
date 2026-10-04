@@ -84,8 +84,10 @@ jobs:
           step "tools speed ping"; curl --fail-with-body -sS -H "$AUTH" http://127.0.0.1:18787/api/tools/speed/ping | tee /tmp/cdanet-ci/speed.json | grep -q '"ok":true'
           DRY='{"model":"LiteBeam 5AC","firmware":"8.7.4","mac":"AA:BB:CC:DD:EE:FF","serial":"CI123","ssid":"CDA-NET-N2-D01","pppoeUser":"ROSSI.MARIO@cda-net.it","pppoePassword":"transient-ci"}'
           step "provision dry run"; curl --fail-with-body -sS -H "$AUTH" -H 'Content-Type: application/json' -d "$DRY" http://127.0.0.1:18787/api/provision/dry-run | tee /tmp/cdanet-ci/dry.json | grep -q '"targetFirmware":"8.7.4"'
-          BAD_PROFILE='{"template":"system.cfg.version=65547\\nvlan.1.id=87\\nvlan.1.status=enabled\\nwireless.1.status=enabled\\n# filler filler filler filler filler filler filler","boardMatch":"board.model=LBE-5AC"}'
+          step "reject legacy VLAN profile"
+          BAD_PROFILE='{"template":"system.cfg.version=65547\\nvlan.1.id=87\\nvlan.1.status=enabled\\nwireless.1.status=enabled\\n# filler filler filler filler filler filler filler filler filler filler filler filler","boardMatch":"board.model=LBE-5AC"}'
           CODE=$(curl -sS -o /tmp/cdanet-ci/vlan.json -w '%{http_code}' -X PUT -H "$AUTH" -H 'Content-Type: application/json' -d "$BAD_PROFILE" 'http://127.0.0.1:18787/api/admin/provision-profiles/LiteBeam%205AC/8.7.4')
+          echo "VLAN rejection HTTP=$CODE body=$(cat /tmp/cdanet-ci/vlan.json)"
           test "$CODE" = "400"
           grep -q 'profile_contains_vlan' /tmp/cdanet-ci/vlan.json
           kill "$(cat /tmp/cdanet-ci/pid)" 2>/dev/null || true
