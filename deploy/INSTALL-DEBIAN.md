@@ -1,24 +1,65 @@
 # CDA Net CPE Configurator — Debian 12/13
 
 ## Requisiti
-- Debian 12 (Bookworm) o Debian 13 (Trixie), amd64/arm64 supportati da Docker.
-- DNS del dominio PWA puntato all'IP del server; TCP 80/443 raggiungibili per Caddy/ACME.
-- GitHub fine-grained PAT dedicato con accesso **read-only Contents** esclusivamente al repository privato.
-- Firmware airOS 8.7.4 conservato fuori dal repository.
 
-## Installazione
-Scaricare `deploy/install-debian.sh` dal repository autenticandosi a GitHub e lanciarlo come root. Non inserire il PAT nella command line o nella shell history. L'installer chiede il token in modo non visibile, installa Docker Engine dal repository ufficiale Docker, clona il branch privato, genera un JWT secret iniziale e abilita il timer di aggiornamento.
+- Debian 12/13.
+- Repository/release source already synchronized in `/opt/cdanet-cpe-configurator`.
+- Docker Engine + Compose (the bootstrap can install them).
+- Firmware airOS 8.7.4 stored outside Git.
+- For a real PWA: DNS hostname plus TCP 80/443 usable by Caddy for TLS.
 
-Dopo l'installazione modificare `/opt/cdanet-cpe-configurator/deploy/.env`, impostando almeno dominio, password admin forte, URL/token bridge e percorso firmware. Copiare il firmware nel percorso privato indicato e avviare `docker compose --env-file .env up -d --build` dalla cartella `deploy`.
+## Bootstrap
 
-## Auto-update
-`cdanet-cpe-update.timer` controlla il branch ogni circa 15 minuti. Se HEAD è cambiato, esegue fetch autenticato, reset al commit remoto, rebuild delle immagini e rolling restart Compose. Il token GitHub è conservato root-only in `/etc/cdanet-cpe/github.env` e non resta nell'URL `origin` del repository.
+`deploy/install-debian.sh` **does not clone the private repository and does not store a GitHub PAT**. The source must already exist in `/opt/cdanet-cpe-configurator`.
 
-Comandi utili:
-- `systemctl status cdanet-cpe-update.timer`
-- `systemctl start cdanet-cpe-update.service`
-- `journalctl -u cdanet-cpe-update.service`
-- `docker compose --env-file /opt/cdanet-cpe-configurator/deploy/.env -f /opt/cdanet-cpe-configurator/deploy/docker-compose.yml ps`
+The bootstrap:
+- installs/starts Docker;
+- creates the CDA Net master key if missing;
+- creates private firmware/release directories;
+- asks interactively for the first Admin credentials;
+- creates `deploy/.env`;
+- builds and starts the containers;
+- verifies backend health.
 
-## Sicurezza
-Usare un PAT dedicato e read-only, ruotarlo periodicamente e revocarlo se il server viene dismesso o compromesso. `/etc/cdanet-cpe/github.env` e `deploy/.env` devono rimanere `0600`. Non committare questi file né il firmware. Per produzione è consigliato aggiornare da un branch/release stabile anziché da un branch di sviluppo.
+Initial LAN recovery access may use `http://172.31.0.29`, but that is not an installable secure PWA.
+
+## Redeploy
+
+After synchronizing the repository on the server:
+
+```bash
+cd /opt/cdanet-cpe-configurator
+sudo ./deploy/redeploy-local-pwa.sh
+```
+
+This preserves `.env`, rebuilds containers and performs health checks.
+
+## HTTPS PWA
+
+Once the real hostname resolves correctly and Caddy can obtain a certificate:
+
+```bash
+sudo ./deploy/enable-pwa-https.sh pwa.example.it
+```
+
+Replace the example with the CDA Net production hostname. The script backs up `.env`, changes the PWA origin/listener and verifies HTTPS health.
+
+## Admin password recovery
+
+```bash
+sudo ./deploy/reset-admin-password.sh
+```
+
+This updates the existing SQLite account without deleting audit/profile data.
+
+## Android release publication
+
+After GitHub Actions has produced a **stable-signed** APK plus `latest.json`:
+
+```bash
+sudo ./deploy/publish-android-release.sh CDA-Net-CPE-x.y.z.apk latest.json
+```
+
+The script verifies SHA-256 and publishes atomically to the backend release directory.
+
+There is currently no hidden GitHub/PAT timer on the server. Server updates are controlled redeploys; APK updates use the backend release channel.
