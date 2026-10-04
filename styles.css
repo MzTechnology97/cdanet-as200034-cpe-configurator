@@ -34,3 +34,7 @@ button.state-warn{background:#fff2d6!important;color:#805a00!important;border-co
 .rosSection pre{margin:0;padding:14px 15px;white-space:pre-wrap;word-break:break-word;overflow:auto;max-height:520px;background:#111;color:#e8eef2;font-size:12px;line-height:1.5}
 .rosCommand{padding:8px 15px;background:#fff8ef;color:#965710;border-top:1px solid #eee;font-family:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;font-size:11px;overflow-wrap:anywhere}
 @media(max-width:620px){.routerGrid{grid-template-columns:repeat(2,minmax(0,1fr))}.rosSection pre{max-height:420px}}
+
+.updateBanner{position:sticky;top:0;z-index:30;margin:0 auto 10px;max-width:1100px;padding:10px 14px;background:#fff7df;border:1px solid #e7c46a;border-radius:0 0 14px 14px;display:flex;gap:12px;align-items:center;justify-content:space-between;box-shadow:0 4px 18px rgba(0,0,0,.08)}
+.updateBanner[hidden]{display:none}.updateBanner div{display:flex;flex-direction:column;gap:2px}.updateBanner span{font-size:12px;color:#6f5a1c}.updateBanner button{min-width:86px}
+.startupState{margin:0 0 14px;padding:12px;border-radius:12px;background:#f7f7f5;color:var(--muted);font-size:13px}
