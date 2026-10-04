@@ -48,6 +48,8 @@ vals={
     "APP_SCHEME": "http",
     "APP_LISTEN": ":80",
     "ALLOWED_ORIGIN": f"http://{ip}",
+    "ANDROID_RELEASE_HOST_PATH": "/srv/cdanet-private/releases",
+    "ANDROID_RELEASE_DIR": "/opt/cdanet/releases",
 }
 lines=p.read_text().splitlines() if p.exists() else []
 out=[]; seen=set()
