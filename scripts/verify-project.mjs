@@ -17,7 +17,7 @@ const android=read('.github/workflows/android-apk.yml');
 const compose=read('deploy/docker-compose.yml');
 
 ok(index.includes('v'+version),'index version');
-ok(app.includes('v'+version),'app version');
+ok(app.includes("APP_UI_VERSION='"+version+"'"),'app version');
 ok(sw.includes('v'+version),'service worker cache version');
 ok(server.includes("APP_VERSION='"+version+"'"),'backend version');
 ok(JSON.parse(read('server/package.json')).version===version,'server package version');
