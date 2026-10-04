@@ -24,11 +24,21 @@ The PWA should contain only the minimum UI/orchestration logic required by insta
 - Require authenticated installer accounts; no anonymous provisioning endpoint.
 - Enforce authorization server-side for every provisioning/audit operation.
 - Use short-lived sessions/tokens and secure cookie/header handling.
-- Apply rate limiting and request-size limits.
+- Apply rate limiting and request-size limits. Login rate limiting is enforced by the backend.
 - Restrict CORS to the production PWA origin.
 - Keep the provisioning bridge on a controlled management network; do not expose CPE-management access directly to the public Internet.
 - Store production secrets in the deployment platform secret store/environment, with rotation procedures.
 - Keep audit records redacted: never log passwords, enrollment keys, communities/tokens or raw authorization headers.
+
+## Android release signing and updates
+
+APK updates must use one long-lived CDA Net signing key. Never commit the keystore or its passwords. Store them only as protected GitHub/deployment secrets. Android verifies that an update is signed with the same key; SHA-256 verification is an additional transport/integrity check, not a replacement for APK signing.
+
+The update endpoint may be reachable before login so a broken login can be repaired. For a public deployment, restrict access to the CDA Net/VPN environment where practical.
+
+## SSH host-key note
+
+Factory/local CPE and RouterOS sessions currently accept the device SSH host key because factory devices do not have a pre-enrolled fingerprint. CPE provisioning compensates with local-target, firmware, board and expected-MAC checks before writing, but first-connection credential interception remains a residual risk on an untrusted LAN. Production field networks should be controlled; host-key enrollment/pinning is recommended for managed RouterOS devices.
 
 ## Release rule
 
