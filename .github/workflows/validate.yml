@@ -64,7 +64,28 @@ jobs:
           curl -fsS http://127.0.0.1:18787/api/mobile/update | grep -q '"versionCode":999'
           curl -fsS http://127.0.0.1:18787/api/mobile/apk -o /tmp/cdanet-ci/download.apk
           test "$(sha256sum /tmp/cdanet-ci/download.apk | awk '{print $1}')" = "$SHA"
-          curl -fsS -H 'Content-Type: application/json' -d '{"username":"adminci","password":"CI-Admin-Password-1234"}' http://127.0.0.1:18787/api/login | grep -q '"token"'
+          curl -fsS -H 'Content-Type: application/json' -d '{"username":"adminci","password":"CI-Admin-Password-1234"}' http://127.0.0.1:18787/api/login > /tmp/cdanet-ci/login.json
+          TOKEN=$(node -e "const j=require('/tmp/cdanet-ci/login.json');process.stdout.write(j.token||'')")
+          test -n "$TOKEN"
+          AUTH="Authorization: Bearer $TOKEN"
+          curl -fsS -H "$AUTH" http://127.0.0.1:18787/api/admin/users | grep -q 'adminci'
+          curl -fsS -H "$AUTH" -H 'Content-Type: application/json' -d '{"username":"installerci","password":"Installer-CI-Password-123"}' http://127.0.0.1:18787/api/users | grep -q '"ok":true'
+          curl -fsS -H "$AUTH" http://127.0.0.1:18787/api/admin/users > /tmp/cdanet-ci/users.json
+          USER_ID=$(node -e "const j=require('/tmp/cdanet-ci/users.json');const x=j.find(v=>v.username==='installerci');process.stdout.write(String(x?.id||''))")
+          test -n "$USER_ID"
+          curl -fsS -X PUT -H "$AUTH" -H 'Content-Type: application/json' -d '{"password":"Installer-CI-Reset-Password-456","active":true}' "http://127.0.0.1:18787/api/admin/users/$USER_ID" | grep -q '"ok":true'
+          curl -fsS -H 'Content-Type: application/json' -d '{"username":"installerci","password":"Installer-CI-Reset-Password-456"}' http://127.0.0.1:18787/api/login | grep -q '"token"'
+          curl -fsS -H "$AUTH" -H 'Content-Type: application/json' -d '{"ssid":"CDA-NET-N2-D01","pppoeUser":"ROSSI.MARIO@cda-net.it","model":"LiteBeam 5AC","mac":"AA:BB:CC:DD:EE:FF","serial":"CI123","result":"success"}' http://127.0.0.1:18787/api/mobile/provision-result | grep -q '"ok":true'
+          curl -fsS -H "$AUTH" http://127.0.0.1:18787/api/audits | grep -q 'ROSSI.MARIO@cda-net.it'
+          curl -fsS -H "$AUTH" http://127.0.0.1:18787/api/tools/interfaces | grep -q '"source":"backend"'
+          curl -fsS -H "$AUTH" -H 'Content-Type: application/json' -d '{"host":"localhost"}' http://127.0.0.1:18787/api/tools/dns | grep -q '"addresses"'
+          curl -fsS -H "$AUTH" http://127.0.0.1:18787/api/tools/speed/ping | grep -q '"ok":true'
+          DRY='{"model":"LiteBeam 5AC","firmware":"8.7.4","mac":"AA:BB:CC:DD:EE:FF","serial":"CI123","ssid":"CDA-NET-N2-D01","pppoeUser":"ROSSI.MARIO@cda-net.it","pppoePassword":"transient-ci"}'
+          curl -fsS -H "$AUTH" -H 'Content-Type: application/json' -d "$DRY" http://127.0.0.1:18787/api/provision/dry-run | grep -q '"targetFirmware":"8.7.4"'
+          BAD_PROFILE='{"template":"system.cfg.version=65547\\nvlan.1.id=87\\nvlan.1.status=enabled\\nwireless.1.status=enabled\\n# filler filler filler filler filler filler filler","boardMatch":"board.model=LBE-5AC"}'
+          CODE=$(curl -sS -o /tmp/cdanet-ci/vlan.json -w '%{http_code}' -X PUT -H "$AUTH" -H 'Content-Type: application/json' -d "$BAD_PROFILE" 'http://127.0.0.1:18787/api/admin/provision-profiles/LiteBeam%205AC/8.7.4')
+          test "$CODE" = "400"
+          grep -q 'profile_contains_vlan' /tmp/cdanet-ci/vlan.json
           kill "$(cat /tmp/cdanet-ci/pid)" 2>/dev/null || true
       - name: Check Web Bridge JavaScript
         run: node --check web-agent/server.mjs
