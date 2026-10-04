@@ -18,6 +18,8 @@ jobs:
           node-version: '22'
       - name: Check frontend JavaScript
         run: node --check app.js && node --check sw.js
+      - name: Full project release gate
+        run: node scripts/verify-project.mjs
       - name: Validate manifest
         run: node -e "JSON.parse(require('fs').readFileSync('manifest.webmanifest','utf8'))"
       - name: Verify required PWA assets
@@ -31,6 +33,36 @@ jobs:
           node --check src/server.js
           node --check src/tools.js
           node --check src/routeros.js
+          node --check src/reset-admin-password.js
+      - name: Backend auth and updater smoke test
+        run: |
+          set -euo pipefail
+          mkdir -p /tmp/cdanet-ci/data /tmp/cdanet-ci/releases
+          openssl rand -base64 32 > /tmp/cdanet-ci/master.key
+          printf 'fake-apk-ci' > /tmp/cdanet-ci/releases/CDA-Net-CPE-9.9.9.apk
+          SHA=$(sha256sum /tmp/cdanet-ci/releases/CDA-Net-CPE-9.9.9.apk | awk '{print $1}')
+          printf '{"versionCode":999,"versionName":"9.9.9","sha256":"%s","fileName":"CDA-Net-CPE-9.9.9.apk","mandatory":false}\n' "$SHA" > /tmp/cdanet-ci/releases/latest.json
+          (
+            cd server
+            PORT=18787 \
+            JWT_SECRET=ci-jwt-secret-abcdefghijklmnopqrstuvwxyz0123456789 \
+            ADMIN_USERNAME=adminci \
+            ADMIN_PASSWORD='CI-Admin-Password-1234' \
+            SECRETS_KEY_FILE=/tmp/cdanet-ci/master.key \
+            DB_PATH=/tmp/cdanet-ci/data/test.sqlite \
+            STATIC_DIR="$GITHUB_WORKSPACE" \
+            ANDROID_RELEASE_DIR=/tmp/cdanet-ci/releases \
+            ALLOWED_ORIGIN=https://localhost \
+            node src/server.js >/tmp/cdanet-ci/server.log 2>&1 &
+            echo $! >/tmp/cdanet-ci/pid
+          )
+          for i in $(seq 1 40); do curl -fsS http://127.0.0.1:18787/api/health >/tmp/cdanet-ci/health.json && break || sleep .25; done
+          grep -q '"version":"0.5.0"' /tmp/cdanet-ci/health.json
+          curl -fsS http://127.0.0.1:18787/api/mobile/update | grep -q '"versionCode":999'
+          curl -fsS http://127.0.0.1:18787/api/mobile/apk -o /tmp/cdanet-ci/download.apk
+          test "$(sha256sum /tmp/cdanet-ci/download.apk | awk '{print $1}')" = "$SHA"
+          curl -fsS -H 'Content-Type: application/json' -d '{"username":"adminci","password":"CI-Admin-Password-1234"}' http://127.0.0.1:18787/api/login | grep -q '"token"'
+          kill "$(cat /tmp/cdanet-ci/pid)" 2>/dev/null || true
       - name: Check Web Bridge JavaScript
         run: node --check web-agent/server.mjs
       - name: Validate Docker Compose
