@@ -9,6 +9,7 @@ services:
     environment:
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
       SECRETS_KEY_FILE: /run/secrets/cdanet_master_key
+      ANDROID_RELEASE_DIR: /opt/cdanet/releases
     init: true
     security_opt:
       - no-new-privileges:true
@@ -17,6 +18,7 @@ services:
       - appdata:/app/server/data
       - ${FIRMWARE_HOST_PATH}:/opt/cdanet/firmware/WA-8.7.4.bin:ro
       - /etc/cdanet-cpe/secrets/master.key:/run/secrets/cdanet_master_key:ro
+      - ${ANDROID_RELEASE_HOST_PATH}:/opt/cdanet/releases:ro
     expose: ["8787"]
     networks: [private]
     healthcheck:
