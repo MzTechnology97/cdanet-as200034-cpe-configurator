@@ -23,3 +23,7 @@ Per HTTPS pubblico impostare `CDA_WEB_BRIDGE_ORIGIN=https://cpe.cda-net.it`.
 - credenziali CPE/PPPoE/WPA2 restano in memoria e non vengono scritte su disco;
 - provisioning recupera il pacchetto direttamente dal backend autenticato;
 - scansione limitata a reti private/CGNAT /24 o più piccole.
+
+## Nota SSH
+
+Il bridge accetta la host key al primo collegamento per supportare apparati factory/non pre-enrolled. Usarlo solo su reti di management controllate; per RouterOS gestiti è raccomandata una futura modalità di fingerprint pinning.
