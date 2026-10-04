@@ -19,7 +19,7 @@ Signed-By: /etc/apt/keyrings/docker.asc
 EOF
 apt-get update;apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin;systemctl enable --now docker
 docker version >/dev/null;docker compose version >/dev/null
-install -d -m0750 "$APP_DIR" "$CFG_DIR" "$SECRETS_DIR" "$LOG_DIR" "$LOG_DIR/errors" /srv/cdanet-private/firmware
+install -d -m0750 "$APP_DIR" "$CFG_DIR" "$SECRETS_DIR" "$LOG_DIR" "$LOG_DIR/errors" /srv/cdanet-private/firmware /srv/cdanet-private/releases
 [[ -f $MASTER_KEY ]]||{ openssl rand -base64 32 >"$MASTER_KEY";chmod 0400 "$MASTER_KEY"; }
 # No GitHub SSH keys are generated or configured by this installer.
 # Source deployment is expected to be present in APP_DIR before bootstrap/update.
@@ -30,7 +30,7 @@ ENV_FILE=$APP_DIR/deploy/.env;cp "$APP_DIR/deploy/.env.example" "$ENV_FILE";chmo
 python3 - "$ENV_FILE" "$SERVER_IP" "$JWT_SECRET" "$BRIDGE_TOKEN" "$ADMIN_USERNAME" <<'PY'
 from pathlib import Path
 import sys
-p=Path(sys.argv[1]);ip,jwt,bridge,user=sys.argv[2:];vals={'APP_DOMAIN':ip,'APP_SCHEME':'http','APP_LISTEN':':80','JWT_SECRET':jwt,'ADMIN_USERNAME':user,'ALLOWED_ORIGIN':f'http://{ip}','BRIDGE_TOKEN':bridge}
+p=Path(sys.argv[1]);ip,jwt,bridge,user=sys.argv[2:];vals={'APP_DOMAIN':ip,'APP_SCHEME':'http','APP_LISTEN':':80','JWT_SECRET':jwt,'ADMIN_USERNAME':user,'ALLOWED_ORIGIN':f'http://{ip}','BRIDGE_TOKEN':bridge,'ANDROID_RELEASE_HOST_PATH':'/srv/cdanet-private/releases','ANDROID_RELEASE_DIR':'/opt/cdanet/releases'}
 lines=[];seen=set()
 for line in p.read_text().splitlines():
  if '=' in line and not line.lstrip().startswith('#'):
