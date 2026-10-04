@@ -20,13 +20,16 @@ jobs:
         run: node --check app.js && node --check sw.js
       - name: Full project release gate
         run: node scripts/verify-project.mjs
+      - name: Shell syntax checks
+        run: |
+          for f in deploy/*.sh web-agent/*.sh; do bash -n "$f"; done
       - name: Validate manifest
         run: node -e "JSON.parse(require('fs').readFileSync('manifest.webmanifest','utf8'))"
       - name: Verify required PWA assets
         run: test -f index.html && test -f styles.css && test -f assets/cda-net-logo.svg && test -f assets/icon.svg
       - name: Install backend dependencies
         working-directory: server
-        run: npm install --ignore-scripts
+        run: npm install
       - name: Check backend JavaScript
         working-directory: server
         run: |
