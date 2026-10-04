@@ -34,7 +34,7 @@ jobs:
           P=android/android/app/src/main/java/it/cdanet/cpeconfigurator; mkdir -p "$P"
           cat > "$P/NetworkToolsPlugin.java" <<'JAVA'
           package it.cdanet.cpeconfigurator;
-          import android.Manifest;import android.content.*;import android.content.pm.*;import android.hardware.*;import android.net.*;import android.net.wifi.*;import android.os.Build;import android.provider.Settings;import androidx.core.content.FileProvider;import com.getcapacitor.*;import com.getcapacitor.annotation.*;import com.jcraft.jsch.*;import org.json.JSONObject;import java.io.*;import java.net.*;import java.nio.charset.StandardCharsets;import java.security.*;import java.util.*;import java.util.concurrent.*;import java.util.regex.*;
+          import android.Manifest;import android.content.*;import android.content.pm.*;import android.hardware.*;import android.net.*;import android.net.wifi.*;import android.os.Build;import android.provider.Settings;import androidx.core.content.FileProvider;import com.getcapacitor.*;import com.getcapacitor.annotation.*;import com.jcraft.jsch.*;import org.json.JSONObject;import java.io.*;import java.net.*;import java.nio.charset.StandardCharsets;import java.security.MessageDigest;import java.util.*;import java.util.concurrent.*;import java.util.regex.*;
           @CapacitorPlugin(name="NetworkTools",permissions={@Permission(alias="location",strings={Manifest.permission.ACCESS_FINE_LOCATION}),@Permission(alias="camera",strings={Manifest.permission.CAMERA}),@Permission(alias="nearby",strings={"android.permission.NEARBY_WIFI_DEVICES"})})
           public class NetworkToolsPlugin extends Plugin{
             private final ExecutorService pool=Executors.newCachedThreadPool();
