@@ -15,8 +15,8 @@ object Validation {
     fun isMac(raw: String) = MAC.matches(normalizeMac(raw))
 
     fun customerName(user: String): String =
-        user.trim().replace(Regex("@cda-net\.it$", RegexOption.IGNORE_CASE), "").substringBefore('@')
-            .replace(Regex("[._-]+"), " ").replace(Regex("\s+"), " ").trim().uppercase()
+        user.trim().replace(Regex("""@cda-net\.it$""", RegexOption.IGNORE_CASE), "").substringBefore('@')
+            .replace(Regex("[._-]+"), " ").replace(Regex("""\s+"""), " ").trim().uppercase()
 
     fun formErrors(f: ProvisionForm): List<String> = buildList {
         if (!isMac(f.mac)) add("MAC non valido (AA:BB:CC:DD:EE:FF)")

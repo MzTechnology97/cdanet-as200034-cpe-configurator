@@ -1,69 +1,77 @@
-# CDA Net CPE Configurator
+# CDA Net CPE Configurator · v1
 
-Private field platform for CDA Net installers: Android APK, HTTPS PWA/backend and optional loopback Web Bridge.
+Piattaforma interna CDA Net (AS200034) per il provisioning delle CPE Ubiquiti airMAX AC e la diagnostica di campo.
 
-## v0.5.0 architecture
+| Componente | Cartella | Ruolo |
+|---|---|---|
+| **Server** | [`server/`](server) | Node.js 24 + TypeScript. Unica fonte della policy CDA Net: account, segreti cifrati, profili airOS, **generazione del `system.cfg` finale**, storico, tool NOC, canale aggiornamenti Android. |
+| **Console web** | [`web/`](web) | Admin/NOC servita dal server: account, chiavi WPA2, profili airOS, storico, strumenti di rete e RouterOS lato server. |
+| **App Android** | [`android/`](android) | Kotlin + Jetpack Compose. Client di campo: prepara il job online, applica la configurazione alla CPE offline via SSH, strumenti LAN (Wi-Fi, discovery, SNMP, TVCC/RTSP, RouterOS). |
+| **Deploy** | [`deploy/`](deploy) | Docker Compose con immagine pubblicata dalla CI su GHCR, reverse proxy Caddy e **container updater con rollback automatico**. |
 
-- **Android APK** — native diagnostics, Ubiquiti offline provisioning, RouterOS SSH tools, TVCC/RTSP, automatic runtime-permission request and Android update client.
-- **HTTPS PWA / backend** — authentication, installer accounts, encrypted wireless/profile secrets, redacted audit history, server-side network tools and Android release channel.
-- **Web Bridge** — loopback-only companion for PC/PWA operations that a browser cannot perform directly on the LAN.
+```
+ Admin/NOC (browser) ──HTTPS──▶ ┌──────────────── server (Docker) ────────────────┐
+                                │ policy · profili cifrati · WPA2 · job · audit    │
+ App Android ──(online)──────▶  │ POST /api/provisioning/jobs → system.cfg finale  │
+     │                          └──────────────────────────────────────────────────┘
+     │ Wi-Fi management CPE (offline)
+     ▼
+ CPE airOS 8.7.4  ◀── SSH: verifica firmware/board/MAC → /tmp/system.cfg → cfgmtd → reboot
+```
 
-The HTTP endpoint on an internal IP can be used as a recovery/admin web page, but an installable/offline PWA requires **HTTPS** (or localhost).
+## Flusso di provisioning
 
-## Ubiquiti CPE policy
+1. **Online** — l'installatore compila modello, MAC/seriale (scansione etichetta), nodo/distretto e credenziali RADIUS. Il server valida, genera il `system.cfg` definitivo (template del modello + segreti + policy CDA Net) e lo consegna **solo all'app**, in memoria, con scadenza (30 min di default).
+2. **Offline** — il telefono si collega alla Wi-Fi di management della CPE. L'app instrada il traffico su quella Wi-Fi anche con i dati mobili attivi, apre il primo avvio airOS dentro l'app, poi via SSH:
+   - verifica firmware **8.7.4**, board (regex del profilo) e **MAC atteso**;
+   - trasferisce `/tmp/system.cfg` e ne controlla dimensione e MD5;
+   - salva con `cfgmtd -f /tmp/system.cfg -w -p /etc/ && sync`;
+   - riavvia la CPE.
+3. **Esito** — l'esito, senza password, viene messo in coda sul telefono e inviato al server appena torna la connettività.
 
-Supported models:
-- NanoStation Loco 5AC
-- NanoStation 5AC
-- NanoBeam 5AC
-- LiteBeam 5AC
-- PowerBeam 5AC
+Policy forzata dal server: WAN wireless in PPPoE **senza VLAN**, watchdog `8.8.8.8`, SNMP v2c (community/contact da configurazione, location `COGNOME NOME`), Device Name `COGNOME NOME`, Calculate EIRP Limit OFF, ATPC Station ON, management HTTP 20080 / HTTPS 20443. Dettagli in [docs/PROVISIONING.md](docs/PROVISIONING.md).
 
-Production target is airOS **8.7.4**. 8.7.11 and 8.7.25 are detected but configuration write is blocked until the board-specific normalization/downgrade procedure has been bench-tested.
+## Aggiornamenti automatici
 
-Provisioning verifies firmware, board profile and expected MAC before writing `system.cfg`, then persists with `cfgmtd -f /tmp/system.cfg -w -p /etc/ && sync`.
+- **Server**: ogni push su `main` con test verdi pubblica `ghcr.io/mztechnology97/cdanet-cpe-server:stable`. Ogni 5 minuti il container `updater` sul server:
+  1. scarica la nuova immagine;
+  2. fa il backup del database (`VACUUM INTO`);
+  3. riavvia l'app;
+  4. se l'health-check fallisce, torna alla versione precedente.
+- **App Android**: a ogni nuova `VERSION` la CI firma l'APK e crea una GitHub Release. Il server la scarica e ne verifica lo SHA-256. All'avvio l'app trova l'aggiornamento, lo scarica, verifica lo SHA-256 e lo propone ad Android.
 
-Current CDA Net policy:
-- wireless WAN direct to PPPoE; **no VLAN**;
-- watchdog `8.8.8.8`;
-- SNMP v2c enabled, community `public`, contact `172.31.0.7`;
-- SNMP location and Device Name derived as `COGNOME NOME` from the RADIUS username before `@cda-net.it`;
-- Calculate EIRP Limit OFF;
-- Automatic Power Control (Station) ON;
-- HTTP 20080 / HTTPS 20443;
-- UISP/SNMP/device secrets supplied only at runtime.
+Per pubblicare una nuova versione:
+1. incrementa [`VERSION`](VERSION) e `server/package.json`;
+2. fai merge su `main`.
 
-Legacy field files are used only as a sanitized behavioral reference. Legacy VLANs, hard-coded passwords/PSKs and HTTP self-update scripts are not imported.
+Guida completa: [docs/DEPLOY.md](docs/DEPLOY.md).
 
-## Accounts and audit
+## Sviluppo
 
-Admin can create, list, enable/disable and reset installer accounts. The application records redacted provisioning metadata only. Offline APK/Web Bridge results are queued without passwords and synchronized after connectivity/login returns.
+```bash
+cd server && npm ci && npm test        # 28 test: dominio, API, migrazione DB v0.5, sync release
+npm run typecheck
+```
 
-Audit retention uses `GDPR_AUDIT_RETENTION_DAYS` (default 365).
+Server locale con la console:
 
-## Android startup and update
+```bash
+JWT_SECRET=dev-secret-0123456789abcdefghijklmnop ADMIN_PASSWORD=Dev-Admin-Password-1 \
+SECRETS_KEY_FILE=.dev/master.key DB_PATH=.dev/dev.sqlite STATIC_DIR=web node server/src/main.ts
+```
 
-At native startup the APK requests the Android permissions required by the toolbox automatically. Already-granted permissions do not prompt again.
+Per l'app Android:
+- apri `android/` in Android Studio (usa Gradle 8.11.1 da `gradle-wrapper.properties`);
+- oppure, con Gradle installato: `gradle -p android testDebugUnitTest assembleDebug`.
 
-The APK checks the backend release channel automatically. A newer APK is downloaded to private app cache, SHA-256 verified, then passed to Android Package Installer. Android still requires the user to approve installation/unknown-app permission where required.
+## Documentazione
 
-**Stable signing is mandatory for real in-place updates.** GitHub Actions supports a signed release when these repository secrets are configured:
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — componenti, API, modello dati, scelte di sicurezza
+- [docs/PROVISIONING.md](docs/PROVISIONING.md) — profili airOS, placeholder, collaudo
+- [docs/DEPLOY.md](docs/DEPLOY.md) — installazione Debian, auto-update, firma APK, backup
+- [docs/MIGRATION-v1.md](docs/MIGRATION-v1.md) — passaggio dalla v0.5.x
+- [SECURITY.md](SECURITY.md)
 
-- `ANDROID_KEYSTORE_BASE64`
-- `ANDROID_KEYSTORE_PASSWORD`
-- `ANDROID_KEY_ALIAS`
-- `ANDROID_KEY_PASSWORD`
+## Limiti noti
 
-Without them CI produces a tester debug APK only; it must not be treated as the permanent auto-update release channel.
-
-## Network / RouterOS / TVCC
-
-Network tools include Ping, DNS, Traceroute, interfaces, subnet discovery, ARP/neighbors, NetBIOS, SNMP v2c, BGP/RIPEstat, Looking Glass, MAC vendor and speed tests.
-
-RouterOS 6.x/7.x exposes read-oriented Quick Set, CAPsMAN, Interfaces, Wireless, Bridge, PPP, Switch, Mesh, IP, MPLS, Routing, System, Queues, Files, Log, RADIUS and Tools. The free-form terminal is deliberately read-only; Supout generation is an explicit confirmed action.
-
-TVCC supports ONVIF/Hikvision discovery, camera port probing, RTSP viewer and bandwidth/storage calculation.
-
-## Release gates
-
-See `docs/PROJECT-REVIEW-v0.5.0.md`. A production release requires green CI plus physical lab validation. In particular, successful compilation is not considered proof of CPE/RouterOS/camera behavior on real hardware.
+La normalizzazione firmware (downgrade 8.7.11/8.7.25 → 8.7.4) non è automatizzata: la scrittura viene bloccata finché la CPE non è su 8.7.4. Il collaudo su hardware reale (5 modelli) resta un requisito prima della produzione: compilazione e test automatici non sostituiscono la prova al banco.

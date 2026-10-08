@@ -1,49 +1,49 @@
-# CDA Net CPE Configurator — Security Policy
+# CDA Net CPE Configurator · Security Policy
 
-This repository and its source code are confidential CDA Net internal material. Access must be limited to explicitly authorized personnel.
+Materiale interno CDA Net, accessibile solo al personale autorizzato.
 
-## Repository controls
+## Repository
 
-- Repository visibility must remain **private**.
-- Do not enable GitHub Pages or any public source distribution mechanism.
-- Grant repository access only to named personnel who need it; use least privilege.
-- Require MFA/2FA on accounts with repository or production access.
-- Production deployment credentials must never be committed to Git.
-- Review collaborator/app access periodically and revoke unused access.
-- Prefer protected/ruleset-controlled `main` and release branches when the GitHub plan supports private-repository rulesets.
+- La repository **deve essere privata**. GitHub Pages e qualsiasi distribuzione pubblica dei sorgenti vanno tenuti disattivati.
+- Valutare visibilità **privata** anche per il pacchetto GHCR `cdanet-cpe-server` (vedi [docs/DEPLOY.md](docs/DEPLOY.md) per l'accesso del server).
+- MFA obbligatoria per chi ha accesso. Rivedere periodicamente collaboratori e token.
+- Nessun segreto di produzione nei commit. Se un segreto finisce nella storia git, rimuovere il file non basta: va **revocato/ruotato** subito, poi si valuta la pulizia della storia.
+- La CI blocca chiavi private e token GitHub riconoscibili (`server.yml` → *Secret scan*).
 
-## PWA security boundary
+## Dove stanno i segreti
 
-A PWA is client-side software. Any HTML, CSS, JavaScript, manifest, icon, configuration value or secret delivered to an installer's browser/device can be inspected by that authorized client. Therefore proprietary provisioning logic and all privileged credentials must live in the authenticated server-side provisioning service, not in downloadable frontend code.
+| Segreto | Dove | Esposto a |
+|---|---|---|
+| Master key AES-256 | `/etc/cdanet-cpe/secrets/master.key` (root, 0400) | processo server |
+| `JWT_SECRET`, `CPE_ADMIN_PASSWORD`, `UISP_ENROLLMENT`, `SNMP_COMMUNITY` | `/opt/cdanet-cpe/.env` (0600) | processo server; la password CPE arriva all'app solo nel pacchetto del job |
+| WPA2 per SSID, template airOS | DB, cifrati AES-256-GCM | solo nel pacchetto del job (in memoria nell'app) |
+| Password PPPoE | mai salvata | richiesta → pacchetto del job |
+| Token di sessione | solo in memoria (app) / `sessionStorage` (console) | — |
+| Keystore Android | GitHub Secrets + copia offline | CI |
 
-The PWA should contain only the minimum UI/orchestration logic required by installers. Device credentials, UISP enrollment secrets, SNMP credentials, signing/JWT secrets and infrastructure credentials are server-side secrets.
+Lo storico (`provisioning_jobs`, `events`) contiene solo metadati: utente RADIUS, MAC, seriale, SSID, modello, fasi ed errori sanificati. Mai password, PSK o configurazioni.
 
-## Production deployment
+## Controlli applicativi
 
-- Serve the PWA and API only over HTTPS.
-- Require authenticated installer accounts; no anonymous provisioning endpoint.
-- Enforce authorization server-side for every provisioning/audit operation.
-- Use short-lived sessions/tokens and secure cookie/header handling.
-- Apply rate limiting and request-size limits. Login rate limiting is enforced by the backend.
-- Restrict CORS to the production PWA origin.
-- Keep the provisioning bridge on a controlled management network; do not expose CPE-management access directly to the public Internet.
-- Store production secrets in the deployment platform secret store/environment, with rotation procedures.
-- Keep audit records redacted: never log passwords, enrollment keys, communities/tokens or raw authorization headers.
+- Login con rate limit e tempo costante per username inesistenti. Password admin ≥ 14 caratteri, installatori ≥ 12.
+- Ogni richiesta verifica account attivo e `token_version`: disabilitazione, reset password o cambio ruolo **revocano subito** le sessioni.
+- Il pacchetto di provisioning è rilasciato solo a `X-CDA-Client: android/x.y.z` ≥ `MIN_ANDROID_VERSION`, scade (`PROVISION_JOB_TTL_MINUTES`) e ha `Cache-Control: no-store`.
+- L'app verifica lo SHA-256 della configurazione ed esegue solo comandi costanti (lettura, scrittura, `cfgmtd`, reboot). Non esegue comandi forniti dal server.
+- Target locali limitati a reti private/CGNAT; scansioni limitate a /24; RouterOS lato server solo su reti private (salvo `ROUTEROS_ALLOW_PUBLIC=1`).
+- Terminale RouterOS in sola lettura (allow/deny list, niente `;`, `[`, `$`); output con le password redatte.
+- Console web con CSP `default-src 'self'` senza inline e rendering via `textContent` (nessun HTML costruito dai dati).
+- Container non-root (`node`), `no-new-privileges`, capability minime.
 
-## Android release signing and updates
+## Rischi residui accettati
 
-APK updates must use one long-lived CDA Net signing key. Never commit the keystore or its passwords. Store them only as protected GitHub/deployment secrets. Android verifies that an update is signed with the same key; SHA-256 verification is an additional transport/integrity check, not a replacement for APK signing.
+- **Host key SSH non verificata** per CPE factory e RouterOS: i dispositivi factory non hanno un fingerprint registrato. Compensazione per le CPE: target locale, firmware, board e MAC verificati prima della scrittura. Usare reti di management controllate.
+- **Certificato TLS self-signed della CPE** accettato nel WebView di primo avvio, solo per l'IP factory del job.
+- **Endpoint aggiornamenti pubblico** (`/api/mobile/*`) per poter riparare un'app che non riesce più a fare login. Se il server è esposto su Internet, valutare di limitarlo alla rete CDA Net/VPN.
+- **Socket Docker montato nell'updater**: equivale a root sull'host. L'updater esegue solo lo script in `deploy/updater/`, montato in sola lettura.
 
-The update endpoint may be reachable before login so a broken login can be repaired. For a public deployment, restrict access to the CDA Net/VPN environment where practical.
+## Gate di rilascio
 
-## SSH host-key note
-
-Factory/local CPE and RouterOS sessions currently accept the device SSH host key because factory devices do not have a pre-enrolled fingerprint. CPE provisioning compensates with local-target, firmware, board and expected-MAC checks before writing, but first-connection credential interception remains a residual risk on an untrusted LAN. Production field networks should be controlled; host-key enrollment/pinning is recommended for managed RouterOS devices.
-
-## Release rule
-
-A release must not be marked production-ready until secret scanning, dependency review, authenticated API tests, authorization tests, redaction tests and a lab CPE recovery test have passed.
-
-## Incident handling
-
-If a secret is committed or exposed, removing the file is not sufficient because Git history may retain it. Immediately revoke/rotate the credential, assess exposure, then clean history where appropriate.
+Prima di dichiarare una versione pronta per la produzione:
+- CI verde (test server, typecheck, smoke test immagine, test e build Android);
+- APK firmato con la chiave stabile;
+- checklist di collaudo hardware in [docs/PROVISIONING.md](docs/PROVISIONING.md) completata sui modelli interessati.
