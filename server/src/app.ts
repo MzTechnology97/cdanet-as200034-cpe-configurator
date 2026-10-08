@@ -112,7 +112,9 @@ export async function buildApp(cfg: Config, version: string, opts: { db?: Db; lo
       root: cfg.staticDir,
       index: ['index.html'],
       cacheControl: false,
-      setHeaders: (res) => res.setHeader('Cache-Control', 'no-cache'),
+      setHeaders: (reply) => {
+        reply.header('Cache-Control', 'no-cache');
+      },
     });
   }
   app.setNotFoundHandler((req, reply) => {
