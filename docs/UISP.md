@@ -2,16 +2,37 @@
 
 ## Configurazione
 
-Nel `.env` del server (`sudo cdanet-cpe edit`):
+Dalla console web, menu **Connettori** (solo amministratori), card **UISP**:
+- **Indirizzo UISP**, es. `https://uisp.esempio.it`. Va bene anche l'URL delle API incollato per intero (`…/nms/api/v2.1`): viene ridotto da solo;
+- **Token API**: si crea in UISP da **Settings → Users → API tokens**, con permesso di scrittura (serve per accettazione e backup). Viene salvato cifrato con la master key e non viene più mostrato (solo le ultime 4 cifre). Lasciando il campo vuoto si mantiene quello salvato;
+- **Ignora verifica TLS**: da attivare solo se UISP usa un certificato autofirmato e il server lo raggiunge su una rete di gestione fidata;
+- **Backup automatico** dopo "Accetta in UISP", **raggio della Copertura** (km) e **cache** dei dati UISP (secondi).
+
+**Testa connessione** prova i valori del modulo senza salvarli e mostra versione di UISP, latenza, dispositivi, AP (e quanti con posizione), dispositivi in attesa e site. **Salva** applica subito la configurazione, senza riavviare il container. Ogni modifica finisce nel Registro attività.
+
+In alternativa, o per le installazioni esistenti, restano validi i parametri del `.env` (`sudo cdanet-cpe edit`):
 
 ```
 UISP_API_URL=https://uisp.esempio.it
 UISP_API_TOKEN=<token creato in UISP>
+UISP_IGNORE_TLS=0
 ```
 
-Il token si crea in UISP da **Settings → Users → API tokens** e serve con permesso di scrittura (accettazione e backup). Resta solo sul server: non viene mai inviato a browser o app. Il risultato si verifica in **Panoramica → UISP**: numero di dispositivi, AP (e quanti hanno una posizione), dispositivi in attesa e site.
+Se nella console c'è una configurazione salvata, questa ha la precedenza; **Rimuovi configurazione** torna ai valori del `.env`.
 
-Le chiamate usano le API **UISP v2.1** (`/nms/api/v2.1`, header `x-auth-token`). Se la vostra versione espone percorsi diversi, la Panoramica mostra l'errore con il codice HTTP: indicamelo e lo adeguo. La documentazione Swagger della vostra installazione è su `https://<uisp>/nms/api-docs`.
+### API usate e compatibilità
+
+Le chiamate usano le API **UISP v2.1** (`/nms/api/v2.1`, header `x-auth-token`), verificate sulla specifica ufficiale *UISP API 1.5.0*, che vale anche per **UISP 3.1.x** (in uso la 3.1.65):
+
+| Funzione | Chiamata |
+|---|---|
+| Test e versione | `GET /nms/version`, `GET /devices`, `GET /sites` |
+| AP vicini e stato CPE | `GET /devices` (ruolo, `authorized`, `attributes.ssid`, `attributes.apDevice`, `location`) |
+| Posizione dei site | `GET /sites` (`description.location`) |
+| Accettazione CPE pending | `POST /devices/{id}/authorize` con `{ "siteId": … }` |
+| Backup | `GET`/`POST /devices/{id}/backups`, `GET /devices/{id}/backups/{backupId}` (per airMAX è il `.cfg`) |
+
+Il site proposto per l'accettazione è quello dell'AP a cui la CPE è agganciata (`attributes.apDevice.siteId`). Gli endpoint dei profili AP non vengono usati perché espongono le chiavi Wi-Fi. La documentazione Swagger della vostra installazione è su `https://<uisp>/nms/api-docs`.
 
 ## Posizione della CPE
 

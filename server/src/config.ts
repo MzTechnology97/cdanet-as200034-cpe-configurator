@@ -70,6 +70,8 @@ const envSchema = z.object({
   UISP_API_TOKEN: optionalText(400),
   UISP_CACHE_SECONDS: int(60, 5, 3600),
   UISP_AUTO_BACKUP: z.enum(['0', '1']).default('1'),
+  // 1 = accept self-signed/invalid certificates from UISP (use only on a trusted management network).
+  UISP_IGNORE_TLS: z.enum(['0', '1']).default('0'),
   COVERAGE_MAX_KM: int(15, 1, 100),
   GEOCODER_URL: z.string().url().default('https://nominatim.openstreetmap.org'),
   GEOCODER_CONTACT: optionalText(200),
@@ -121,6 +123,7 @@ export interface Config {
   routerOsAllowPublic: boolean;
   uisp: { url: string; token: string; cacheSeconds: number } | null;
   uispAutoBackup: boolean;
+  uispIgnoreTls: boolean;
   coverageMaxKm: number;
   geocoder: { url: string; contact: string | undefined };
 }
@@ -191,6 +194,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
         ? { url: e.UISP_API_URL, token: e.UISP_API_TOKEN, cacheSeconds: e.UISP_CACHE_SECONDS }
         : null,
     uispAutoBackup: e.UISP_AUTO_BACKUP === '1',
+    uispIgnoreTls: e.UISP_IGNORE_TLS === '1',
     coverageMaxKm: e.COVERAGE_MAX_KM,
     geocoder: { url: e.GEOCODER_URL, contact: e.GEOCODER_CONTACT },
   };

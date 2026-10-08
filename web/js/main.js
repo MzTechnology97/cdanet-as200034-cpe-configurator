@@ -1,5 +1,6 @@
 import { api, session } from './api.js';
 import { h, mount, toast } from './dom.js';
+import { connectorsView } from './views/connectors.js';
 import { coverageView } from './views/coverage.js';
 import { dashboardView } from './views/dashboard.js';
 import { eventsView } from './views/events.js';
@@ -24,6 +25,7 @@ const ROUTES = [
   { id: 'users', label: 'Account', view: usersView, admin: true },
   { id: 'wireless', label: 'Reti Wi-Fi (WPA2)', view: wirelessView, admin: true },
   { id: 'profiles', label: 'Profili airOS', view: profilesView, admin: true },
+  { id: 'connectors', label: 'Connettori', view: connectorsView, admin: true },
   { id: 'events', label: 'Registro attività', view: eventsView, admin: true },
 ];
 

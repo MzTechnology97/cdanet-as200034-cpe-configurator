@@ -15,7 +15,9 @@ import { toolRoutes } from './routes/tools.ts';
 import { createProvisioning } from './services/provisioning.ts';
 import { createTemplates } from './services/templates.ts';
 import { createGeocoder } from './services/geocode.ts';
-import { createUisp, type Uisp } from './services/uisp.ts';
+import type { Uisp } from './services/uisp.ts';
+import { createConnectors } from './services/connectors.ts';
+import { connectorRoutes } from './routes/connectors.ts';
 import { uispRoutes } from './routes/uisp.ts';
 
 const CSP = [
@@ -53,6 +55,8 @@ export async function buildApp(
   ensureBootstrapAdmin(db, cfg);
   const sealer = createSealer(cfg.masterKey);
   const templates = createTemplates(db, sealer);
+  const connectors = createConnectors(db, sealer, cfg, { fetchImpl: opts.fetchImpl });
+  const uispCfg = connectors.uispSettings();
   const ctx: AppContext = {
     cfg,
     db,
@@ -60,7 +64,9 @@ export async function buildApp(
     auth: createAuth(db, cfg.jwtSecret, cfg.jwtTtlHours),
     provisioning: createProvisioning(db, cfg, sealer, templates),
     templates,
-    uisp: opts.uisp !== undefined ? opts.uisp : cfg.uisp ? createUisp({ ...cfg.uisp, fetchImpl: opts.fetchImpl }) : null,
+    uisp: opts.uisp !== undefined ? opts.uisp : uispCfg ? connectors.build(uispCfg) : null,
+    uispSettings: { autoBackup: uispCfg?.autoBackup ?? cfg.uispAutoBackup, coverageMaxKm: uispCfg?.coverageMaxKm ?? cfg.coverageMaxKm },
+    connectors,
     geocoder: createGeocoder({ url: cfg.geocoder.url, contact: cfg.geocoder.contact, fetchImpl: opts.fetchImpl }),
     version,
   };
@@ -118,6 +124,7 @@ export async function buildApp(
   adminRoutes(app, ctx);
   toolRoutes(app, ctx);
   uispRoutes(app, ctx);
+  connectorRoutes(app, ctx);
 
   if (existsSync(join(cfg.staticDir, 'index.html'))) {
     // Revalidate on every load (ETag/Last-Modified): after an auto-update the console must never mix old and new assets.

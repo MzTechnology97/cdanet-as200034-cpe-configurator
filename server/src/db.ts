@@ -134,6 +134,15 @@ const MIGRATIONS: string[] = [
   ALTER TABLE provisioning_jobs ADD COLUMN uisp_authorized_at TEXT;
   ALTER TABLE provisioning_jobs ADD COLUMN uisp_authorized_by INTEGER;
   `,
+  // 6: settings edited from the console (connectors). Secrets inside values are sealed.
+  `
+  CREATE TABLE settings(
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    updated_by INTEGER
+  );
+  `,
 ];
 
 export function openDatabase(path: string): Db {

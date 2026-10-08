@@ -22,6 +22,8 @@ export interface UispDevice {
   siteName: string | null;
   apId: string | null;
   apName: string | null;
+  /** Site of the associated AP as reported by UISP (attributes.apDevice.siteId). */
+  apSiteId: string | null;
   signal: number | null;
   stations: number | null;
   frequency: number | null;
@@ -72,6 +74,7 @@ export function normalizeDevice(raw: unknown): UispDevice {
     siteName: str(site.name),
     apId: str(ap.id),
     apName: str(ap.name),
+    apSiteId: str(ap.siteId),
     signal: num(ov.signal),
     stations: num(ov.stationsCount),
     frequency: num(ov.frequency),
@@ -154,9 +157,15 @@ export function createUisp(opts: UispOptions) {
 
   return {
     async test() {
+      invalidate();
+      const started = Date.now();
+      const ver = obj(await call('GET', '/nms/version').catch(() => null));
       const [ds, ss] = await Promise.all([devices(), sites()]);
       return {
         ok: true,
+        version: str(ver.version),
+        deployment: str(ver.deployment),
+        latencyMs: Date.now() - started,
         devices: ds.length,
         aps: ds.filter(isAp).length,
         apsWithLocation: (await aps()).length,
@@ -206,6 +215,7 @@ export function createUisp(opts: UispOptions) {
     async siteForStation(st: UispDevice, ssid: string, near: LatLon | null): Promise<UispSite | null> {
       const [ds, ss] = await Promise.all([devices(), sites()]);
       const byId = new Map(ss.map((s) => [s.id, s]));
+      if (st.apSiteId && byId.has(st.apSiteId)) return byId.get(st.apSiteId) as UispSite;
       let ap = st.apId ? ds.find((d) => d.id === st.apId) : undefined;
       if (!ap) {
         // Not associated yet (or UISP did not report it): APs broadcasting the job SSID, nearest first.
@@ -236,7 +246,15 @@ export function createUisp(opts: UispOptions) {
       const list = (await call('GET', `/devices/${encodeURIComponent(deviceId)}/backups`)) as unknown[];
       return (Array.isArray(list) ? list : []).map((b) => {
         const o = obj(b);
-        return { id: str(o.id) ?? '', timestamp: str(o.timestamp) ?? str(o.createdAt) ?? str(o.date) ?? null, name: str(o.name) ?? null };
+        return {
+          id: str(o.id) ?? '',
+          timestamp: str(o.timestamp) ?? str(o.createdAt) ?? str(o.date) ?? null,
+          type: str(o.type),
+          extension: str(o.extension),
+          filename: str(o.filename),
+          note: str(o.note),
+          pinned: o.pinned === true,
+        };
       });
     },
 

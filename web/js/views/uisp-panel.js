@@ -2,7 +2,8 @@ import { api } from '../api.js';
 import { badge, busy, fmtDate, h, mount, stat, table, toast } from '../dom.js';
 
 const ERRORS = {
-  uisp_not_configured: 'UISP non configurato sul server (UISP_API_URL / UISP_API_TOKEN).',
+  uisp_not_configured: 'UISP non configurato: impostalo in Connettori.',
+  uisp_tls_error: 'Certificato TLS di UISP non valido: valuta "Ignora verifica TLS" in Connettori.',
   uisp_unreachable: 'UISP non raggiungibile dal server.',
   uisp_auth_failed: 'Token UISP rifiutato: verifica UISP_API_TOKEN e i suoi permessi.',
   uisp_device_not_found: 'La CPE non è ancora comparsa in UISP: attendi che si colleghi dopo il riavvio e riprova.',
@@ -148,8 +149,8 @@ export function uispPanel(job, isAdmin) {
 /** Dashboard card: UISP connection test. */
 export async function uispStatusCard() {
   const s = await api('/api/admin/uisp/status').catch((e) => ({ configured: true, ok: false, error: e.message }));
-  if (!s.configured) return h('p', { class: 'small muted' }, 'Non configurata: imposta UISP_API_URL e UISP_API_TOKEN nel .env del server per AP vicini, accettazione CPE e backup.');
-  if (s.ok === false) return h('div', { class: 'notice bad' }, `Connessione UISP non riuscita: ${ERRORS[s.error] ?? s.error}${s.status ? ` (HTTP ${s.status})` : ''}`);
+  if (!s.configured) return h('p', { class: 'small muted' }, 'Non configurata: impostala in ', h('a', { href: '#/connectors' }, 'Connettori'), ' per AP vicini, accettazione CPE e backup.');
+  if (s.ok === false) return h('div', { class: 'notice bad' }, `Connessione UISP non riuscita: ${ERRORS[s.error] ?? s.error}${s.status ? ` (HTTP ${s.status})` : ''} · `, h('a', { href: '#/connectors' }, 'apri Connettori'));
   return h(
     'div',
     { class: 'grid' },
@@ -157,6 +158,7 @@ export async function uispStatusCard() {
     stat('AP', `${s.aps} (${s.apsWithLocation} con posizione)`),
     stat('In attesa', s.pending),
     stat('Site', s.sites),
+    stat('Versione UISP', s.version ?? '—'),
     h('div', { class: 'stat' }, h('small', {}, 'Connessione'), badge('OK', 'good')),
   );
 }

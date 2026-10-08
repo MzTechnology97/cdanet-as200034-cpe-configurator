@@ -6,6 +6,7 @@ import type { Provisioning } from './services/provisioning.ts';
 import type { Templates } from './services/templates.ts';
 import type { Geocoder } from './services/geocode.ts';
 import type { Uisp } from './services/uisp.ts';
+import type { Connectors } from './services/connectors.ts';
 
 export interface AppContext {
   cfg: Config;
@@ -14,8 +15,10 @@ export interface AppContext {
   auth: Auth;
   provisioning: Provisioning;
   templates: Templates;
-  /** null when UISP_API_URL/UISP_API_TOKEN are not configured. */
+  /** null when UISP is not configured (Connettori or .env). Replaced at runtime when an admin saves the connector. */
   uisp: Uisp | null;
+  uispSettings: { autoBackup: boolean; coverageMaxKm: number };
+  connectors: Connectors;
   geocoder: Geocoder;
   version: string;
 }
