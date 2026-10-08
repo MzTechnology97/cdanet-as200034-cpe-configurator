@@ -16,6 +16,18 @@ export type CpeModel = (typeof SUPPORTED_MODELS)[number];
 export const TARGET_FIRMWARE = '8.7.4';
 export const COMPATIBILITY_FIRMWARE = ['8.7.11', '8.7.25'] as const;
 
+/**
+ * Suggested board match (regex on /etc/board.info), proposed when importing a backup.
+ * Always confirm with `cat /etc/board.info` on the lab CPE before field use.
+ */
+export const BOARD_MATCH_SUGGESTIONS: Record<CpeModel, string> = {
+  'NanoStation Loco 5AC': 'board\\.name=NanoStation 5AC ?loco',
+  'NanoStation 5AC': 'board\\.name=NanoStation 5AC(?! ?loco)',
+  'NanoBeam 5AC': 'board\\.name=NanoBeam 5AC',
+  'LiteBeam 5AC': 'board\\.name=LiteBeam 5AC',
+  'PowerBeam 5AC': 'board\\.name=PowerBeam 5AC',
+};
+
 export const MANAGEMENT_PORTS = { http: 20080, https: 20443 } as const;
 
 export const NODE_RANGE = { min: 2, max: 99 } as const;

@@ -6,17 +6,38 @@ NanoStation Loco 5AC, NanoStation 5AC, NanoBeam 5AC, LiteBeam 5AC, PowerBeam 5AC
 
 ## Profili (uno per modello)
 
-Il server non inventa chiavi `system.cfg`. Ogni modello usa l'export reale di una CPE di laboratorio su 8.7.4:
+Il server non inventa chiavi `system.cfg`. Ogni modello usa il backup reale di una CPE di laboratorio su 8.7.4, e i placeholder vengono inseriti **in automatico**:
 
 1. Fai il factory reset di una CPE di laboratorio, completa il primo avvio e portala a 8.7.4.
-2. Configurala a mano in modo completo e funzionante: Station WPA2, Router Mode, PPPoE su WAN wireless senza VLAN, management, UISP, SNMP.
-3. Esporta `system.cfg` (System → Backup Configuration).
-4. Sostituisci solo i valori variabili con i placeholder qui sotto.
-5. Dalla console: **Profili airOS → modello → carica il file**. Il server mostra subito:
-   - gli errori bloccanti (VLAN, placeholder sconosciuti, `${CPE_PASSWORD}` in chiaro in `users.N.password`);
-   - gli avvisi (placeholder SSID/WPA2/PPPoE mancanti).
-6. Imposta il **board match**: una regex applicata all'output di `/etc/version`, `/etc/board.info` e `/proc/ubnthal/system.info` (es. `board\.name=LiteBeam 5AC`).
+2. Configurala a mano in modo completo e funzionante: Station WPA2, Router Mode, PPPoE su WAN wireless senza VLAN, management 20080/20443, UISP, SNMP, NTP e watchdog.
+3. Scarica il backup: **System → Back Up Configuration → Download**.
+4. Nella console: **Profili airOS → modello → Importa backup**, e scegli il file così com'è.
+5. Il server sostituisce i valori del cliente con i placeholder e mostra l'anteprima:
+   - righe e chiavi sostituite, con i segreti oscurati;
+   - avvisi su ciò che non ha trovato;
+   - errori bloccanti, per esempio una VLAN presente.
+
+   Nulla viene salvato finché non premi **Salva come profilo**. Con **Scarica template generato** puoi rileggerlo.
+6. Controlla il **board match** proposto, cioè la regex applicata a `/etc/version`, `/etc/board.info` e `/proc/ubnthal/system.info`. Confrontalo con `cat /etc/board.info` sulla CPE (es. `board\.name=LiteBeam 5AC`), poi salva.
 7. Prova il profilo su una seconda CPE di laboratorio prima dell'uso in campo.
+
+Righe sostituite in automatico (nomi chiave di airOS 8):
+
+| Chiave nel backup | Placeholder |
+|---|---|
+| `wireless.N.ssid`, `wpasupplicant.profile.N.network.N.ssid` | `${SSID}` |
+| `wpasupplicant.profile.N.network.N.psk` | `${WPA2_PSK}` |
+| `ppp.N.name` / `ppp.N.password` / `ppp.N.mtu` / `ppp.N.mru` | `${PPPOE_USER}` / `${PPPOE_PASSWORD}` / `${PPPOE_MTU}` / `${PPPOE_MRU}` |
+| `users.1.name` / `users.1.password` | `${CPE_USERNAME}` / `${CPE_PASSWORD_HASH}` |
+| qualsiasi valore `wss://…` (UISP) | `${UISP_ENROLLMENT}` |
+| `snmp.community` / `snmp.contact` / `snmp.location` | `${SNMP_COMMUNITY}` / `${SNMP_CONTACT}` / `${SNMP_LOCATION}` |
+| `resolv.host.1.name` | `${DEVICE_NAME}` |
+| `httpd.port` / `httpd.https.port` / `sshd.port` | `${HTTP_PORT}` / `${HTTPS_PORT}` / `${SSH_PORT}` |
+| `pwdog.host` / `ntpclient.N.server` | `${WATCHDOG_HOST}` / `${NTP_SERVER}` |
+| `dhcpd.1.start` / `end` / `lease_time` / `netmask` | `${DHCP_START}` / `${DHCP_END}` / `${DHCP_LEASE}` / `${LAN_NETMASK}` |
+| `netconf.N.ip` / `netmask` dell'interfaccia di `dhcpd.1.devname` | `${LAN_IP}` / `${LAN_NETMASK}` |
+
+Le righe che contengono già un `${…}` restano invariate. Si può quindi caricare anche un template preparato a mano, o ricaricare quello scaricato dopo averlo ritoccato. Se dopo la sostituzione resta un valore che sembra un segreto (chiave che termina in `psk`, `password`, `secret`, `key`…), l'anteprima lo segnala.
 
 Il template viene cifrato (AES-256-GCM) e di lui si mostra solo lo SHA-256.
 

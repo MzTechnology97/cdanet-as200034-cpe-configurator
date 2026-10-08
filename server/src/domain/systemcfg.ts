@@ -58,7 +58,9 @@ export function inspectTemplate(raw: string): TemplateReport {
   const errors: string[] = [];
   const warnings: string[] = [];
   if (template.length < 64 || template.length > MAX_TEMPLATE) errors.push('template_size');
-  if (!/^system\.cfg\.version=/m.test(template)) errors.push('profile_not_system_cfg');
+  // airOS exports are key=value files: require some core sections rather than a specific header line.
+  const sections = new Set([...template.matchAll(/^(radio|wireless|netconf|users)\./gm)].map((m) => m[1]));
+  if (sections.size < 2) errors.push('profile_not_system_cfg');
   if (containsLegacyVlan(template)) errors.push('profile_contains_vlan');
   if (template.includes('\0')) errors.push('profile_contains_nul');
 

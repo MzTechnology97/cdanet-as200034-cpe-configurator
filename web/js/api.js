@@ -11,7 +11,7 @@ const MESSAGES = {
   last_admin: 'Deve restare almeno un amministratore attivo',
   cannot_demote_current_admin: 'Non puoi disabilitare o declassare il tuo account',
   profile_contains_vlan: 'Il profilo contiene una VLAN legacy: non consentito',
-  profile_not_system_cfg: 'Il file non è un export system.cfg',
+  profile_not_system_cfg: 'Il file non sembra un backup di configurazione airOS',
   unknown_placeholders: 'Il profilo contiene placeholder non riconosciuti',
   users_password_requires_hash_placeholder: 'users.N.password deve usare ${CPE_PASSWORD_HASH}',
   board_match_invalid_regex: 'Board match: espressione regolare non valida',
