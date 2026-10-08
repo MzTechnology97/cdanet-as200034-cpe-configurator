@@ -149,6 +149,7 @@ fun DiscoveryScreen(c: AppContainer) {
             OutlinedButton(onClick = { c.tools.suggestedCidr()?.let { cidr = it } }) { Text("Usa subnet attuale") }
             WifiSwitch(viaWifi) { viaWifi = it }
             ToolButton(r, "Scansiona subnet", primary = true) { c.tools.discover(cidr, viaWifi) }
+            ToolButton(r, "Trova apparati Ubiquiti (CPE, AP)") { c.tools.ubntDiscovery() }
             ToolButton(r, "Tabella ARP / neighbor") { c.tools.neighbors() }
         }
         SectionCard("Host") {
