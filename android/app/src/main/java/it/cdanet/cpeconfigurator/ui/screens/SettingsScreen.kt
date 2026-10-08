@@ -77,6 +77,41 @@ fun UpdateBanner(c: AppContainer, state: UpdateState, onState: (UpdateState) -> 
 }
 
 @Composable
+private fun PasswordCard(c: AppContainer, onDone: (String) -> Unit, onError: (String?) -> Unit) {
+    val scope = rememberCoroutineScope()
+    var current by remember { mutableStateOf("") }
+    var next by remember { mutableStateOf("") }
+    var again by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    val tooShort = next.isNotEmpty() && next.length < 12
+    val mismatch = again.isNotEmpty() && again != next
+    SectionCard("Cambia password") {
+        Field("Password attuale", current, { current = it }, password = true)
+        Field("Nuova password", next, { next = it }, password = true, isError = tooShort, supporting = "Almeno 12 caratteri")
+        Field("Ripeti la nuova password", again, { again = it }, password = true, isError = mismatch, supporting = if (mismatch) "Le password non coincidono" else null)
+        BusyButton(
+            "Cambia password",
+            busy,
+            Modifier.fillMaxWidth(),
+            enabled = current.isNotEmpty() && next.length >= 12 && next == again,
+        ) {
+            scope.launch {
+                busy = true
+                try {
+                    c.api.changePassword(current, next)
+                    current = ""; next = ""; again = ""
+                    onDone("Password cambiata: le altre sessioni sono state chiuse")
+                } catch (e: Exception) {
+                    onError(e.message)
+                } finally {
+                    busy = false
+                }
+            }
+        }
+    }
+}
+
+@Composable
 fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) -> Unit, onLogout: () -> Unit) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
@@ -98,6 +133,18 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
             KeyValue("Utente", session?.user?.let { "${it.username} (${it.role})" } ?: "non connesso")
             KeyValue("Sessione fino a", session?.expiresAt?.replace('T', ' ')?.take(16) ?: "—")
             OutlinedButton(onClick = onLogout) { Text(if (session != null) "Esci" else "Torna al login") }
+        }
+
+        if (session != null) {
+            PasswordCard(c, onDone = { msg = it }, onError = { error = it })
+            SectionCard("Sessioni") {
+                Text("Telefono perso o accesso da un dispositivo condiviso? Chiudi tutte le sessioni dell'account, anche questa.", style = MaterialTheme.typography.bodySmall)
+                OutlinedButton(onClick = {
+                    scope.launch {
+                        runCatching { c.api.logoutAll() }.onFailure { error = it.message }.onSuccess { onLogout() }
+                    }
+                }) { Text("Esci da tutti i dispositivi") }
+            }
         }
 
         SectionCard("Server") {

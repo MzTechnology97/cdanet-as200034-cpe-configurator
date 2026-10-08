@@ -1,5 +1,6 @@
 import { api, session } from './api.js';
 import { h, mount, toast } from './dom.js';
+import { accountView } from './views/account.js';
 import { connectorsView } from './views/connectors.js';
 import { coverageView } from './views/coverage.js';
 import { dashboardView } from './views/dashboard.js';
@@ -27,6 +28,8 @@ const ROUTES = [
   { id: 'profiles', label: 'Profili airOS', view: profilesView, admin: true },
   { id: 'connectors', label: 'Connettori', view: connectorsView, admin: true },
   { id: 'events', label: 'Registro attività', view: eventsView, admin: true },
+  { group: 'Profilo' },
+  { id: 'account', label: 'Il mio account', view: accountView },
 ];
 
 const viewEl = document.getElementById('view');
@@ -66,7 +69,7 @@ function renderChrome(user) {
   );
   mount(
     sessionEl,
-    h('span', { class: 'session-name' }, `${user.username} · ${user.role === 'admin' ? 'Admin' : 'Installatore'}`),
+    h('a', { class: 'session-name', href: '#/account', title: 'Il mio account' }, `${user.username} · ${user.role === 'admin' ? 'Admin' : 'Installatore'}`),
     h('button', { onclick: logout }, 'Esci'),
   );
 }

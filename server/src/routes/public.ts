@@ -3,8 +3,8 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { HttpError, createLoginLimiter } from '../auth.ts';
 import type { AppContext } from '../context.ts';
-import { DUMMY_PASSWORD_HASH, verifyPassword } from '../crypto.ts';
-import { nowIso } from '../db.ts';
+import { DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from '../crypto.ts';
+import { nowIso, recordEvent } from '../db.ts';
 import {
   COMPATIBILITY_FIRMWARE,
   DISTRICT_RANGE,
@@ -53,6 +53,40 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
   app.post('/api/login', login);
 
   app.get('/api/auth/me', { preHandler: ctx.auth.requireUser }, async (req) => ({ user: req.user }));
+
+  // ---- Il mio account -------------------------------------------------------------------
+  const selfRow = ctx.db.prepare('SELECT id, username, password_hash, role, active, token_version, last_login_at, created_at FROM users WHERE id = ?');
+  type SelfRow = { id: number; username: string; password_hash: string; role: 'admin' | 'installer'; active: number; token_version: number; last_login_at: string | null; created_at: string };
+
+  app.get('/api/auth/account', { preHandler: ctx.auth.requireUser }, async (req) => {
+    const u = selfRow.get(req.user!.id) as SelfRow;
+    return { id: u.id, username: u.username, role: u.role, lastLoginAt: u.last_login_at, createdAt: u.created_at };
+  });
+
+  /** Own password change: needs the current password; other sessions are revoked, this one gets a new token. */
+  app.post('/api/auth/password', { preHandler: ctx.auth.requireUser }, async (req) => {
+    const b = z.object({ currentPassword: z.string().min(1).max(200), newPassword: z.string().min(12).max(200) }).strict().parse(req.body);
+    const u = selfRow.get(req.user!.id) as SelfRow;
+    if (limiter.blocked(req.ip, u.username)) throw new HttpError(429, 'too_many_attempts');
+    if (!verifyPassword(b.currentPassword, u.password_hash)) {
+      limiter.fail(req.ip, u.username);
+      throw new HttpError(403, 'wrong_current_password');
+    }
+    if (b.newPassword === b.currentPassword) throw new HttpError(400, 'password_unchanged');
+    if (b.newPassword.toLowerCase().includes(u.username.toLowerCase())) throw new HttpError(400, 'password_contains_username');
+    limiter.clear(req.ip, u.username);
+    ctx.db.prepare('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?').run(hashPassword(b.newPassword), u.id);
+    recordEvent(ctx.db, u.id, 'account.password', u.username, 'cambio password personale');
+    const { token, expiresAt } = await ctx.auth.issueToken({ ...u, token_version: u.token_version + 1 });
+    return { ok: true, token, expiresAt };
+  });
+
+  /** Revokes every session of the account (lost phone, shared PC). */
+  app.post('/api/auth/logout-all', { preHandler: ctx.auth.requireUser }, async (req) => {
+    ctx.db.prepare('UPDATE users SET token_version = token_version + 1 WHERE id = ?').run(req.user!.id);
+    recordEvent(ctx.db, req.user!.id, 'account.logout_all', req.user!.username, 'tutte le sessioni chiuse');
+    return { ok: true };
+  });
 
   app.get('/api/meta', { preHandler: ctx.auth.requireUser }, async () => ({
     version: ctx.version,
