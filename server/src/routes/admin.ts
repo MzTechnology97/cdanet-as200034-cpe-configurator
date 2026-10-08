@@ -5,6 +5,7 @@ import type { AppContext } from '../context.ts';
 import { hashPassword, sha256Hex } from '../crypto.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { autoTemplate } from '../domain/autotemplate.ts';
+import { parseWirelessCsv } from '../domain/wireless-csv.ts';
 import { BOARD_MATCH_SUGGESTIONS, SSID_RX, SUPPORTED_MODELS, TARGET_FIRMWARE } from '../domain/policy.ts';
 import { PLACEHOLDERS, inspectTemplate, normalizeTemplate } from '../domain/systemcfg.ts';
 import { loadLatestRelease } from '../services/releases.ts';
@@ -87,6 +88,69 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
     db.prepare('DELETE FROM wireless_secrets WHERE ssid = ?').run(ssid);
     recordEvent(db, actor(req), 'wireless.delete', ssid);
     return { ok: true };
+  });
+
+  /** Bulk create/update from CSV. All-or-nothing: any invalid row and nothing is written. */
+  app.post('/api/admin/wireless-networks/import', { ...admin, bodyLimit: 2 * 1024 * 1024 }, async (req) => {
+    const b = z.object({ csv: z.string().min(1).max(2_000_000), dryRun: z.boolean().default(true) }).strict().parse(req.body);
+    const { rows, errors } = parseWirelessCsv(b.csv);
+    const existing = new Map(
+      (db.prepare('SELECT ssid, wpa2_ciphertext FROM wireless_secrets').all() as Array<{ ssid: string; wpa2_ciphertext: string }>).map((r) => [
+        r.ssid,
+        r.wpa2_ciphertext,
+      ]),
+    );
+    const created: string[] = [];
+    const updated: string[] = [];
+    const unchanged: string[] = [];
+    const sameKey = (sealed: string, wpa2: string) => {
+      try {
+        return sealer.open(sealed) === wpa2;
+      } catch {
+        return false;
+      }
+    };
+    for (const r of rows) {
+      const sealed = existing.get(r.ssid);
+      if (!sealed) created.push(r.ssid);
+      else if (sameKey(sealed, r.wpa2)) unchanged.push(r.ssid);
+      else updated.push(r.ssid);
+    }
+    const ok = errors.length === 0;
+    if (ok && !b.dryRun && created.length + updated.length > 0) {
+      const write = new Set([...created, ...updated]);
+      const upsert = db.prepare(
+        `INSERT INTO wireless_secrets(ssid, wpa2_ciphertext, updated_at) VALUES(?,?,?)
+         ON CONFLICT(ssid) DO UPDATE SET wpa2_ciphertext = excluded.wpa2_ciphertext, updated_at = excluded.updated_at`,
+      );
+      const now = nowIso();
+      db.exec('BEGIN');
+      try {
+        for (const r of rows) if (write.has(r.ssid)) upsert.run(r.ssid, sealer.seal(r.wpa2), now);
+        db.exec('COMMIT');
+      } catch (e) {
+        db.exec('ROLLBACK');
+        throw e;
+      }
+      recordEvent(db, actor(req), 'wireless.import', `${rows.length} righe`, `${created.length} nuove, ${updated.length} aggiornate, ${unchanged.length} invariate`);
+    }
+    return { ok, dryRun: b.dryRun || !ok, rows: rows.length, created, updated, unchanged, errors: errors.slice(0, 200), errorCount: errors.length };
+  });
+
+  app.post('/api/admin/wireless-networks/bulk-delete', admin, async (req) => {
+    const b = z.object({ ssids: z.array(z.string().regex(SSID_RX)).min(1).max(10_000) }).strict().parse(req.body);
+    const del = db.prepare('DELETE FROM wireless_secrets WHERE ssid = ?');
+    let deleted = 0;
+    db.exec('BEGIN');
+    try {
+      for (const s of new Set(b.ssids)) deleted += Number(del.run(s).changes);
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
+    recordEvent(db, actor(req), 'wireless.bulk_delete', `${deleted} reti`, b.ssids.slice(0, 20).join(', ') + (b.ssids.length > 20 ? '…' : ''));
+    return { ok: true, deleted };
   });
 
   // ---- airOS profiles -----------------------------------------------------------

@@ -6,6 +6,8 @@ const LABELS = {
   'user.update': 'Account modificato',
   'wireless.set': 'WPA2 impostata',
   'wireless.delete': 'WPA2 eliminata',
+  'wireless.import': 'Import WPA2 da CSV',
+  'wireless.bulk_delete': 'WPA2 eliminate (multiplo)',
   'profile.set': 'Profilo caricato',
   'profile.delete': 'Profilo eliminato',
   'job.create': 'Provisioning preparato',

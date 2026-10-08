@@ -48,6 +48,23 @@ Se rendi privati la repo o il pacchetto GHCR (consigliato):
 - **APK**: imposta `ANDROID_RELEASE_GITHUB_TOKEN` (fine-grained, Contents: read-only).
 - **Installer via curl**: aggiungi `-H "Authorization: Bearer <token>"`, oppure eseguilo da un checkout.
 
+## Reti Wi-Fi (chiavi WPA2) in blocco
+
+Nella console, in **Reti Wi-Fi**:
+- **Importa da CSV**: carica un file con una riga per rete. Il modello si scarica dalla pagina (*Scarica CSV di esempio*):
+
+  ```csv
+  nodo;distretto;wpa2
+  2;01;ChiaveWpa2DiEsempio
+  ```
+
+  In alternativa usa le colonne `ssid;wpa2` (es. `CDA-NET-N2-D01;Chiave…`). Il separatore può essere `;` (Excel in italiano) o `,`. I valori che contengono il separatore vanno tra virgolette.
+- Prima di salvare compare un'anteprima: reti nuove, da aggiornare, invariate ed errori riga per riga. **Se anche una sola riga è errata non viene importato nulla.** Le reti già presenti vengono aggiornate con la nuova chiave.
+- **Modifica WPA2** su una riga carica la rete nel modulo in alto: inserisci la nuova chiave e premi *Aggiorna chiave*.
+- Con le caselle di selezione (o *seleziona tutte* nell'intestazione, che agisce sulle reti filtrate) puoi eliminare più reti con **Elimina selezionate**.
+
+Ogni import ed eliminazione multipla compare nel **Registro attività**, senza le chiavi.
+
 ## HTTPS
 
 Imposta `APP_LISTEN=cpe.example.it` in `.env`: Caddy ottiene il certificato automaticamente. Servono il DNS verso il server e le porte TCP 80/443 raggiungibili. Con `APP_LISTEN=:80` la console è in HTTP sulla LAN.
