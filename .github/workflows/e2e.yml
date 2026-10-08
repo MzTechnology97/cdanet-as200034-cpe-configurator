@@ -75,7 +75,8 @@ jobs:
           test -n "$TOKEN" && test "$TOKEN" != null
           echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
           # the first-boot admin password must not remain in the container environment
-          ! docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$(docker ps -qf "label=com.docker.compose.project=$PROJECT" -f label=com.docker.compose.service=app)" | grep -q "^ADMIN_PASSWORD=.\+"
+          env_of_app=$(docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$(docker ps -qf "label=com.docker.compose.project=$PROJECT" -f label=com.docker.compose.service=app)")
+          if echo "$env_of_app" | grep -Eq '^ADMIN_PASSWORD=.+'; then echo "ADMIN_PASSWORD still in the app container"; exit 1; fi
           app=$(docker ps -qf "label=com.docker.compose.project=$PROJECT" -f label=com.docker.compose.service=app)
           echo "app restarts: $(docker inspect -f '{{.RestartCount}}' "$app")"
           test "$(docker inspect -f '{{.RestartCount}}' "$app")" = 0
