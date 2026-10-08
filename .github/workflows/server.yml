@@ -95,9 +95,9 @@ jobs:
           echo "step: backup"; docker exec -u node smoke node src/cli/backup.ts ci | grep -q '/data/backups/'
           echo "step: runs as node"
           docker exec smoke ps -o pid,user,args
-          # Every process named "node" must run with uid 1000 (tini, PID 1, stays root).
-          uids=$(docker exec smoke sh -c 'for f in /proc/[0-9]*/status; do grep -q "^Name:[[:space:]]*node$" "$f" && grep "^Uid:" "$f" | cut -f2; done' | sort -u)
-          echo "node process uids: $uids"; test "$uids" = 1000
+          # The server process (Node renames it "{MainThread} node src/main.ts") must not be root; tini (PID 1) is.
+          user=$(docker exec smoke ps -o user,args | grep 'src/main.ts' | grep -v tini | awk '{print $1}' | sort -u)
+          echo "server process user: $user"; test "$user" = node
       - uses: docker/login-action@v3
         if: github.event_name != 'pull_request'
         with:
