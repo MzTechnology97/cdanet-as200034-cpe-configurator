@@ -4,7 +4,8 @@ import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { hashPassword, sha256Hex } from '../crypto.ts';
 import { nowIso, recordEvent } from '../db.ts';
-import { SSID_RX, SUPPORTED_MODELS, TARGET_FIRMWARE } from '../domain/policy.ts';
+import { autoTemplate } from '../domain/autotemplate.ts';
+import { BOARD_MATCH_SUGGESTIONS, SSID_RX, SUPPORTED_MODELS, TARGET_FIRMWARE } from '../domain/policy.ts';
 import { PLACEHOLDERS, inspectTemplate, normalizeTemplate } from '../domain/systemcfg.ts';
 import { loadLatestRelease } from '../services/releases.ts';
 
@@ -113,6 +114,14 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   app.get('/api/admin/placeholders', admin, async () => Object.entries(PLACEHOLDERS).map(([name, description]) => ({ name, description })));
+
+  /** Raw CPE backup -> template with placeholders + preview. Nothing is stored here. */
+  app.post('/api/admin/profiles/:model/autotemplate', admin, async (req) => {
+    const { model } = modelParam.parse(req.params);
+    const b = z.object({ backup: z.string().min(64).max(300_000) }).strict().parse(req.body);
+    const result = autoTemplate(b.backup);
+    return { ...result, report: inspectTemplate(result.template), suggestedBoardMatch: BOARD_MATCH_SUGGESTIONS[model] };
+  });
 
   app.post('/api/admin/profiles/:model/inspect', admin, async (req) => {
     modelParam.parse(req.params);
