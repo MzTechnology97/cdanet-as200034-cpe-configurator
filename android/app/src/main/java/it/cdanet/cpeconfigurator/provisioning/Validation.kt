@@ -31,7 +31,7 @@ object Validation {
         if (!isMac(f.mac)) add("MAC non valido: 12 cifre esadecimali, con o senza separatori")
         if (f.serial.isBlank()) add("Seriale obbligatorio")
         if (!PPPOE.matches(f.pppoeUser.trim())) add("Username RADIUS nel formato cognome.nome@cda-net.it")
-        if (f.pppoePassword.isEmpty()) add("Password PPPoE obbligatoria")
+        if (f.pppoePassword.isEmpty() && f.replaces == null) add("Password PPPoE obbligatoria")
     }
 
     /** Barcode/QR from the CPE label: a MAC (any notation) or the serial. */

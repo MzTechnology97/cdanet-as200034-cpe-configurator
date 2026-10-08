@@ -143,6 +143,27 @@ const MIGRATIONS: string[] = [
     updated_by INTEGER
   );
   `,
+  // 7: acceptance test (collaudo) with photos, CPE replacement link
+  `
+  CREATE TABLE job_acceptance(
+    job_id TEXT PRIMARY KEY REFERENCES provisioning_jobs(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    verdict TEXT NOT NULL CHECK(verdict IN('ok','warn','bad')),
+    data TEXT NOT NULL
+  );
+  CREATE TABLE job_photos(
+    id INTEGER PRIMARY KEY,
+    job_id TEXT NOT NULL REFERENCES provisioning_jobs(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    caption TEXT NOT NULL DEFAULT '',
+    size INTEGER NOT NULL,
+    sha256 TEXT NOT NULL
+  );
+  CREATE INDEX job_photos_job ON job_photos(job_id);
+  ALTER TABLE provisioning_jobs ADD COLUMN replaces_job_id TEXT;
+  `,
 ];
 
 export function openDatabase(path: string): Db {

@@ -2,8 +2,10 @@ package it.cdanet.cpeconfigurator.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -34,7 +36,7 @@ private fun statusLabel(s: String) = when (s) {
 }
 
 @Composable
-fun HistoryScreen(c: AppContainer) {
+fun HistoryScreen(c: AppContainer, onAcceptance: (JobDto) -> Unit, onReplace: (JobDto) -> Unit = {}) {
     val scope = rememberCoroutineScope()
     val pending by c.resultQueue.pending.collectAsState()
     var jobs by remember { mutableStateOf<List<JobDto>>(emptyList()) }
@@ -71,6 +73,19 @@ fun HistoryScreen(c: AppContainer) {
                 Text("${j.model}${j.template?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()} · ${j.mac} · ${j.ssid}", style = MaterialTheme.typography.bodySmall)
                 Text(j.createdAt.replace('T', ' ').take(16), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (j.error.isNotBlank()) Text(j.error, style = MaterialTheme.typography.bodySmall, color = BadRed)
+                if (j.status == "success") {
+                    val acc = when (j.acceptance) {
+                        "ok" -> "Collaudo superato" to GoodGreen
+                        "warn" -> "Collaudo con riserva" to WarnAmber
+                        "bad" -> "Collaudo non superato" to BadRed
+                        else -> "Collaudo da fare" to MaterialTheme.colorScheme.onSurfaceVariant
+                    }
+                    Text(acc.first + if (j.photos > 0) " · ${j.photos} foto" else "", color = acc.second, style = MaterialTheme.typography.bodySmall)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        OutlinedButton(onClick = { onAcceptance(j) }) { Text(if (j.acceptance == null) "Collaudo" else "Collaudo / foto") }
+                        OutlinedButton(onClick = { onReplace(j) }) { Text("Sostituisci CPE") }
+                    }
+                }
             }
         }
         if (jobs.isEmpty() && !busy) Text("Nessun provisioning registrato.", color = MaterialTheme.colorScheme.onSurfaceVariant)

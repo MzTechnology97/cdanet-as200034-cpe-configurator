@@ -10,8 +10,8 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 | 2 | **Strumenti di campo** (Android), vedi [FIELD-TOOLS.md](FIELD-TOOLS.md) | puntare, collaudare e diagnosticare senza aprire l'interfaccia della CPE | 🔄 |
 |   | ↳ Puntamento antenna (segnale live, bip, picco, segnale atteso) | | ✅ v1.2.0 |
 |   | ↳ Diagnosi CPE (segnale, catene, CINR, cavo LAN, PPPoE, firmware) con rapporto per il NOC | | ✅ v1.2.0 |
-|   | ↳ Collaudo finale automatico con verbale e foto salvati nel job | | ⏳ |
-|   | ↳ Sostituzione CPE guasta riusando i dati del job | | ⏳ |
+|   | ↳ Collaudo finale automatico con verbale e foto salvati nel job | | ✅ v1.3.0 |
+|   | ↳ Sostituzione CPE guasta riusando i dati del job (password PPPoE dal backup UISP) | | ✅ v1.3.0 |
 |   | ↳ Bussola verso l'AP (con verifica calibrazione e disturbi magnetici) | | ⏳ |
 |   | ↳ Scansione AP visibili dalla CPE, storico segnale da UISP, configurazione cambiata rispetto al template | | ⏳ |
 |   | ↳ Migliorie a Wi-Fi Analyzer e Discovery LAN | | ⏳ |
@@ -21,6 +21,7 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 
 ## Già rilasciato
 
+- v1.2.0: puntamento antenna e diagnosi CPE dall'app.
 - v1.1.0: Il mio account (cambio password, esci da tutti i dispositivi).
 - v1.0.10: stato OpenStreetMap in Panoramica, test e2e di aggiornamento.
 - v1.0.9: OpenStreetMap locale (Nominatim) installato dall'installer, regione Sicilia.

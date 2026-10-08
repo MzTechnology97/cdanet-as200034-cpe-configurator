@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import it.cdanet.cpeconfigurator.core.AppContainer
+import it.cdanet.cpeconfigurator.data.JobDto
 import it.cdanet.cpeconfigurator.data.TemplateDto
 import it.cdanet.cpeconfigurator.provisioning.Phase
 import it.cdanet.cpeconfigurator.provisioning.ProvisionForm
@@ -44,7 +45,7 @@ import java.time.Duration
 import java.time.Instant
 
 @Composable
-fun ProvisionScreen(c: AppContainer, onOpenCpeWeb: () -> Unit, onLogin: () -> Unit) {
+fun ProvisionScreen(c: AppContainer, onOpenCpeWeb: () -> Unit, onLogin: () -> Unit, onAcceptance: () -> Unit = {}) {
     val state by c.provisioning.state.collectAsState()
     val session by c.session.state.collectAsState()
 
@@ -58,7 +59,7 @@ fun ProvisionScreen(c: AppContainer, onOpenCpeWeb: () -> Unit, onLogin: () -> Un
                 FormStep(c)
             }
             Phase.Prepared, Phase.Applying -> ApplyStep(c, onOpenCpeWeb)
-            Phase.Done -> DoneStep(c)
+            Phase.Done -> DoneStep(c, onAcceptance)
         }
     }
 }
@@ -80,6 +81,18 @@ private fun FormStep(c: AppContainer) {
     }
     val parsedMac = Validation.parseMac(form.mac)
     val errors = form.errors()
+
+    if (form.replaces != null) {
+        SectionCard("Sostituzione CPE") {
+            Text("CPE sostituita: ${form.replacesLabel}", fontWeight = FontWeight.SemiBold)
+            Text(
+                "Cliente, SSID, posizione e template restano quelli della CPE guasta: inserisci MAC e seriale della nuova. " +
+                    "La password PPPoE si può lasciare vuota: il server la recupera dall'ultimo backup UISP della CPE sostituita.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            OutlinedButton(onClick = { c.provisioning.reset() }) { Text("Annulla sostituzione") }
+        }
+    }
 
     SectionCard("1 · CPE") {
         Dropdown("Modello", models, form.model, { it }, { m -> c.provisioning.updateForm { it.copy(model = m, templateId = null) } }, Modifier.fillMaxWidth())
@@ -131,7 +144,7 @@ private fun FormStep(c: AppContainer) {
     }
 
     SectionCard("2 · Wireless Station") {
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (form.replaces == null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Dropdown("Nodo", (2..99).toList(), form.node, { it.toString() }, { n -> c.provisioning.updateForm { it.copy(node = n) } }, Modifier.weight(1f))
             Dropdown("Distretto", (1..99).toList(), form.district, { it.toString().padStart(2, '0') }, { d -> c.provisioning.updateForm { it.copy(district = d) } }, Modifier.weight(1f))
         }
@@ -148,9 +161,9 @@ private fun FormStep(c: AppContainer) {
 
     SectionCard("3 · Router / PPPoE") {
         Field("Username RADIUS / PPPoE", form.pppoeUser, { v -> c.provisioning.updateForm { it.copy(pppoeUser = v.trim()) } },
-            placeholder = "cognome.nome@cda-net.it", supporting = form.customerName.takeIf { it.isNotBlank() }?.let { "Device Name / SNMP location: $it" })
+            readOnly = form.replaces != null, placeholder = "cognome.nome@cda-net.it", supporting = form.customerName.takeIf { it.isNotBlank() }?.let { "Device Name / SNMP location: $it" })
         Field("Password PPPoE", form.pppoePassword, { v -> c.provisioning.updateForm { it.copy(pppoePassword = v) } }, password = true,
-            supporting = "Usata solo per questo provisioning, mai salvata")
+            supporting = if (form.replaces != null) "Facoltativa: vuota = presa dal backup UISP della CPE sostituita" else "Usata solo per questo provisioning, mai salvata")
     }
 
     if (showErrors && errors.isNotEmpty()) Banner(errors.joinToString("\n"), MaterialTheme.colorScheme.error)
@@ -171,7 +184,8 @@ private fun FormStep(c: AppContainer) {
         )
         BusyButton("Verifica piano", state.busy, Modifier.fillMaxWidth(), primary = false) {
             showErrors = true
-            if (errors.isEmpty()) scope.launch { c.provisioning.plan(form.toRequest()) }
+            // The dry-run never uses the password: a placeholder keeps it valid in replacement mode.
+            if (errors.isEmpty()) scope.launch { c.provisioning.plan(form.toRequest().let { r -> if (r.pppoePassword.isEmpty()) r.copy(pppoePassword = "-") else r }) }
         }
         BusyButton("Prepara provisioning", state.busy, Modifier.fillMaxWidth()) {
             showErrors = true
@@ -240,7 +254,7 @@ private fun ApplyStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
 }
 
 @Composable
-private fun DoneStep(c: AppContainer) {
+private fun DoneStep(c: AppContainer, onAcceptance: () -> Unit) {
     val state by c.provisioning.state.collectAsState()
     val pending by c.resultQueue.pending.collectAsState()
     val ok = state.success == true
@@ -260,5 +274,17 @@ private fun DoneStep(c: AppContainer) {
     if (!ok && state.pkg != null) {
         BusyButton("Riprova con lo stesso pacchetto", false, Modifier.fillMaxWidth(), primary = false) { c.provisioning.retry() }
     }
-    BusyButton("Nuovo provisioning", false, Modifier.fillMaxWidth()) { c.provisioning.reset() }
+    val pkg = state.pkg
+    if (ok && pkg != null) {
+        BusyButton("Collaudo: misure, foto e verbale", false, Modifier.fillMaxWidth()) {
+            val s = pkg.summary
+            c.selectedJob.value = JobDto(
+                id = pkg.jobId, createdAt = "", status = "success", model = s.model, template = s.template,
+                mac = s.mac, serial = s.serial, ssid = s.ssid, pppoeUser = s.pppoeUser, deviceName = s.deviceName,
+            )
+            onAcceptance()
+        }
+        Text("Attendi il riavvio della CPE (1-2 minuti) e ricollegati alla sua Wi-Fi o a quella del router del cliente.", style = MaterialTheme.typography.bodySmall)
+    }
+    BusyButton("Nuovo provisioning", false, Modifier.fillMaxWidth(), primary = !ok) { c.provisioning.reset() }
 }

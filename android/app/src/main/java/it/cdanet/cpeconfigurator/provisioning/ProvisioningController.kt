@@ -7,6 +7,7 @@ import it.cdanet.cpeconfigurator.data.PlanDto
 import it.cdanet.cpeconfigurator.data.ProvisionPackage
 import it.cdanet.cpeconfigurator.data.ProvisionRequest
 import it.cdanet.cpeconfigurator.data.ProvisionResult
+import it.cdanet.cpeconfigurator.data.ReplaceRequest
 import it.cdanet.cpeconfigurator.data.ResultQueue
 import it.cdanet.cpeconfigurator.network.NetworkHelper
 import kotlinx.coroutines.CoroutineScope
@@ -32,6 +33,9 @@ data class ProvisionForm(
     val templateId: Int? = null,
     val location: it.cdanet.cpeconfigurator.data.CpeLocation? = null,
     val locationLabel: String = "",
+    /** Job of the broken CPE being replaced: customer, SSID, position and template come from it. */
+    val replaces: String? = null,
+    val replacesLabel: String = "",
 ) {
     val ssid: String get() = "CDA-NET-N$node-D${district.toString().padStart(2, '0')}"
     val customerName: String get() = Validation.customerName(pppoeUser)
@@ -92,7 +96,11 @@ class ProvisioningController(
     }
 
     suspend fun prepare(req: ProvisionRequest) {
-        busy { api.createJob(req) }?.let { pkg ->
+        val old = _form.value.replaces
+        busy {
+            if (old == null) api.createJob(req)
+            else api.replaceJob(old, ReplaceRequest(req.model, req.mac, req.serial, req.pppoePassword.ifEmpty { null }, req.templateId, req.location))
+        }?.let { pkg ->
             _form.update { it.copy(pppoePassword = "") }
             _state.update { it.copy(phase = Phase.Prepared, pkg = pkg, stages = emptyList(), success = null, probe = null) }
         }
@@ -148,6 +156,20 @@ class ProvisioningController(
 
     fun retry() {
         _state.update { if (it.pkg != null) it.copy(phase = Phase.Prepared, stages = emptyList(), success = null, error = null) else it }
+    }
+
+    /** Starts the replacement of the CPE of a completed job (History → Sostituisci CPE). */
+    fun startReplacement(j: it.cdanet.cpeconfigurator.data.JobDto) {
+        val m = Regex("""^CDA-NET-N(\d+)-D(\d+)$""").find(j.ssid)
+        _state.value = ProvisioningState()
+        _form.value = ProvisionForm(
+            model = j.model,
+            node = m?.groupValues?.get(1)?.toIntOrNull() ?: 2,
+            district = m?.groupValues?.get(2)?.toIntOrNull() ?: 1,
+            pppoeUser = j.pppoeUser,
+            replaces = j.id,
+            replacesLabel = "${j.deviceName.ifBlank { j.pppoeUser }} · ${j.mac}",
+        )
     }
 
     fun reset() {

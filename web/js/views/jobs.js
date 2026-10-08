@@ -1,5 +1,6 @@
 import { api } from '../api.js';
 import { busy, card, field, fmtDate, h, mount, pageHead, statusBadge, table } from '../dom.js';
+import { acceptanceBadge, acceptancePanel } from './acceptance-panel.js';
 import { osmLink } from './coverage.js';
 import { uispPanel } from './uisp-panel.js';
 
@@ -32,6 +33,7 @@ export async function jobsView({ user }) {
           { label: 'Cliente', render: (j) => h('div', {}, j.deviceName || '—', h('div', { class: 'small muted' }, j.pppoeUser)) },
           { label: 'CPE', render: (j) => h('div', {}, j.model, j.template ? h('div', { class: 'small muted' }, `Template: ${j.template}`) : null, h('div', { class: 'small muted mono' }, j.mac)) },
           { label: 'SSID', key: 'ssid' },
+          { label: 'Collaudo', render: (j) => (j.acceptance ? h('span', {}, acceptanceBadge(j.acceptance), j.photos ? h('span', { class: 'small muted' }, ` · ${j.photos} foto`) : '') : j.photos ? h('span', { class: 'small muted' }, `${j.photos} foto`) : '—') },
           { label: 'UISP', render: (j) => (j.uispAuthorizedAt ? h('span', { class: 'small' }, `✓ ${j.uispSite}`) : j.status === 'success' ? h('span', { class: 'small muted' }, 'da accettare') : '—') },
           user.role === 'admin' ? { label: 'Installatore', key: 'installer' } : null,
         ].filter(Boolean),
@@ -72,6 +74,8 @@ export async function jobsView({ user }) {
               h('a', { href: osmLink(j.latitude, j.longitude), target: '_blank', rel: 'noopener' }, 'apri su OpenStreetMap'),
             )
           : h('p', { class: 'small muted' }, 'Non registrata.'),
+        j.status === 'success' ? [h('h3', {}, 'Collaudo'), acceptancePanel(j)] : null,
+        j.replacesJobId ? h('p', { class: 'small muted' }, `Sostituisce la CPE del job ${j.replacesJobId}`) : null,
         j.status === 'success' ? [h('h3', {}, 'UISP'), uispPanel(j, user.role === 'admin')] : null,
         j.stages?.length ? [h('h3', {}, 'Fasi'), h('ol', {}, j.stages.map((s) => h('li', {}, s)))] : null,
         j.error ? [h('h3', {}, 'Errore'), h('pre', {}, j.error)] : null,

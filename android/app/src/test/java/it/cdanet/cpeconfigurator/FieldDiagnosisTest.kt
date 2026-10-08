@@ -1,6 +1,10 @@
 package it.cdanet.cpeconfigurator
 
+import it.cdanet.cpeconfigurator.data.AppJson
+import it.cdanet.cpeconfigurator.field.Acceptance
+import it.cdanet.cpeconfigurator.field.AcceptanceReport
 import it.cdanet.cpeconfigurator.field.AirosStatus
+import it.cdanet.cpeconfigurator.field.InternetTest
 import it.cdanet.cpeconfigurator.field.FieldDiagnosis
 import it.cdanet.cpeconfigurator.field.FieldThresholds
 import it.cdanet.cpeconfigurator.field.Verdict
@@ -97,5 +101,25 @@ class FieldDiagnosisTest {
         assertFalse(s.associated)
         assertNull(s.signal)
         assertTrue(FieldDiagnosis.checks(s, t, "8.7.4").isNotEmpty())
+    }
+
+    @Test
+    fun acceptanceAveragesSignalAndSerializesForTheServer() {
+        val base = AirosStatus.parse(raw)
+        val samples = listOf(-60, -62, -58, -61).map { base.copy(signal = it) }
+        val r = Acceptance.build(samples, t, "8.7.18", InternetTest(true, pingMs = 18.0, jitterMs = 2.0, downloadMbps = 95.0, uploadMbps = 20.0), "  nota  ", java.time.Instant.parse("2026-10-09T08:00:00Z"))
+        assertEquals(-60, r.radio.signal)
+        assertEquals(-62, r.radio.signalMin)
+        assertEquals(-58, r.radio.signalMax)
+        assertEquals(4, r.samples)
+        assertEquals("ok", r.verdict)
+        assertEquals("nota", r.notes)
+        assertTrue(r.checks.any { it.title == "Internet dal lato cliente" && it.verdict == "ok" })
+        val json = AppJson.encodeToString(AcceptanceReport.serializer(), r)
+        assertTrue(json.contains("\"measuredAt\":\"2026-10-09T08:00:00Z\""))
+        assertFalse(json.contains("null"))
+
+        val noInternet = Acceptance.build(samples, t, "8.7.18", InternetTest(false, note = "non raggiungibile"), "")
+        assertEquals("warn", noInternet.verdict)
     }
 }
