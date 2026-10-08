@@ -8,6 +8,8 @@ export interface AuthUser {
   id: number;
   username: string;
   role: Role;
+  /** Two-step verification enabled on the account. */
+  totp?: boolean;
 }
 
 declare module 'fastify' {
@@ -31,6 +33,31 @@ export class HttpError extends Error {
 export function createAuth(db: Db, secret: Uint8Array, ttlHours: number) {
   const ISSUER = 'cdanet-cpe';
 
+  /** Short-lived proof that the password was right; only exchangeable for a session with the TOTP code. */
+  async function issueMfaToken(u: { id: number; username: string; token_version: number }) {
+    return new SignJWT({ username: u.username, tv: u.token_version, mfa: true })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject(String(u.id))
+      .setIssuer(ISSUER)
+      .setIssuedAt()
+      .setExpirationTime('5m')
+      .sign(secret);
+  }
+
+  async function verifyMfaToken(token: string): Promise<{ id: number; tv: number }> {
+    try {
+      const { payload } = await jwtVerify(token, secret, { issuer: ISSUER, algorithms: ['HS256'] });
+      if (payload.mfa !== true) throw new Error('not_mfa');
+      return { id: Number(payload.sub), tv: Number(payload.tv) };
+    } catch {
+      throw new HttpError(401, 'mfa_expired');
+    }
+  }
+
+  /** Admin policy: two-step verification required for administrators (settings table). */
+  const policyStmt = db.prepare("SELECT value FROM settings WHERE key = 'security.totp_admins'");
+  const totpRequiredForAdmins = () => (policyStmt.get() as { value: string } | undefined)?.value === 'required';
+
   async function issueToken(u: { id: number; username: string; role: Role; token_version: number }) {
     const expiresAt = new Date(Date.now() + ttlHours * 3600_000);
     const token = await new SignJWT({ username: u.username, role: u.role, tv: u.token_version })
@@ -43,7 +70,7 @@ export function createAuth(db: Db, secret: Uint8Array, ttlHours: number) {
     return { token, expiresAt: expiresAt.toISOString() };
   }
 
-  const userStmt = db.prepare('SELECT id, username, role, active, token_version FROM users WHERE id = ?');
+  const userStmt = db.prepare('SELECT id, username, role, active, token_version, totp_enabled FROM users WHERE id = ?');
 
   /** Verifies the bearer token and re-checks the account on every request (disable/reset revoke immediately). */
   async function authenticate(req: FastifyRequest): Promise<AuthUser> {
@@ -52,11 +79,12 @@ export function createAuth(db: Db, secret: Uint8Array, ttlHours: number) {
     if (!m) throw new HttpError(401, 'unauthorized');
     try {
       const { payload } = await jwtVerify(m[1] as string, secret, { issuer: ISSUER, algorithms: ['HS256'] });
+      if (payload.mfa === true) throw new Error('mfa_token_is_not_a_session');
       const row = userStmt.get(Number(payload.sub)) as
-        | { id: number; username: string; role: Role; active: number; token_version: number }
+        | { id: number; username: string; role: Role; active: number; token_version: number; totp_enabled: number }
         | undefined;
       if (!row || !row.active || row.token_version !== payload.tv) throw new Error('revoked');
-      return { id: row.id, username: row.username, role: row.role };
+      return { id: row.id, username: row.username, role: row.role, totp: !!row.totp_enabled };
     } catch {
       throw new HttpError(401, 'unauthorized');
     }
@@ -68,9 +96,11 @@ export function createAuth(db: Db, secret: Uint8Array, ttlHours: number) {
   const requireAdmin = async (req: FastifyRequest, _reply: FastifyReply) => {
     req.user = await authenticate(req);
     if (req.user.role !== 'admin') throw new HttpError(403, 'forbidden');
+    // Policy on: admin pages are closed until the admin enables two-step verification (Il mio account stays open).
+    if (!req.user.totp && totpRequiredForAdmins()) throw new HttpError(403, 'mfa_setup_required');
   };
 
-  return { issueToken, authenticate, requireUser, requireAdmin };
+  return { issueToken, issueMfaToken, verifyMfaToken, totpRequiredForAdmins, authenticate, requireUser, requireAdmin };
 }
 export type Auth = ReturnType<typeof createAuth>;
 

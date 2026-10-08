@@ -19,10 +19,11 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 |   | ↳ Discovery Ubiquiti, produttori in scansione LAN, canale consigliato nel Wi-Fi Analyzer | | ✅ v1.6.0 |
 | 3 | **Export CSV dello storico provisioning**, con i filtri della pagina e l'intervallo di date | report per NOC e amministrazione | ✅ v1.8.0 |
 | 4 | **Connettore notifiche Telegram**: provisioning fallito, CPE da accettare in UISP, UISP giù/su, eventi di sicurezza, riepilogo serale; configurazione e test da Connettori, vedi [NOTIFICHE.md](NOTIFICHE.md) | il NOC sa subito cosa è successo sul campo | ✅ v1.7.0 |
-| 5 | **Verifica in due passaggi (TOTP)** per gli account, obbligatoria per gli admin se attivata | la console è esposta su Internet | ⏳ |
+| 5 | **Verifica in due passaggi (TOTP)** per gli account, obbligatoria per gli admin se attivata (web e app), vedi [SECURITY.md](../SECURITY.md) | la console è esposta su Internet | ✅ v1.9.0 |
 
 ## Già rilasciato
 
+- v1.8.0: export CSV dello storico.
 - v1.7.0: notifiche Telegram per il NOC.
 - v1.6.0: discovery Ubiquiti, produttori in scansione LAN, canale consigliato.
 - v1.5.0: configurazione della CPE rispetto al template (backup UISP).

@@ -49,6 +49,8 @@ private val ERRORS = mapOf(
     "job_not_completed" to "Esito del provisioning non ancora registrato sul server",
     "too_many_photos" to "Troppe foto per questo job (massimo 8)",
     "photo_not_jpeg" to "La foto deve essere in formato JPEG",
+    "mfa_expired" to "Tempo scaduto: ripeti l'accesso",
+    "invalid_code" to "Codice non valido",
     "wrong_current_password" to "Password attuale non corretta",
     "password_unchanged" to "La nuova password è uguale a quella attuale",
     "password_contains_username" to "La password non può contenere il nome utente",
@@ -89,11 +91,20 @@ class ApiClient(
 
     suspend fun health(): HealthDto = AppJson.decodeFromString(HealthDto.serializer(), request("GET", "/api/health", auth = false))
 
-    suspend fun login(username: String, password: String): LoginResponse {
+    /** Returns the mfa token when the account uses two-step verification (then call [loginTotp]). */
+    suspend fun login(username: String, password: String): String? {
         val body = AppJson.encodeToJsonElement(LoginRequest.serializer(), LoginRequest(username, password))
-        val r = AppJson.decodeFromString(LoginResponse.serializer(), request("POST", "/api/auth/login", body, auth = false))
+        val r = AppJson.decodeFromString(LoginStep.serializer(), request("POST", "/api/auth/login", body, auth = false))
+        if (r.mfaRequired) return r.mfaToken ?: throw ApiException(500, "mfa_expired", apiMessage("mfa_expired"))
+        session.set(SessionState(r.token!!, r.user!!, r.expiresAt!!))
+        return null
+    }
+
+    /** Second step: 6-digit code from the authenticator app or a recovery code. */
+    suspend fun loginTotp(mfaToken: String, code: String) {
+        val body = AppJson.encodeToJsonElement(TotpLoginRequest.serializer(), TotpLoginRequest(mfaToken, code.trim()))
+        val r = AppJson.decodeFromString(LoginResponse.serializer(), request("POST", "/api/auth/login/totp", body, auth = false))
         session.set(SessionState(r.token, r.user, r.expiresAt))
-        return r
     }
 
     /** Own password change: other sessions are revoked, this one continues with the new token. */
