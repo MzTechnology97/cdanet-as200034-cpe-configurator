@@ -94,7 +94,8 @@ jobs:
           echo "step: login"; curl -fsS -H 'content-type: application/json' -d '{"username":"adminci","password":"CI-Admin-Password-1234"}' localhost:18787/api/auth/login | grep -q token
           echo "step: backup"; docker exec -u node smoke node src/cli/backup.ts ci | grep -q '/data/backups/'
           echo "step: runs as node"
-          user=$(docker exec smoke sh -c "ps -o user,args | grep '[s]rc/main.ts' | awk '{print \$1}' | head -1")
+          # tini (PID 1, root) also carries "node src/main.ts" in its args: match the node process itself.
+          user=$(docker exec smoke ps -o user,args | awk '$2=="node" && $3=="src/main.ts" {print $1}')
           echo "server process user: $user"; test "$user" = node
       - uses: docker/login-action@v3
         if: github.event_name != 'pull_request'
