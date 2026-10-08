@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>CDA Net · CPE Admin</title>
+    <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+    <link rel="stylesheet" href="css/app.css" />
+    <script type="module" src="js/main.js"></script>
+  </head>
+  <body>
+    <header class="topbar">
+      <button class="icon-btn" id="navToggle" aria-label="Menu" hidden>☰</button>
+      <img class="logo" src="assets/cda-net-logo.svg" alt="CDA Net" />
+      <span class="product">CPE Configurator</span>
+      <span class="spacer"></span>
+      <span class="session" id="session"></span>
+    </header>
+    <div class="layout">
+      <nav class="sidebar" id="sidebar" hidden></nav>
+      <main id="view" class="view" aria-live="polite"></main>
+    </div>
+    <div id="toast" class="toast" role="status" hidden></div>
+  </body>
+</html>
