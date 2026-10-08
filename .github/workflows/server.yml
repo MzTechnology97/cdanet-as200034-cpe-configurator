@@ -42,7 +42,7 @@ jobs:
       - name: Web console syntax
         run: for f in $(find web/js -name '*.js'); do node --check "$f"; done
       - name: Shell scripts
-        run: for f in deploy/*.sh deploy/updater/*.sh; do bash -n "$f"; done
+        run: for f in deploy/*.sh deploy/updater/*.sh deploy/cdanet-cpe; do bash -n "$f"; done
       - name: Secret scan
         run: |
           if git grep -nE 'BEGIN (RSA|OPENSSH|EC) PRIVATE KEY|ghp_[A-Za-z0-9]{30,}|github_pat_[A-Za-z0-9_]{20,}'; then

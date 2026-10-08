@@ -1,0 +1,31 @@
+#!/bin/sh
+# Shortcut for the CDA Net stack: works from any directory, even though
+# /opt/cdanet-cpe is readable by root only (it holds .env with the secrets).
+#
+#   sudo cdanet-cpe ps                      container status
+#   sudo cdanet-cpe logs -f updater         auto-update history
+#   sudo cdanet-cpe restart updater         check for a new version now
+#   sudo cdanet-cpe up -d                   apply changes made to .env
+#   sudo cdanet-cpe edit                    edit .env, then apply it
+#   sudo cdanet-cpe backup                  database backup
+#   sudo cdanet-cpe version                 running version
+set -eu
+DEPLOY_DIR="${DEPLOY_DIR:-/opt/cdanet-cpe}"
+case "${1:-}" in ""|-h|--help|help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+[ "$(id -u)" -eq 0 ] || { echo "Usa: sudo cdanet-cpe $*" >&2; exit 1; }
+dc() { docker compose -f "$DEPLOY_DIR/docker-compose.yml" --project-directory "$DEPLOY_DIR" "$@"; }
+case "${1:-}" in
+  edit)
+    "${EDITOR:-nano}" "$DEPLOY_DIR/.env"
+    dc up -d
+    ;;
+  backup)
+    dc exec -T -u node app node src/cli/backup.ts manual
+    ;;
+  version)
+    dc exec -T app wget -qO- http://127.0.0.1:8787/api/health; echo
+    ;;
+  *)
+    dc "$@"
+    ;;
+esac
