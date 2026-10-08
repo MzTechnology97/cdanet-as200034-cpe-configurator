@@ -6,6 +6,7 @@ import it.cdanet.cpeconfigurator.data.ApiClient
 import it.cdanet.cpeconfigurator.data.ResultQueue
 import it.cdanet.cpeconfigurator.data.Session
 import it.cdanet.cpeconfigurator.data.Settings
+import it.cdanet.cpeconfigurator.field.FieldController
 import it.cdanet.cpeconfigurator.network.NetworkHelper
 import it.cdanet.cpeconfigurator.provisioning.ProvisioningController
 import it.cdanet.cpeconfigurator.routeros.RouterOsClient
@@ -28,5 +29,6 @@ class AppContainer(context: Context) {
     val provisioning = ProvisioningController(api, network, resultQueue, scope)
     val routerOs = RouterOsClient(api, network)
     val tools = LocalTools(network, api, session)
+    val field = FieldController(api, network, scope)
     val updater = AppUpdater(appContext, settings)
 }

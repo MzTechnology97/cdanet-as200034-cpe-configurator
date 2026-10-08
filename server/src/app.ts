@@ -9,6 +9,7 @@ import type { AppContext } from './context.ts';
 import { createSealer, hashPassword } from './crypto.ts';
 import { nowIso, openDatabase, type Db } from './db.ts';
 import { adminRoutes } from './routes/admin.ts';
+import { fieldRoutes } from './routes/field.ts';
 import { provisioningRoutes } from './routes/provisioning.ts';
 import { publicRoutes } from './routes/public.ts';
 import { toolRoutes } from './routes/tools.ts';
@@ -121,6 +122,7 @@ export async function buildApp(
 
   publicRoutes(app, ctx);
   provisioningRoutes(app, ctx);
+  fieldRoutes(app, ctx);
   adminRoutes(app, ctx);
   toolRoutes(app, ctx);
   uispRoutes(app, ctx);

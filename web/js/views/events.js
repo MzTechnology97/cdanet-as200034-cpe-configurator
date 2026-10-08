@@ -16,6 +16,7 @@ const LABELS = {
   'uisp.authorize': 'CPE accettata in UISP',
   'uisp.backup': 'Backup UISP richiesto',
   'account.password': 'Password personale cambiata',
+  'field.access': 'Accesso alla CPE dagli strumenti di campo',
   'account.logout_all': 'Chiuse tutte le sessioni',
   'connector.uisp.update': 'Connettore UISP modificato',
   'connector.uisp.reset': 'Connettore UISP rimosso (torna al .env)',
