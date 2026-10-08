@@ -31,6 +31,9 @@ class AppContainer(context: Context) {
     val tools = LocalTools(network, api, session)
     val field = FieldController(api, network, scope)
 
+    /** AP selected in Copertura for the compass. */
+    val compassTarget = kotlinx.coroutines.flow.MutableStateFlow<it.cdanet.cpeconfigurator.field.CompassTarget?>(null)
+
     /** Job opened from the history (or just provisioned) for acceptance test / replacement. */
     val selectedJob = kotlinx.coroutines.flow.MutableStateFlow<it.cdanet.cpeconfigurator.data.JobDto?>(null)
     val updater = AppUpdater(appContext, settings)

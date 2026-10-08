@@ -97,6 +97,16 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     };
   });
 
+  /** Signal history of the CPE of a job (fault diagnosis: sudden failure vs slow degradation). */
+  app.get('/api/provisioning/jobs/:id/uisp/statistics', user, async (req) => {
+    const job = loadJob(req);
+    const range = z.enum(['day', 'week', 'month']).default('week').parse((req.query as { range?: string }).range);
+    const device = await deviceOf(job);
+    if (!device) throw new HttpError(409, 'uisp_device_not_found');
+    const [stats, outages] = await Promise.all([uisp().statistics(device.id, range), uisp().outages(device.id, range).catch(() => null)]);
+    return { device: { id: device.id, name: device.name }, ...stats, outages };
+  });
+
   // ---- Admin actions ------------------------------------------------------------------------
   app.get('/api/admin/uisp/status', admin, async () => {
     if (!ctx.uisp) return { configured: false };

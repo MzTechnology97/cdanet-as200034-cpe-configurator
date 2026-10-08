@@ -98,6 +98,41 @@ export function normalizeSite(raw: unknown): UispSite {
 
 export const isAp = (d: UispDevice) => d.role === 'ap' || d.role === 'accesspoint';
 
+export type StatsRange = 'day' | 'week' | 'month';
+const RANGE_MS: Record<StatsRange, number> = { day: 86_400_000, week: 7 * 86_400_000, month: 30 * 86_400_000 };
+export interface SeriesSummary {
+  points: Array<[number, number]>;
+  min: number | null;
+  avg: number | null;
+  max: number | null;
+  /** Average of the last quarter minus the first quarter of the period (negative = worsening). */
+  trend: number | null;
+}
+
+/** `{avg: [{x, y}]}` series of /devices/{id}/statistics -> sorted points, downsampled, with summary. */
+export function summarizeSeries(v: unknown, maxPoints = 200): SeriesSummary {
+  const o = obj(v);
+  const list = Array.isArray(o.avg) ? o.avg : Array.isArray(v) ? (v as unknown[]) : [];
+  const pts = list
+    .map((p) => [num(obj(p).x), num(obj(p).y)] as const)
+    .filter((p): p is readonly [number, number] => p[0] !== null && p[1] !== null)
+    .map(([x, y]) => [x, y] as [number, number])
+    .sort((a, b) => a[0] - b[0]);
+  if (!pts.length) return { points: [], min: null, avg: null, max: null, trend: null };
+  const ys = pts.map((p) => p[1]);
+  const mean = (a: number[]) => a.reduce((s, x) => s + x, 0) / a.length;
+  const q = Math.max(1, Math.floor(pts.length / 4));
+  const step = Math.max(1, Math.ceil(pts.length / maxPoints));
+  const round = (x: number) => Math.round(x * 10) / 10;
+  return {
+    points: pts.filter((_, i) => i % step === 0 || i === pts.length - 1).map(([x, y]) => [x, round(y)]),
+    min: round(Math.min(...ys)),
+    avg: round(mean(ys)),
+    max: round(Math.max(...ys)),
+    trend: pts.length >= 8 ? round(mean(ys.slice(-q)) - mean(ys.slice(0, q))) : null,
+  };
+}
+
 export interface UispOptions {
   url: string;
   token: string;
@@ -255,6 +290,32 @@ export function createUisp(opts: UispOptions) {
           note: str(o.note),
           pinned: o.pinned === true,
         };
+      });
+    },
+
+    /** Signal / capacity history of a device (UISP statistics), summarised for the history page. */
+    async statistics(deviceId: string, range: StatsRange) {
+      const period = RANGE_MS[range];
+      const q = new URLSearchParams({ interval: range, start: String(Date.now() - period), period: String(period) });
+      const s = obj(await call('GET', `/devices/${encodeURIComponent(deviceId)}/statistics?${q}`));
+      return {
+        range,
+        signal: summarizeSeries(s.signal),
+        remoteSignal: summarizeSeries(s.remoteSignal),
+        downlinkCapacity: summarizeSeries(s.downlinkCapacity),
+        uplinkCapacity: summarizeSeries(s.uplinkCapacity),
+        ping: summarizeSeries(s.ping),
+      };
+    },
+
+    /** Outages of a device in the period (UISP /outages). */
+    async outages(deviceId: string, range: StatsRange) {
+      const period = RANGE_MS[range];
+      const q = new URLSearchParams({ count: '50', page: '1', deviceId, start: String(Date.now() - period), period: String(period) });
+      const r = obj(await call('GET', `/outages?${q}`));
+      return (Array.isArray(r.items) ? r.items : []).map((it) => {
+        const o = obj(it);
+        return { start: str(o.startTimestamp), end: str(o.endTimestamp), type: str(o.type), inProgress: o.inProgress === true, seconds: num(o.aggregatedTime) };
       });
     },
 

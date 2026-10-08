@@ -7,6 +7,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -81,6 +82,9 @@ fun HistoryScreen(c: AppContainer, onAcceptance: (JobDto) -> Unit, onReplace: (J
                         else -> "Collaudo da fare" to MaterialTheme.colorScheme.onSurfaceVariant
                     }
                     Text(acc.first + if (j.photos > 0) " · ${j.photos} foto" else "", color = acc.second, style = MaterialTheme.typography.bodySmall)
+                    var showHistory by remember(j.id) { mutableStateOf(false) }
+                    if (showHistory) SignalHistory(c, j)
+                    TextButton(onClick = { showHistory = !showHistory }) { Text(if (showHistory) "Nascondi storico segnale" else "Storico segnale (UISP, 7 giorni)") }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         OutlinedButton(onClick = { onAcceptance(j) }) { Text(if (j.acceptance == null) "Collaudo" else "Collaudo / foto") }
                         OutlinedButton(onClick = { onReplace(j) }) { Text("Sostituisci CPE") }

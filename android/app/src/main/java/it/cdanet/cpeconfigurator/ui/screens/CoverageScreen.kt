@@ -28,6 +28,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.cdanet.cpeconfigurator.core.AppContainer
+import it.cdanet.cpeconfigurator.field.CompassTarget
 import it.cdanet.cpeconfigurator.data.CoverageAp
 import it.cdanet.cpeconfigurator.data.CoverageDto
 import it.cdanet.cpeconfigurator.data.CpeLocation
@@ -104,7 +105,7 @@ fun LocationPicker(c: AppContainer, current: CpeLocation?, label: String, onLoca
 
 /** Nearest APs (from UISP, via the server) with distance and pointing direction. */
 @Composable
-fun NearbyAps(c: AppContainer, location: CpeLocation, onPick: ((CoverageAp) -> Unit)? = null) {
+fun NearbyAps(c: AppContainer, location: CpeLocation, onPick: ((CoverageAp) -> Unit)? = null, onCompass: ((CompassTarget) -> Unit)? = null) {
     var data by remember { mutableStateOf<CoverageDto?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(location) {
@@ -138,6 +139,10 @@ fun NearbyAps(c: AppContainer, location: CpeLocation, onPick: ((CoverageAp) -> U
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
+                if (onCompass != null) {
+                    androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
+                    OutlinedButton(onClick = { onCompass(CompassTarget(ap.name.ifBlank { ap.id }, ap.bearing, ap.distanceM, location.latitude, location.longitude)) }) { Text("Bussola") }
+                }
                 if (onPick != null && ap.node != null && ap.district != null) {
                     androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
                     OutlinedButton(onClick = { onPick(ap) }) { Text("Usa") }
@@ -148,7 +153,7 @@ fun NearbyAps(c: AppContainer, location: CpeLocation, onPick: ((CoverageAp) -> U
 }
 
 @Composable
-fun CoverageScreen(c: AppContainer) {
+fun CoverageScreen(c: AppContainer, onCompass: (CompassTarget) -> Unit = {}) {
     var location by remember { mutableStateOf<CpeLocation?>(null) }
     var label by remember { mutableStateOf("") }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -160,7 +165,7 @@ fun CoverageScreen(c: AppContainer) {
         }
         location?.let { l ->
             SectionCard("AP più vicini") {
-                NearbyAps(c, l)
+                NearbyAps(c, l, onCompass = onCompass)
                 Text(
                     "La freccia indica la direzione di puntamento (0° = nord). Vengono mostrati solo gli AP più vicini entro il raggio configurato.",
                     style = MaterialTheme.typography.bodySmall,

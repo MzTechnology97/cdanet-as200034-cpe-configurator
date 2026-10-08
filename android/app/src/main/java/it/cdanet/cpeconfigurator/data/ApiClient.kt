@@ -149,6 +149,9 @@ class ApiClient(
             request("POST", "/api/provisioning/jobs/$oldJobId/replace", AppJson.encodeToJsonElement(ReplaceRequest.serializer(), req), client = true),
         )
 
+    suspend fun signalHistory(jobId: String, range: String): SignalHistoryDto =
+        AppJson.decodeFromString(SignalHistoryDto.serializer(), request("GET", "/api/provisioning/jobs/$jobId/uisp/statistics?range=$range"))
+
     suspend fun sendResult(jobId: String, result: ProvisionResult) {
         request("POST", "/api/provisioning/jobs/$jobId/result", AppJson.encodeToJsonElement(ProvisionResult.serializer(), result))
     }
