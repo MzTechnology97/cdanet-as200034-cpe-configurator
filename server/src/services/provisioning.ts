@@ -33,6 +33,16 @@ export const provisionRequestSchema = z
     pppoePassword: z.string().min(1).max(200),
     /** Named template of the model; omitted = the model's default template. */
     templateId: z.number().int().positive().optional(),
+    /** CPE position: phone GPS, geocoded address or manual entry. */
+    location: z
+      .object({
+        latitude: z.number().min(-90).max(90),
+        longitude: z.number().min(-180).max(180),
+        accuracy: z.number().min(0).max(100_000).optional(),
+        source: z.enum(['gps', 'address', 'manual']),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 export type ProvisionRequest = z.infer<typeof provisionRequestSchema>;
@@ -179,6 +189,13 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
           ['radio.1.atpc.sta.status', 'enabled'],
           ['resolv.host.1.name', name],
           ['resolv.host.1.status', 'enabled'],
+          // airOS System > Location: UISP shows the CPE where it was installed.
+          ...(x.location
+            ? ([
+                ['system.latitude', x.location.latitude.toFixed(6)],
+                ['system.longitude', x.location.longitude.toFixed(6)],
+              ] as Array<[string, string]>)
+            : []),
         ],
       });
     } catch (e) {
@@ -192,9 +209,10 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
     const expiresAt = new Date(created.getTime() + cfg.jobTtlMinutes * 60_000).toISOString();
     const configSha256 = sha256Hex(text);
     db.prepare(
-      `INSERT INTO provisioning_jobs(id, created_at, expires_at, user_id, client, model, mac, serial, ssid, pppoe_user, device_name, profile_sha256, config_sha256, template_name, status)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'prepared')`,
-    ).run(id, created.toISOString(), expiresAt, userId, client, x.model, x.mac, x.serial, x.ssid, x.pppoeUser, name, profile.sha256, configSha256, profile.name);
+      `INSERT INTO provisioning_jobs(id, created_at, expires_at, user_id, client, model, mac, serial, ssid, pppoe_user, device_name, profile_sha256, config_sha256, template_name, latitude, longitude, location_accuracy, location_source, status)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'prepared')`,
+    ).run(id, created.toISOString(), expiresAt, userId, client, x.model, x.mac, x.serial, x.ssid, x.pppoeUser, name, profile.sha256, configSha256, profile.name,
+      x.location?.latitude ?? null, x.location?.longitude ?? null, x.location?.accuracy ?? null, x.location?.source ?? '');
 
     return {
       jobId: id,
@@ -253,6 +271,8 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
       .prepare(
         `SELECT j.id, j.created_at createdAt, j.expires_at expiresAt, j.completed_at completedAt, j.status, j.client,
                 j.model, j.template_name template, j.mac, j.serial, j.ssid, j.pppoe_user pppoeUser, j.device_name deviceName,
+                j.latitude, j.longitude, j.location_accuracy locationAccuracy, j.location_source locationSource,
+                j.uisp_device_id uispDeviceId, j.uisp_site uispSite, j.uisp_authorized_at uispAuthorizedAt,
                 j.stages, j.detected, j.error, u.username installer
          FROM provisioning_jobs j JOIN users u ON u.id = j.user_id
          ${where.length ? `WHERE ${where.join(' AND ')}` : ''}

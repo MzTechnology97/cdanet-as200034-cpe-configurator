@@ -1,8 +1,9 @@
 import { api } from '../api.js';
 import { card, h, pageHead, stat } from '../dom.js';
+import { uispStatusCard } from './uisp-panel.js';
 
 export async function dashboardView() {
-  const [s, profiles] = await Promise.all([api('/api/admin/status'), api('/api/admin/profiles')]);
+  const [s, profiles, uisp] = await Promise.all([api('/api/admin/status'), api('/api/admin/profiles'), uispStatusCard()]);
   const missingProfiles = profiles.filter((p) => !p.templates.length).map((p) => p.model);
   const warnings = [];
   if (!s.runtimeSecrets.cpeAdminPassword) warnings.push('CPE_ADMIN_PASSWORD non configurata: il provisioning è bloccato.');
@@ -30,6 +31,7 @@ export async function dashboardView() {
         stat('Template airOS', s.counts.templates),
       ),
     ),
+    card(h('h2', {}, 'UISP'), uisp),
     card(
       h('h2', {}, 'App Android'),
       h(

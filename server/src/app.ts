@@ -14,6 +14,9 @@ import { publicRoutes } from './routes/public.ts';
 import { toolRoutes } from './routes/tools.ts';
 import { createProvisioning } from './services/provisioning.ts';
 import { createTemplates } from './services/templates.ts';
+import { createGeocoder } from './services/geocode.ts';
+import { createUisp, type Uisp } from './services/uisp.ts';
+import { uispRoutes } from './routes/uisp.ts';
 
 const CSP = [
   "default-src 'self'",
@@ -41,7 +44,11 @@ export function ensureBootstrapAdmin(db: Db, cfg: Config): 'created' | 'exists' 
   return 'created';
 }
 
-export async function buildApp(cfg: Config, version: string, opts: { db?: Db; logger?: boolean } = {}): Promise<{ app: FastifyInstance; ctx: AppContext }> {
+export async function buildApp(
+  cfg: Config,
+  version: string,
+  opts: { db?: Db; logger?: boolean; uisp?: Uisp | null; fetchImpl?: typeof fetch } = {},
+): Promise<{ app: FastifyInstance; ctx: AppContext }> {
   const db = opts.db ?? openDatabase(cfg.dbPath);
   ensureBootstrapAdmin(db, cfg);
   const sealer = createSealer(cfg.masterKey);
@@ -53,6 +60,8 @@ export async function buildApp(cfg: Config, version: string, opts: { db?: Db; lo
     auth: createAuth(db, cfg.jwtSecret, cfg.jwtTtlHours),
     provisioning: createProvisioning(db, cfg, sealer, templates),
     templates,
+    uisp: opts.uisp !== undefined ? opts.uisp : cfg.uisp ? createUisp({ ...cfg.uisp, fetchImpl: opts.fetchImpl }) : null,
+    geocoder: createGeocoder({ url: cfg.geocoder.url, contact: cfg.geocoder.contact, fetchImpl: opts.fetchImpl }),
     version,
   };
 
@@ -108,6 +117,7 @@ export async function buildApp(cfg: Config, version: string, opts: { db?: Db; lo
   provisioningRoutes(app, ctx);
   adminRoutes(app, ctx);
   toolRoutes(app, ctx);
+  uispRoutes(app, ctx);
 
   if (existsSync(join(cfg.staticDir, 'index.html'))) {
     // Revalidate on every load (ETag/Last-Modified): after an auto-update the console must never mix old and new assets.

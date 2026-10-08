@@ -34,6 +34,8 @@ data class MetaDto(
     val ssid: SsidMetaDto,
     val factoryIp: String,
     val jobTtlMinutes: Int,
+    val uisp: Boolean = false,
+    val coverageMaxKm: Int = 15,
 )
 
 @Serializable
@@ -46,7 +48,34 @@ data class ProvisionRequest(
     val pppoePassword: String,
     /** Named template of the model; null = the model's default (omitted from JSON). */
     val templateId: Int? = null,
+    val location: CpeLocation? = null,
 )
+
+/** CPE position: phone GPS, geocoded address or manual entry. */
+@Serializable
+data class CpeLocation(val latitude: Double, val longitude: Double, val accuracy: Double? = null, val source: String)
+
+@Serializable
+data class GeocodeResult(val label: String, val lat: Double, val lon: Double)
+
+@Serializable
+data class CoverageAp(
+    val id: String,
+    val name: String = "",
+    val ssid: String? = null,
+    val siteName: String? = null,
+    val status: String = "",
+    val stations: Int? = null,
+    val frequency: Int? = null,
+    val distanceM: Int,
+    val bearing: Int,
+    val direction: String,
+    val node: Int? = null,
+    val district: Int? = null,
+)
+
+@Serializable
+data class CoverageDto(val maxKm: Int, val aps: List<CoverageAp>)
 
 @Serializable
 /** isDefault = default for the signed-in installer (personal default if any, else the model default). */

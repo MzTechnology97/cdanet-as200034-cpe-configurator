@@ -30,10 +30,12 @@ data class ProvisionForm(
     val pppoeUser: String = "",
     val pppoePassword: String = "",
     val templateId: Int? = null,
+    val location: it.cdanet.cpeconfigurator.data.CpeLocation? = null,
+    val locationLabel: String = "",
 ) {
     val ssid: String get() = "CDA-NET-N$node-D${district.toString().padStart(2, '0')}"
     val customerName: String get() = Validation.customerName(pppoeUser)
-    fun toRequest() = ProvisionRequest(model, Validation.normalizeMac(mac), serial.trim(), ssid, pppoeUser.trim(), pppoePassword, templateId)
+    fun toRequest() = ProvisionRequest(model, Validation.normalizeMac(mac), serial.trim(), ssid, pppoeUser.trim(), pppoePassword, templateId, location)
     fun errors(): List<String> = Validation.formErrors(this)
 
     companion object {

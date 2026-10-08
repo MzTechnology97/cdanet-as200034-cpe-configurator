@@ -69,6 +69,7 @@ Per l'app Android:
 - [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — componenti, API, modello dati, scelte di sicurezza
 - [docs/PROVISIONING.md](docs/PROVISIONING.md) — profili airOS, placeholder, collaudo
 - [docs/DEPLOY.md](docs/DEPLOY.md) — installazione Debian, auto-update, firma APK, backup
+- [docs/UISP.md](docs/UISP.md) — UISP, posizione GPS, AP vicini e copertura
 - [docs/MIGRATION-v1.md](docs/MIGRATION-v1.md) — passaggio dalla v0.5.x
 - [SECURITY.md](SECURITY.md)
 

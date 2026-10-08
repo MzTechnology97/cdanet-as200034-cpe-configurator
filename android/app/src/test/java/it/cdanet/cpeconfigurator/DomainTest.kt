@@ -97,6 +97,12 @@ class RequestJsonTest {
         assertFalse(json.contains("templateId"))
         val chosen = it.cdanet.cpeconfigurator.data.AppJson.encodeToString(it.cdanet.cpeconfigurator.data.ProvisionRequest.serializer(), f.copy(templateId = 7).toRequest())
         assertTrue(chosen.contains("\"templateId\":7"))
+        assertFalse(json.contains("location"))
+        val located = it.cdanet.cpeconfigurator.data.AppJson.encodeToString(
+            it.cdanet.cpeconfigurator.data.ProvisionRequest.serializer(),
+            f.copy(location = it.cdanet.cpeconfigurator.data.CpeLocation(37.5, 14.1, 4.0, "gps")).toRequest(),
+        )
+        assertTrue(located.contains("\"location\":{\"latitude\":37.5,\"longitude\":14.1,\"accuracy\":4.0,\"source\":\"gps\"}"))
     }
 }
 

@@ -28,6 +28,7 @@ private data class Tile(val screen: Screen, val title: String, val subtitle: Str
 private val TILES = listOf(
     Tile(Screen.Provision, "Provisioning CPE", "airMAX AC · prepara online, applica sulla Wi-Fi della CPE"),
     Tile(Screen.History, "Storico", "I miei provisioning e risultati in attesa di invio", needsLogin = true),
+    Tile(Screen.Coverage, "Copertura", "AP più vicini da GPS o indirizzo, con direzione di puntamento", needsLogin = true),
     Tile(Screen.Wifi, "Wi-Fi Analyzer", "Reti, canali e segnale"),
     Tile(Screen.Network, "Strumenti di rete", "Connessione, ping, traceroute, DNS, speed test"),
     Tile(Screen.Discovery, "Discovery LAN", "Scansione subnet, ARP, porte, NetBIOS"),
