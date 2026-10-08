@@ -4,7 +4,9 @@ import { z } from 'zod';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
+import { configDrift } from '../domain/drift.ts';
 import { isValidLatLon } from '../domain/geo.ts';
+import { TARGET_FIRMWARE } from '../domain/policy.ts';
 import type { UispDevice } from '../services/uisp.ts';
 
 const SSID_PARTS = /^CDA-NET-N(\d+)-D(\d+)$/;
@@ -12,6 +14,7 @@ const SSID_PARTS = /^CDA-NET-N(\d+)-D(\d+)$/;
 interface JobRow {
   id: string;
   user_id: number;
+  status: string;
   ssid: string;
   mac: string;
   detected: string;
@@ -148,6 +151,41 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
         .catch(() => 'failed' as const);
     }
     return { ok: true, deviceId: device.id, site: siteName, backup };
+  });
+
+  /** What changed on the CPE compared with the CDA Net configuration (latest UISP backup). */
+  app.get('/api/admin/provisioning/jobs/:id/uisp/drift', admin, async (req) => {
+    const job = loadJob(req);
+    if (job.status !== 'success') throw new HttpError(409, 'job_not_completed');
+    const full = db.prepare('SELECT model, mac, serial, ssid, pppoe_user, template_name, latitude, longitude FROM provisioning_jobs WHERE id = ?').get(job.id) as {
+      model: string; mac: string; serial: string; ssid: string; pppoe_user: string; template_name: string; latitude: number | null; longitude: number | null;
+    };
+    const tpl = db
+      .prepare('SELECT template_ciphertext FROM profile_templates WHERE model = ? AND name = ? AND firmware = ?')
+      .get(full.model, full.template_name, TARGET_FIRMWARE) as { template_ciphertext: string } | undefined;
+    if (!tpl) throw new HttpError(409, 'drift_template_missing', { template: full.template_name });
+    const wpa = db.prepare('SELECT wpa2_ciphertext FROM wireless_secrets WHERE ssid = ?').get(full.ssid) as { wpa2_ciphertext: string } | undefined;
+    const device = await deviceOf(job);
+    if (!device) throw new HttpError(409, 'uisp_device_not_found');
+    const u = uisp();
+    const latest = (await u.backups(device.id)).filter((b) => b.id).sort((a, b) => String(b.timestamp ?? '').localeCompare(String(a.timestamp ?? '')))[0];
+    if (!latest) throw new HttpError(409, 'drift_no_backup');
+    const r = await u.downloadBackup(device.id, latest.id);
+    const cfgText = await r.text();
+    if (!/^(radio|wireless|netconf|users)\./m.test(cfgText)) throw new HttpError(409, 'drift_backup_unreadable');
+    const { values, name } = ctx.provisioning.jobValues(
+      { ssid: full.ssid, pppoeUser: full.pppoe_user, mac: full.mac, serial: full.serial },
+      wpa ? ctx.sealer.open(wpa.wpa2_ciphertext) : '',
+    );
+    if (!wpa) delete values.WPA2_PSK;
+    const report = configDrift(
+      ctx.sealer.open(tpl.template_ciphertext),
+      values,
+      ctx.provisioning.enforcedKeys(name, full.latitude != null && full.longitude != null ? { latitude: full.latitude, longitude: full.longitude } : null),
+      cfgText,
+    );
+    recordEvent(db, req.user!.id, 'uisp.drift', device.name || device.mac || device.id, `${report.items.length} differenze`);
+    return { backup: { id: latest.id, timestamp: latest.timestamp }, template: full.template_name, ...report };
   });
 
   app.get('/api/admin/provisioning/jobs/:id/uisp/backups', admin, async (req) => {

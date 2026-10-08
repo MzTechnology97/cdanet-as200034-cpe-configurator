@@ -67,3 +67,14 @@ Nel dettaglio di un provisioning completato, la sezione **UISP**:
 - **Backup ora** e l'elenco dei backup, scaricabili dalla console.
 
 Accettazioni e backup vengono registrati nel **Registro attività**.
+
+## Configurazione rispetto al template
+
+Nella console, Storico → job → UISP → **Confronta con il template** (solo admin). Il server prende l'ultimo backup UISP della CPE e lo confronta con la configurazione che CDA Net le aveva applicato: template del job, dati del job (SSID, utente PPPoE, nome, porte, LAN, DHCP…) e regole forzate (watchdog, SNMP, EIRP, ATPC, posizione).
+
+Per ogni chiave diversa mostra il valore atteso e quello trovato sulla CPE. In più:
+- le chiavi segrete (chiave WPA2, credenziali CPE, community SNMP, chiave UISP) vengono confrontate ma **mai mostrate**: risultano solo "segreto diverso";
+- password PPPoE e hash della password CPE non sono confrontabili (CDA Net non conserva la prima, la seconda ha un sale casuale);
+- vengono contate le chiavi presenti sulla CPE ma non nel template.
+
+Serve a scoprire modifiche fatte a mano sulla CPE (potenza, canale, utente PPPoE, SNMP disattivato…). Per un confronto aggiornato premi prima **Backup ora**. Ogni confronto finisce nel Registro attività.

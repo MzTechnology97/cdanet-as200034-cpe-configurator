@@ -122,25 +122,8 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
     };
   }
 
-  function createJob(x: ProvisionRequest, viewer: Viewer, client: string) {
-    const userId = viewer.id;
-    const r = readiness(x, viewer);
-    if (r.missing.length) throw new HttpError(409, r.missing[0] as string, { missing: r.missing });
-
-    const profile = templates.resolve(x.model, x.templateId, viewer);
-    const wpa = getWpa.get(x.ssid) as { wpa2_ciphertext: string } | undefined;
-    if (!profile || !wpa) throw new HttpError(409, 'provision_profile_missing');
-    if (!profile.boardMatch) throw new HttpError(409, 'profile_board_match_missing');
-
-    let template: string;
-    let wpa2: string;
-    try {
-      template = sealer.open(profile.ciphertext);
-      wpa2 = sealer.open(wpa.wpa2_ciphertext);
-    } catch {
-      throw new HttpError(500, 'secret_decrypt_failed');
-    }
-
+  /** Placeholder values of a job (same for the rendered config and the drift check). */
+  function jobValues(x: Pick<ProvisionRequest, 'ssid' | 'pppoeUser' | 'mac' | 'serial'> & { pppoePassword?: string }, wpa2: string) {
     const s = cfg.cpeSecrets;
     const n = cfg.network;
     const name = customerNameFromRadius(x.pppoeUser);
@@ -148,7 +131,7 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
       SSID: x.ssid,
       WPA2_PSK: wpa2,
       PPPOE_USER: x.pppoeUser,
-      PPPOE_PASSWORD: x.pppoePassword,
+      ...(x.pppoePassword !== undefined ? { PPPOE_PASSWORD: x.pppoePassword } : {}),
       HTTP_PORT: String(MANAGEMENT_PORTS.http),
       HTTPS_PORT: String(MANAGEMENT_PORTS.https),
       SNMP_COMMUNITY: s.snmpCommunity,
@@ -173,31 +156,63 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
       DISCOVERY_PORT: String(n.discoveryPort),
     };
     if (s.uispEnrollment) values.UISP_ENROLLMENT = s.uispEnrollment;
+    return { values, name };
+  }
+
+  /** Keys forced on every CPE regardless of the template (CDA Net policy). */
+  function enforcedKeys(name: string, location?: { latitude: number; longitude: number } | null): Array<[string, string]> {
+    const s = cfg.cpeSecrets;
+    const n = cfg.network;
+    return [
+      ['pwdog.status', 'enabled'],
+      ['pwdog.host', n.watchdogHost],
+      ['snmp.status', 'enabled'],
+      ['snmp.community', s.snmpCommunity],
+      ['snmp.contact', s.snmpContact],
+      ['snmp.location', name],
+      ['system.eirp.status', 'disabled'],
+      ['radio.1.obey', 'disabled'],
+      ['radio.1.atpc.sta.status', 'enabled'],
+      ['resolv.host.1.name', name],
+      ['resolv.host.1.status', 'enabled'],
+      // airOS System > Location: UISP shows the CPE where it was installed.
+      ...(location
+        ? ([
+            ['system.latitude', location.latitude.toFixed(6)],
+            ['system.longitude', location.longitude.toFixed(6)],
+          ] as Array<[string, string]>)
+        : []),
+    ];
+  }
+
+  function createJob(x: ProvisionRequest, viewer: Viewer, client: string) {
+    const userId = viewer.id;
+    const r = readiness(x, viewer);
+    if (r.missing.length) throw new HttpError(409, r.missing[0] as string, { missing: r.missing });
+
+    const profile = templates.resolve(x.model, x.templateId, viewer);
+    const wpa = getWpa.get(x.ssid) as { wpa2_ciphertext: string } | undefined;
+    if (!profile || !wpa) throw new HttpError(409, 'provision_profile_missing');
+    if (!profile.boardMatch) throw new HttpError(409, 'profile_board_match_missing');
+
+    let template: string;
+    let wpa2: string;
+    try {
+      template = sealer.open(profile.ciphertext);
+      wpa2 = sealer.open(wpa.wpa2_ciphertext);
+    } catch {
+      throw new HttpError(500, 'secret_decrypt_failed');
+    }
+
+    const s = cfg.cpeSecrets;
+    const n = cfg.network;
+    const { values, name } = jobValues(x, wpa2);
 
     let text: string;
     try {
       text = renderSystemCfg(template, {
         values,
-        enforced: [
-          ['pwdog.status', 'enabled'],
-          ['pwdog.host', n.watchdogHost],
-          ['snmp.status', 'enabled'],
-          ['snmp.community', s.snmpCommunity],
-          ['snmp.contact', s.snmpContact],
-          ['snmp.location', name],
-          ['system.eirp.status', 'disabled'],
-          ['radio.1.obey', 'disabled'],
-          ['radio.1.atpc.sta.status', 'enabled'],
-          ['resolv.host.1.name', name],
-          ['resolv.host.1.status', 'enabled'],
-          // airOS System > Location: UISP shows the CPE where it was installed.
-          ...(x.location
-            ? ([
-                ['system.latitude', x.location.latitude.toFixed(6)],
-                ['system.longitude', x.location.longitude.toFixed(6)],
-              ] as Array<[string, string]>)
-            : []),
-        ],
+        enforced: enforcedKeys(name, x.location),
       });
     } catch (e) {
       const code = (e as Error).message;
@@ -303,6 +318,6 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
     return now;
   }
 
-  return { readiness, plan, createJob, recordResult, listJobs, housekeeping };
+  return { readiness, plan, createJob, recordResult, listJobs, housekeeping, jobValues, enforcedKeys };
 }
 export type Provisioning = ReturnType<typeof createProvisioning>;
