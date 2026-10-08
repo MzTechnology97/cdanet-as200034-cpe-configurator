@@ -38,6 +38,8 @@
   }
 }
 * { box-sizing: border-box; }
+/* Author display rules (e.g. .sidebar { display: flex }) must not override the hidden attribute. */
+[hidden] { display: none !important; }
 body { margin: 0; background: var(--bg); color: var(--ink); }
 a { color: var(--brand-ink); }
 h1 { font-size: 1.45rem; margin: 0 0 4px; }
@@ -64,7 +66,7 @@ pre { background: var(--surface-2); border: 1px solid var(--line); border-radius
 .sidebar a { display: block; padding: 9px 12px; border-radius: 8px; color: var(--ink); text-decoration: none; }
 .sidebar a:hover { background: var(--surface-2); }
 .sidebar a.active { background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand-ink); font-weight: 600; }
-.view { padding: 22px; max-width: 1180px; width: 100%; }
+.view { padding: 22px; max-width: 1180px; width: 100%; margin: 0 auto; }
 
 .card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); padding: 18px; margin-bottom: 16px; box-shadow: var(--shadow); }
 .page-head { display: flex; justify-content: space-between; align-items: flex-end; gap: 12px; flex-wrap: wrap; margin-bottom: 16px; }

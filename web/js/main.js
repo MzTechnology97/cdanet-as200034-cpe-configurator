@@ -35,6 +35,8 @@ function renderChrome(user) {
   const sessionEl = document.getElementById('session');
   if (!user) {
     sidebar.hidden = true;
+    sidebar.classList.remove('open');
+    sidebar.replaceChildren();
     navToggle.hidden = true;
     sessionEl.replaceChildren();
     return;
