@@ -1,9 +1,9 @@
 import { api } from '../api.js';
-import { card, h, pageHead, stat } from '../dom.js';
+import { badge, card, fmtDate, h, pageHead, stat } from '../dom.js';
 import { uispStatusCard } from './uisp-panel.js';
 
 export async function dashboardView() {
-  const [s, profiles, uisp] = await Promise.all([api('/api/admin/status'), api('/api/admin/profiles'), uispStatusCard()]);
+  const [s, profiles, uisp, osm] = await Promise.all([api('/api/admin/status'), api('/api/admin/profiles'), uispStatusCard(), osmStatus()]);
   const missingProfiles = profiles.filter((p) => !p.templates.length).map((p) => p.model);
   const warnings = [];
   if (!s.runtimeSecrets.cpeAdminPassword) warnings.push('CPE_ADMIN_PASSWORD non configurata: il provisioning è bloccato.');
@@ -32,6 +32,7 @@ export async function dashboardView() {
       ),
     ),
     card(h('h2', {}, 'UISP'), uisp),
+    card(h('h2', {}, 'OpenStreetMap (ricerca indirizzi)'), osm),
     card(
       h('h2', {}, 'App Android'),
       h(
@@ -60,5 +61,25 @@ export async function dashboardView() {
         stat('Retention audit', `${s.policy.auditRetentionDays} giorni`),
       ),
     ),
+  );
+}
+
+/** Local Nominatim / public service at a glance (local import may take a while after install). */
+async function osmStatus() {
+  const r = await api('/api/admin/connectors/geocoder/test', { method: 'POST', body: {} }).catch(() => null);
+  if (!r) return h('p', { class: 'small muted' }, 'Stato non disponibile.');
+  const p = r.primary;
+  const state = p.ok
+    ? badge('operativo', 'good')
+    : p.local && r.fallback?.ok
+      ? badge('import in corso / non pronto: si usa la riserva', 'warn')
+      : badge('non disponibile', 'bad');
+  return h(
+    'div',
+    { class: 'grid' },
+    stat('Servizio', p.local ? 'Nominatim locale' : 'pubblico (openstreetmap.org)'),
+    h('div', { class: 'stat' }, h('small', {}, 'Stato'), state),
+    stat('Dati aggiornati al', p.dataUpdated ? fmtDate(p.dataUpdated) : '—'),
+    h('div', { class: 'stat' }, h('small', {}, 'Dettagli'), h('a', { href: '#/connectors' }, 'Connettori')),
   );
 }
