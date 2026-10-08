@@ -69,6 +69,9 @@ fetch updater/update.sh "$DEPLOY_DIR/updater/update.sh"
 fetch .env.example "$DEPLOY_DIR/.env.example"
 fetch reset-admin-password.sh "$DEPLOY_DIR/reset-admin-password.sh"
 chmod 0755 "$DEPLOY_DIR/reset-admin-password.sh"
+# Shortcut usable from any directory: sudo cdanet-cpe <docker compose args>
+fetch cdanet-cpe /usr/local/bin/cdanet-cpe
+chmod 0755 /usr/local/bin/cdanet-cpe
 
 ENV_FILE=$DEPLOY_DIR/.env
 FIRST_ADMIN=""
@@ -131,4 +134,5 @@ docker compose exec -T app wget -qO- http://127.0.0.1:8787/api/health; echo
 echo
 echo "=== Installazione completata ==="
 echo "Console: http://$(hostname -I | awk '{print $1}')  (APP_LISTEN=hostname in .env per HTTPS automatico)"
-echo "Aggiornamenti automatici: container 'updater' (log: docker compose -f $DEPLOY_DIR/docker-compose.yml logs -f updater)"
+echo "Aggiornamenti automatici: container 'updater' (log: sudo cdanet-cpe logs -f updater)"
+echo "Comandi: sudo cdanet-cpe help"

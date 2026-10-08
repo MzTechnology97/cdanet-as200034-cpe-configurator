@@ -33,11 +33,13 @@ Lo script:
 
 Rieseguirlo è sicuro: `.env`, chiave e database restano intatti.
 
-Dopo l'installazione completa in `.env` almeno `CPE_ADMIN_PASSWORD` e `UISP_ENROLLMENT`, poi:
+Dopo l'installazione completa in `.env` almeno `CPE_ADMIN_PASSWORD` e `UISP_ENROLLMENT`. Il comando apre l'editor e alla chiusura applica le modifiche:
 
 ```bash
-cd /opt/cdanet-cpe && sudo docker compose up -d
+sudo cdanet-cpe edit
 ```
+
+> `/opt/cdanet-cpe` è leggibile solo da root, perché contiene `.env` con i segreti: `cd /opt/cdanet-cpe` da utente normale dà *Permission denied*, e `sudo cd` non esiste. Usa `sudo cdanet-cpe …`, che è `docker compose` già puntato alla cartella giusta, oppure `sudo -i`.
 
 ### Repository / pacchetto privato
 
@@ -59,14 +61,20 @@ Imposta `APP_LISTEN=cpe.example.it` in `.env`: Caddy ottiene il certificato auto
 | `UPDATE_WINDOW` | vuoto | es. `01-05`: aggiorna solo tra le 01:00 e le 04:59 |
 | `CDANET_CHANNEL` | `stable` | tag dell'immagine (`stable`, `1.2.3` per bloccare una versione, `branch-…` per test) |
 
-Comandi utili:
+Il controllo avviene all'avvio dell'updater e poi ogni `UPDATE_INTERVAL` secondi. Dal merge su `main` all'aggiornamento del server passano circa 5–8 minuti (build CI + intervallo).
+
+Comandi utili (da qualsiasi cartella):
 
 ```bash
-cd /opt/cdanet-cpe
-sudo docker compose logs -f updater          # storico aggiornamenti/rollback
-sudo docker compose exec -u node app node src/cli/backup.ts manual   # backup manuale
+sudo cdanet-cpe version                 # versione in esecuzione
+sudo cdanet-cpe logs -f updater         # storico aggiornamenti/rollback
+sudo cdanet-cpe restart updater         # controlla subito se c'è una nuova versione
+sudo cdanet-cpe ps                      # stato dei container
+sudo cdanet-cpe backup                  # backup manuale del database
 sudo ls /var/lib/docker/volumes/cdanet-cpe-configurator_appdata/_data/backups
 ```
+
+`cdanet-cpe` viene installato da `install-debian.sh`. Su un server installato prima che esistesse, rilancia l'installer da una copia aggiornata della repo: `.env` e i dati non vengono toccati.
 
 I backup (`VACUUM INTO`, ultimi 20) si trovano nel volume dati, in `backups/`. Se un'immagine fallisce l'health-check:
 - viene scritta in `bad-images` (volume `updater_state`) e non viene più riprovata;
