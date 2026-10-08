@@ -4,8 +4,9 @@ import { acceptanceBadge, acceptancePanel } from './acceptance-panel.js';
 import { osmLink } from './coverage.js';
 import { uispPanel } from './uisp-panel.js';
 
-export async function jobsView({ user }) {
-  const q = h('input', { placeholder: 'MAC, seriale, utente RADIUS, SSID, cliente…' });
+export async function jobsView({ user, params }) {
+  // #/jobs?q=… (links from Telegram notifications)
+  const q = h('input', { placeholder: 'MAC, seriale, utente RADIUS, SSID, cliente…', value: params?.get('q') ?? '' });
   const status = h(
     'select',
     {},

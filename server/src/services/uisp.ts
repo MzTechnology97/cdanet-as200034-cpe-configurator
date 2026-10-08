@@ -293,6 +293,11 @@ export function createUisp(opts: UispOptions) {
       });
     },
 
+    /** Lightweight reachability/auth check (used by the Telegram UISP monitor). */
+    async ping() {
+      await call('GET', '/nms/version');
+    },
+
     /** Signal / capacity history of a device (UISP statistics), summarised for the history page. */
     async statistics(deviceId: string, range: StatsRange) {
       const period = RANGE_MS[range];

@@ -21,8 +21,11 @@ const stopSync = cfg.releases.githubRepo
     })
   : () => {};
 
+ctx.notify.start();
+
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, 'shutting down');
+  ctx.notify.stop();
   stopSync();
   clearInterval(housekeeping);
   await app.close();

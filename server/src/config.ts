@@ -76,6 +76,8 @@ const envSchema = z.object({
   // 1 = accept self-signed/invalid certificates from UISP (use only on a trusted management network).
   UISP_IGNORE_TLS: z.enum(['0', '1']).default('0'),
   COVERAGE_MAX_KM: int(15, 1, 100),
+  // Public console address (e.g. https://cpe.cda-net.it): used for links in Telegram messages.
+  PUBLIC_URL: z.union([z.literal(''), z.string().url()]).optional(),
   GEOCODER_URL: z.string().url().default('https://nominatim.openstreetmap.org'),
   // Used while the local Nominatim is importing or down (e.g. the public service).
   GEOCODER_FALLBACK_URL: z.union([z.literal(''), z.string().url()]).optional(),
@@ -131,6 +133,7 @@ export interface Config {
   uispAutoBackup: boolean;
   uispIgnoreTls: boolean;
   coverageMaxKm: number;
+  publicUrl: string | undefined;
   geocoder: { url: string; fallbackUrl: string | undefined; contact: string | undefined };
 }
 
@@ -203,6 +206,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     uispAutoBackup: e.UISP_AUTO_BACKUP === '1',
     uispIgnoreTls: e.UISP_IGNORE_TLS === '1',
     coverageMaxKm: e.COVERAGE_MAX_KM,
+    publicUrl: e.PUBLIC_URL ? e.PUBLIC_URL.replace(/\/+$/, '') : undefined,
     geocoder: { url: e.GEOCODER_URL, fallbackUrl: e.GEOCODER_FALLBACK_URL || undefined, contact: e.GEOCODER_CONTACT },
   };
 }

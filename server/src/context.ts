@@ -7,6 +7,8 @@ import type { Templates } from './services/templates.ts';
 import type { Geocoder } from './services/geocode.ts';
 import type { Uisp } from './services/uisp.ts';
 import type { Connectors } from './services/connectors.ts';
+import type { Notifier } from './services/notify.ts';
+import type { Telegram } from './services/telegram.ts';
 
 export interface AppContext {
   cfg: Config;
@@ -20,5 +22,7 @@ export interface AppContext {
   uispSettings: { autoBackup: boolean; coverageMaxKm: number };
   connectors: Connectors;
   geocoder: Geocoder;
+  telegram: Telegram;
+  notify: Notifier;
   version: string;
 }

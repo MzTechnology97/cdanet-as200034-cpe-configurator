@@ -18,6 +18,8 @@ import { toolRoutes } from './routes/tools.ts';
 import { createProvisioning } from './services/provisioning.ts';
 import { createTemplates } from './services/templates.ts';
 import { createGeocoder } from './services/geocode.ts';
+import { createNotifier, type Notifier } from './services/notify.ts';
+import { createTelegram } from './services/telegram.ts';
 import type { Uisp } from './services/uisp.ts';
 import { createConnectors } from './services/connectors.ts';
 import { connectorRoutes } from './routes/connectors.ts';
@@ -52,7 +54,7 @@ export function ensureBootstrapAdmin(db: Db, cfg: Config): 'created' | 'exists' 
 export async function buildApp(
   cfg: Config,
   version: string,
-  opts: { db?: Db; logger?: boolean; uisp?: Uisp | null; fetchImpl?: typeof fetch } = {},
+  opts: { db?: Db; logger?: boolean; uisp?: Uisp | null; fetchImpl?: typeof fetch; telegramIntervalMs?: number } = {},
 ): Promise<{ app: FastifyInstance; ctx: AppContext }> {
   const db = opts.db ?? openDatabase(cfg.dbPath);
   ensureBootstrapAdmin(db, cfg);
@@ -60,6 +62,7 @@ export async function buildApp(
   const templates = createTemplates(db, sealer);
   const connectors = createConnectors(db, sealer, cfg, { fetchImpl: opts.fetchImpl });
   const uispCfg = connectors.uispSettings();
+  const telegram = createTelegram(db, sealer, { fetchImpl: opts.fetchImpl, ...(opts.telegramIntervalMs !== undefined ? { minIntervalMs: opts.telegramIntervalMs } : {}) });
   const ctx: AppContext = {
     cfg,
     db,
@@ -71,8 +74,11 @@ export async function buildApp(
     uispSettings: { autoBackup: uispCfg?.autoBackup ?? cfg.uispAutoBackup, coverageMaxKm: uispCfg?.coverageMaxKm ?? cfg.coverageMaxKm },
     connectors,
     geocoder: createGeocoder({ ...cfg.geocoder, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
+    telegram,
+    notify: undefined as unknown as Notifier,
     version,
   };
+  ctx.notify = createNotifier(db, cfg, telegram, () => ctx.uisp, version);
 
   const app = Fastify({
     logger:

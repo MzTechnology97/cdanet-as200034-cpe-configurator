@@ -14,6 +14,7 @@ import {
   TARGET_FIRMWARE,
 } from '../domain/policy.ts';
 import { loadLatestRelease } from '../services/releases.ts';
+import { escapeHtml } from '../services/telegram.ts';
 
 const loginSchema = z.object({
   username: z.string().trim().min(1).max(80),
@@ -41,11 +42,15 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     const valid = verifyPassword(body.password, u?.password_hash ?? DUMMY_PASSWORD_HASH);
     if (!u || !valid || !u.active) {
       limiter.fail(req.ip, body.username);
+      if (limiter.blocked(req.ip, body.username)) {
+        ctx.notify.security(`Troppi tentativi di accesso falliti per <b>${escapeHtml(body.username)}</b> da ${escapeHtml(req.ip)}: accesso bloccato per qualche minuto`);
+      }
       throw new HttpError(401, 'invalid_credentials');
     }
     limiter.clear(req.ip, body.username);
     ctx.db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').run(nowIso(), u.id);
     const { token, expiresAt } = await ctx.auth.issueToken(u);
+    if (u.role === 'admin') ctx.notify.adminLogin(u.id, u.username, req.ip);
     return { token, expiresAt, user: { id: u.id, username: u.username, role: u.role } };
   };
   app.post('/api/auth/login', login);
@@ -77,6 +82,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     limiter.clear(req.ip, u.username);
     ctx.db.prepare('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?').run(hashPassword(b.newPassword), u.id);
     recordEvent(ctx.db, u.id, 'account.password', u.username, 'cambio password personale');
+    if (u.role === 'admin') ctx.notify.security(`Password dell'amministratore <b>${escapeHtml(u.username)}</b> cambiata dall'interessato`);
     const { token, expiresAt } = await ctx.auth.issueToken({ ...u, token_version: u.token_version + 1 });
     return { ok: true, token, expiresAt };
   });
