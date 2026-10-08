@@ -16,13 +16,14 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 |   | ↳ Storico segnale da UISP (web e app) con riconoscimento del degrado lento | | ✅ v1.4.0 |
 |   | ↳ Configurazione cambiata rispetto al template (da backup UISP) | | ✅ v1.5.0 |
 |   | ↳ Scansione degli AP visibili dalla CPE (da verificare su una CPE reale) | | ⏳ |
-|   | ↳ Migliorie a Wi-Fi Analyzer e Discovery LAN | | ⏳ |
+|   | ↳ Discovery Ubiquiti, produttori in scansione LAN, canale consigliato nel Wi-Fi Analyzer | | ✅ v1.6.0 |
 | 3 | **Export CSV dello storico provisioning**, con i filtri della pagina | report per NOC e amministrazione | ⏳ |
 | 4 | **Connettore notifiche Telegram**: provisioning fallito, CPE da accettare in UISP, UISP giù/su, eventi di sicurezza, riepilogo serale; configurazione e test da Connettori | il NOC sa subito cosa è successo sul campo | ⏳ |
 | 5 | **Verifica in due passaggi (TOTP)** per gli account, obbligatoria per gli admin se attivata | la console è esposta su Internet | ⏳ |
 
 ## Già rilasciato
 
+- v1.5.0: configurazione della CPE rispetto al template (backup UISP).
 - v1.4.0: bussola verso l'AP, storico segnale UISP.
 - v1.3.0: collaudo con verbale e foto, sostituzione CPE.
 - v1.2.0: puntamento antenna e diagnosi CPE dall'app.

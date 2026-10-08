@@ -80,8 +80,14 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
             )
         }
         val bands = results.map { if (it.frequency < 3000) "2.4 GHz" else if (it.frequency < 5925) "5 GHz" else "6 GHz" }.distinct()
+        val seen = results.map { SeenNetwork(it.frequency, it.level, when (it.channelWidth) { 1 -> 40; 2 -> 80; 3, 4 -> 160; else -> 20 }) }
         ToolResult(
-            rows = listOf("Reti" to results.size.toString(), "Bande" to bands.joinToString(" / ").ifBlank { "—" }),
+            rows = listOf(
+                "Reti" to results.size.toString(),
+                "Bande" to bands.joinToString(" / ").ifBlank { "—" },
+                "Router cliente, 2.4 GHz" to ChannelAdvisor.describe(ChannelAdvisor.best24(seen)).substringAfter(": "),
+                "Router cliente, 5 GHz" to ChannelAdvisor.describe(ChannelAdvisor.best5(seen)).substringAfter(": "),
+            ),
             items = items,
             note = if (results.isEmpty()) "Nessun risultato: verifica posizione attiva e permessi (Android limita le scansioni a 4 ogni 2 minuti)." else null,
         )
@@ -186,6 +192,28 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
         return m
     }
 
+    /** Ubiquiti devices on the LAN (UDP 10001/10002): IP, MAC, model, firmware, name. */
+    suspend fun ubntDiscovery(): ToolResult {
+        val list = UbntDiscovery.discover(network)
+        return ToolResult(
+            rows = listOf("Apparati Ubiquiti" to list.size.toString()),
+            items = list.map { d ->
+                ToolItem(
+                    title = "${d.ip ?: "IP sconosciuto"} · ${d.hostname ?: d.model ?: "—"}",
+                    subtitle = listOfNotNull(d.fullModel ?: d.model, d.firmware, d.mac, d.ssid?.let { "SSID $it" }).joinToString(" · "),
+                    trailing = d.uptimeSec?.let { it.formatUptime() }.orEmpty(),
+                )
+            },
+            note = if (list.isEmpty()) "Nessuna risposta: verifica di essere sulla LAN giusta (la discovery non attraversa i router)." else "Discovery Ubiquiti (UDP 10001) e annunci (UDP 10002).",
+        )
+    }
+
+    private fun Long.formatUptime(): String {
+        val d = this / 86_400
+        val h = (this % 86_400) / 3600
+        return if (d > 0) "${d}g ${h}h" else "${h}h ${(this % 3600) / 60}m"
+    }
+
     suspend fun neighbors(): ToolResult = io {
         val t = arpTable()
         ToolResult(
@@ -197,7 +225,7 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
 
     suspend fun discover(cidrText: String, viaWifi: Boolean): ToolResult {
         val cidr = Ip.parseScanCidr(cidrText)
-        val block: suspend () -> ToolResult = {
+        val block: suspend () -> Pair<List<Pair<String, String>>, Map<String, String>> = {
             val ips = (cidr.first..cidr.last).map { Ip.format(it) }
             val sem = Semaphore(48)
             val alive = coroutineScope {
@@ -211,16 +239,29 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
                     }
                 }.awaitAll().filterNotNull()
             }
-            val macs = arpTable()
-            ToolResult(
-                rows = listOf("Rete" to cidr.toString(), "Host attivi" to alive.size.toString(), "Con MAC" to alive.count { macs[it] != null }.toString()),
-                items = alive.map { ip ->
-                    val name = runCatching { InetAddress.getByName(ip).canonicalHostName }.getOrNull()?.takeIf { it != ip }.orEmpty()
-                    ToolItem(ip, listOf(name, macs[ip].orEmpty()).filter { it.isNotBlank() }.joinToString(" · "))
-                },
-            )
+            alive.map { ip -> ip to (runCatching { InetAddress.getByName(ip).canonicalHostName }.getOrNull()?.takeIf { it != ip }.orEmpty()) } to arpTable()
         }
-        return withContext(Dispatchers.IO) { if (viaWifi) network.onWifi(block) else block() }
+        val (hosts, macs) = withContext(Dispatchers.IO) { if (viaWifi) network.onWifi(block) else block() }
+        // Vendor lookup after leaving the Wi-Fi binding: the server is reached over mobile data if needed.
+        val vendors = vendorsOf(hosts.mapNotNull { macs[it.first] })
+        return ToolResult(
+            rows = listOf("Rete" to cidr.toString(), "Host attivi" to hosts.size.toString(), "Con MAC" to hosts.count { macs[it.first] != null }.toString()),
+            items = hosts.map { (ip, name) ->
+                val mac = macs[ip]
+                ToolItem(ip, listOf(name, mac.orEmpty(), mac?.let { vendors[it] }.orEmpty()).filter { it.isNotBlank() }.joinToString(" · "))
+            },
+        )
+    }
+
+    /** Vendor of each MAC (server lookup, best effort: skipped when offline). */
+    private suspend fun vendorsOf(macs: List<String>): Map<String, String> {
+        if (session.token == null) return emptyMap()
+        val out = mutableMapOf<String, String>()
+        for (mac in macs.distinct().take(40)) {
+            val v = runCatching { api.macVendor(mac) }.getOrNull() ?: break
+            if (v.isNotBlank() && v != "—" && v != "null") out[mac] = v
+        }
+        return out
     }
 
     suspend fun portProbe(host: String, ports: List<Int>, viaWifi: Boolean): ToolResult {

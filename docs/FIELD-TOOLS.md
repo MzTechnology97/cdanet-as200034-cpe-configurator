@@ -107,3 +107,13 @@ Mostra:
 Se il segnale nell'ultimo quarto del periodo è più basso di almeno 4 dB rispetto al primo quarto, viene segnalato un **degrado lento** (vegetazione, antenna spostata, staffa allentata). Questo aiuta a distinguerlo da un guasto improvviso.
 
 API usate: `GET /devices/{id}/statistics` (`interval`, `start`, `period`) e `GET /outages` (`deviceId`, `start`, `period`) della specifica UISP API 1.5.0.
+
+## Strumenti di rete
+
+- **Discovery LAN → Trova apparati Ubiquiti**: invia la richiesta di discovery Ubiquiti (UDP 10001, la stessa usata da UISP) e ascolta gli annunci degli apparati (UDP 10002). Mostra IP, MAC, modello, firmware, nome e SSID di CPE e AP sulla LAN, anche quando l'IP non è noto. Non attraversa i router: il telefono deve essere sulla stessa LAN.
+- **Scansione subnet**: accanto a ogni host con MAC noto compare il **produttore** (Ubiquiti, MikroTik, TP-Link, Hikvision…), letto dal server dopo la scansione. Senza Internet viene semplicemente omesso.
+- **Wi-Fi Analyzer**: oltre all'elenco delle reti indica il **canale consigliato per il router del cliente**:
+  - 2.4 GHz: tra 1, 6 e 11, tenendo conto delle sovrapposizioni;
+  - 5 GHz: tra 36 e 48, senza DFS né attese radar.
+
+  Le reti vicine pesano in base al segnale.
