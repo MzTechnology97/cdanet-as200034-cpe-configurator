@@ -65,7 +65,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     managementPorts: MANAGEMENT_PORTS,
     jobTtlMinutes: ctx.cfg.jobTtlMinutes,
     uisp: !!ctx.uisp,
-    coverageMaxKm: ctx.cfg.coverageMaxKm,
+    coverageMaxKm: ctx.uispSettings.coverageMaxKm,
   }));
 
   // Android update channel: reachable before login so a broken login can still be repaired.

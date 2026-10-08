@@ -15,6 +15,8 @@ const LABELS = {
   'template.delete': 'Template eliminato',
   'uisp.authorize': 'CPE accettata in UISP',
   'uisp.backup': 'Backup UISP richiesto',
+  'connector.uisp.update': 'Connettore UISP modificato',
+  'connector.uisp.reset': 'Connettore UISP rimosso (torna al .env)',
   'profile.delete': 'Profilo eliminato',
   'job.create': 'Provisioning preparato',
 };

@@ -72,9 +72,9 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       .object({ lat: z.coerce.number(), lon: z.coerce.number(), limit: z.coerce.number().int().min(1).max(10).default(5) })
       .parse(req.query);
     if (!isValidLatLon(q.lat, q.lon)) throw new HttpError(400, 'invalid_position');
-    const aps = await uisp().nearestAps({ lat: q.lat, lon: q.lon }, q.limit, ctx.cfg.coverageMaxKm);
+    const aps = await uisp().nearestAps({ lat: q.lat, lon: q.lon }, q.limit, ctx.uispSettings.coverageMaxKm);
     return {
-      maxKm: ctx.cfg.coverageMaxKm,
+      maxKm: ctx.uispSettings.coverageMaxKm,
       aps: aps.map((a) => {
         const m = a.ssid ? SSID_PARTS.exec(a.ssid) : null;
         return { ...a, node: m ? Number(m[1]) : null, district: m ? Number(m[2]) : null };
@@ -131,7 +131,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     );
     recordEvent(db, req.user!.id, 'uisp.authorize', `${device.name || device.mac} → ${siteName}`, job.id);
     let backup: 'created' | 'failed' | 'disabled' = 'disabled';
-    if (ctx.cfg.uispAutoBackup) {
+    if (ctx.uispSettings.autoBackup) {
       backup = await u
         .createBackup(device.id)
         .then(() => 'created' as const)
@@ -160,11 +160,15 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     const backupId = z.string().min(1).max(100).parse((req.params as { backupId: string }).backupId);
     const device = await deviceOf(job);
     if (!device) throw new HttpError(409, 'uisp_device_not_found');
-    const r = await uisp().downloadBackup(device.id, backupId);
+    const u = uisp();
+    const meta = (await u.backups(device.id).catch(() => [])).find((b) => b.id === backupId);
+    const r = await u.downloadBackup(device.id, backupId);
     const safe = (device.name || device.mac || device.id).replace(/[^\w.-]+/g, '_');
+    // airMAX backups are served as the plain system.cfg (UISP unzips them).
+    const ext = (meta?.extension ?? 'bin').replace(/[^\w]+/g, '');
     reply
       .header('Content-Type', r.headers.get('content-type') ?? 'application/octet-stream')
-      .header('Content-Disposition', `attachment; filename="backup-${safe}-${backupId.replace(/[^\w.-]+/g, '_')}.unms"`);
+      .header('Content-Disposition', `attachment; filename="backup-${safe}-${backupId.replace(/[^\w.-]+/g, '_')}.${ext || 'bin'}"`);
     return reply.send(Readable.fromWeb(r.body as import('node:stream/web').ReadableStream));
   });
 }

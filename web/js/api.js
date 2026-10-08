@@ -22,6 +22,9 @@ const MESSAGES = {
   template_audience_empty: 'Seleziona almeno un installatore',
   default_must_be_public: 'Il predefinito generale deve essere visibile a tutti gli installatori',
   template_user_not_found: 'Account selezionato inesistente',
+  connector_incomplete: 'Servono indirizzo UISP e token',
+  uisp_not_configured: 'UISP non configurato (Connettori)',
+  uisp_tls_error: 'Certificato TLS di UISP non valido',
 };
 
 export const session = {
