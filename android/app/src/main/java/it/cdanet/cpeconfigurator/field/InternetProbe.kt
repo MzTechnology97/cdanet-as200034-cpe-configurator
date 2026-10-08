@@ -9,6 +9,7 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
+import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
 
@@ -21,7 +22,9 @@ object InternetProbe {
         val wifi = network.wifiNetwork() ?: return@withContext InternetTest(false, note = "Telefono non collegato a una Wi-Fi")
         val http = OkHttpClient.Builder()
             .socketFactory(wifi.socketFactory)
-            .dns(Dns { host -> wifi.getAllByName(host).toList() })
+            .dns(object : Dns {
+                override fun lookup(hostname: String): List<InetAddress> = wifi.getAllByName(hostname).toList()
+            })
             .connectTimeout(6, TimeUnit.SECONDS)
             .readTimeout(30, TimeUnit.SECONDS)
             .writeTimeout(30, TimeUnit.SECONDS)

@@ -12,6 +12,17 @@ data class LoginRequest(val username: String, val password: String)
 @Serializable
 data class LoginResponse(val token: String, val expiresAt: String, val user: UserDto)
 
+/** Body of POST /api/provisioning/jobs/{id}/replace: the rest comes from the replaced job. */
+@Serializable
+data class ReplaceRequest(
+    val model: String,
+    val mac: String,
+    val serial: String,
+    val pppoePassword: String? = null,
+    val templateId: Int? = null,
+    val location: CpeLocation? = null,
+)
+
 @Serializable
 data class PasswordChangeRequest(val currentPassword: String, val newPassword: String)
 

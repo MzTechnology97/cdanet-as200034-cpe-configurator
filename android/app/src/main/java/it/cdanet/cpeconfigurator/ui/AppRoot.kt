@@ -147,7 +147,11 @@ fun AppRoot(c: AppContainer) {
                     Screen.Camera -> CameraScreen(c)
                     Screen.Remote -> RemoteScreen(c)
                     Screen.RouterOs -> RouterOsScreen(c)
-                    Screen.History -> HistoryScreen(c, onAcceptance = { c.selectedJob.value = it; go(Screen.Acceptance) })
+                    Screen.History -> HistoryScreen(
+                        c,
+                        onAcceptance = { c.selectedJob.value = it; go(Screen.Acceptance) },
+                        onReplace = { c.provisioning.startReplacement(it); go(Screen.Provision) },
+                    )
                     Screen.Settings -> SettingsScreen(c, update = update, onUpdate = { update = it }, onLogout = {
                         c.session.clear()
                         offline = false

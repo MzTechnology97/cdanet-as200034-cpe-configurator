@@ -44,6 +44,8 @@ private val ERRORS = mapOf(
     "uisp_unreachable" to "UISP non raggiungibile dal server",
     "geocoder_unreachable" to "Servizio indirizzi non raggiungibile",
     "address_too_short" to "Indirizzo troppo corto",
+    "pppoe_password_required" to "Password PPPoE necessaria: non è stato possibile recuperarla dal backup UISP della CPE sostituita",
+    "replace_same_mac" to "Il MAC è quello della CPE sostituita: inserisci quello della CPE nuova",
     "job_not_completed" to "Esito del provisioning non ancora registrato sul server",
     "too_many_photos" to "Troppe foto per questo job (massimo 8)",
     "photo_not_jpeg" to "La foto deve essere in formato JPEG",
@@ -139,6 +141,12 @@ class ApiClient(
         AppJson.decodeFromString(
             ProvisionPackage.serializer(),
             request("POST", "/api/provisioning/jobs", AppJson.encodeToJsonElement(ProvisionRequest.serializer(), req), client = true),
+        )
+
+    suspend fun replaceJob(oldJobId: String, req: ReplaceRequest): ProvisionPackage =
+        AppJson.decodeFromString(
+            ProvisionPackage.serializer(),
+            request("POST", "/api/provisioning/jobs/$oldJobId/replace", AppJson.encodeToJsonElement(ReplaceRequest.serializer(), req), client = true),
         )
 
     suspend fun sendResult(jobId: String, result: ProvisionResult) {

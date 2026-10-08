@@ -25,6 +25,8 @@ const MESSAGES = {
   wrong_current_password: 'Password attuale non corretta',
   password_unchanged: 'La nuova password è uguale a quella attuale',
   password_contains_username: 'La password non può contenere il nome utente',
+  pppoe_password_required: 'Password PPPoE necessaria (non recuperabile dal backup UISP)',
+  replace_same_mac: 'La CPE nuova ha lo stesso MAC di quella sostituita',
   job_not_completed: 'Il provisioning non risulta completato',
   too_many_photos: 'Troppe foto per questo job',
   photo_not_jpeg: 'La foto deve essere in formato JPEG',

@@ -29,7 +29,7 @@ export const STATION = {
   attributes: { ssid: 'CDA-NET-N2-D01', apDevice: { id: 'ap-n2', name: 'AP N2 D01' } },
 };
 
-export function fakeUisp(opts: { authorizeMethod?: 'POST' | 'PUT' } = {}) {
+export function fakeUisp(opts: { authorizeMethod?: 'POST' | 'PUT'; backupCfg?: string } = {}) {
   const calls: Array<{ method: string; path: string; body: unknown; token: string | null }> = [];
   const devices = [AP_N2, AP_N7, FAR_AP, STATION].map((d) => structuredClone(d));
   const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
@@ -54,8 +54,11 @@ export function fakeUisp(opts: { authorizeMethod?: 'POST' | 'PUT' } = {}) {
       return new Response('{}');
     }
     if (/^\/devices\/[^/]+\/backups$/.test(path)) {
-      return method === 'POST' ? new Response('{}') : new Response(JSON.stringify([{ id: 'bk1', timestamp: '2026-10-08T10:00:00Z', type: 'manual', extension: 'cfg' }]));
+      const list = [{ id: 'bk1', timestamp: '2026-10-08T10:00:00Z', type: 'manual', extension: 'cfg' }];
+      if (opts.backupCfg) list.push({ id: 'bk2', timestamp: '2026-10-09T03:00:00Z', type: 'auto', extension: 'cfg' });
+      return method === 'POST' ? new Response('{}') : new Response(JSON.stringify(list));
     }
+    if (opts.backupCfg && /^\/devices\/[^/]+\/backups\/bk2$/.test(path)) return new Response(opts.backupCfg, { headers: { 'content-type': 'text/plain' } });
     if (/^\/devices\/[^/]+\/backups\/bk1$/.test(path)) return new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'application/octet-stream' } });
     return new Response('not found', { status: 404 });
   }) as typeof fetch;

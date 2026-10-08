@@ -16,6 +16,7 @@ const LABELS = {
   'uisp.authorize': 'CPE accettata in UISP',
   'uisp.backup': 'Backup UISP richiesto',
   'account.password': 'Password personale cambiata',
+  'job.replace': 'Sostituzione CPE (nuovo job)',
   'job.acceptance': 'Collaudo registrato',
   'job.photo': 'Foto di installazione caricata',
   'job.photo_delete': 'Foto di installazione eliminata',
