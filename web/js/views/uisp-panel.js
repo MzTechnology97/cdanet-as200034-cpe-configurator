@@ -93,7 +93,39 @@ export function uispPanel(job, isAdmin) {
           setTimeout(loadBackups, 3000);
         });
       actions.append(mk);
+      const cmp = h('button', {}, 'Confronta con il template');
+      cmp.onclick = () => busy(cmp, showDrift);
+      actions.append(cmp);
       loadBackups();
+    }
+
+    const drift = h('div', {});
+    async function showDrift() {
+      let r;
+      try {
+        r = await api(`/api/admin/provisioning/jobs/${job.id}/uisp/drift`);
+      } catch (e) {
+        mount(drift, h('div', { class: 'notice bad' }, err(e)));
+        return;
+      }
+      const kind = { changed: 'modificata', missing: 'assente sulla CPE', secret_changed: 'segreto diverso (valore non mostrato)' };
+      mount(
+        drift,
+        h('h3', {}, 'Configurazione rispetto al template'),
+        h('p', { class: 'small muted' }, `Backup UISP del ${fmtDate(r.backup.timestamp)} · template "${r.template}" · ${r.compared} chiavi confrontate, ${r.skipped} non confrontabili (password), ${r.extra} chiavi in più sulla CPE.`),
+        r.items.length
+          ? table(
+              [
+                { label: 'Chiave', render: (i) => h('span', { class: 'mono small' }, i.key) },
+                { label: 'Differenza', render: (i) => kind[i.kind] ?? i.kind },
+                { label: 'Atteso', render: (i) => h('span', { class: 'mono small' }, i.expected ?? '—') },
+                { label: 'Sulla CPE', render: (i) => h('span', { class: 'mono small' }, i.actual ?? '—') },
+              ],
+              r.items,
+            )
+          : h('div', { class: 'notice good' }, 'Nessuna differenza: la CPE ha la configurazione CDA Net.'),
+        h('p', { class: 'small muted' }, 'Per un confronto aggiornato premi prima "Backup ora" e attendi qualche secondo.'),
+      );
     }
 
     async function loadBackups() {
@@ -139,6 +171,7 @@ export function uispPanel(job, isAdmin) {
       pending ? null : s.authorizedAt ? h('p', { class: 'small muted' }, `Accettata il ${fmtDate(s.authorizedAt)}`) : null,
       actions,
       pending ? null : signalHistory(job),
+      drift,
       backups,
     );
   }

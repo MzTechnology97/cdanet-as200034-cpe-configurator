@@ -14,7 +14,7 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 |   | ↳ Sostituzione CPE guasta riusando i dati del job (password PPPoE dal backup UISP) | | ✅ v1.3.0 |
 |   | ↳ Bussola verso l'AP (con verifica calibrazione e disturbi magnetici) | | ✅ v1.4.0 |
 |   | ↳ Storico segnale da UISP (web e app) con riconoscimento del degrado lento | | ✅ v1.4.0 |
-|   | ↳ Configurazione cambiata rispetto al template (da backup UISP) | | ⏳ |
+|   | ↳ Configurazione cambiata rispetto al template (da backup UISP) | | ✅ v1.5.0 |
 |   | ↳ Scansione degli AP visibili dalla CPE (da verificare su una CPE reale) | | ⏳ |
 |   | ↳ Migliorie a Wi-Fi Analyzer e Discovery LAN | | ⏳ |
 | 3 | **Export CSV dello storico provisioning**, con i filtri della pagina | report per NOC e amministrazione | ⏳ |
@@ -23,6 +23,7 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 
 ## Già rilasciato
 
+- v1.4.0: bussola verso l'AP, storico segnale UISP.
 - v1.3.0: collaudo con verbale e foto, sostituzione CPE.
 - v1.2.0: puntamento antenna e diagnosi CPE dall'app.
 - v1.1.0: Il mio account (cambio password, esci da tutti i dispositivi).
