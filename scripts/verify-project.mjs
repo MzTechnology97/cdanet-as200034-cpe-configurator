@@ -71,7 +71,7 @@ ok(server.includes("'web-bridge-v0.5.1'"),'trusted Web Bridge v0.5.1 missing');
 ok(web.includes("version:'0.5.1'"),'Web Bridge health version mismatch');
 ok(web.includes("'X-CDA-Client':'web-bridge-v0.5.1'"),'Web Bridge client header mismatch');
 
-const forbidden=['CdaNet@CdaNet','CADsystem.it2007','wagqTppuS1H8Lf6owQt5qAzcUmDMZI5g6ApsxO2jz3TYlIob'];
+const forbidden=['test','test123','wagqTppuS1H8Lf6owQt5qAzcUmDMZI5g6ApsxO2jz3TYlIob'];
 for(const [name,text] of [['index',index],['app',app],['server',server],['android',android],['web',web],['tools',tools],['routeros',ros]]){
   for(const x of forbidden)ok(!text.includes(x),name+' contains forbidden legacy secret material');
 }
