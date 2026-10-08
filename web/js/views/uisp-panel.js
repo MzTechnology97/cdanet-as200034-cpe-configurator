@@ -1,4 +1,4 @@
-import { api } from '../api.js';
+import { api, download } from '../api.js';
 import { badge, busy, fmtDate, h, mount, stat, table, toast } from '../dom.js';
 
 const ERRORS = {
@@ -11,17 +11,6 @@ const ERRORS = {
   uisp_site_unknown: 'Non riesco a determinare il site dell’AP: sceglilo manualmente.',
 };
 const err = (e) => ERRORS[e.body?.error] ?? e.message;
-
-async function download(url, fallbackName) {
-  const r = await api(url, { raw: true });
-  if (!r.ok) throw new Error(`Download non riuscito (HTTP ${r.status})`);
-  const name = /filename="([^"]+)"/.exec(r.headers.get('content-disposition') ?? '')?.[1] ?? fallbackName;
-  const a = h('a', { href: URL.createObjectURL(await r.blob()), download: name });
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-}
 
 /** UISP section of a provisioning job: live status, acceptance and backups. */
 export function uispPanel(job, isAdmin) {

@@ -1,4 +1,4 @@
-import { api } from '../api.js';
+import { api, download } from '../api.js';
 import { busy, card, field, fmtDate, h, mount, pageHead, statusBadge, table } from '../dom.js';
 import { acceptanceBadge, acceptancePanel } from './acceptance-panel.js';
 import { osmLink } from './coverage.js';
@@ -16,15 +16,25 @@ export async function jobsView({ user, params }) {
     h('option', { value: 'prepared' }, 'Preparati / in corso'),
     h('option', { value: 'expired' }, 'Scaduti'),
   );
+  const from = h('input', { type: 'date' });
+  const to = h('input', { type: 'date' });
   const out = h('div', {});
   const detail = h('div', {});
   const search = h('button', { class: 'primary', type: 'submit' }, 'Cerca');
+  const exportBtn = h('button', { type: 'button' }, 'Esporta CSV');
 
-  async function load() {
-    const params = new URLSearchParams({ limit: '300' });
+  function filters(limit) {
+    const params = new URLSearchParams({ limit });
     if (q.value.trim()) params.set('q', q.value.trim());
     if (status.value) params.set('status', status.value);
-    const jobs = await api(`/api/provisioning/jobs?${params}`);
+    if (from.value) params.set('from', from.value);
+    if (to.value) params.set('to', to.value);
+    return params;
+  }
+  exportBtn.onclick = () => busy(exportBtn, () => download(`/api/provisioning/jobs.csv?${filters('5000')}`, 'storico-provisioning.csv'));
+
+  async function load() {
+    const jobs = await api(`/api/provisioning/jobs?${filters('300')}`);
     mount(
       out,
       table(
@@ -90,7 +100,10 @@ export async function jobsView({ user, params }) {
     { class: 'row', onsubmit: (e) => (e.preventDefault(), busy(search, load)) },
     field('Ricerca', q),
     field('Esito', status),
+    field('Dal', from),
+    field('Al', to),
     search,
+    exportBtn,
   );
   await load();
   return h(

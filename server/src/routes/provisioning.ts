@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
+import { toCsv } from '../domain/csv.ts';
 import { parseClientHeader, versionAtLeast } from '../domain/policy.ts';
 import { provisionRequestSchema, provisionResultSchema } from '../services/provisioning.ts';
 
@@ -49,14 +50,39 @@ export function provisioningRoutes(app: FastifyInstance, ctx: AppContext) {
     return r;
   });
 
+  const listQuery = z.object({
+    limit: z.coerce.number().int().min(1).max(1000).default(200),
+    q: z.string().trim().max(80).optional(),
+    status: z.enum(['prepared', 'success', 'failed', 'expired']).optional(),
+    /** YYYY-MM-DD, both inclusive. */
+    from: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    to: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  });
+  const range = (q: { from?: string | undefined; to?: string | undefined }) => ({
+    from: q.from ? `${q.from}T00:00:00.000Z` : undefined,
+    to: q.to ? new Date(Date.parse(`${q.to}T00:00:00.000Z`) + 86400_000).toISOString() : undefined,
+  });
+
   app.get('/api/provisioning/jobs', user, async (req) => {
-    const q = z
-      .object({
-        limit: z.coerce.number().int().min(1).max(1000).default(200),
-        q: z.string().trim().max(80).optional(),
-        status: z.enum(['prepared', 'success', 'failed', 'expired']).optional(),
-      })
-      .parse(req.query);
-    return ctx.provisioning.listJobs(req.user!, q);
+    const q = listQuery.parse(req.query);
+    return ctx.provisioning.listJobs(req.user!, { ...q, ...range(q) });
+  });
+
+  /** Same filters as the history page, as CSV for Excel (Italian locale: ';', UTF-8 BOM). */
+  app.get('/api/provisioning/jobs.csv', user, async (req, reply) => {
+    const q = listQuery.extend({ limit: z.coerce.number().int().min(1).max(20000).default(5000) }).parse(req.query);
+    const rows = ctx.provisioning.listJobs(req.user!, { ...q, ...range(q) }) as Array<Record<string, unknown>>;
+    const header = ['Data', 'Esito', 'Cliente', 'Utente PPPoE', 'Modello', 'Template', 'MAC', 'Seriale', 'SSID', 'Installatore', 'Collaudo', 'Foto', 'Site UISP', 'Accettata in UISP', 'Latitudine', 'Longitudine', 'Sostituisce job', 'Errore'];
+    const esito: Record<string, string> = { success: 'completato', failed: 'fallito', prepared: 'preparato', expired: 'scaduto' };
+    const collaudo: Record<string, string> = { ok: 'superato', warn: 'con riserva', bad: 'non superato' };
+    const lines = rows.map((r) => [
+      r.createdAt, esito[String(r.status)] ?? r.status, r.deviceName, r.pppoeUser, r.model, r.template, r.mac, r.serial, r.ssid, r.installer,
+      r.acceptance ? (collaudo[String(r.acceptance)] ?? r.acceptance) : '', r.photos ?? 0, r.uispSite, r.uispAuthorizedAt ?? '',
+      r.latitude ?? '', r.longitude ?? '', r.replacesJobId ?? '', r.error,
+    ]);
+    recordEvent(ctx.db, req.user!.id, 'jobs.export', `${rows.length} righe`, [q.status, q.q, q.from, q.to].filter(Boolean).join(' · '));
+    const name = `storico-provisioning-${new Date().toISOString().slice(0, 10)}.csv`;
+    reply.header('Content-Type', 'text/csv; charset=utf-8').header('Content-Disposition', `attachment; filename="${name}"`);
+    return '﻿' + toCsv([header, ...lines]);
   });
 }

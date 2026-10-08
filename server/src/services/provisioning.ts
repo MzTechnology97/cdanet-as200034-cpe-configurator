@@ -265,7 +265,10 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
     return { ok: true, duplicate: false };
   }
 
-  function listJobs(user: { id: number; role: string }, filter: { limit: number; q?: string | undefined; status?: string | undefined }) {
+  function listJobs(
+    user: { id: number; role: string },
+    filter: { limit: number; q?: string | undefined; status?: string | undefined; from?: string | undefined; to?: string | undefined },
+  ) {
     const where: string[] = [];
     const params: Array<string | number> = [];
     if (user.role !== 'admin') {
@@ -275,6 +278,14 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
     if (filter.status) {
       where.push('j.status = ?');
       params.push(filter.status);
+    }
+    if (filter.from) {
+      where.push('j.created_at >= ?');
+      params.push(filter.from);
+    }
+    if (filter.to) {
+      where.push('j.created_at < ?');
+      params.push(filter.to);
     }
     if (filter.q) {
       // MACs are stored as AA:BB:..: also match a search typed without separators.
