@@ -139,7 +139,7 @@ private fun FormStep(c: AppContainer) {
         Text("La posizione viene salvata nello storico e scritta nella CPE (UISP la mostra sulla mappa).", style = MaterialTheme.typography.bodySmall)
         LocationPicker(c, form.location, form.locationLabel) { l, label -> c.provisioning.updateForm { it.copy(location = l, locationLabel = label) } }
         form.location?.let { l ->
-            NearbyAps(c, l) { ap -> c.provisioning.updateForm { it.copy(node = ap.node ?: it.node, district = ap.district ?: it.district) } }
+            NearbyAps(c, l, onPick = { ap -> c.provisioning.updateForm { it.copy(node = ap.node ?: it.node, district = ap.district ?: it.district) } })
         }
     }
 
