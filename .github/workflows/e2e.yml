@@ -171,7 +171,7 @@ jobs:
       - name: Upgrade to this commit
         run: |
           docker exec -e CDANET_IMAGE=cdanet-e2e -e CDANET_CHANNEL=ci -e CDANET_SKIP_PULL=1 srv /src/deploy/install-debian.sh
-          curl -fsS http://localhost/api/health | tee /dev/stderr | grep -q '"version":"e2e"'
+          curl -fsS http://localhost/api/health | tee /dev/stderr | grep -q "\"version\":\"$(jq -r .version server/package.json)\""
           TOKEN=$(curl -fsS -H 'Content-Type: application/json' -d "{\"username\":\"admin\",\"password\":\"$ADMIN_PW\"}" http://localhost/api/auth/login | jq -r .token)
           curl -fsS -H "Authorization: Bearer $TOKEN" http://localhost/api/admin/users | jq -e 'map(.username) | index("tecnico-e2e") != null' >/dev/null
           curl -fsS -H "Authorization: Bearer $TOKEN" http://localhost/api/admin/connectors | jq -e '.uisp.source == "none" and .geocoder.local == false' >/dev/null
