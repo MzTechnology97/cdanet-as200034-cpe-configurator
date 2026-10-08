@@ -200,7 +200,6 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer) {
       credentials: { username: s.adminUsername, password: s.adminPassword as string },
       checks: { firmware: TARGET_FIRMWARE, boardMatch: profile.board_match, mac: x.mac },
       config: { path: '/tmp/system.cfg', text, sha256: configSha256 },
-      commit: { command: 'cfgmtd -f /tmp/system.cfg -w -p /etc/ && sync', reboot: true },
       summary: { model: x.model, ssid: x.ssid, pppoeUser: x.pppoeUser, deviceName: name, mac: x.mac, serial: x.serial },
       afterApply: { lanIp: n.lanIp, httpPort: MANAGEMENT_PORTS.http, httpsPort: MANAGEMENT_PORTS.https },
     };
