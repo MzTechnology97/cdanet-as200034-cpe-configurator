@@ -39,7 +39,7 @@ jobs:
           echo "code=$((a*10000+b*100+c))" >> "$GITHUB_OUTPUT"
       - name: Unit tests and debug build
         working-directory: android
-        run: gradle --no-daemon testDebugUnitTest assembleDebug
+        run: gradle --no-daemon testDebugUnitTest assembleDebug lintRelease
       - name: Signed release build
         id: release
         working-directory: android
