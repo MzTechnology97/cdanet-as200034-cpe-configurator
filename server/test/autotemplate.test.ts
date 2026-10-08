@@ -124,7 +124,7 @@ describe('POST /api/admin/profiles/:model/autotemplate', () => {
     assert.ok(!r.body.includes('LabWpaKey123'));
     // nothing stored until the admin confirms with PUT
     const list = (await t.app.inject({ method: 'GET', url: '/api/admin/profiles', headers: t.auth(token) })).json();
-    assert.equal(list.find((p: { model: string }) => p.model === 'LiteBeam 5AC').profile, null);
+    assert.deepEqual(list.find((p: { model: string }) => p.model === 'LiteBeam 5AC').templates, []);
     await t.app.close();
   });
 });

@@ -3,7 +3,7 @@ import { card, h, pageHead, stat } from '../dom.js';
 
 export async function dashboardView() {
   const [s, profiles] = await Promise.all([api('/api/admin/status'), api('/api/admin/profiles')]);
-  const missingProfiles = profiles.filter((p) => !p.profile).map((p) => p.model);
+  const missingProfiles = profiles.filter((p) => !p.templates.length).map((p) => p.model);
   const warnings = [];
   if (!s.runtimeSecrets.cpeAdminPassword) warnings.push('CPE_ADMIN_PASSWORD non configurata: il provisioning è bloccato.');
   if (!s.runtimeSecrets.uispEnrollment) warnings.push('UISP_ENROLLMENT non configurata: i profili che usano ${UISP_ENROLLMENT} verranno rifiutati.');
@@ -26,7 +26,8 @@ export async function dashboardView() {
         stat('Completati', s.counts.success30d),
         stat('Account attivi', s.counts.users),
         stat('Reti WPA2', s.counts.wirelessNetworks),
-        stat('Profili airOS', `${s.counts.profiles} / 5`),
+        stat('Modelli con template', `${s.counts.profiles} / 5`),
+        stat('Template airOS', s.counts.templates),
       ),
     ),
     card(

@@ -3,6 +3,7 @@ import type { Config } from './config.ts';
 import type { Sealer } from './crypto.ts';
 import type { Db } from './db.ts';
 import type { Provisioning } from './services/provisioning.ts';
+import type { Templates } from './services/templates.ts';
 
 export interface AppContext {
   cfg: Config;
@@ -10,5 +11,6 @@ export interface AppContext {
   sealer: Sealer;
   auth: Auth;
   provisioning: Provisioning;
+  templates: Templates;
   version: string;
 }

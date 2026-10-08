@@ -90,6 +90,16 @@ class ValidationTest {
     }
 }
 
+class RequestJsonTest {
+    @Test fun templateIdOmittedWhenDefault() {
+        val f = ProvisionForm(mac = "24a43c112233", serial = "S", pppoeUser = "a.b@cda-net.it", pppoePassword = "x")
+        val json = it.cdanet.cpeconfigurator.data.AppJson.encodeToString(it.cdanet.cpeconfigurator.data.ProvisionRequest.serializer(), f.toRequest())
+        assertFalse(json.contains("templateId"))
+        val chosen = it.cdanet.cpeconfigurator.data.AppJson.encodeToString(it.cdanet.cpeconfigurator.data.ProvisionRequest.serializer(), f.copy(templateId = 7).toRequest())
+        assertTrue(chosen.contains("\"templateId\":7"))
+    }
+}
+
 class RouterOsPolicyTest {
     @Test fun readonlyTerminal() {
         assertEquals("/interface print", RouterOsPolicy.readonlyCommand(" /interface print "))

@@ -13,6 +13,7 @@ import { provisioningRoutes } from './routes/provisioning.ts';
 import { publicRoutes } from './routes/public.ts';
 import { toolRoutes } from './routes/tools.ts';
 import { createProvisioning } from './services/provisioning.ts';
+import { createTemplates } from './services/templates.ts';
 
 const CSP = [
   "default-src 'self'",
@@ -44,12 +45,14 @@ export async function buildApp(cfg: Config, version: string, opts: { db?: Db; lo
   const db = opts.db ?? openDatabase(cfg.dbPath);
   ensureBootstrapAdmin(db, cfg);
   const sealer = createSealer(cfg.masterKey);
+  const templates = createTemplates(db, sealer);
   const ctx: AppContext = {
     cfg,
     db,
     sealer,
     auth: createAuth(db, cfg.jwtSecret, cfg.jwtTtlHours),
-    provisioning: createProvisioning(db, cfg, sealer),
+    provisioning: createProvisioning(db, cfg, sealer, templates),
+    templates,
     version,
   };
 

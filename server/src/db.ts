@@ -90,6 +90,27 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX events_created ON events(created_at);
   `,
+  // 3: several named templates per model (one default). Existing profiles become "Standard".
+  `
+  CREATE TABLE profile_templates(
+    id INTEGER PRIMARY KEY,
+    model TEXT NOT NULL,
+    firmware TEXT NOT NULL,
+    name TEXT NOT NULL,
+    board_match TEXT NOT NULL,
+    template_ciphertext TEXT NOT NULL,
+    template_sha256 TEXT NOT NULL,
+    is_default INTEGER NOT NULL DEFAULT 0,
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL,
+    updated_by INTEGER,
+    UNIQUE(model, firmware, name COLLATE NOCASE)
+  );
+  INSERT INTO profile_templates(model, firmware, name, board_match, template_ciphertext, template_sha256, is_default, created_at, updated_at, updated_by)
+    SELECT model, firmware, 'Standard', board_match, template_ciphertext, template_sha256, 1, updated_at, updated_at, updated_by
+    FROM provision_profiles;
+  ALTER TABLE provisioning_jobs ADD COLUMN template_name TEXT NOT NULL DEFAULT '';
+  `,
 ];
 
 export function openDatabase(path: string): Db {

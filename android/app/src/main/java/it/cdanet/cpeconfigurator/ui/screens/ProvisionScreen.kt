@@ -25,6 +25,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import it.cdanet.cpeconfigurator.core.AppContainer
+import it.cdanet.cpeconfigurator.data.TemplateDto
 import it.cdanet.cpeconfigurator.provisioning.Phase
 import it.cdanet.cpeconfigurator.provisioning.ProvisionForm
 import it.cdanet.cpeconfigurator.provisioning.Validation
@@ -71,15 +72,37 @@ private fun FormStep(c: AppContainer) {
     var models by remember { mutableStateOf(ProvisionForm.MODELS) }
     var showErrors by remember { mutableStateOf(false) }
     var configuredSsids by remember { mutableStateOf<Set<String>?>(null) }
+    var templates by remember { mutableStateOf<List<TemplateDto>?>(null) }
     LaunchedEffect(Unit) {
         runCatching { c.api.meta() }.getOrNull()?.let { models = it.models }
+        templates = runCatching { c.api.templates() }.getOrNull()
         configuredSsids = runCatching { c.api.wirelessNetworks() }.getOrNull()
     }
     val parsedMac = Validation.parseMac(form.mac)
     val errors = form.errors()
 
     SectionCard("1 · CPE") {
-        Dropdown("Modello", models, form.model, { it }, { m -> c.provisioning.updateForm { it.copy(model = m) } }, Modifier.fillMaxWidth())
+        Dropdown("Modello", models, form.model, { it }, { m -> c.provisioning.updateForm { it.copy(model = m, templateId = null) } }, Modifier.fillMaxWidth())
+        val modelTemplates = templates?.filter { it.model == form.model }.orEmpty()
+        when {
+            templates != null && modelTemplates.isEmpty() -> Text(
+                "Nessun template airOS per ${form.model}: un amministratore deve crearlo nella console web (Profili airOS).",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
+            modelTemplates.size > 1 -> {
+                val selected = modelTemplates.firstOrNull { it.id == form.templateId } ?: modelTemplates.firstOrNull { it.isDefault } ?: modelTemplates.first()
+                Dropdown(
+                    "Template",
+                    modelTemplates,
+                    selected,
+                    { t -> if (t.isDefault) "${t.name} (predefinito)" else t.name },
+                    { t -> c.provisioning.updateForm { it.copy(templateId = if (t.isDefault) null else t.id) } },
+                    Modifier.fillMaxWidth(),
+                )
+            }
+            modelTemplates.size == 1 -> KeyValue("Template", modelTemplates.first().name)
+        }
         Field(
             "MAC",
             form.mac,
@@ -170,6 +193,7 @@ private fun ApplyStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
     SectionCard("Provisioning preparato") {
         KeyValue("Cliente", pkg.summary.deviceName)
         KeyValue("CPE", "${pkg.summary.model} · ${pkg.summary.mac}")
+        if (pkg.summary.template.isNotBlank()) KeyValue("Template", pkg.summary.template)
         KeyValue("SSID", pkg.summary.ssid)
         KeyValue("Valido ancora", if (left.isNegative) "SCADUTO" else "${left.toMinutes()} min ${left.seconds % 60} s")
         if (left.isNegative) Banner("Pacchetto scaduto: torna online e preparalo di nuovo.", MaterialTheme.colorScheme.error)

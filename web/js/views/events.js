@@ -9,6 +9,10 @@ const LABELS = {
   'wireless.import': 'Import WPA2 da CSV',
   'wireless.bulk_delete': 'WPA2 eliminate (multiplo)',
   'profile.set': 'Profilo caricato',
+  'template.create': 'Template creato',
+  'template.edit': 'Template modificato',
+  'template.update': 'Template aggiornato (nome/board/predefinito)',
+  'template.delete': 'Template eliminato',
   'profile.delete': 'Profilo eliminato',
   'job.create': 'Provisioning preparato',
 };

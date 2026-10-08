@@ -68,7 +68,7 @@ fun HistoryScreen(c: AppContainer) {
             SectionCard {
                 Text(label, color = color, fontWeight = FontWeight.SemiBold)
                 Text(j.deviceName.ifBlank { j.pppoeUser }, style = MaterialTheme.typography.titleMedium)
-                Text("${j.model} · ${j.mac} · ${j.ssid}", style = MaterialTheme.typography.bodySmall)
+                Text("${j.model}${j.template?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()} · ${j.mac} · ${j.ssid}", style = MaterialTheme.typography.bodySmall)
                 Text(j.createdAt.replace('T', ' ').take(16), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (j.error.isNotBlank()) Text(j.error, style = MaterialTheme.typography.bodySmall, color = BadRed)
             }
