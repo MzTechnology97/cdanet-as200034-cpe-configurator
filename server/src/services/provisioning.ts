@@ -5,21 +5,27 @@ import type { Config } from '../config.ts';
 import { md5Crypt, sha256Hex, type Sealer } from '../crypto.ts';
 import { nowIso, type Db } from '../db.ts';
 import {
-  MAC_RX,
   MANAGEMENT_PORTS,
   PPPOE_USER_RX,
   SSID_RX,
   SUPPORTED_MODELS,
   TARGET_FIRMWARE,
   customerNameFromRadius,
-  normalizeMac,
+  parseMac,
 } from '../domain/policy.ts';
 import { renderSystemCfg, type PlaceholderName } from '../domain/systemcfg.ts';
 
 export const provisionRequestSchema = z
   .object({
     model: z.enum(SUPPORTED_MODELS),
-    mac: z.string().regex(MAC_RX).transform(normalizeMac),
+    mac: z
+      .string()
+      .max(40)
+      .transform((v, ctx) => {
+        const mac = parseMac(v);
+        if (!mac) ctx.addIssue({ code: 'custom', message: 'MAC non valido' });
+        return mac ?? z.NEVER;
+      }),
     serial: z.string().trim().min(1).max(128).regex(/^[\x20-\x7e]+$/),
     ssid: z.string().regex(SSID_RX),
     pppoeUser: z.string().trim().min(3).max(128).regex(PPPOE_USER_RX),
@@ -240,9 +246,11 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer) {
       params.push(filter.status);
     }
     if (filter.q) {
-      where.push('(j.mac LIKE ? OR j.pppoe_user LIKE ? OR j.serial LIKE ? OR j.ssid LIKE ? OR j.device_name LIKE ?)');
+      // MACs are stored as AA:BB:..: also match a search typed without separators.
+      where.push("(j.mac LIKE ? OR REPLACE(j.mac, ':', '') LIKE ? OR j.pppoe_user LIKE ? OR j.serial LIKE ? OR j.ssid LIKE ? OR j.device_name LIKE ?)");
       const like = `%${filter.q}%`;
-      params.push(like, like, like, like, like);
+      const compact = `%${filter.q.replace(/[\s:.-]/g, '')}%`;
+      params.push(like, compact, like, like, like, like);
     }
     const rows = db
       .prepare(

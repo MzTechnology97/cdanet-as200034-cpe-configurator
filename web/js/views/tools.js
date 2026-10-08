@@ -88,7 +88,7 @@ export async function toolsView() {
   const out = h('div', {});
   const target = h('input', { value: '1.1.1.1', placeholder: 'IP, hostname, ASN o prefisso' });
   const cidr = h('input', { placeholder: '192.168.1.0/24' });
-  const mac = h('input', { placeholder: 'AA:BB:CC:DD:EE:FF' });
+  const mac = h('input', { placeholder: 'AABBCCDDEEFF o AA:BB:CC:DD:EE:FF' });
   const snmpHost = h('input', { placeholder: '10.x.x.x' });
   const community = h('input', { type: 'password', autocomplete: 'off', placeholder: 'community v2c' });
   const ports = h('input', { value: '80,443,554,8000,8080,8899,22,20080,20443' });

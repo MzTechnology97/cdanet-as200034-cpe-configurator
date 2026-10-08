@@ -130,6 +130,9 @@ data class JobDto(
 )
 
 @Serializable
+data class WirelessNetworkDto(val ssid: String, val updatedAt: String = "")
+
+@Serializable
 data class RosCommandDto(val command: String, val title: String)
 
 @Serializable
