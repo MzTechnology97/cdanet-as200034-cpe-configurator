@@ -67,6 +67,20 @@ export class ApiError extends Error {
   }
 }
 
+/** Authenticated file download (name from Content-Disposition). */
+export async function download(url, fallbackName) {
+  const r = await api(url, { raw: true });
+  if (!r.ok) throw new Error(`Download non riuscito (HTTP ${r.status})`);
+  const name = /filename="([^"]+)"/.exec(r.headers.get('content-disposition') ?? '')?.[1] ?? fallbackName;
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(await r.blob());
+  a.download = name;
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
 export async function api(path, { method = 'GET', body, raw = false, headers = {} } = {}) {
   const s = session.get();
   const h = { ...headers };
