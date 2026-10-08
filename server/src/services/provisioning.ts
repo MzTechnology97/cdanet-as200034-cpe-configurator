@@ -14,7 +14,7 @@ import {
   parseMac,
 } from '../domain/policy.ts';
 import { renderSystemCfg, type PlaceholderName } from '../domain/systemcfg.ts';
-import type { Templates } from './templates.ts';
+import type { Templates, Viewer } from './templates.ts';
 
 export const provisionRequestSchema = z
   .object({
@@ -73,9 +73,9 @@ export interface Readiness {
 export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, templates: Templates) {
   const getWpa = db.prepare('SELECT wpa2_ciphertext FROM wireless_secrets WHERE ssid = ?');
 
-  function readiness(x: Pick<ProvisionRequest, 'ssid' | 'model' | 'templateId'>): Readiness {
+  function readiness(x: Pick<ProvisionRequest, 'ssid' | 'model' | 'templateId'>, viewer: Viewer): Readiness {
     const wpa2Configured = !!getWpa.get(x.ssid);
-    const profileConfigured = !!templates.resolve(x.model, x.templateId);
+    const profileConfigured = !!templates.resolve(x.model, x.templateId, viewer);
     const cpeAdminSecret = !!cfg.cpeSecrets.adminPassword;
     const missing: string[] = [];
     if (!wpa2Configured) missing.push('ssid_secret_not_configured');
@@ -85,15 +85,15 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
   }
 
   /** Non-secret description of what will be written, for the dry-run/plan screen. */
-  function plan(x: ProvisionRequest) {
+  function plan(x: ProvisionRequest, viewer: Viewer) {
     const name = customerNameFromRadius(x.pppoeUser);
     const n = cfg.network;
-    const tpl = templates.resolve(x.model, x.templateId);
+    const tpl = templates.resolve(x.model, x.templateId, viewer);
     return {
       targetFirmware: TARGET_FIRMWARE,
       template: tpl ? { id: tpl.id, name: tpl.name } : null,
       factoryIp: n.factoryIp,
-      readiness: readiness(x),
+      readiness: readiness(x, viewer),
       steps: [
         `Primo avvio CPE su ${n.factoryIp}: Country Licensed e credenziali CDA Net`,
         `Template ${x.model} "${tpl?.name ?? '—'}" · verifica firmware ${TARGET_FIRMWARE}, board e MAC ${x.mac}`,
@@ -111,11 +111,12 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
     };
   }
 
-  function createJob(x: ProvisionRequest, userId: number, client: string) {
-    const r = readiness(x);
+  function createJob(x: ProvisionRequest, viewer: Viewer, client: string) {
+    const userId = viewer.id;
+    const r = readiness(x, viewer);
     if (r.missing.length) throw new HttpError(409, r.missing[0] as string, { missing: r.missing });
 
-    const profile = templates.resolve(x.model, x.templateId);
+    const profile = templates.resolve(x.model, x.templateId, viewer);
     const wpa = getWpa.get(x.ssid) as { wpa2_ciphertext: string } | undefined;
     if (!profile || !wpa) throw new HttpError(409, 'provision_profile_missing');
     if (!profile.boardMatch) throw new HttpError(409, 'profile_board_match_missing');

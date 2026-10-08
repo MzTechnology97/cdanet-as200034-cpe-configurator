@@ -18,6 +18,10 @@ const MESSAGES = {
   target_non_privato: 'Target consentito solo su reti private/CGNAT',
   cidr_troppo_ampio: 'Scansione limitata a /24 o reti più piccole',
   rete_non_privata: 'Rete privata/CGNAT richiesta',
+  template_not_allowed: 'Template non disponibile per il tuo account',
+  template_audience_empty: 'Seleziona almeno un installatore',
+  default_must_be_public: 'Il predefinito generale deve essere visibile a tutti gli installatori',
+  template_user_not_found: 'Account selezionato inesistente',
 };
 
 export const session = {

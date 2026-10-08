@@ -39,6 +39,7 @@ private val ERRORS = mapOf(
     "job_not_found" to "Provisioning non trovato sul server",
     "job_already_completed" to "Esito già registrato con valore diverso",
     "target_non_privato" to "Consentiti solo target su reti private/CGNAT",
+    "template_not_allowed" to "Template non disponibile per il tuo account",
 )
 
 fun apiMessage(code: String): String = ERRORS[code] ?: code

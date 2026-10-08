@@ -157,9 +157,15 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
   // ---- airOS templates (several named templates per model) ------------------------
   const modelParam = z.object({ model: z.enum(SUPPORTED_MODELS) });
   const idParam = z.object({ id: z.coerce.number().int().positive() });
-  const templateName = z.string().trim().min(1).max(60).regex(/^[\p{L}\p{N} ._()+\/-]+$/u, 'Caratteri non ammessi nel nome');
+  const templateName = z.string().trim().min(1).max(60).regex(/^[\p{L}\p{N} ._()+\/'&,·-]+$/u, 'Caratteri non ammessi nel nome');
   const templateText = z.string().min(64).max(300_000);
   const boardMatch = z.string().trim().min(2).max(240);
+  // Visibility: 'all' installers, or only the listed users (personal templates).
+  const visibility = {
+    audience: z.enum(['all', 'users']).optional(),
+    userIds: z.array(z.number().int().positive()).max(1000).optional(),
+    defaultForAssigned: z.boolean().optional(),
+  };
 
   app.get('/api/admin/profiles', admin, async () => {
     const all = ctx.templates.list();
@@ -185,7 +191,7 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.post('/api/admin/profiles/:model/templates', admin, async (req, reply) => {
     const { model } = modelParam.parse(req.params);
-    const b = z.object({ name: templateName, template: templateText, boardMatch, isDefault: z.boolean().optional() }).strict().parse(req.body);
+    const b = z.object({ name: templateName, template: templateText, boardMatch, isDefault: z.boolean().optional(), ...visibility }).strict().parse(req.body);
     const t = ctx.templates.create(model, b, actor(req));
     recordEvent(db, actor(req), 'template.create', `${model} · ${t.name}`, t.sha256);
     return reply.code(201).send(t);
@@ -196,7 +202,7 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
   app.patch('/api/admin/templates/:id', admin, async (req) => {
     const { id } = idParam.parse(req.params);
     const b = z
-      .object({ name: templateName.optional(), template: templateText.optional(), boardMatch: boardMatch.optional(), isDefault: z.literal(true).optional() })
+      .object({ name: templateName.optional(), template: templateText.optional(), boardMatch: boardMatch.optional(), isDefault: z.literal(true).optional(), ...visibility })
       .strict()
       .refine((x) => Object.keys(x).length > 0, 'empty')
       .parse(req.body);

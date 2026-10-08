@@ -3,10 +3,12 @@ import { badge, busy, card, field, fmtDate, h, mount, pageHead, table, toast } f
 
 export async function usersView({ user: me }) {
   const list = h('div', {});
+  let profiles = [];
   const editor = h('div', {});
 
   async function load() {
-    const users = await api('/api/admin/users');
+    const [users, p] = await Promise.all([api('/api/admin/users'), api('/api/admin/profiles')]);
+    profiles = p;
     mount(
       list,
       table(
@@ -51,6 +53,14 @@ export async function usersView({ user: me }) {
         h('h2', {}, `Account ${u.username}`),
         h('p', { class: 'muted small' }, `Creato ${fmtDate(u.createdAt)}`),
         h('div', { class: 'row' }, field('Nuova password', pw), resetBtn),
+        h('h3', {}, 'Template airOS'),
+        (() => {
+          const mine = profiles.flatMap((m) => m.templates).filter((t) => t.audience === 'users' && t.users.some((x) => x.id === u.id));
+          return mine.length
+            ? h('ul', { class: 'plain small' }, mine.map((t) => h('li', {}, `${t.model} · ${t.name}`, t.defaultForAssigned ? ' (predefinito per lui/lei)' : '', t.users.length > 1 ? ` · condiviso con ${t.users.length - 1} altri` : '')))
+            : h('p', { class: 'small muted' }, 'Usa i template visibili a tutti. Nessun template riservato.');
+        })(),
+        h('a', { class: 'button-link', href: `#/profiles?user=${u.id}` }, 'Crea template personale'),
         h('h3', {}, 'Stato e ruolo'),
         u.id === me.id ? h('p', { class: 'muted' }, 'Non puoi disabilitare o declassare il tuo account.') : h('div', { class: 'btns' }, toggle, role),
       ),
