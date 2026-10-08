@@ -29,9 +29,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import it.cdanet.cpeconfigurator.core.AppContainer
+import it.cdanet.cpeconfigurator.ui.screens.AlignmentScreen
 import it.cdanet.cpeconfigurator.ui.screens.CameraScreen
 import it.cdanet.cpeconfigurator.ui.screens.CoverageScreen
 import it.cdanet.cpeconfigurator.ui.screens.CpeWebScreen
+import it.cdanet.cpeconfigurator.ui.screens.DiagnosisScreen
 import it.cdanet.cpeconfigurator.ui.screens.DiscoveryScreen
 import it.cdanet.cpeconfigurator.ui.screens.HistoryScreen
 import it.cdanet.cpeconfigurator.ui.screens.HomeScreen
@@ -55,6 +57,8 @@ enum class Screen(val title: String, val scroll: Boolean = true) {
     Network("Strumenti di rete"),
     Discovery("Discovery LAN"),
     Coverage("Copertura AP"),
+    Alignment("Puntamento antenna"),
+    Diagnosis("Diagnosi CPE"),
     Snmp("SNMP"),
     Camera("TVCC / IP camera"),
     Remote("Accesso remoto"),
@@ -92,6 +96,10 @@ fun AppRoot(c: AppContainer) {
         if (session != null) {
             c.resultQueue.syncInBackground()
             scope.launch { c.routerOs.refreshCatalog() }
+            // CPE credentials for alignment/diagnosis, so they also work later without Internet.
+            scope.launch { c.field.prefetch() }
+        } else {
+            c.field.forget()
         }
     }
 
@@ -130,6 +138,8 @@ fun AppRoot(c: AppContainer) {
                     Screen.Network -> NetworkScreen(c)
                     Screen.Discovery -> DiscoveryScreen(c)
                     Screen.Coverage -> CoverageScreen(c)
+                    Screen.Alignment -> AlignmentScreen(c)
+                    Screen.Diagnosis -> DiagnosisScreen(c)
                     Screen.Snmp -> SnmpScreen(c)
                     Screen.Camera -> CameraScreen(c)
                     Screen.Remote -> RemoteScreen(c)

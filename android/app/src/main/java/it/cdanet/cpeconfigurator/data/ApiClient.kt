@@ -98,6 +98,12 @@ class ApiClient(
         session.state.value?.let { session.set(it.copy(token = r.token, expiresAt = r.expiresAt)) }
     }
 
+    /** CPE credentials for the field tools (Android client only, audited on the server). */
+    suspend fun fieldAccess(purpose: String): it.cdanet.cpeconfigurator.field.FieldAccess {
+        val body = buildJsonObject { put("purpose", purpose) }
+        return AppJson.decodeFromString(it.cdanet.cpeconfigurator.field.FieldAccess.serializer(), request("POST", "/api/field/access", body, client = true))
+    }
+
     /** Closes every session of the account (this one included). */
     suspend fun logoutAll() {
         request("POST", "/api/auth/logout-all")
