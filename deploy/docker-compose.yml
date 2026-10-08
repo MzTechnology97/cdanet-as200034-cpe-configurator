@@ -52,17 +52,17 @@ services:
       options: {max-size: "10m", max-file: "3"}
 
   # Local OpenStreetMap geocoder. First start downloads the OSM extract and imports it
-  # (from ~30 min for a region to hours for all of Italy); meanwhile the app uses
+  # (~20-60 min for Sicily, hours for all of Italy); meanwhile the app uses
   # GEOCODER_FALLBACK_URL. Data persist in the nominatim_data volume and are kept
-  # up to date daily from Geofabrik. Never exposed outside the private network.
+  # up to date daily (Geofabrik / openstreetmap.fr). Never exposed outside the private network.
   nominatim:
     image: mediagis/nominatim:5.3
     profiles: [geocoder]
     restart: unless-stopped
     shm_size: ${NOMINATIM_SHM_SIZE:-1g}
     environment:
-      PBF_URL: ${NOMINATIM_PBF_URL:-https://download.geofabrik.de/europe/italy/isole-latest.osm.pbf}
-      REPLICATION_URL: ${NOMINATIM_REPLICATION_URL:-https://download.geofabrik.de/europe/italy/isole-updates/}
+      PBF_URL: ${NOMINATIM_PBF_URL:-https://download.openstreetmap.fr/extracts/europe/italy/sicilia-latest.osm.pbf}
+      REPLICATION_URL: ${NOMINATIM_REPLICATION_URL:-https://download.openstreetmap.fr/replication/europe/italy/sicilia/minute/}
       UPDATE_MODE: ${NOMINATIM_UPDATE_MODE:-continuous}
       IMPORT_STYLE: ${NOMINATIM_IMPORT_STYLE:-address}
       IMPORT_WIKIPEDIA: "false"

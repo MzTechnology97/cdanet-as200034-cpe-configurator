@@ -49,17 +49,19 @@ La ricerca degli indirizzi (Copertura e posizione della CPE) può girare in un c
 Al primo avvio l'installer chiede se attivarlo e quale regione importare. Per farlo senza domande, ad esempio su un server di test:
 
 ```bash
-sudo CDANET_GEOCODER=local CDANET_GEOCODER_REGION=isole ./deploy/install-debian.sh
+sudo CDANET_GEOCODER=local CDANET_GEOCODER_REGION=sicilia ./deploy/install-debian.sh
 ```
 
 | Regione | Contenuto | RAM | Disco libero | Primo import |
 |---|---|---|---|---|
-| `isole` (default) | Sicilia + Sardegna | 4 GB | 25 GB | ~30-90 min |
+| `sicilia` (default) | solo Sicilia (estratto openstreetmap.fr) | 3 GB | 15 GB | ~20-60 min |
+| `isole` | Sicilia + Sardegna (Geofabrik) | 4 GB | 25 GB | ~30-90 min |
 | `sud`, `centro`, `nord-est`, `nord-ovest` | macro-area | 4-8 GB | 25-40 GB | 1-3 ore |
 | `italia` | tutta Italia | 8+ GB | 90 GB | diverse ore |
+| `custom` | qualsiasi estratto: `CDANET_GEOCODER_PBF_URL` (+ `CDANET_GEOCODER_REPLICATION_URL`) | | | |
 
 Cosa succede:
-- il container `nominatim` (immagine `mediagis/nominatim:5.3`) scarica l'estratto da Geofabrik, lo importa e poi si aggiorna da solo ogni giorno;
+- il container `nominatim` (immagine `mediagis/nominatim:5.3`) scarica l'estratto (Geofabrik o openstreetmap.fr), lo importa e poi si aggiorna da solo ogni giorno;
 - PostgreSQL viene dimensionato sulla RAM del server; la password interna del DB è generata casualmente;
 - il servizio non è esposto: lo raggiunge solo l'app, sulla rete interna;
 - **durante l'import** la ricerca usa il servizio pubblico come riserva (`GEOCODER_FALLBACK_URL`), quindi l'app funziona da subito.
@@ -73,6 +75,16 @@ sudo cdanet-cpe geocoder reset    # cancella i dati e rifà l'import (es. cambio
 ```
 
 Lo stato si vede anche dalla console: **Connettori → OpenStreetMap → Verifica servizio**. Per tornare al servizio pubblico: `sudo CDANET_GEOCODER=public ./deploy/install-debian.sh`.
+
+### Installazione senza domande
+
+Per automatizzare la prima installazione (nessuna domanda a terminale):
+
+```bash
+sudo CDANET_ADMIN_USER=admin CDANET_ADMIN_PASSWORD='<min 14 caratteri>' CDANET_GEOCODER=local ./deploy/install-debian.sh
+```
+
+`CDANET_CHANNEL=1.0.9` fissa una versione dell'immagine al posto di `stable`. Lo stesso percorso è provato a ogni modifica dal workflow **Installer e2e**: Debian 12, installazione, login, Nominatim locale (estratto di prova) e seconda esecuzione dell'installer.
 
 ### Repository / pacchetto privato
 

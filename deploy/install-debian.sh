@@ -8,9 +8,15 @@
 #   curl -fsSL <raw-url>/deploy/install-debian.sh | sudo bash
 #
 # Local OpenStreetMap geocoder (Nominatim container), asked on first run or forced with:
-#   sudo CDANET_GEOCODER=local [CDANET_GEOCODER_REGION=isole] ./deploy/install-debian.sh
+#   sudo CDANET_GEOCODER=local [CDANET_GEOCODER_REGION=sicilia] ./deploy/install-debian.sh
 #   sudo CDANET_GEOCODER=public ./deploy/install-debian.sh       (back to the public service)
-#   regions: isole (Sicilia+Sardegna), sud, centro, nord-est, nord-ovest, italia
+#   regions: sicilia (default), isole (Sicilia+Sardegna), sud, centro, nord-est, nord-ovest,
+#            italia, custom (CDANET_GEOCODER_PBF_URL [+ CDANET_GEOCODER_REPLICATION_URL])
+#
+# Unattended first install (no questions), e.g. for automation:
+#   CDANET_ADMIN_USER=admin CDANET_ADMIN_PASSWORD=... CDANET_GEOCODER=local|public
+# Image override (pin a version or test a local build): CDANET_IMAGE, CDANET_CHANNEL,
+# CDANET_SKIP_PULL=1 (use images already present).
 #
 # Re-running is safe: existing .env, master key and database are preserved.
 set -Eeuo pipefail
@@ -100,14 +106,21 @@ if [[ ! -f $ENV_FILE ]]; then
     done < "$LEGACY_DIR/deploy/.env"
   else
     set_env JWT_SECRET "$(openssl rand -hex 48)"
-    read -rp "Username amministratore [admin]: " u </dev/tty; u=${u:-admin}
+    if [[ -n ${CDANET_ADMIN_PASSWORD:-} ]]; then
+      u=${CDANET_ADMIN_USER:-admin}
+      p1=$CDANET_ADMIN_PASSWORD
+      [[ ${#p1} -ge 14 ]] || fail "CDANET_ADMIN_PASSWORD: almeno 14 caratteri"
+    else
+      has_tty || fail "Installazione senza terminale: imposta CDANET_ADMIN_USER e CDANET_ADMIN_PASSWORD"
+      read -rp "Username amministratore [admin]: " u </dev/tty; u=${u:-admin}
+      while :; do
+        read -rsp "Password amministratore (min 14): " p1 </dev/tty; echo
+        read -rsp "Conferma password: " p2 </dev/tty; echo
+        [[ ${#p1} -ge 14 && $p1 == "$p2" ]] && break
+        echo "Password non valide, riprova."
+      done
+    fi
     [[ $u =~ ^[A-Za-z0-9._-]{3,64}$ ]] || fail "Username non valido"
-    while :; do
-      read -rsp "Password amministratore (min 14): " p1 </dev/tty; echo
-      read -rsp "Conferma password: " p2 </dev/tty; echo
-      [[ ${#p1} -ge 14 && $p1 == "$p2" ]] && break
-      echo "Password non valide, riprova."
-    done
     set_env ADMIN_USERNAME "$u"
     FIRST_ADMIN=$p1
   fi
@@ -115,6 +128,8 @@ if [[ ! -f $ENV_FILE ]]; then
   chmod 0600 "$ENV_FILE"
   echo "  creato $ENV_FILE: completare CPE_ADMIN_PASSWORD e UISP_ENROLLMENT prima del provisioning"
 fi
+[[ -z ${CDANET_IMAGE:-} ]] || set_env CDANET_IMAGE "$CDANET_IMAGE"
+[[ -z ${CDANET_CHANNEL:-} ]] || set_env CDANET_CHANNEL "$CDANET_CHANNEL"
 
 # --- OpenStreetMap: local Nominatim container or public service --------------------------
 GEOCODER_LOCAL=0
@@ -126,7 +141,7 @@ setup_geocoder() {
       mode=$saved
     elif has_tty; then
       echo "  OpenStreetMap locale: la ricerca indirizzi (Copertura, posizione CPE) gira su questo server,"
-      echo "  senza inviare indirizzi all'esterno. Servono almeno 4 GB di RAM e 25 GB di disco liberi."
+      echo "  senza inviare indirizzi all'esterno. Per la Sicilia servono almeno 3 GB di RAM e 15 GB di disco liberi."
       read -rp "  Installare OpenStreetMap locale (Nominatim)? [S/n]: " a </dev/tty
       if [[ ${a:-S} =~ ^[sSyY] ]]; then mode=local; else mode=public; fi
     else
@@ -145,10 +160,15 @@ setup_geocoder() {
   old_region=$(get_env NOMINATIM_REGION)
   region=${CDANET_GEOCODER_REGION:-$old_region}
   if [[ -z $region ]] && has_tty; then
-    read -rp "  Regione OSM da importare [isole] (isole, sud, centro, nord-est, nord-ovest, italia): " region </dev/tty
+    read -rp "  Regione OSM da importare [sicilia] (sicilia, isole, sud, centro, nord-est, nord-ovest, italia): " region </dev/tty
   fi
-  region=${region:-isole}
+  region=${region:-sicilia}
   case $region in
+    sicilia)
+      # openstreetmap.fr: Sicily-only extract (Geofabrik only has Sicilia+Sardegna).
+      pbf=https://download.openstreetmap.fr/extracts/europe/italy/sicilia-latest.osm.pbf
+      repl=https://download.openstreetmap.fr/replication/europe/italy/sicilia/minute/
+      need_ram=3000; need_disk=15 ;;
     isole|sud|centro|nord-est|nord-ovest)
       pbf=https://download.geofabrik.de/europe/italy/$region-latest.osm.pbf
       repl=https://download.geofabrik.de/europe/italy/$region-updates/
@@ -157,6 +177,11 @@ setup_geocoder() {
       pbf=https://download.geofabrik.de/europe/italy-latest.osm.pbf
       repl=https://download.geofabrik.de/europe/italy-updates/
       need_ram=8000; need_disk=90 ;;
+    custom)
+      pbf=${CDANET_GEOCODER_PBF_URL:-$(get_env NOMINATIM_PBF_URL)}
+      repl=${CDANET_GEOCODER_REPLICATION_URL-$(get_env NOMINATIM_REPLICATION_URL)}
+      [[ $pbf =~ ^https?:// ]] || fail "Regione custom: imposta CDANET_GEOCODER_PBF_URL"
+      need_ram=2000; need_disk=10 ;;
     *) fail "Regione OSM non valida: $region" ;;
   esac
   if [[ -n $old_region && $old_region != "$region" ]] && docker volume inspect cdanet-cpe-configurator_nominatim_data >/dev/null 2>&1; then
@@ -211,7 +236,7 @@ cd "$DEPLOY_DIR"
 if [[ -n ${GHCR_TOKEN:-} ]]; then
   echo "$GHCR_TOKEN" | docker login ghcr.io -u "${GHCR_USER:-cdanet}" --password-stdin
 fi
-docker compose --env-file .env pull
+if [[ ${CDANET_SKIP_PULL:-0} == 1 ]]; then echo "  pull saltato (CDANET_SKIP_PULL=1)"; else docker compose --env-file .env pull; fi
 # App first (and alone): the updater must not race with it, and a failing start shows its log.
 ADMIN_PASSWORD="$FIRST_ADMIN" docker compose --env-file .env up -d --remove-orphans --no-deps app || true
 s=""

@@ -1,0 +1,115 @@
+name: Installer e2e
+
+# Runs the real deploy/install-debian.sh in a Debian 12 container that drives the
+# runner's Docker (same host paths are bind-mounted, as on a real server), with the
+# image built from this commit and a tiny OSM extract for the local Nominatim.
+
+on:
+  push:
+    branches: [main]
+    paths: ['deploy/**', 'server/**', 'web/**', '.github/workflows/e2e.yml']
+  pull_request:
+    paths: ['deploy/**', 'server/**', 'web/**', '.github/workflows/e2e.yml']
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: e2e-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  installer:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    env:
+      ADMIN_PW: E2e-Admin-Password-1
+      PROJECT: cdanet-cpe-configurator
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build image of this commit
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: deploy/Dockerfile
+          load: true
+          tags: cdanet-e2e:ci
+          build-args: |
+            VERSION=e2e
+            REVISION=${{ github.sha }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      - name: Debian 12 "server" with Docker CLI
+        run: |
+          sudo mkdir -p /opt/cdanet-cpe /etc/cdanet-cpe /srv/cdanet-private /root/.docker
+          docker run -d --name srv \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            -v /opt/cdanet-cpe:/opt/cdanet-cpe -v /etc/cdanet-cpe:/etc/cdanet-cpe -v /srv/cdanet-private:/srv/cdanet-private \
+            -v "$PWD:/src:ro" debian:12 sleep infinity
+          docker exec srv bash -euc '
+            apt-get update -qq && apt-get install -y -qq ca-certificates curl >/dev/null
+            install -m0755 -d /etc/apt/keyrings
+            curl -fsSL https://download.docker.com/linux/debian/gpg -o /etc/apt/keyrings/docker.asc
+            echo "deb [signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/debian bookworm stable" >/etc/apt/sources.list.d/docker.list
+            apt-get update -qq && apt-get install -y -qq docker-ce-cli docker-compose-plugin >/dev/null
+            docker version --format "server {{.Server.Version}}"'
+
+      - name: First install (unattended, local OpenStreetMap)
+        run: |
+          docker exec \
+            -e CDANET_ADMIN_USER=admin -e CDANET_ADMIN_PASSWORD="$ADMIN_PW" \
+            -e CDANET_GEOCODER=local -e CDANET_GEOCODER_REGION=custom \
+            -e CDANET_GEOCODER_PBF_URL=https://download.geofabrik.de/europe/monaco-latest.osm.pbf \
+            -e CDANET_GEOCODER_REPLICATION_URL= \
+            -e CDANET_IMAGE=cdanet-e2e -e CDANET_CHANNEL=ci -e CDANET_SKIP_PULL=1 \
+            srv /src/deploy/install-debian.sh
+
+      - name: App reachable through Caddy, admin login works
+        run: |
+          curl -fsS http://localhost/api/health | tee /dev/stderr | grep -q '"ok":true'
+          TOKEN=$(curl -fsS -H 'Content-Type: application/json' \
+            -d "{\"username\":\"admin\",\"password\":\"$ADMIN_PW\"}" http://localhost/api/auth/login | jq -r .token)
+          test -n "$TOKEN" && test "$TOKEN" != null
+          echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          app=$(docker ps -qf "label=com.docker.compose.project=$PROJECT" -f label=com.docker.compose.service=app)
+          echo "app restarts: $(docker inspect -f '{{.RestartCount}}' "$app")"
+          test "$(docker inspect -f '{{.RestartCount}}' "$app")" = 0
+
+      - name: Local Nominatim imports and answers the app
+        run: |
+          n=$(docker ps -qf "label=com.docker.compose.project=$PROJECT" -f label=com.docker.compose.service=nominatim)
+          for i in $(seq 1 120); do
+            s=$(docker inspect -f '{{.State.Health.Status}}' "$n")
+            [ "$s" = healthy ] && break
+            [ $((i % 10)) = 0 ] && docker logs --tail 3 "$n" 2>&1 | sed 's/^/  nominatim> /'
+            sleep 10
+          done
+          echo "nominatim: $s"; test "$s" = healthy
+          docker exec srv cdanet-cpe geocoder
+          curl -fsS -X POST -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' -d '{}' \
+            http://localhost/api/admin/connectors/geocoder/test | tee /dev/stderr | jq -e '.primary.ok and .primary.local' >/dev/null
+          app=$(docker ps -qf "label=com.docker.compose.project=$PROJECT" -f label=com.docker.compose.service=app)
+          docker exec "$app" wget -qO- 'http://nominatim:8080/search?q=Monaco&format=jsonv2' | jq -e 'length > 0' >/dev/null
+
+      - name: Re-running the installer keeps the stack up
+        run: |
+          app=$(docker ps -qf "label=com.docker.compose.project=$PROJECT" -f label=com.docker.compose.service=app)
+          docker exec -e CDANET_SKIP_PULL=1 srv /src/deploy/install-debian.sh
+          app2=$(docker ps -qf "label=com.docker.compose.project=$PROJECT" -f label=com.docker.compose.service=app)
+          echo "app container before=$app after=$app2"
+          test "$app" = "$app2"
+          curl -fsS http://localhost/api/health | grep -q '"ok":true'
+          docker exec srv cdanet-cpe ps
+
+      - name: Diagnostics
+        if: always()
+        run: |
+          docker ps -a
+          for s in app caddy updater nominatim; do
+            c=$(docker ps -aqf "label=com.docker.compose.project=$PROJECT" -f label=com.docker.compose.service=$s | head -n1)
+            [ -n "$c" ] || continue
+            echo "::group::$s logs"; docker logs --tail 150 "$c" 2>&1; echo "::endgroup::"
+          done
