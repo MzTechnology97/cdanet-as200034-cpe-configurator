@@ -26,6 +26,14 @@ const ROUTES = [
 const viewEl = document.getElementById('view');
 const sidebar = document.getElementById('sidebar');
 const navToggle = document.getElementById('navToggle');
+const shade = document.getElementById('shade');
+
+/** Off-canvas menu on narrow screens (no effect on desktop, where the sidebar is static). */
+function setMenu(open) {
+  sidebar.classList.toggle('open', open);
+  shade.hidden = !open;
+  navToggle.setAttribute('aria-expanded', String(open));
+}
 
 function allowed(r, user) {
   return !r.admin || user?.role === 'admin';
@@ -35,6 +43,8 @@ function renderChrome(user) {
   const sessionEl = document.getElementById('session');
   if (!user) {
     sidebar.hidden = true;
+    setMenu(false);
+    sidebar.replaceChildren();
     navToggle.hidden = true;
     sessionEl.replaceChildren();
     return;
@@ -49,7 +59,7 @@ function renderChrome(user) {
   );
   mount(
     sessionEl,
-    h('span', {}, `${user.username} · ${user.role === 'admin' ? 'Admin' : 'Installatore'}`),
+    h('span', { class: 'session-name' }, `${user.username} · ${user.role === 'admin' ? 'Admin' : 'Installatore'}`),
     h('button', { onclick: logout }, 'Esci'),
   );
 }
@@ -63,7 +73,7 @@ function logout() {
 async function route() {
   const s = session.get();
   renderChrome(s?.user);
-  sidebar.classList.remove('open');
+  setMenu(false);
   if (!s?.token) {
     mount(viewEl, loginView(onLogin));
     return;
@@ -87,7 +97,9 @@ async function onLogin(username, password) {
   route();
 }
 
-navToggle.addEventListener('click', () => sidebar.classList.toggle('open'));
+navToggle.addEventListener('click', () => setMenu(!sidebar.classList.contains('open')));
+shade.addEventListener('click', () => setMenu(false));
+document.addEventListener('keydown', (e) => e.key === 'Escape' && setMenu(false));
 window.addEventListener('hashchange', route);
 window.addEventListener('cda:logout', () => {
   toast('Sessione scaduta: accedi di nuovo', 'bad');

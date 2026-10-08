@@ -107,7 +107,15 @@ export async function buildApp(cfg: Config, version: string, opts: { db?: Db; lo
   toolRoutes(app, ctx);
 
   if (existsSync(join(cfg.staticDir, 'index.html'))) {
-    await app.register(fastifyStatic, { root: cfg.staticDir, index: ['index.html'], maxAge: '1h', cacheControl: true });
+    // Revalidate on every load (ETag/Last-Modified): after an auto-update the console must never mix old and new assets.
+    await app.register(fastifyStatic, {
+      root: cfg.staticDir,
+      index: ['index.html'],
+      cacheControl: false,
+      setHeaders: (reply) => {
+        reply.header('Cache-Control', 'no-cache');
+      },
+    });
   }
   app.setNotFoundHandler((req, reply) => {
     if (req.url.startsWith('/api/') || req.method !== 'GET' || !existsSync(join(cfg.staticDir, 'index.html'))) {

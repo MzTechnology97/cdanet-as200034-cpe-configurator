@@ -25,6 +25,7 @@ export function loginView(onLogin) {
   return h(
     'div',
     { class: 'login' },
+    h('img', { class: 'login-logo', src: 'assets/cda-net-logo.svg', alt: 'CDA Net' }),
     card(
       h('h1', {}, 'Accesso'),
       h('p', { class: 'muted' }, 'Console Admin/NOC CDA Net. Il provisioning delle CPE si esegue dall’app Android.'),

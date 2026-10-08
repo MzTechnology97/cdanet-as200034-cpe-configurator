@@ -4,14 +4,16 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow" />
+    <meta name="theme-color" content="#f15a2c" />
     <title>CDA Net · CPE Admin</title>
     <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="assets/icon.svg" />
     <link rel="stylesheet" href="css/app.css" />
     <script type="module" src="js/main.js"></script>
   </head>
   <body>
     <header class="topbar">
-      <button class="icon-btn" id="navToggle" aria-label="Menu" hidden>☰</button>
+      <button class="icon-btn" id="navToggle" aria-label="Menu" aria-controls="sidebar" aria-expanded="false" hidden>☰</button>
       <img class="logo" src="assets/cda-net-logo.svg" alt="CDA Net" />
       <span class="product">CPE Configurator</span>
       <span class="spacer"></span>
@@ -19,6 +21,7 @@
     </header>
     <div class="layout">
       <nav class="sidebar" id="sidebar" hidden></nav>
+      <div class="shade" id="shade" hidden></div>
       <main id="view" class="view" aria-live="polite"></main>
     </div>
     <div id="toast" class="toast" role="status" hidden></div>

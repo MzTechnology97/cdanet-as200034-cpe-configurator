@@ -85,8 +85,15 @@ export function table(columns, rows, onRow) {
         'tbody',
         {},
         rows.length
-          ? rows.map((r) => h('tr', { class: onRow ? 'clickable' : '', onclick: onRow ? () => onRow(r) : undefined }, columns.map((c) => h('td', {}, c.render ? c.render(r) : r[c.key] ?? '—'))))
-          : h('tr', {}, h('td', { colspan: columns.length, class: 'muted' }, 'Nessun elemento.')),
+          ? rows.map((r) =>
+              h(
+                'tr',
+                { class: onRow ? 'clickable' : '', onclick: onRow ? () => onRow(r) : undefined },
+                // data-label lets narrow screens render each row as a labelled card.
+                columns.map((c) => h('td', { 'data-label': c.label || null }, c.render ? c.render(r) : r[c.key] ?? '—')),
+              ),
+            )
+          : h('tr', {}, h('td', { colspan: columns.length, class: 'muted empty' }, 'Nessun elemento.')),
       ),
     ),
   );
