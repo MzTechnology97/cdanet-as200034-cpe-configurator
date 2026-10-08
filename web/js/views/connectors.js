@@ -1,5 +1,6 @@
 import { api } from '../api.js';
 import { badge, busy, card, field, fmtDate, h, mount, pageHead, stat, toast } from '../dom.js';
+import { telegramCard } from './telegram-card.js';
 
 const ERRORS = {
   uisp_unreachable: 'UISP non raggiungibile dal server (indirizzo, DNS, firewall o porta).',
@@ -138,6 +139,7 @@ export async function connectorsView() {
       h('div', { class: 'btns' }, testBtn, saveBtn, u.source === 'console' ? resetBtn : null),
       result,
     ),
+    telegramCard(data.telegram, async () => document.getElementById('view').replaceChildren(await connectorsView())),
     geocoderCard(data.geocoder),
   );
 }

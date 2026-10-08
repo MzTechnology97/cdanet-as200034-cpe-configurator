@@ -16,6 +16,8 @@ const LABELS = {
   'uisp.authorize': 'CPE accettata in UISP',
   'uisp.backup': 'Backup UISP richiesto',
   'account.password': 'Password personale cambiata',
+  'connector.telegram.update': 'Notifiche Telegram modificate',
+  'connector.telegram.reset': 'Notifiche Telegram rimosse',
   'uisp.drift': 'Confronto configurazione con il template',
   'job.replace': 'Sostituzione CPE (nuovo job)',
   'job.acceptance': 'Collaudo registrato',

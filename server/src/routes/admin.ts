@@ -10,6 +10,7 @@ import { BOARD_MATCH_SUGGESTIONS, SSID_RX, SUPPORTED_MODELS, TARGET_FIRMWARE } f
 import { PLACEHOLDERS, inspectTemplate } from '../domain/systemcfg.ts';
 import { validateBoardMatch } from '../services/templates.ts';
 import { loadLatestRelease } from '../services/releases.ts';
+import { escapeHtml } from '../services/telegram.ts';
 
 const username = z.string().trim().min(3).max(80).regex(/^[A-Za-z0-9._-]+$/);
 const password = z.string().min(12).max(200);
@@ -61,7 +62,11 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
       if (admins <= 1) throw new HttpError(409, 'last_admin');
     }
     // Any security-relevant change bumps token_version, revoking existing sessions.
-    if (b.password !== undefined) db.prepare('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?').run(hashPassword(b.password), id);
+    if (b.password !== undefined) {
+      db.prepare('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?').run(hashPassword(b.password), id);
+      if (target.role === 'admin') ctx.notify.security(`Password dell'amministratore <b>${escapeHtml(target.username)}</b> reimpostata da ${escapeHtml(req.user!.username)}`);
+    }
+    if (b.role === 'admin' && target.role !== 'admin') ctx.notify.security(`<b>${escapeHtml(target.username)}</b> promosso amministratore da ${escapeHtml(req.user!.username)}`);
     if (b.active !== undefined) db.prepare('UPDATE users SET active = ?, token_version = token_version + 1 WHERE id = ?').run(b.active ? 1 : 0, id);
     if (b.role !== undefined) db.prepare('UPDATE users SET role = ?, token_version = token_version + 1 WHERE id = ?').run(b.role, id);
     recordEvent(db, actor(req), 'user.update', target.username, Object.keys(b).join(','));

@@ -44,7 +44,9 @@ export function provisioningRoutes(app: FastifyInstance, ctx: AppContext) {
   app.post('/api/provisioning/jobs/:id/result', user, async (req) => {
     const id = z.string().uuid().parse((req.params as { id: string }).id);
     const body = provisionResultSchema.parse(req.body);
-    return ctx.provisioning.recordResult(id, req.user!, body);
+    const r = ctx.provisioning.recordResult(id, req.user!, body);
+    if (!r.duplicate) ctx.notify.provisioningResult(id);
+    return r;
   });
 
   app.get('/api/provisioning/jobs', user, async (req) => {
