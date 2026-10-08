@@ -101,6 +101,7 @@ describe('migration of v1.0.x single profiles', () => {
 /** Builds a database in the v1.0.0-1.0.4 shape (schema version 2). */
 function asVersion2(db: DatabaseSync) {
   migrate(db);
+  db.exec('DROP TABLE template_users');
   db.exec('DROP TABLE profile_templates');
   db.exec('ALTER TABLE provisioning_jobs DROP COLUMN template_name');
   db.exec('PRAGMA user_version = 2');

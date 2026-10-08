@@ -49,7 +49,8 @@ data class ProvisionRequest(
 )
 
 @Serializable
-data class TemplateDto(val id: Int, val model: String, val name: String, val isDefault: Boolean = false)
+/** isDefault = default for the signed-in installer (personal default if any, else the model default). */
+data class TemplateDto(val id: Int, val model: String, val name: String, val isDefault: Boolean = false, val personal: Boolean = false)
 
 @Serializable
 data class ReadinessDto(val missing: List<String> = emptyList())

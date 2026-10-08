@@ -4,6 +4,7 @@ import { dashboardView } from './views/dashboard.js';
 import { eventsView } from './views/events.js';
 import { jobsView } from './views/jobs.js';
 import { loginView } from './views/login.js';
+import { myTemplatesView } from './views/mytemplates.js';
 import { profilesView } from './views/profiles.js';
 import { routerosView } from './views/routeros.js';
 import { toolsView } from './views/tools.js';
@@ -14,6 +15,7 @@ const ROUTES = [
   { group: 'Operatività' },
   { id: 'dashboard', label: 'Panoramica', view: dashboardView, admin: true },
   { id: 'jobs', label: 'Storico provisioning', view: jobsView },
+  { id: 'mytemplates', label: 'Template disponibili', view: myTemplatesView, installer: true },
   { id: 'tools', label: 'Strumenti di rete', view: toolsView },
   { id: 'routeros', label: 'MikroTik · RouterOS', view: routerosView },
   { group: 'Amministrazione', admin: true },
@@ -36,6 +38,7 @@ function setMenu(open) {
 }
 
 function allowed(r, user) {
+  if (r.installer) return user?.role !== 'admin'; // admins manage templates in Profili airOS
   return !r.admin || user?.role === 'admin';
 }
 
@@ -78,12 +81,14 @@ async function route() {
     mount(viewEl, loginView(onLogin));
     return;
   }
-  const id = location.hash.replace(/^#\//, '') || (s.user.role === 'admin' ? 'dashboard' : 'jobs');
+  // #/route?key=value — the query part is handed to the view (e.g. #/profiles?user=5).
+  const [path, query = ''] = location.hash.replace(/^#\//, '').split('?');
+  const id = path || (s.user.role === 'admin' ? 'dashboard' : 'jobs');
   const r = ROUTES.find((x) => x.id === id && allowed(x, s.user)) ?? ROUTES.find((x) => x.id === 'jobs');
   for (const a of sidebar.querySelectorAll('a')) a.classList.toggle('active', a.dataset.route === r.id);
   mount(viewEl, h('p', { class: 'muted' }, 'Caricamento…'));
   try {
-    const content = await r.view({ user: s.user });
+    const content = await r.view({ user: s.user, params: new URLSearchParams(query) });
     mount(viewEl, content);
   } catch (e) {
     mount(viewEl, h('div', { class: 'notice bad' }, e.message || String(e)));

@@ -10,8 +10,8 @@ export function provisioningRoutes(app: FastifyInstance, ctx: AppContext) {
   const user = { preHandler: ctx.auth.requireUser };
 
   /** Templates selectable in the field app (names only, no content). */
-  app.get('/api/provisioning/templates', user, async () =>
-    ctx.templates.list().map((t) => ({ id: t.id, model: t.model, name: t.name, isDefault: t.isDefault })),
+  app.get('/api/provisioning/templates', user, async (req) =>
+    ctx.templates.visibleTo(req.user!),
   );
 
   app.get('/api/wireless-networks', user, async () =>
@@ -21,7 +21,7 @@ export function provisioningRoutes(app: FastifyInstance, ctx: AppContext) {
   /** Dry-run: validates the request and reports readiness without exposing any secret. */
   app.post('/api/provisioning/plan', user, async (req) => {
     const x = provisionRequestSchema.parse(req.body);
-    return { ok: true, request: { ...x, pppoePassword: undefined }, ...ctx.provisioning.plan(x) };
+    return { ok: true, request: { ...x, pppoePassword: undefined }, ...ctx.provisioning.plan(x, req.user!) };
   });
 
   /**
@@ -35,7 +35,7 @@ export function provisioningRoutes(app: FastifyInstance, ctx: AppContext) {
       throw new HttpError(426, 'client_update_required', { minVersion: ctx.cfg.minAndroidVersion });
     }
     const x = provisionRequestSchema.parse(req.body);
-    const pkg = ctx.provisioning.createJob(x, req.user!.id, `${client.platform}/${client.version}`);
+    const pkg = ctx.provisioning.createJob(x, req.user!, `${client.platform}/${client.version}`);
     recordEvent(ctx.db, req.user!.id, 'job.create', pkg.jobId, `${x.model} ${x.mac}`);
     reply.header('Cache-Control', 'no-store');
     return reply.code(201).send(pkg);

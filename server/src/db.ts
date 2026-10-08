@@ -111,6 +111,18 @@ const MIGRATIONS: string[] = [
     FROM provision_profiles;
   ALTER TABLE provisioning_jobs ADD COLUMN template_name TEXT NOT NULL DEFAULT '';
   `,
+  // 4: template visibility. audience 'all' = every installer; 'users' = only the listed ones
+  // (a template assigned to a single installer is that installer's personal template).
+  `
+  ALTER TABLE profile_templates ADD COLUMN audience TEXT NOT NULL DEFAULT 'all' CHECK(audience IN('all','users'));
+  ALTER TABLE profile_templates ADD COLUMN default_for_assigned INTEGER NOT NULL DEFAULT 0;
+  CREATE TABLE template_users(
+    template_id INTEGER NOT NULL REFERENCES profile_templates(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    PRIMARY KEY(template_id, user_id)
+  );
+  CREATE INDEX template_users_user ON template_users(user_id);
+  `,
 ];
 
 export function openDatabase(path: string): Db {

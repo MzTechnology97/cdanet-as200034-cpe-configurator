@@ -57,6 +57,21 @@ Nella console, in **Profili airOS**, per ciascun template:
 
 **Nuovo template** può partire da un backup della CPE, con i placeholder inseriti in automatico, e va poi rifinito nell'editor. I nomi sono unici per modello (senza distinzione maiuscole/minuscole). Ogni job registra nello storico il nome del template usato.
 
+### Chi può usare un template (permessi e template personali)
+
+Nell'editor, la sezione **Chi può usarlo** offre due scelte:
+- **Tutti gli installatori**;
+- **Solo gli installatori selezionati**: con un solo installatore è il suo **template personale**, con più installatori è un template di squadra.
+  - **Predefinito per gli installatori selezionati**: nell'app lo trovano già selezionato al posto del predefinito generale.
+
+Regole applicate dal server, sia nell'app sia nel web:
+- un installatore vede (nell'app e nella pagina web **Template disponibili**) e può usare **solo** i template a cui ha accesso; un job con un template non consentito viene rifiutato (`template_not_allowed`);
+- senza scelta esplicita si usa il suo predefinito personale, se esiste, altrimenti il predefinito generale del modello;
+- il predefinito generale deve essere visibile a tutti; per riservarlo, prima rendi predefinito un altro template;
+- gli admin vedono e possono usare tutti i template.
+
+Scorciatoia: **Account → installatore → Crea template personale**. Scegli il modello e il punto di partenza (copia di un template esistente o backup CPE); l'editor si apre con la visibilità già impostata su quell'installatore. Nella stessa scheda Account sono elencati i template riservati a lui.
+
 Ogni template viene cifrato (AES-256-GCM); nell'elenco se ne mostra solo lo SHA-256. Il testo è visibile solo agli admin, nell'editor.
 
 ## Placeholder

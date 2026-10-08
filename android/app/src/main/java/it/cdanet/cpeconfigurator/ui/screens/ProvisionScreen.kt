@@ -96,12 +96,12 @@ private fun FormStep(c: AppContainer) {
                     "Template",
                     modelTemplates,
                     selected,
-                    { t -> if (t.isDefault) "${t.name} (predefinito)" else t.name },
+                    { t -> t.name + listOfNotNull(if (t.isDefault) "predefinito" else null, if (t.personal) "riservato" else null).joinToString(", ").let { if (it.isEmpty()) "" else " ($it)" } },
                     { t -> c.provisioning.updateForm { it.copy(templateId = if (t.isDefault) null else t.id) } },
                     Modifier.fillMaxWidth(),
                 )
             }
-            modelTemplates.size == 1 -> KeyValue("Template", modelTemplates.first().name)
+            modelTemplates.size == 1 -> KeyValue("Template", modelTemplates.first().name + if (modelTemplates.first().personal) " (riservato)" else "")
         }
         Field(
             "MAC",
