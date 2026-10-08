@@ -15,6 +15,7 @@ import {
 } from '../domain/policy.ts';
 import { renderSystemCfg, type PlaceholderName } from '../domain/systemcfg.ts';
 import type { Templates, Viewer } from './templates.ts';
+import { sweepPhotos } from './photos.ts';
 
 export const provisionRequestSchema = z
   .object({
@@ -273,7 +274,9 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
                 j.model, j.template_name template, j.mac, j.serial, j.ssid, j.pppoe_user pppoeUser, j.device_name deviceName,
                 j.latitude, j.longitude, j.location_accuracy locationAccuracy, j.location_source locationSource,
                 j.uisp_device_id uispDeviceId, j.uisp_site uispSite, j.uisp_authorized_at uispAuthorizedAt,
-                j.stages, j.detected, j.error, u.username installer
+                j.stages, j.detected, j.error, u.username installer, j.replaces_job_id replacesJobId,
+                (SELECT a.verdict FROM job_acceptance a WHERE a.job_id = j.id) acceptance,
+                (SELECT count(*) FROM job_photos p WHERE p.job_id = j.id) photos
          FROM provisioning_jobs j JOIN users u ON u.id = j.user_id
          ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
          ORDER BY j.created_at DESC LIMIT ?`,
@@ -296,6 +299,7 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
     db.prepare('DELETE FROM provisioning_jobs WHERE created_at < ?').run(cutoff);
     db.prepare('DELETE FROM audits WHERE created_at < ?').run(cutoff);
     db.prepare('DELETE FROM events WHERE created_at < ?').run(cutoff);
+    sweepPhotos(db, cfg.photosDir);
     return now;
   }
 

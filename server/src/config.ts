@@ -1,5 +1,6 @@
 import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
+import { tmpdir } from 'node:os';
+import { dirname, join, resolve } from 'node:path';
 import { z } from 'zod';
 
 const int = (def: number, min: number, max: number) =>
@@ -21,6 +22,8 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   TRUST_PROXY: z.string().default('loopback,uniquelocal'),
   DB_PATH: z.string().default('./data/cdanet.sqlite'),
+  // Acceptance-test photos (default: 'photos' next to the database).
+  PHOTOS_DIR: z.string().optional(),
   STATIC_DIR: z.string().default('../web'),
   SECRETS_KEY_FILE: z.string().default('/run/secrets/cdanet_master_key'),
 
@@ -87,6 +90,7 @@ export interface Config {
   logLevel: Env['LOG_LEVEL'];
   trustProxy: string;
   dbPath: string;
+  photosDir: string;
   staticDir: string;
   masterKey: Buffer;
   jwtSecret: Uint8Array;
@@ -155,6 +159,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     logLevel: e.LOG_LEVEL,
     trustProxy: e.TRUST_PROXY,
     dbPath: e.DB_PATH,
+    photosDir: e.PHOTOS_DIR || (e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-photos-${process.pid}`) : join(dirname(e.DB_PATH), 'photos')),
     staticDir: resolve(e.STATIC_DIR),
     masterKey: masterKey ?? loadMasterKey(e.SECRETS_KEY_FILE),
     jwtSecret: new TextEncoder().encode(e.JWT_SECRET),

@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import it.cdanet.cpeconfigurator.core.AppContainer
+import it.cdanet.cpeconfigurator.ui.screens.AcceptanceScreen
 import it.cdanet.cpeconfigurator.ui.screens.AlignmentScreen
 import it.cdanet.cpeconfigurator.ui.screens.CameraScreen
 import it.cdanet.cpeconfigurator.ui.screens.CoverageScreen
@@ -59,6 +60,7 @@ enum class Screen(val title: String, val scroll: Boolean = true) {
     Coverage("Copertura AP"),
     Alignment("Puntamento antenna"),
     Diagnosis("Diagnosi CPE"),
+    Acceptance("Collaudo installazione"),
     Snmp("SNMP"),
     Camera("TVCC / IP camera"),
     Remote("Accesso remoto"),
@@ -132,7 +134,7 @@ fun AppRoot(c: AppContainer) {
             val body: @Composable () -> Unit = {
                 when (screen) {
                     Screen.Home -> HomeScreen(c, offline = session == null, onNavigate = ::go, onLogin = { offline = false })
-                    Screen.Provision -> ProvisionScreen(c, onOpenCpeWeb = { go(Screen.CpeWeb) }, onLogin = { offline = false })
+                    Screen.Provision -> ProvisionScreen(c, onOpenCpeWeb = { go(Screen.CpeWeb) }, onLogin = { offline = false }, onAcceptance = { go(Screen.Acceptance) })
                     Screen.CpeWeb -> CpeWebScreen(c)
                     Screen.Wifi -> WifiScreen(c)
                     Screen.Network -> NetworkScreen(c)
@@ -140,11 +142,12 @@ fun AppRoot(c: AppContainer) {
                     Screen.Coverage -> CoverageScreen(c)
                     Screen.Alignment -> AlignmentScreen(c)
                     Screen.Diagnosis -> DiagnosisScreen(c)
+                    Screen.Acceptance -> AcceptanceScreen(c)
                     Screen.Snmp -> SnmpScreen(c)
                     Screen.Camera -> CameraScreen(c)
                     Screen.Remote -> RemoteScreen(c)
                     Screen.RouterOs -> RouterOsScreen(c)
-                    Screen.History -> HistoryScreen(c)
+                    Screen.History -> HistoryScreen(c, onAcceptance = { c.selectedJob.value = it; go(Screen.Acceptance) })
                     Screen.Settings -> SettingsScreen(c, update = update, onUpdate = { update = it }, onLogout = {
                         c.session.clear()
                         offline = false

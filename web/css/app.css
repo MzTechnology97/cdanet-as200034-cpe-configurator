@@ -173,3 +173,6 @@ ul.plain { padding-left: 18px; margin: 6px 0; }
 @media (max-width: 340px) {
   .grid { grid-template-columns: minmax(0, 1fr); }
 }
+.photos { display: grid; grid-template-columns: repeat(auto-fill, minmax(160px, 1fr)); gap: 10px; margin: 10px 0; }
+.photos figure { margin: 0; }
+.photos img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); }

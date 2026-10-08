@@ -30,5 +30,8 @@ class AppContainer(context: Context) {
     val routerOs = RouterOsClient(api, network)
     val tools = LocalTools(network, api, session)
     val field = FieldController(api, network, scope)
+
+    /** Job opened from the history (or just provisioned) for acceptance test / replacement. */
+    val selectedJob = kotlinx.coroutines.flow.MutableStateFlow<it.cdanet.cpeconfigurator.data.JobDto?>(null)
     val updater = AppUpdater(appContext, settings)
 }

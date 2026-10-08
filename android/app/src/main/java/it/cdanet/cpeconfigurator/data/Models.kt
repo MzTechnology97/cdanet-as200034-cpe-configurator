@@ -170,6 +170,9 @@ data class JobDto(
     val stages: List<String> = emptyList(),
     val error: String = "",
     val installer: String = "",
+    val acceptance: String? = null,
+    val photos: Int = 0,
+    val replacesJobId: String? = null,
 )
 
 @Serializable

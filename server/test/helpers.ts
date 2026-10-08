@@ -36,6 +36,7 @@ export function testConfig(overrides: Record<string, string> = {}) {
       DB_PATH: ':memory:',
       STATIC_DIR: join(dir, 'web-missing'),
       ANDROID_RELEASE_DIR: join(dir, 'releases'),
+      PHOTOS_DIR: join(dir, 'photos'),
       CPE_ADMIN_PASSWORD: 'Cpe-Admin-Secret-1',
       UISP_ENROLLMENT: 'wss://uisp.example:443+token+allowUntrustedCertificate',
       LOG_LEVEL: 'silent',

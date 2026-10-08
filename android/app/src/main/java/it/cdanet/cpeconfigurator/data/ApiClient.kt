@@ -44,6 +44,9 @@ private val ERRORS = mapOf(
     "uisp_unreachable" to "UISP non raggiungibile dal server",
     "geocoder_unreachable" to "Servizio indirizzi non raggiungibile",
     "address_too_short" to "Indirizzo troppo corto",
+    "job_not_completed" to "Esito del provisioning non ancora registrato sul server",
+    "too_many_photos" to "Troppe foto per questo job (massimo 8)",
+    "photo_not_jpeg" to "La foto deve essere in formato JPEG",
     "wrong_current_password" to "Password attuale non corretta",
     "password_unchanged" to "La nuova password è uguale a quella attuale",
     "password_contains_username" to "La password non può contenere il nome utente",
@@ -102,6 +105,23 @@ class ApiClient(
     suspend fun fieldAccess(purpose: String): it.cdanet.cpeconfigurator.field.FieldAccess {
         val body = buildJsonObject { put("purpose", purpose) }
         return AppJson.decodeFromString(it.cdanet.cpeconfigurator.field.FieldAccess.serializer(), request("POST", "/api/field/access", body, client = true))
+    }
+
+    suspend fun putAcceptance(jobId: String, report: it.cdanet.cpeconfigurator.field.AcceptanceReport) {
+        request("PUT", "/api/provisioning/jobs/$jobId/acceptance", AppJson.encodeToJsonElement(it.cdanet.cpeconfigurator.field.AcceptanceReport.serializer(), report))
+    }
+
+    /** Installation photo (JPEG) attached to a job. */
+    suspend fun uploadPhoto(jobId: String, jpeg: ByteArray, caption: String) = withContext(Dispatchers.IO) {
+        val url = (base() + "/api/provisioning/jobs/$jobId/photos").toHttpUrl().newBuilder().addQueryParameter("caption", caption).build()
+        val b = Request.Builder().url(url).post(jpeg.toRequestBody("image/jpeg".toMediaType()))
+        session.token?.let { b.header("Authorization", "Bearer $it") }
+        http.newCall(b.build()).execute().use { r ->
+            if (!r.isSuccessful) {
+                val code = runCatching { AppJson.decodeFromString(ApiErrorDto.serializer(), r.body?.string().orEmpty()).error }.getOrNull()?.ifBlank { null } ?: "HTTP ${r.code}"
+                throw ApiException(r.code, code, apiMessage(code))
+            }
+        }
     }
 
     /** Closes every session of the account (this one included). */
