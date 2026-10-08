@@ -74,6 +74,8 @@ const envSchema = z.object({
   UISP_IGNORE_TLS: z.enum(['0', '1']).default('0'),
   COVERAGE_MAX_KM: int(15, 1, 100),
   GEOCODER_URL: z.string().url().default('https://nominatim.openstreetmap.org'),
+  // Used while the local Nominatim is importing or down (e.g. the public service).
+  GEOCODER_FALLBACK_URL: z.union([z.literal(''), z.string().url()]).optional(),
   GEOCODER_CONTACT: optionalText(200),
 });
 
@@ -125,7 +127,7 @@ export interface Config {
   uispAutoBackup: boolean;
   uispIgnoreTls: boolean;
   coverageMaxKm: number;
-  geocoder: { url: string; contact: string | undefined };
+  geocoder: { url: string; fallbackUrl: string | undefined; contact: string | undefined };
 }
 
 export function loadMasterKey(path: string): Buffer {
@@ -196,6 +198,6 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     uispAutoBackup: e.UISP_AUTO_BACKUP === '1',
     uispIgnoreTls: e.UISP_IGNORE_TLS === '1',
     coverageMaxKm: e.COVERAGE_MAX_KM,
-    geocoder: { url: e.GEOCODER_URL, contact: e.GEOCODER_CONTACT },
+    geocoder: { url: e.GEOCODER_URL, fallbackUrl: e.GEOCODER_FALLBACK_URL || undefined, contact: e.GEOCODER_CONTACT },
   };
 }

@@ -38,7 +38,7 @@ Il site proposto per l'accettazione è quello dell'AP a cui la CPE è agganciata
 
 Nel modulo di provisioning dell'app, sezione **Posizione CPE e AP vicini**, la posizione si ottiene in due modi:
 - **Usa GPS del telefono**: funziona anche offline;
-- **indirizzo** (via, civico, CAP, comune), cercato tramite OpenStreetMap.
+- **indirizzo** (via, civico, CAP, comune), cercato tramite OpenStreetMap: con Nominatim locale (vedi [DEPLOY.md](DEPLOY.md#openstreetmap-locale-ricerca-indirizzi)) la ricerca resta sul server.
 
 La posizione:
 - viene salvata nello storico, con precisione e origine (GPS o indirizzo); nel dettaglio del job c'è il link alla mappa;

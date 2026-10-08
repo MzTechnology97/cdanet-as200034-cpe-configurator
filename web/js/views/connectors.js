@@ -138,11 +138,42 @@ export async function connectorsView() {
       h('div', { class: 'btns' }, testBtn, saveBtn, u.source === 'console' ? resetBtn : null),
       result,
     ),
-    card(
-      h('h2', {}, 'OpenStreetMap (ricerca indirizzi)'),
-      h('p', { class: 'small muted' }, 'Usato dalla Copertura e dal provisioning per convertire un indirizzo in coordinate. Riceve solo l’indirizzo cercato; massimo 1 richiesta al secondo.'),
-      h('div', { class: 'grid' }, stat('Servizio', data.geocoder.url), stat('Contatto', data.geocoder.contact || '—')),
-      h('p', { class: 'small muted' }, 'Modificabile con GEOCODER_URL e GEOCODER_CONTACT nel .env (es. per un Nominatim interno).'),
+    geocoderCard(data.geocoder),
+  );
+}
+
+/** OpenStreetMap (Nominatim): local container of the stack, with optional public fallback. */
+function geocoderCard(g) {
+  const result = h('div', {});
+  const line = (title, st, primary) =>
+    h(
+      'div',
+      { class: `notice ${st.ok ? 'good' : 'warn'}` },
+      h('strong', {}, title),
+      ` · ${st.ok ? 'operativo' : 'non disponibile'} · ${st.latencyMs} ms`,
+      st.version ? ` · Nominatim ${st.version}` : '',
+      st.dataUpdated ? ` · dati aggiornati al ${fmtDate(st.dataUpdated)}` : '',
+      !st.ok ? h('div', { class: 'small' }, primary && st.local ? `${st.message} — se è appena stato installato, l'import dei dati OSM è probabilmente ancora in corso (sudo cdanet-cpe geocoder).` : st.message) : null,
+    );
+  const testBtn = h('button', { type: 'button' }, 'Verifica servizio');
+  testBtn.onclick = () =>
+    busy(testBtn, async () => {
+      mount(result, h('p', { class: 'muted' }, 'Verifica in corso…'));
+      const r = await api('/api/admin/connectors/geocoder/test', { method: 'POST', body: {} });
+      mount(result, line(r.primary.local ? 'Nominatim locale' : 'Servizio pubblico', r.primary, true), r.fallback ? line('Riserva', r.fallback, false) : null);
+    });
+  return card(
+    h(
+      'div',
+      { class: 'page-head' },
+      h('div', {}, h('h2', {}, 'OpenStreetMap (ricerca indirizzi)'), h('p', { class: 'small muted' }, 'Converte un indirizzo in coordinate per Copertura e provisioning.')),
+      h('div', {}, badge(g.local ? 'locale' : 'pubblico', g.local ? 'good' : 'warn')),
     ),
+    g.local
+      ? h('p', { class: 'small muted' }, 'Nominatim gira nello stesso server (container "nominatim"): gli indirizzi cercati non escono dalla rete.' + (g.fallbackUrl ? ' Se il servizio locale non risponde (es. durante il primo import) si usa la riserva.' : ''))
+      : h('p', { class: 'small muted' }, 'Servizio pubblico di OpenStreetMap: riceve solo l’indirizzo cercato, massimo 1 richiesta al secondo. Per averlo in locale: sudo CDANET_GEOCODER=local ./deploy/install-debian.sh'),
+    h('div', { class: 'grid' }, stat('Servizio', g.url), stat('Riserva', g.fallbackUrl || '—'), g.local ? null : stat('Contatto', g.contact || '—')),
+    h('div', { class: 'btns' }, testBtn),
+    result,
   );
 }

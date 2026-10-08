@@ -67,7 +67,7 @@ export async function buildApp(
     uisp: opts.uisp !== undefined ? opts.uisp : uispCfg ? connectors.build(uispCfg) : null,
     uispSettings: { autoBackup: uispCfg?.autoBackup ?? cfg.uispAutoBackup, coverageMaxKm: uispCfg?.coverageMaxKm ?? cfg.coverageMaxKm },
     connectors,
-    geocoder: createGeocoder({ url: cfg.geocoder.url, contact: cfg.geocoder.contact, fetchImpl: opts.fetchImpl }),
+    geocoder: createGeocoder({ ...cfg.geocoder, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
     version,
   };
 

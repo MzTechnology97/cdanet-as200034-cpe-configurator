@@ -9,9 +9,10 @@
 #   sudo cdanet-cpe edit                    edit .env, then apply it
 #   sudo cdanet-cpe backup                  database backup
 #   sudo cdanet-cpe version                 running version
+#   sudo cdanet-cpe geocoder [logs|reset]   local OpenStreetMap (Nominatim) status
 set -eu
 DEPLOY_DIR="${DEPLOY_DIR:-/opt/cdanet-cpe}"
-case "${1:-}" in ""|-h|--help|help) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+case "${1:-}" in ""|-h|--help|help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
 [ "$(id -u)" -eq 0 ] || { echo "Usa: sudo cdanet-cpe $*" >&2; exit 1; }
 dc() { docker compose -f "$DEPLOY_DIR/docker-compose.yml" --project-directory "$DEPLOY_DIR" "$@"; }
 case "${1:-}" in
@@ -24,6 +25,34 @@ case "${1:-}" in
     ;;
   version)
     dc exec -T app wget -qO- http://127.0.0.1:8787/api/health; echo
+    ;;
+  geocoder)
+    c=$(dc ps -q nominatim 2>/dev/null || true)
+    if [ -z "$c" ]; then
+      echo "OpenStreetMap locale non attivo. Per installarlo: sudo CDANET_GEOCODER=local ./deploy/install-debian.sh"
+      exit 1
+    fi
+    case "${2:-status}" in
+      logs) dc logs -f --tail=100 nominatim ;;
+      reset)
+        printf "Cancello i dati OpenStreetMap importati e rifaccio l'import da zero. Confermi? [s/N] "
+        read -r a
+        case "$a" in s|S|y|Y) ;; *) exit 1 ;; esac
+        dc rm -sf nominatim
+        docker volume rm cdanet-cpe-configurator_nominatim_data
+        dc up -d nominatim
+        echo "Import ripartito. Avanzamento: sudo cdanet-cpe geocoder logs"
+        ;;
+      *)
+        docker inspect -f 'Container: {{.State.Status}} (salute: {{if .State.Health}}{{.State.Health.Status}}{{else}}n/d{{end}})' "$c"
+        if docker exec "$c" curl -fsS 'http://127.0.0.1:8080/status?format=json' 2>/dev/null; then
+          echo
+        else
+          echo "Import in corso o servizio non ancora pronto. Ultime righe del log:"
+          dc logs --tail=15 nominatim
+        fi
+        ;;
+    esac
     ;;
   *)
     dc "$@"

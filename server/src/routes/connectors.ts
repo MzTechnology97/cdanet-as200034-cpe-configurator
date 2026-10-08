@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
+import { isPublicNominatim } from '../services/geocode.ts';
 
 /** Admin "Connettori": configure and test external integrations from the console. */
 export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
@@ -34,7 +35,12 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.get('/api/admin/connectors', admin, async () => ({
     uisp: { ...ctx.connectors.uispView(), active: !!ctx.uisp },
-    geocoder: { url: ctx.cfg.geocoder.url, contact: ctx.cfg.geocoder.contact ?? '' },
+    geocoder: {
+      url: ctx.cfg.geocoder.url,
+      local: !isPublicNominatim(ctx.cfg.geocoder.url),
+      fallbackUrl: ctx.cfg.geocoder.fallbackUrl ?? '',
+      contact: ctx.cfg.geocoder.contact ?? '',
+    },
   }));
 
   app.put('/api/admin/connectors/uisp', admin, async (req) => {
@@ -51,6 +57,9 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
     recordEvent(ctx.db, req.user!.id, 'connector.uisp.reset', 'UISP', 'tornato alla configurazione .env');
     return { ...ctx.connectors.uispView(), active: !!ctx.uisp };
   });
+
+  /** OpenStreetMap / Nominatim health (local container still importing shows here). */
+  app.post('/api/admin/connectors/geocoder/test', admin, async () => ctx.geocoder.status());
 
   /** Tests the values in the form (token optional: the saved one is used) without saving them. */
   app.post('/api/admin/connectors/uisp/test', admin, async (req) => {
