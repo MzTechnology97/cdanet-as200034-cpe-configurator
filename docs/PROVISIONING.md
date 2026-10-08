@@ -4,7 +4,7 @@
 
 NanoStation Loco 5AC, NanoStation 5AC, NanoBeam 5AC, LiteBeam 5AC, PowerBeam 5AC. Il firmware di produzione è **airOS 8.7.4**. 8.7.11 e 8.7.25 vengono rilevati, ma la scrittura è bloccata finché la normalizzazione a 8.7.4 non è collaudata al banco.
 
-## Profili (uno per modello)
+## Template airOS (più template con nome per ogni modello)
 
 Il server non inventa chiavi `system.cfg`. Ogni modello usa il backup reale di una CPE di laboratorio su 8.7.4, e i placeholder vengono inseriti **in automatico**:
 
@@ -39,7 +39,25 @@ Righe sostituite in automatico (nomi chiave di airOS 8):
 
 Le righe che contengono già un `${…}` restano invariate. Si può quindi caricare anche un template preparato a mano, o ricaricare quello scaricato dopo averlo ritoccato. Se dopo la sostituzione resta un valore che sembra un segreto (chiave che termina in `psk`, `password`, `secret`, `key`…), l'anteprima lo segnala.
 
-Il template viene cifrato (AES-256-GCM) e di lui si mostra solo lo SHA-256.
+### Più template per modello e modifica dalla console
+
+Ogni modello può avere più template con nomi diversi, per esempio *Standard*, *Palo alto* o *Bassa potenza*:
+- uno è il **predefinito**, usato quando nell'app non se ne sceglie un altro;
+- nell'app Android, se il modello ha più template, compare il selettore **Template** nel passo "1 · CPE".
+
+Nella console, in **Profili airOS**, per ciascun template:
+- **Modifica**: editor del testo completo.
+  - Un clic su un placeholder lo inserisce nel punto del cursore.
+  - **Controlla** verifica il template senza salvarlo.
+  - **Salva modifiche** rifiuta i template non validi, per esempio con una VLAN o un placeholder sconosciuto.
+  - Puoi cambiare anche nome, board match e predefinito.
+- **Duplica**: apre una copia da salvare con un altro nome. È il modo rapido per creare una variante.
+- **Rendi predefinito**.
+- **Elimina**: se elimini il predefinito, diventa predefinito il template modificato più di recente. Se elimini l'ultimo, il provisioning di quel modello resta bloccato finché non ne crei uno.
+
+**Nuovo template** può partire da un backup della CPE, con i placeholder inseriti in automatico, e va poi rifinito nell'editor. I nomi sono unici per modello (senza distinzione maiuscole/minuscole). Ogni job registra nello storico il nome del template usato.
+
+Ogni template viene cifrato (AES-256-GCM); nell'elenco se ne mostra solo lo SHA-256. Il testo è visibile solo agli admin, nell'editor.
 
 ## Placeholder
 

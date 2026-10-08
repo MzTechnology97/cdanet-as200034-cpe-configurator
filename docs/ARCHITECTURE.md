@@ -39,7 +39,8 @@ Node.js 24 esegue TypeScript direttamente (type stripping): non c'è uno step di
 | POST | `/api/provisioning/jobs/:id/result` | proprietario o admin, idempotente |
 | GET | `/api/provisioning/jobs` | i propri job (admin: tutti), con filtri |
 | * | `/api/tools/*`, `/api/routeros/*` | utente |
-| * | `/api/admin/users`, `/wireless-networks`, `/profiles`, `/status`, `/events`, `/placeholders` | admin |
+| GET | `/api/provisioning/templates` | utente: nomi dei template per modello (senza contenuto) |
+| * | `/api/admin/users`, `/wireless-networks` (+ `/import`, `/bulk-delete`), `/profiles`, `/profiles/:model/templates`, `/templates/:id`, `/status`, `/events`, `/placeholders` | admin |
 
 ### Pacchetto del job (solo all'app, `Cache-Control: no-store`)
 

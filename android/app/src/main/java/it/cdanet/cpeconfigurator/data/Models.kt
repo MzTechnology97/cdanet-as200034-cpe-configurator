@@ -44,7 +44,12 @@ data class ProvisionRequest(
     val ssid: String,
     val pppoeUser: String,
     val pppoePassword: String,
+    /** Named template of the model; null = the model's default (omitted from JSON). */
+    val templateId: Int? = null,
 )
+
+@Serializable
+data class TemplateDto(val id: Int, val model: String, val name: String, val isDefault: Boolean = false)
 
 @Serializable
 data class ReadinessDto(val missing: List<String> = emptyList())
@@ -72,6 +77,7 @@ data class ConfigDto(val path: String = "/tmp/system.cfg", val text: String, val
 @Serializable
 data class JobSummaryDto(
     val model: String,
+    val template: String = "",
     val ssid: String,
     val pppoeUser: String,
     val deviceName: String,
@@ -119,6 +125,7 @@ data class JobDto(
     val completedAt: String? = null,
     val status: String,
     val model: String,
+    val template: String? = null,
     val mac: String,
     val serial: String,
     val ssid: String,

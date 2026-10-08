@@ -9,6 +9,11 @@ import { provisionRequestSchema, provisionResultSchema } from '../services/provi
 export function provisioningRoutes(app: FastifyInstance, ctx: AppContext) {
   const user = { preHandler: ctx.auth.requireUser };
 
+  /** Templates selectable in the field app (names only, no content). */
+  app.get('/api/provisioning/templates', user, async () =>
+    ctx.templates.list().map((t) => ({ id: t.id, model: t.model, name: t.name, isDefault: t.isDefault })),
+  );
+
   app.get('/api/wireless-networks', user, async () =>
     ctx.db.prepare('SELECT ssid, updated_at updatedAt FROM wireless_secrets ORDER BY ssid').all(),
   );

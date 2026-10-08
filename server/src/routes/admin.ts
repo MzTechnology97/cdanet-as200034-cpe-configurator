@@ -7,7 +7,8 @@ import { nowIso, recordEvent } from '../db.ts';
 import { autoTemplate } from '../domain/autotemplate.ts';
 import { parseWirelessCsv } from '../domain/wireless-csv.ts';
 import { BOARD_MATCH_SUGGESTIONS, SSID_RX, SUPPORTED_MODELS, TARGET_FIRMWARE } from '../domain/policy.ts';
-import { PLACEHOLDERS, inspectTemplate, normalizeTemplate } from '../domain/systemcfg.ts';
+import { PLACEHOLDERS, inspectTemplate } from '../domain/systemcfg.ts';
+import { validateBoardMatch } from '../services/templates.ts';
 import { loadLatestRelease } from '../services/releases.ts';
 
 const username = z.string().trim().min(3).max(80).regex(/^[A-Za-z0-9._-]+$/);
@@ -153,28 +154,16 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
     return { ok: true, deleted };
   });
 
-  // ---- airOS profiles -----------------------------------------------------------
+  // ---- airOS templates (several named templates per model) ------------------------
   const modelParam = z.object({ model: z.enum(SUPPORTED_MODELS) });
-  const profileBody = z
-    .object({ template: z.string().min(64).max(300_000), boardMatch: z.string().trim().min(2).max(240) })
-    .strict();
-
-  const validateBoardMatch = (rx: string) => {
-    try {
-      new RegExp(rx, 'is');
-    } catch {
-      throw new HttpError(400, 'board_match_invalid_regex');
-    }
-  };
+  const idParam = z.object({ id: z.coerce.number().int().positive() });
+  const templateName = z.string().trim().min(1).max(60).regex(/^[\p{L}\p{N} ._()+\/-]+$/u, 'Caratteri non ammessi nel nome');
+  const templateText = z.string().min(64).max(300_000);
+  const boardMatch = z.string().trim().min(2).max(240);
 
   app.get('/api/admin/profiles', admin, async () => {
-    const rows = db
-      .prepare(
-        `SELECT p.model, p.firmware, p.board_match boardMatch, p.template_sha256 sha256, p.updated_at updatedAt, u.username updatedBy
-         FROM provision_profiles p LEFT JOIN users u ON u.id = p.updated_by ORDER BY p.model`,
-      )
-      .all() as Array<{ model: string }>;
-    return SUPPORTED_MODELS.map((model) => ({ model, firmware: TARGET_FIRMWARE, profile: rows.find((r) => r.model === model) ?? null }));
+    const all = ctx.templates.list();
+    return SUPPORTED_MODELS.map((model) => ({ model, firmware: TARGET_FIRMWARE, templates: all.filter((t) => t.model === model) }));
   });
 
   app.get('/api/admin/placeholders', admin, async () => Object.entries(PLACEHOLDERS).map(([name, description]) => ({ name, description })));
@@ -182,41 +171,43 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
   /** Raw CPE backup -> template with placeholders + preview. Nothing is stored here. */
   app.post('/api/admin/profiles/:model/autotemplate', admin, async (req) => {
     const { model } = modelParam.parse(req.params);
-    const b = z.object({ backup: z.string().min(64).max(300_000) }).strict().parse(req.body);
+    const b = z.object({ backup: templateText }).strict().parse(req.body);
     const result = autoTemplate(b.backup);
     return { ...result, report: inspectTemplate(result.template), suggestedBoardMatch: BOARD_MATCH_SUGGESTIONS[model] };
   });
 
   app.post('/api/admin/profiles/:model/inspect', admin, async (req) => {
     modelParam.parse(req.params);
-    const b = profileBody.partial({ boardMatch: true }).parse(req.body);
+    const b = z.object({ template: templateText, boardMatch: boardMatch.optional() }).strict().parse(req.body);
     if (b.boardMatch) validateBoardMatch(b.boardMatch);
     return inspectTemplate(b.template);
   });
 
-  app.put('/api/admin/profiles/:model', admin, async (req) => {
+  app.post('/api/admin/profiles/:model/templates', admin, async (req, reply) => {
     const { model } = modelParam.parse(req.params);
-    const b = profileBody.parse(req.body);
-    validateBoardMatch(b.boardMatch);
-    const report = inspectTemplate(b.template);
-    if (!report.ok) throw new HttpError(400, report.errors[0] as string, { report });
-    const template = normalizeTemplate(b.template);
-    const sha = sha256Hex(template);
-    const now = nowIso();
-    db.prepare(
-      `INSERT INTO provision_profiles(model, firmware, board_match, template_ciphertext, template_sha256, updated_at, updated_by)
-       VALUES(?,?,?,?,?,?,?)
-       ON CONFLICT(model, firmware) DO UPDATE SET board_match = excluded.board_match, template_ciphertext = excluded.template_ciphertext,
-         template_sha256 = excluded.template_sha256, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
-    ).run(model, TARGET_FIRMWARE, b.boardMatch, sealer.seal(template), sha, now, actor(req));
-    recordEvent(db, actor(req), 'profile.set', model, sha);
-    return { ok: true, model, firmware: TARGET_FIRMWARE, sha256: sha, updatedAt: now, report };
+    const b = z.object({ name: templateName, template: templateText, boardMatch, isDefault: z.boolean().optional() }).strict().parse(req.body);
+    const t = ctx.templates.create(model, b, actor(req));
+    recordEvent(db, actor(req), 'template.create', `${model} · ${t.name}`, t.sha256);
+    return reply.code(201).send(t);
   });
 
-  app.delete('/api/admin/profiles/:model', admin, async (req) => {
-    const { model } = modelParam.parse(req.params);
-    db.prepare('DELETE FROM provision_profiles WHERE model = ? AND firmware = ?').run(model, TARGET_FIRMWARE);
-    recordEvent(db, actor(req), 'profile.delete', model);
+  app.get('/api/admin/templates/:id', admin, async (req) => ctx.templates.get(idParam.parse(req.params).id));
+
+  app.patch('/api/admin/templates/:id', admin, async (req) => {
+    const { id } = idParam.parse(req.params);
+    const b = z
+      .object({ name: templateName.optional(), template: templateText.optional(), boardMatch: boardMatch.optional(), isDefault: z.literal(true).optional() })
+      .strict()
+      .refine((x) => Object.keys(x).length > 0, 'empty')
+      .parse(req.body);
+    const t = ctx.templates.update(id, b, actor(req));
+    recordEvent(db, actor(req), b.template ? 'template.edit' : 'template.update', `${t.model} · ${t.name}`, Object.keys(b).join(','));
+    return t;
+  });
+
+  app.delete('/api/admin/templates/:id', admin, async (req) => {
+    const t = ctx.templates.remove(idParam.parse(req.params).id);
+    recordEvent(db, actor(req), 'template.delete', `${t.model} · ${t.name}`);
     return { ok: true };
   });
 
@@ -244,7 +235,8 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
       counts: {
         users: count('SELECT count(*) n FROM users WHERE active = 1'),
         wirelessNetworks: count('SELECT count(*) n FROM wireless_secrets'),
-        profiles: count('SELECT count(*) n FROM provision_profiles WHERE firmware = ?', TARGET_FIRMWARE),
+        profiles: count('SELECT count(DISTINCT model) n FROM profile_templates WHERE firmware = ?', TARGET_FIRMWARE),
+        templates: count('SELECT count(*) n FROM profile_templates WHERE firmware = ?', TARGET_FIRMWARE),
         jobs30d: count('SELECT count(*) n FROM provisioning_jobs WHERE created_at > ?', since30d),
         success30d: count("SELECT count(*) n FROM provisioning_jobs WHERE status = 'success' AND created_at > ?", since30d),
       },

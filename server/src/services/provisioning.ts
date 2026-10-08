@@ -14,6 +14,7 @@ import {
   parseMac,
 } from '../domain/policy.ts';
 import { renderSystemCfg, type PlaceholderName } from '../domain/systemcfg.ts';
+import type { Templates } from './templates.ts';
 
 export const provisionRequestSchema = z
   .object({
@@ -30,6 +31,8 @@ export const provisionRequestSchema = z
     ssid: z.string().regex(SSID_RX),
     pppoeUser: z.string().trim().min(3).max(128).regex(PPPOE_USER_RX),
     pppoePassword: z.string().min(1).max(200),
+    /** Named template of the model; omitted = the model's default template. */
+    templateId: z.number().int().positive().optional(),
   })
   .strict();
 export type ProvisionRequest = z.infer<typeof provisionRequestSchema>;
@@ -60,12 +63,6 @@ export function sanitizeError(text: string): string {
     .slice(0, 500);
 }
 
-interface ProfileRow {
-  board_match: string;
-  template_ciphertext: string;
-  template_sha256: string;
-}
-
 export interface Readiness {
   wpa2Configured: boolean;
   profileConfigured: boolean;
@@ -73,15 +70,12 @@ export interface Readiness {
   missing: string[];
 }
 
-export function createProvisioning(db: Db, cfg: Config, sealer: Sealer) {
+export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, templates: Templates) {
   const getWpa = db.prepare('SELECT wpa2_ciphertext FROM wireless_secrets WHERE ssid = ?');
-  const getProfile = db.prepare(
-    'SELECT board_match, template_ciphertext, template_sha256 FROM provision_profiles WHERE model = ? AND firmware = ?',
-  );
 
-  function readiness(x: Pick<ProvisionRequest, 'ssid' | 'model'>): Readiness {
+  function readiness(x: Pick<ProvisionRequest, 'ssid' | 'model' | 'templateId'>): Readiness {
     const wpa2Configured = !!getWpa.get(x.ssid);
-    const profileConfigured = !!getProfile.get(x.model, TARGET_FIRMWARE);
+    const profileConfigured = !!templates.resolve(x.model, x.templateId);
     const cpeAdminSecret = !!cfg.cpeSecrets.adminPassword;
     const missing: string[] = [];
     if (!wpa2Configured) missing.push('ssid_secret_not_configured');
@@ -94,13 +88,15 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer) {
   function plan(x: ProvisionRequest) {
     const name = customerNameFromRadius(x.pppoeUser);
     const n = cfg.network;
+    const tpl = templates.resolve(x.model, x.templateId);
     return {
       targetFirmware: TARGET_FIRMWARE,
+      template: tpl ? { id: tpl.id, name: tpl.name } : null,
       factoryIp: n.factoryIp,
       readiness: readiness(x),
       steps: [
         `Primo avvio CPE su ${n.factoryIp}: Country Licensed e credenziali CDA Net`,
-        `Verifica firmware ${TARGET_FIRMWARE}, board del profilo ${x.model} e MAC ${x.mac}`,
+        `Template ${x.model} "${tpl?.name ?? '—'}" · verifica firmware ${TARGET_FIRMWARE}, board e MAC ${x.mac}`,
         `Station WPA2 su ${x.ssid} (chiave dal backend)`,
         'Router Mode, WAN wireless diretta in PPPoE, nessuna VLAN',
         `PPPoE ${x.pppoeUser} · MTU/MRU ${n.pppoeMtu}/${n.pppoeMru}`,
@@ -119,15 +115,15 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer) {
     const r = readiness(x);
     if (r.missing.length) throw new HttpError(409, r.missing[0] as string, { missing: r.missing });
 
-    const profile = getProfile.get(x.model, TARGET_FIRMWARE) as ProfileRow | undefined;
+    const profile = templates.resolve(x.model, x.templateId);
     const wpa = getWpa.get(x.ssid) as { wpa2_ciphertext: string } | undefined;
     if (!profile || !wpa) throw new HttpError(409, 'provision_profile_missing');
-    if (!profile.board_match) throw new HttpError(409, 'profile_board_match_missing');
+    if (!profile.boardMatch) throw new HttpError(409, 'profile_board_match_missing');
 
     let template: string;
     let wpa2: string;
     try {
-      template = sealer.open(profile.template_ciphertext);
+      template = sealer.open(profile.ciphertext);
       wpa2 = sealer.open(wpa.wpa2_ciphertext);
     } catch {
       throw new HttpError(500, 'secret_decrypt_failed');
@@ -195,18 +191,18 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer) {
     const expiresAt = new Date(created.getTime() + cfg.jobTtlMinutes * 60_000).toISOString();
     const configSha256 = sha256Hex(text);
     db.prepare(
-      `INSERT INTO provisioning_jobs(id, created_at, expires_at, user_id, client, model, mac, serial, ssid, pppoe_user, device_name, profile_sha256, config_sha256, status)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?, 'prepared')`,
-    ).run(id, created.toISOString(), expiresAt, userId, client, x.model, x.mac, x.serial, x.ssid, x.pppoeUser, name, profile.template_sha256, configSha256);
+      `INSERT INTO provisioning_jobs(id, created_at, expires_at, user_id, client, model, mac, serial, ssid, pppoe_user, device_name, profile_sha256, config_sha256, template_name, status)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'prepared')`,
+    ).run(id, created.toISOString(), expiresAt, userId, client, x.model, x.mac, x.serial, x.ssid, x.pppoeUser, name, profile.sha256, configSha256, profile.name);
 
     return {
       jobId: id,
       expiresAt,
       target: { host: n.factoryIp, sshPort: 22 },
       credentials: { username: s.adminUsername, password: s.adminPassword as string },
-      checks: { firmware: TARGET_FIRMWARE, boardMatch: profile.board_match, mac: x.mac },
+      checks: { firmware: TARGET_FIRMWARE, boardMatch: profile.boardMatch, mac: x.mac },
       config: { path: '/tmp/system.cfg', text, sha256: configSha256 },
-      summary: { model: x.model, ssid: x.ssid, pppoeUser: x.pppoeUser, deviceName: name, mac: x.mac, serial: x.serial },
+      summary: { model: x.model, template: profile.name, ssid: x.ssid, pppoeUser: x.pppoeUser, deviceName: name, mac: x.mac, serial: x.serial },
       afterApply: { lanIp: n.lanIp, httpPort: MANAGEMENT_PORTS.http, httpsPort: MANAGEMENT_PORTS.https },
     };
   }
@@ -255,7 +251,7 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer) {
     const rows = db
       .prepare(
         `SELECT j.id, j.created_at createdAt, j.expires_at expiresAt, j.completed_at completedAt, j.status, j.client,
-                j.model, j.mac, j.serial, j.ssid, j.pppoe_user pppoeUser, j.device_name deviceName,
+                j.model, j.template_name template, j.mac, j.serial, j.ssid, j.pppoe_user pppoeUser, j.device_name deviceName,
                 j.stages, j.detected, j.error, u.username installer
          FROM provisioning_jobs j JOIN users u ON u.id = j.user_id
          ${where.length ? `WHERE ${where.join(' AND ')}` : ''}

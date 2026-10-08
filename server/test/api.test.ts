@@ -81,33 +81,34 @@ describe('API', () => {
     assert.equal(w.statusCode, 200);
 
     const vlan = await t.app.inject({
-      method: 'PUT',
-      url: '/api/admin/profiles/LiteBeam%205AC',
+      method: 'POST',
+      url: '/api/admin/profiles/LiteBeam%205AC/templates',
       headers: t.auth(adminToken),
-      payload: { template: `${SAMPLE_TEMPLATE}vlan.1.id=87\n`, boardMatch: 'board.name=LiteBeam 5AC' },
+      payload: { name: 'Standard', template: `${SAMPLE_TEMPLATE}vlan.1.id=87\n`, boardMatch: 'board.name=LiteBeam 5AC' },
     });
     assert.equal(vlan.statusCode, 400);
     assert.equal(vlan.json().error, 'profile_contains_vlan');
 
     const badRx = await t.app.inject({
-      method: 'PUT',
-      url: '/api/admin/profiles/LiteBeam%205AC',
+      method: 'POST',
+      url: '/api/admin/profiles/LiteBeam%205AC/templates',
       headers: t.auth(adminToken),
-      payload: { template: SAMPLE_TEMPLATE, boardMatch: '(unclosed' },
+      payload: { name: 'Standard', template: SAMPLE_TEMPLATE, boardMatch: '(unclosed' },
     });
     assert.equal(badRx.json().error, 'board_match_invalid_regex');
 
     const ok = await t.app.inject({
-      method: 'PUT',
-      url: '/api/admin/profiles/LiteBeam%205AC',
+      method: 'POST',
+      url: '/api/admin/profiles/LiteBeam%205AC/templates',
       headers: t.auth(adminToken),
-      payload: { template: SAMPLE_TEMPLATE, boardMatch: 'board\\.name=LiteBeam 5AC' },
+      payload: { name: 'Standard', template: SAMPLE_TEMPLATE, boardMatch: 'board\\.name=LiteBeam 5AC' },
     });
-    assert.equal(ok.statusCode, 200, ok.body);
+    assert.equal(ok.statusCode, 201, ok.body);
+    assert.equal(ok.json().isDefault, true);
 
     const list = (await t.app.inject({ method: 'GET', url: '/api/admin/profiles', headers: t.auth(adminToken) })).json();
     assert.equal(list.length, 5);
-    assert.ok(list.find((p: { model: string; profile: unknown }) => p.model === 'LiteBeam 5AC').profile);
+    assert.equal(list.find((p: { model: string; templates: unknown[] }) => p.model === 'LiteBeam 5AC').templates.length, 1);
     assert.ok(!JSON.stringify(list).includes('wireless.1.ssid'));
   });
 

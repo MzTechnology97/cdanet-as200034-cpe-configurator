@@ -101,6 +101,10 @@ class ApiClient(
     suspend fun myJobs(): List<JobDto> =
         AppJson.decodeFromString(kotlinx.serialization.builtins.ListSerializer(JobDto.serializer()), request("GET", "/api/provisioning/jobs?limit=100"))
 
+    /** Named airOS templates (names only) selectable for each model. */
+    suspend fun templates(): List<TemplateDto> =
+        AppJson.decodeFromString(kotlinx.serialization.builtins.ListSerializer(TemplateDto.serializer()), request("GET", "/api/provisioning/templates"))
+
     /** SSIDs whose WPA2 key is configured on the server (no secrets). */
     suspend fun wirelessNetworks(): Set<String> =
         AppJson.decodeFromString(kotlinx.serialization.builtins.ListSerializer(WirelessNetworkDto.serializer()), request("GET", "/api/wireless-networks"))
