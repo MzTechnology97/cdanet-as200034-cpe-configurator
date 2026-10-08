@@ -90,10 +90,12 @@ jobs:
           for i in $(seq 1 40); do if curl -fsS localhost:18787/api/health; then ok=1; break; fi; sleep 1; done
           docker logs smoke
           test "$ok" = 1
-          curl -fsS localhost:18787/ | grep -q 'CPE Admin'
-          curl -fsS -H 'content-type: application/json' -d '{"username":"adminci","password":"CI-Admin-Password-1234"}' localhost:18787/api/auth/login | grep -q token
-          docker exec -u node smoke node src/cli/backup.ts ci | grep -q '/data/backups/'
-          test "$(docker exec smoke sh -c 'stat -c %U /proc/$(pgrep -f src/main.ts | head -1)')" = node
+          echo "step: web console"; curl -fsS localhost:18787/ | grep -q 'CPE Admin'
+          echo "step: login"; curl -fsS -H 'content-type: application/json' -d '{"username":"adminci","password":"CI-Admin-Password-1234"}' localhost:18787/api/auth/login | grep -q token
+          echo "step: backup"; docker exec -u node smoke node src/cli/backup.ts ci | grep -q '/data/backups/'
+          echo "step: runs as node"
+          user=$(docker exec smoke sh -c "ps -o user,args | grep '[s]rc/main.ts' | awk '{print \$1}' | head -1")
+          echo "server process user: $user"; test "$user" = node
       - uses: docker/login-action@v3
         if: github.event_name != 'pull_request'
         with:
