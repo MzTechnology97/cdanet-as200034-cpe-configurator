@@ -58,7 +58,14 @@ export function fakeUisp(opts: { authorizeMethod?: 'POST' | 'PUT'; backupCfg?: s
       if (opts.backupCfg) list.push({ id: 'bk2', timestamp: '2026-10-09T03:00:00Z', type: 'auto', extension: 'cfg' });
       return method === 'POST' ? new Response('{}') : new Response(JSON.stringify(list));
     }
-    if (opts.backupCfg && /^\/devices\/[^/]+\/backups\/bk2$/.test(path)) return new Response(opts.backupCfg, { headers: { 'content-type': 'text/plain' } });
+    if (/^\/devices\/[^/]+\/statistics$/.test(path)) {
+      // a week of hourly samples, signal slowly degrading from -58 to -66 dBm
+      const now = Date.now();
+      const series = (f: (i: number) => number) => ({ avg: Array.from({ length: 168 }, (_, i) => ({ x: now - (167 - i) * 3600_000, y: f(i) })) });
+      return new Response(JSON.stringify({ signal: series((i) => -58 - (8 * i) / 167), remoteSignal: series(() => -60), downlinkCapacity: series(() => 250000), uplinkCapacity: series(() => 200000), ping: { avg: [] } }));
+    }
+    if (path === '/outages') return new Response(JSON.stringify({ items: [{ id: 'o1', startTimestamp: '2026-10-05T02:00:00Z', endTimestamp: '2026-10-05T02:20:00Z', type: 'outage', aggregatedTime: 1200, inProgress: false }] }));
+        if (opts.backupCfg && /^\/devices\/[^/]+\/backups\/bk2$/.test(path)) return new Response(opts.backupCfg, { headers: { 'content-type': 'text/plain' } });
     if (/^\/devices\/[^/]+\/backups\/bk1$/.test(path)) return new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'application/octet-stream' } });
     return new Response('not found', { status: 404 });
   }) as typeof fetch;

@@ -12,6 +12,22 @@ data class LoginRequest(val username: String, val password: String)
 @Serializable
 data class LoginResponse(val token: String, val expiresAt: String, val user: UserDto)
 
+@Serializable
+data class SeriesDto(val points: List<List<Double>> = emptyList(), val min: Double? = null, val avg: Double? = null, val max: Double? = null, val trend: Double? = null)
+
+@Serializable
+data class OutageDto(val start: String? = null, val end: String? = null, val type: String? = null, val inProgress: Boolean = false)
+
+/** GET /api/provisioning/jobs/{id}/uisp/statistics */
+@Serializable
+data class SignalHistoryDto(
+    val signal: SeriesDto = SeriesDto(),
+    val remoteSignal: SeriesDto = SeriesDto(),
+    val downlinkCapacity: SeriesDto = SeriesDto(),
+    val uplinkCapacity: SeriesDto = SeriesDto(),
+    val outages: List<OutageDto>? = null,
+)
+
 /** Body of POST /api/provisioning/jobs/{id}/replace: the rest comes from the replaced job. */
 @Serializable
 data class ReplaceRequest(

@@ -32,6 +32,7 @@ import it.cdanet.cpeconfigurator.core.AppContainer
 import it.cdanet.cpeconfigurator.ui.screens.AcceptanceScreen
 import it.cdanet.cpeconfigurator.ui.screens.AlignmentScreen
 import it.cdanet.cpeconfigurator.ui.screens.CameraScreen
+import it.cdanet.cpeconfigurator.ui.screens.CompassScreen
 import it.cdanet.cpeconfigurator.ui.screens.CoverageScreen
 import it.cdanet.cpeconfigurator.ui.screens.CpeWebScreen
 import it.cdanet.cpeconfigurator.ui.screens.DiagnosisScreen
@@ -61,6 +62,7 @@ enum class Screen(val title: String, val scroll: Boolean = true) {
     Alignment("Puntamento antenna"),
     Diagnosis("Diagnosi CPE"),
     Acceptance("Collaudo installazione"),
+    Compass("Bussola verso l'AP"),
     Snmp("SNMP"),
     Camera("TVCC / IP camera"),
     Remote("Accesso remoto"),
@@ -139,10 +141,11 @@ fun AppRoot(c: AppContainer) {
                     Screen.Wifi -> WifiScreen(c)
                     Screen.Network -> NetworkScreen(c)
                     Screen.Discovery -> DiscoveryScreen(c)
-                    Screen.Coverage -> CoverageScreen(c)
+                    Screen.Coverage -> CoverageScreen(c, onCompass = { c.compassTarget.value = it; go(Screen.Compass) })
                     Screen.Alignment -> AlignmentScreen(c)
                     Screen.Diagnosis -> DiagnosisScreen(c)
                     Screen.Acceptance -> AcceptanceScreen(c)
+                    Screen.Compass -> CompassScreen(c)
                     Screen.Snmp -> SnmpScreen(c)
                     Screen.Camera -> CameraScreen(c)
                     Screen.Remote -> RemoteScreen(c)

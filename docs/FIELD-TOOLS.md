@@ -80,3 +80,30 @@ Dall'app: **Storico → job completato → Sostituisci CPE**. Si apre il provisi
 La **password PPPoE** si può lasciare vuota: il server la legge dall'ultimo backup UISP della CPE sostituita (dalla chiave del template che contiene `${PPPOE_PASSWORD}`, di norma `ppp.1.password`) e la inserisce nella configurazione. Non viene mai mostrata né salvata. Se UISP non è configurato o il backup non la contiene, l'app chiede di inserirla.
 
 Il nuovo job risulta collegato a quello sostituito ("Sostituisce la CPE del job …" nello storico web). Nel Registro attività resta l'evento *Sostituzione CPE*, con l'origine della password (installatore o backup UISP).
+
+## Bussola verso l'AP
+
+Dall'app: **Copertura → AP → Bussola**. L'azimut dell'AP arriva dal server (Nord vero, calcolato dalle coordinate UISP).
+
+La bussola indica dove girare ("Gira di 23° a destra", "Allineato" entro ±3°), ma solo dopo aver verificato che il magnetometro sia affidabile:
+- **Calibrazione**: viene letto lo stato che Android riporta per il sensore magnetico. Con calibrazione bassa o assente la bussola si dichiara non affidabile e chiede di muovere il telefono "a 8".
+- **Precisione stimata**: se il telefono la fornisce (sensore di rotazione), oltre ±20° la bussola non è usabile.
+- **Disturbi magnetici**: l'intensità del campo misurata viene confrontata con quella attesa in quel punto (modello geomagnetico mondiale, circa 44 µT in Sicilia). Uno scarto oltre 8 µT indica metallo vicino (palo, staffa, ringhiere, auto, quadri elettrici); oltre 15 µT la bussola è considerata non affidabile.
+- **Declinazione magnetica**: applicata automaticamente, così il Nord della bussola coincide con il Nord vero dell'azimut.
+- **Inclinazione**: il telefono va tenuto in piano; oltre 30° compare un avviso.
+
+La bussola serve per il puntamento grossolano; quello fine si fa con il segnale (Puntamento antenna).
+
+## Storico segnale (UISP)
+
+Per una CPE già accettata in UISP, lo storico è disponibile in due punti: nella console web (Storico → job → *Storico segnale*, per giorno, settimana o mese) e nell'app (Storico → job → *Storico segnale*, ultimi 7 giorni).
+
+Mostra:
+- il grafico del segnale ricevuto e di quello lato AP, con le soglie;
+- minimo, media e massimo;
+- la capacità media;
+- le interruzioni (UISP `/outages`).
+
+Se il segnale nell'ultimo quarto del periodo è più basso di almeno 4 dB rispetto al primo quarto, viene segnalato un **degrado lento** (vegetazione, antenna spostata, staffa allentata). Questo aiuta a distinguerlo da un guasto improvviso.
+
+API usate: `GET /devices/{id}/statistics` (`interval`, `start`, `period`) e `GET /outages` (`deviceId`, `start`, `period`) della specifica UISP API 1.5.0.
