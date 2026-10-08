@@ -1,0 +1,8 @@
+{
+  "name": "cdanet-logo-tool",
+  "private": true,
+  "type": "module",
+  "description": "Regenerates web/assets/*.svg and the Android logo drawables",
+  "scripts": { "build": "node make-logo.mjs" },
+  "dependencies": { "opentype.js": "1.3.4" }
+}

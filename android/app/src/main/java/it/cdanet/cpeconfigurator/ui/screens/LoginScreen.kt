@@ -7,7 +7,6 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -60,8 +59,12 @@ fun LoginScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) ->
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Image(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, modifier = Modifier.size(110.dp))
-        Text("CDA Net CPE Configurator", style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Bold)
+        Image(
+            painterResource(R.drawable.cda_net_logo),
+            contentDescription = "CDA Net",
+            modifier = Modifier.fillMaxWidth(0.75f).padding(top = 12.dp),
+        )
+        Text("CPE Configurator", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
         Text("v${BuildConfig.VERSION_NAME}", color = MaterialTheme.colorScheme.onSurfaceVariant)
 
         UpdateBanner(c, update, onUpdate)

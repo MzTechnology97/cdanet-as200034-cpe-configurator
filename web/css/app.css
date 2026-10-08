@@ -1,7 +1,7 @@
 :root {
   --topbar-h: 56px;
-  --brand: #f47b20;
-  --brand-ink: #b8560b;
+  --brand: #f15a2c;
+  --brand-ink: #c2441a;
   --bg: #f4f5f7;
   --surface: #ffffff;
   --surface-2: #f8f9fb;
@@ -34,7 +34,7 @@
     --warn: #f0b75a;
     --bad-bg: #3a1714;
     --bad: #ff8a80;
-    --brand-ink: #ffa25c;
+    --brand-ink: #ff8a5c;
     color-scheme: dark;
   }
 }
@@ -53,7 +53,7 @@ p { margin: 0 0 10px; }
 pre { background: var(--surface-2); border: 1px solid var(--line); border-radius: 8px; padding: 12px; overflow: auto; max-height: 420px; font-size: .82rem; white-space: pre-wrap; word-break: break-word; }
 
 .topbar { position: sticky; top: 0; z-index: 30; height: var(--topbar-h); display: flex; align-items: center; gap: 12px; padding: 0 max(16px, env(safe-area-inset-right)) 0 max(16px, env(safe-area-inset-left)); background: var(--surface); border-bottom: 3px solid var(--brand); box-shadow: var(--shadow); }
-.logo { height: 28px; flex: none; }
+.logo { height: 34px; width: auto; flex: none; display: block; }
 .product { font-weight: 700; color: var(--brand-ink); white-space: nowrap; }
 .spacer { flex: 1; }
 .session { display: flex; gap: 10px; align-items: center; font-size: .9rem; color: var(--muted); min-width: 0; }
@@ -109,6 +109,7 @@ tr.clickable:hover td { background: var(--surface-2); }
 ul.plain { padding-left: 18px; margin: 6px 0; }
 
 .login { max-width: 380px; margin: 8vh auto; }
+.login-logo { display: block; width: min(260px, 80%); height: auto; margin: 0 auto 22px; }
 .login form { display: flex; flex-direction: column; gap: 12px; }
 
 .tabs { display: flex; gap: 6px; flex-wrap: wrap; margin-bottom: 14px; }
