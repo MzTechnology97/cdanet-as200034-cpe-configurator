@@ -40,6 +40,10 @@ private val ERRORS = mapOf(
     "job_already_completed" to "Esito già registrato con valore diverso",
     "target_non_privato" to "Consentiti solo target su reti private/CGNAT",
     "template_not_allowed" to "Template non disponibile per il tuo account",
+    "uisp_not_configured" to "UISP non configurato sul server",
+    "uisp_unreachable" to "UISP non raggiungibile dal server",
+    "geocoder_unreachable" to "Servizio indirizzi non raggiungibile",
+    "address_too_short" to "Indirizzo troppo corto",
 )
 
 fun apiMessage(code: String): String = ERRORS[code] ?: code
@@ -101,6 +105,16 @@ class ApiClient(
 
     suspend fun myJobs(): List<JobDto> =
         AppJson.decodeFromString(kotlinx.serialization.builtins.ListSerializer(JobDto.serializer()), request("GET", "/api/provisioning/jobs?limit=100"))
+
+    /** Nearest APs from UISP (server keeps the list to the closest few within range). */
+    suspend fun coverage(lat: Double, lon: Double): CoverageDto =
+        AppJson.decodeFromString(CoverageDto.serializer(), request("GET", "/api/coverage?lat=$lat&lon=$lon&limit=5"))
+
+    suspend fun geocode(query: String): List<GeocodeResult> =
+        AppJson.decodeFromString(
+            kotlinx.serialization.builtins.ListSerializer(GeocodeResult.serializer()),
+            request("GET", "/api/geocode?q=" + java.net.URLEncoder.encode(query, "UTF-8")),
+        )
 
     /** Named airOS templates (names only) selectable for each model. */
     suspend fun templates(): List<TemplateDto> =

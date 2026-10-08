@@ -13,6 +13,8 @@ const LABELS = {
   'template.edit': 'Template modificato',
   'template.update': 'Template aggiornato (nome/board/predefinito)',
   'template.delete': 'Template eliminato',
+  'uisp.authorize': 'CPE accettata in UISP',
+  'uisp.backup': 'Backup UISP richiesto',
   'profile.delete': 'Profilo eliminato',
   'job.create': 'Provisioning preparato',
 };

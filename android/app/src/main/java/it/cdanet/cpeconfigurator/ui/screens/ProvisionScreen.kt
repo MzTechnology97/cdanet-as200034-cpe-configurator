@@ -122,6 +122,14 @@ private fun FormStep(c: AppContainer) {
         }) { Text("Scansiona etichetta (barcode/QR)") }
     }
 
+    SectionCard("Posizione CPE e AP vicini") {
+        Text("La posizione viene salvata nello storico e scritta nella CPE (UISP la mostra sulla mappa).", style = MaterialTheme.typography.bodySmall)
+        LocationPicker(c, form.location, form.locationLabel) { l, label -> c.provisioning.updateForm { it.copy(location = l, locationLabel = label) } }
+        form.location?.let { l ->
+            NearbyAps(c, l) { ap -> c.provisioning.updateForm { it.copy(node = ap.node ?: it.node, district = ap.district ?: it.district) } }
+        }
+    }
+
     SectionCard("2 · Wireless Station") {
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Dropdown("Nodo", (2..99).toList(), form.node, { it.toString() }, { n -> c.provisioning.updateForm { it.copy(node = n) } }, Modifier.weight(1f))
@@ -194,6 +202,7 @@ private fun ApplyStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
         KeyValue("Cliente", pkg.summary.deviceName)
         KeyValue("CPE", "${pkg.summary.model} · ${pkg.summary.mac}")
         if (pkg.summary.template.isNotBlank()) KeyValue("Template", pkg.summary.template)
+        c.provisioning.form.collectAsState().value.location?.let { KeyValue("Posizione", "%.5f, %.5f".format(it.latitude, it.longitude)) }
         KeyValue("SSID", pkg.summary.ssid)
         KeyValue("Valido ancora", if (left.isNegative) "SCADUTO" else "${left.toMinutes()} min ${left.seconds % 60} s")
         if (left.isNegative) Banner("Pacchetto scaduto: torna online e preparalo di nuovo.", MaterialTheme.colorScheme.error)

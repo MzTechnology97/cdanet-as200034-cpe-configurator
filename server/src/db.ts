@@ -123,6 +123,17 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX template_users_user ON template_users(user_id);
   `,
+  // 5: CPE position (phone GPS or geocoded address) and UISP lifecycle of the provisioned device.
+  `
+  ALTER TABLE provisioning_jobs ADD COLUMN latitude REAL;
+  ALTER TABLE provisioning_jobs ADD COLUMN longitude REAL;
+  ALTER TABLE provisioning_jobs ADD COLUMN location_accuracy REAL;
+  ALTER TABLE provisioning_jobs ADD COLUMN location_source TEXT NOT NULL DEFAULT '';
+  ALTER TABLE provisioning_jobs ADD COLUMN uisp_device_id TEXT NOT NULL DEFAULT '';
+  ALTER TABLE provisioning_jobs ADD COLUMN uisp_site TEXT NOT NULL DEFAULT '';
+  ALTER TABLE provisioning_jobs ADD COLUMN uisp_authorized_at TEXT;
+  ALTER TABLE provisioning_jobs ADD COLUMN uisp_authorized_by INTEGER;
+  `,
 ];
 
 export function openDatabase(path: string): Db {
@@ -133,9 +144,10 @@ export function openDatabase(path: string): Db {
   return db;
 }
 
-export function migrate(db: Db): void {
+/** Applies pending migrations (up to `target`, default: latest). */
+export function migrate(db: Db, target = MIGRATIONS.length): void {
   const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
-  for (let v = row.user_version; v < MIGRATIONS.length; v++) {
+  for (let v = row.user_version; v < Math.min(target, MIGRATIONS.length); v++) {
     db.exec('BEGIN');
     try {
       db.exec(MIGRATIONS[v] as string);

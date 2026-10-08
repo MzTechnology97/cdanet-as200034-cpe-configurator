@@ -64,6 +64,15 @@ const envSchema = z.object({
   ANDROID_RELEASE_SYNC_MINUTES: int(30, 0, 1440),
 
   ROUTEROS_ALLOW_PUBLIC: z.enum(['0', '1']).default('0'),
+
+  // UISP API v2.1 (optional): base URL like https://uisp.example.it, token from UISP Settings > Users > API tokens.
+  UISP_API_URL: z.string().url().optional().or(z.literal('').transform(() => undefined)),
+  UISP_API_TOKEN: optionalText(400),
+  UISP_CACHE_SECONDS: int(60, 5, 3600),
+  UISP_AUTO_BACKUP: z.enum(['0', '1']).default('1'),
+  COVERAGE_MAX_KM: int(15, 1, 100),
+  GEOCODER_URL: z.string().url().default('https://nominatim.openstreetmap.org'),
+  GEOCODER_CONTACT: optionalText(200),
 });
 
 export type Env = z.infer<typeof envSchema>;
@@ -110,6 +119,10 @@ export interface Config {
     syncMinutes: number;
   };
   routerOsAllowPublic: boolean;
+  uisp: { url: string; token: string; cacheSeconds: number } | null;
+  uispAutoBackup: boolean;
+  coverageMaxKm: number;
+  geocoder: { url: string; contact: string | undefined };
 }
 
 export function loadMasterKey(path: string): Buffer {
@@ -173,5 +186,12 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
       syncMinutes: e.ANDROID_RELEASE_SYNC_MINUTES,
     },
     routerOsAllowPublic: e.ROUTEROS_ALLOW_PUBLIC === '1',
+    uisp:
+      e.UISP_API_URL && e.UISP_API_TOKEN
+        ? { url: e.UISP_API_URL, token: e.UISP_API_TOKEN, cacheSeconds: e.UISP_CACHE_SECONDS }
+        : null,
+    uispAutoBackup: e.UISP_AUTO_BACKUP === '1',
+    coverageMaxKm: e.COVERAGE_MAX_KM,
+    geocoder: { url: e.GEOCODER_URL, contact: e.GEOCODER_CONTACT },
   };
 }

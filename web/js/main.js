@@ -1,5 +1,6 @@
 import { api, session } from './api.js';
 import { h, mount, toast } from './dom.js';
+import { coverageView } from './views/coverage.js';
 import { dashboardView } from './views/dashboard.js';
 import { eventsView } from './views/events.js';
 import { jobsView } from './views/jobs.js';
@@ -16,6 +17,7 @@ const ROUTES = [
   { id: 'dashboard', label: 'Panoramica', view: dashboardView, admin: true },
   { id: 'jobs', label: 'Storico provisioning', view: jobsView },
   { id: 'mytemplates', label: 'Template disponibili', view: myTemplatesView, installer: true },
+  { id: 'coverage', label: 'Copertura', view: coverageView },
   { id: 'tools', label: 'Strumenti di rete', view: toolsView },
   { id: 'routeros', label: 'MikroTik · RouterOS', view: routerosView },
   { group: 'Amministrazione', admin: true },

@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import it.cdanet.cpeconfigurator.core.AppContainer
 import it.cdanet.cpeconfigurator.ui.screens.CameraScreen
+import it.cdanet.cpeconfigurator.ui.screens.CoverageScreen
 import it.cdanet.cpeconfigurator.ui.screens.CpeWebScreen
 import it.cdanet.cpeconfigurator.ui.screens.DiscoveryScreen
 import it.cdanet.cpeconfigurator.ui.screens.HistoryScreen
@@ -53,6 +54,7 @@ enum class Screen(val title: String, val scroll: Boolean = true) {
     Wifi("Wi-Fi Analyzer"),
     Network("Strumenti di rete"),
     Discovery("Discovery LAN"),
+    Coverage("Copertura AP"),
     Snmp("SNMP"),
     Camera("TVCC / IP camera"),
     Remote("Accesso remoto"),
@@ -127,6 +129,7 @@ fun AppRoot(c: AppContainer) {
                     Screen.Wifi -> WifiScreen(c)
                     Screen.Network -> NetworkScreen(c)
                     Screen.Discovery -> DiscoveryScreen(c)
+                    Screen.Coverage -> CoverageScreen(c)
                     Screen.Snmp -> SnmpScreen(c)
                     Screen.Camera -> CameraScreen(c)
                     Screen.Remote -> RemoteScreen(c)
