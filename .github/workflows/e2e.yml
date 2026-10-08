@@ -74,6 +74,8 @@ jobs:
             -d "{\"username\":\"admin\",\"password\":\"$ADMIN_PW\"}" http://localhost/api/auth/login | jq -r .token)
           test -n "$TOKEN" && test "$TOKEN" != null
           echo "TOKEN=$TOKEN" >> "$GITHUB_ENV"
+          # the first-boot admin password must not remain in the container environment
+          ! docker inspect -f '{{range .Config.Env}}{{println .}}{{end}}' "$(docker ps -qf "label=com.docker.compose.project=$PROJECT" -f label=com.docker.compose.service=app)" | grep -q "^ADMIN_PASSWORD=.\+"
           app=$(docker ps -qf "label=com.docker.compose.project=$PROJECT" -f label=com.docker.compose.service=app)
           echo "app restarts: $(docker inspect -f '{{.RestartCount}}' "$app")"
           test "$(docker inspect -f '{{.RestartCount}}' "$app")" = 0

@@ -237,17 +237,24 @@ if [[ -n ${GHCR_TOKEN:-} ]]; then
   echo "$GHCR_TOKEN" | docker login ghcr.io -u "${GHCR_USER:-cdanet}" --password-stdin
 fi
 if [[ ${CDANET_SKIP_PULL:-0} == 1 ]]; then echo "  pull saltato (CDANET_SKIP_PULL=1)"; else docker compose --env-file .env pull; fi
+wait_app() {
+  local s=""
+  for _ in $(seq 1 90); do
+    s=$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -aq app)" 2>/dev/null || true)
+    [[ $s == healthy ]] && return 0
+    sleep 2
+  done
+  docker compose logs --tail=80 app
+  fail "l'app non si avvia (log qui sopra)"
+}
 # App first (and alone): the updater must not race with it, and a failing start shows its log.
+# ADMIN_PASSWORD is passed only for the very first boot (it creates the admin) and the
+# container is then recreated without it, so it never stays visible in "docker inspect".
 ADMIN_PASSWORD="$FIRST_ADMIN" docker compose --env-file .env up -d --remove-orphans --no-deps app || true
-s=""
-for _ in $(seq 1 90); do
-  s=$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -aq app)" 2>/dev/null || true)
-  [[ $s == healthy ]] && break
-  sleep 2
-done
-[[ ${s:-} == healthy ]] || { docker compose logs --tail=80 app; fail "l'app non si avvia (log qui sopra)"; }
-ADMIN_PASSWORD="$FIRST_ADMIN" docker compose --env-file .env up -d --remove-orphans
+wait_app
 unset FIRST_ADMIN p1 p2
+docker compose --env-file .env up -d --remove-orphans
+wait_app
 docker compose exec -T app wget -qO- http://127.0.0.1:8787/api/health; echo
 echo
 echo "=== Installazione completata ==="
@@ -256,6 +263,6 @@ echo "Aggiornamenti automatici: container 'updater' (log: sudo cdanet-cpe logs -
 echo "Comandi: sudo cdanet-cpe help"
 if [[ $GEOCODER_LOCAL == 1 ]]; then
   echo
-  echo "OpenStreetMap locale: il container 'nominatim' scarica e importa i dati (da ~30 minuti a qualche ora)."
+  echo "OpenStreetMap locale: il container 'nominatim' scarica e importa i dati (da ~20 minuti a qualche ora)."
   echo "  Avanzamento: sudo cdanet-cpe geocoder   (fino al termine la ricerca indirizzi usa il servizio pubblico)"
 fi
