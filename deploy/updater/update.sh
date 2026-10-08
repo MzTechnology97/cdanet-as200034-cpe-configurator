@@ -72,6 +72,8 @@ check_once() {
 
 if [ "${AUTOUPDATE:-1}" != "1" ]; then log "AUTOUPDATE disabled: idle"; while true; do sleep 3600; done; fi
 log "auto-updater started: project=$PROJECT interval=${INTERVAL}s window=${WINDOW:-always}"
+# Let the installer / compose finish starting the stack before the first check.
+sleep "${UPDATE_START_DELAY:-120}"
 while true; do
   if in_window; then check_once || log "update cycle error"; fi
   sleep "$INTERVAL"

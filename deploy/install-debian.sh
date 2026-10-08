@@ -196,9 +196,14 @@ echo "[3b/5] OpenStreetMap"
 setup_geocoder
 
 echo "[4/5] Stop eventuale stack v0.5.x"
-if [[ -f $LEGACY_DIR/deploy/docker-compose.yml && $LEGACY_DIR != "$DEPLOY_DIR" ]]; then
+# Only once: the legacy stack uses the same compose project name, so a later "down"
+# would stop the current stack too.
+if [[ -f $LEGACY_DIR/deploy/docker-compose.yml && $LEGACY_DIR != "$DEPLOY_DIR" && ! -f $DEPLOY_DIR/.legacy-stopped ]]; then
   (cd "$LEGACY_DIR/deploy" && docker compose --env-file .env down --remove-orphans) || true
+  touch "$DEPLOY_DIR/.legacy-stopped"
   echo "  stack legacy fermato: il volume dati 'cdanet-cpe-configurator_appdata' viene riutilizzato"
+else
+  echo "  niente da fare"
 fi
 
 echo "[5/5] Avvio"
@@ -207,15 +212,17 @@ if [[ -n ${GHCR_TOKEN:-} ]]; then
   echo "$GHCR_TOKEN" | docker login ghcr.io -u "${GHCR_USER:-cdanet}" --password-stdin
 fi
 docker compose --env-file .env pull
-ADMIN_PASSWORD="$FIRST_ADMIN" docker compose --env-file .env up -d --remove-orphans
-unset FIRST_ADMIN p1 p2
-
-for _ in $(seq 1 60); do
-  s=$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -q app)" 2>/dev/null || true)
+# App first (and alone): the updater must not race with it, and a failing start shows its log.
+ADMIN_PASSWORD="$FIRST_ADMIN" docker compose --env-file .env up -d --remove-orphans --no-deps app || true
+s=""
+for _ in $(seq 1 90); do
+  s=$(docker inspect -f '{{.State.Health.Status}}' "$(docker compose ps -aq app)" 2>/dev/null || true)
   [[ $s == healthy ]] && break
   sleep 2
 done
-[[ ${s:-} == healthy ]] || { docker compose logs --tail=80 app; fail "health-check fallito"; }
+[[ ${s:-} == healthy ]] || { docker compose logs --tail=80 app; fail "l'app non si avvia (log qui sopra)"; }
+ADMIN_PASSWORD="$FIRST_ADMIN" docker compose --env-file .env up -d --remove-orphans
+unset FIRST_ADMIN p1 p2
 docker compose exec -T app wget -qO- http://127.0.0.1:8787/api/health; echo
 echo
 echo "=== Installazione completata ==="
