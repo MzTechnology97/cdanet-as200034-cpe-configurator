@@ -11,7 +11,7 @@
 #   sudo cdanet-cpe version                 running version
 set -eu
 DEPLOY_DIR="${DEPLOY_DIR:-/opt/cdanet-cpe}"
-case "${1:-}" in ""|-h|--help|help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+case "${1:-}" in ""|-h|--help|help) sed -n '2,11p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
 [ "$(id -u)" -eq 0 ] || { echo "Usa: sudo cdanet-cpe $*" >&2; exit 1; }
 dc() { docker compose -f "$DEPLOY_DIR/docker-compose.yml" --project-directory "$DEPLOY_DIR" "$@"; }
 case "${1:-}" in
