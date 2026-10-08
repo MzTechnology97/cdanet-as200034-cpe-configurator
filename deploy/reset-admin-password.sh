@@ -1,15 +1,12 @@
 #!/usr/bin/env bash
+# Resets (or creates) an admin account in the running stack without touching other data.
 set -Eeuo pipefail
-APP_DIR=${APP_DIR:-/opt/cdanet-cpe-configurator}
-cd "$APP_DIR/deploy"
+DEPLOY_DIR="${DEPLOY_DIR:-/opt/cdanet-cpe}"
 [[ $EUID -eq 0 ]] || { echo "Eseguire come root." >&2; exit 1; }
-read -rp "Username Admin: " USERNAME
-while :; do
-  read -rsp "Nuova password Admin (min 14): " PASSWORD; echo
-  read -rsp "Conferma password: " PASSWORD2; echo
-  [[ ${#PASSWORD} -ge 14 && "$PASSWORD" == "$PASSWORD2" ]] && break
-  echo "Password non valide."
-done
-printf '%s\n%s\n' "$USERNAME" "$PASSWORD" | docker compose --env-file .env exec -T app node src/reset-admin-password.js
-unset PASSWORD PASSWORD2
-echo "Password Admin aggiornata. Verificare il login dalla PWA/APK."
+cd "$DEPLOY_DIR"
+read -rp "Username admin: " u
+read -rsp "Nuova password (min 14): " p; echo
+read -rsp "Conferma: " p2; echo
+[[ $p == "$p2" && ${#p} -ge 14 ]] || { echo "Password non valide" >&2; exit 1; }
+printf '%s\n%s\n' "$u" "$p" | docker compose --env-file .env exec -T -u node app node src/cli/reset-admin.ts
+unset p p2

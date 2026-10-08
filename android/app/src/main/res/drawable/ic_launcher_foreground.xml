@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- CDA Net "C" mark on the 108dp adaptive-icon canvas (safe zone 66dp). -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="512"
+    android:viewportHeight="512">
+    <group
+        android:scaleX="0.62"
+        android:scaleY="0.62"
+        android:translateX="97"
+        android:translateY="97">
+        <path
+            android:fillColor="#00000000"
+            android:pathData="M256,66a190,190 0,1 0,0.1 0z"
+            android:strokeWidth="32"
+            android:strokeColor="#F47B20" />
+        <path
+            android:fillColor="#F47B20"
+            android:pathData="M124,270c0,-94 60,-154 143,-154 59,0 106,28 132,73l-56,32c-15,-28 -41,-45 -75,-45 -47,0 -81,36 -81,94s34,94 81,94c34,0 62,-18 77,-47l56,32c-26,47 -73,75 -134,75 -83,0 -143,-60 -143,-154z" />
+        <path
+            android:fillColor="#F47B20"
+            android:pathData="M399,158m-36,0a36,36 0,1 1,72 0a36,36 0,1 1,-72 0" />
+    </group>
+</vector>

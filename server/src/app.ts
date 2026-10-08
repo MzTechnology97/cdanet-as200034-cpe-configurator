@@ -1,0 +1,120 @@
+import { existsSync } from 'node:fs';
+import { join } from 'node:path';
+import fastifyStatic from '@fastify/static';
+import Fastify, { type FastifyInstance } from 'fastify';
+import { ZodError } from 'zod';
+import { HttpError, createAuth } from './auth.ts';
+import type { Config } from './config.ts';
+import type { AppContext } from './context.ts';
+import { createSealer, hashPassword } from './crypto.ts';
+import { nowIso, openDatabase, type Db } from './db.ts';
+import { adminRoutes } from './routes/admin.ts';
+import { provisioningRoutes } from './routes/provisioning.ts';
+import { publicRoutes } from './routes/public.ts';
+import { toolRoutes } from './routes/tools.ts';
+import { createProvisioning } from './services/provisioning.ts';
+
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self'",
+  "img-src 'self' data:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'none'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
+
+export function ensureBootstrapAdmin(db: Db, cfg: Config): 'created' | 'exists' {
+  const n = (db.prepare("SELECT count(*) n FROM users WHERE role = 'admin'").get() as { n: number }).n;
+  if (n > 0) return 'exists';
+  const p = cfg.bootstrapAdmin.password;
+  if (!p || p.length < 14) throw new Error('First boot requires ADMIN_PASSWORD of at least 14 characters');
+  db.prepare('INSERT INTO users(username, password_hash, role, created_at) VALUES(?,?,?,?)').run(
+    cfg.bootstrapAdmin.username,
+    hashPassword(p),
+    'admin',
+    nowIso(),
+  );
+  return 'created';
+}
+
+export async function buildApp(cfg: Config, version: string, opts: { db?: Db; logger?: boolean } = {}): Promise<{ app: FastifyInstance; ctx: AppContext }> {
+  const db = opts.db ?? openDatabase(cfg.dbPath);
+  ensureBootstrapAdmin(db, cfg);
+  const sealer = createSealer(cfg.masterKey);
+  const ctx: AppContext = {
+    cfg,
+    db,
+    sealer,
+    auth: createAuth(db, cfg.jwtSecret, cfg.jwtTtlHours),
+    provisioning: createProvisioning(db, cfg, sealer),
+    version,
+  };
+
+  const app = Fastify({
+    logger:
+      opts.logger === false
+        ? false
+        : {
+            level: cfg.logLevel,
+            redact: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["x-cda-bridge-token"]'],
+          },
+    bodyLimit: 512 * 1024,
+    trustProxy: cfg.trustProxy,
+  });
+
+  // Speed-test uploads: count bytes without buffering them.
+  app.addContentTypeParser('application/octet-stream', { bodyLimit: 50 * 1024 * 1024 }, (_req, payload, done) => {
+    let bytes = 0;
+    payload.on('data', (c: Buffer) => (bytes += c.length));
+    payload.on('end', () => done(null, { bytes }));
+    payload.on('error', (e) => done(e, undefined));
+  });
+
+  app.addHook('onSend', async (req, reply, payload) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('Referrer-Policy', 'no-referrer');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('Cross-Origin-Opener-Policy', 'same-origin');
+    if (req.url.startsWith('/api/')) reply.header('Cache-Control', reply.getHeader('Cache-Control') ?? 'no-store');
+    else reply.header('Content-Security-Policy', CSP);
+    return payload;
+  });
+
+  app.setErrorHandler((err, req, reply) => {
+    if (err instanceof HttpError) return reply.code(err.status).send({ error: err.code, ...err.extra });
+    if (err instanceof ZodError) {
+      return reply.code(400).send({
+        error: 'invalid_request',
+        issues: err.issues.slice(0, 10).map((i) => ({ path: i.path.join('.'), message: i.message })),
+      });
+    }
+    const status = (err as { statusCode?: number }).statusCode;
+    if (status && status >= 400 && status < 500) return reply.code(status).send({ error: (err as { code?: string }).code ?? 'bad_request' });
+    // Tool errors carry short, user-facing codes (e.g. target_non_privato); everything else is opaque.
+    if (req.url.startsWith('/api/tools/') || req.url.startsWith('/api/routeros/')) {
+      return reply.code(400).send({ error: (err as Error).message.slice(0, 300) });
+    }
+    req.log.error({ err }, 'unhandled error');
+    return reply.code(500).send({ error: 'internal_error' });
+  });
+
+  publicRoutes(app, ctx);
+  provisioningRoutes(app, ctx);
+  adminRoutes(app, ctx);
+  toolRoutes(app, ctx);
+
+  if (existsSync(join(cfg.staticDir, 'index.html'))) {
+    await app.register(fastifyStatic, { root: cfg.staticDir, index: ['index.html'], maxAge: '1h', cacheControl: true });
+  }
+  app.setNotFoundHandler((req, reply) => {
+    if (req.url.startsWith('/api/') || req.method !== 'GET' || !existsSync(join(cfg.staticDir, 'index.html'))) {
+      return reply.code(404).send({ error: 'not_found' });
+    }
+    return reply.sendFile('index.html');
+  });
+
+  return { app, ctx };
+}

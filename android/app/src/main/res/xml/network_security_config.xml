@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Cleartext is required: factory CPEs (192.168.172.1), RouterOS, cameras and the
+  internal CDA Net server are reached over HTTP/RTSP on private networks.
+  The app itself only accepts an HTTP backend on private/CGNAT addresses.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="true">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>

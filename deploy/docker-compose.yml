@@ -1,42 +1,39 @@
+# CDA Net CPE Configurator - production stack.
+#   app      API + Admin/NOC web console (image built by CI from the repository)
+#   caddy    reverse proxy, automatic HTTPS when APP_LISTEN is a hostname
+#   updater  pulls new app images, backs up the DB, rolls back if unhealthy
 name: cdanet-cpe-configurator
+
 services:
   app:
-    build:
-      context: ..
-      dockerfile: deploy/Dockerfile
+    image: ${CDANET_IMAGE:-ghcr.io/mztechnology97/cdanet-cpe-server}:${CDANET_CHANNEL:-stable}
     restart: unless-stopped
     env_file: .env
     environment:
+      # First boot only (installer passes it once; never stored in .env).
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      DB_PATH: /data/cdanet.sqlite
       SECRETS_KEY_FILE: /run/secrets/cdanet_master_key
       ANDROID_RELEASE_DIR: /opt/cdanet/releases
-    init: true
-    security_opt:
-      - no-new-privileges:true
+    init: false
+    security_opt: ["no-new-privileges:true"]
     cap_drop: [ALL]
+    cap_add: [CHOWN, SETUID, SETGID]
     volumes:
-      - appdata:/app/server/data
-      - ${FIRMWARE_HOST_PATH}:/opt/cdanet/firmware/WA-8.7.4.bin:ro
-      - /etc/cdanet-cpe/secrets/master.key:/run/secrets/cdanet_master_key:ro
-      - ${ANDROID_RELEASE_HOST_PATH}:/opt/cdanet/releases:ro
+      - appdata:/data
+      - ${MASTER_KEY_HOST_PATH:-/etc/cdanet-cpe/secrets/master.key}:/run/secrets/cdanet_master_key:ro
+      - ${ANDROID_RELEASE_HOST_PATH:-/srv/cdanet-private/releases}:/opt/cdanet/releases
     expose: ["8787"]
     networks: [private]
-    healthcheck:
-      test: ["CMD", "wget", "-qO-", "http://127.0.0.1:8787/api/health"]
-      interval: 30s
-      timeout: 5s
-      retries: 3
-      start_period: 20s
     logging:
       driver: json-file
       options: {max-size: "10m", max-file: "3"}
+
   caddy:
     image: caddy:2-alpine
     restart: unless-stopped
     security_opt: ["no-new-privileges:true"]
     environment:
-      APP_DOMAIN: ${APP_DOMAIN}
-      APP_SCHEME: ${APP_SCHEME:-http}
       APP_LISTEN: ${APP_LISTEN:-:80}
     ports:
       - "80:80"
@@ -52,10 +49,36 @@ services:
     logging:
       driver: json-file
       options: {max-size: "10m", max-file: "3"}
+
+  updater:
+    image: docker:27-cli
+    restart: unless-stopped
+    entrypoint: ["/bin/sh", "/updater/update.sh"]
+    environment:
+      COMPOSE_PROJECT_NAME: cdanet-cpe-configurator
+      DEPLOY_DIR: ${DEPLOY_DIR:-/opt/cdanet-cpe}
+      UPDATE_INTERVAL: ${UPDATE_INTERVAL:-300}
+      UPDATE_WINDOW: ${UPDATE_WINDOW:-}
+      AUTOUPDATE: ${AUTOUPDATE:-1}
+      DOCKER_CONFIG: /docker-config
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      # Same absolute path as on the host so relative bind mounts resolve correctly.
+      - ${DEPLOY_DIR:-/opt/cdanet-cpe}:${DEPLOY_DIR:-/opt/cdanet-cpe}:ro
+      - ./updater:/updater:ro
+      - updater_state:/state
+      # Optional registry credentials (private GHCR package): docker login writes here.
+      - ${REGISTRY_AUTH_DIR:-/root/.docker}:/docker-config:ro
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "2"}
+
 networks:
   private:
     driver: bridge
+
 volumes:
   appdata:
   caddy_data:
   caddy_config:
+  updater_state:
