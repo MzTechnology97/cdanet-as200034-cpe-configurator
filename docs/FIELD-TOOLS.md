@@ -57,3 +57,26 @@ Il rapporto si copia o si condivide con il NOC (WhatsApp, Telegram, email). Non 
 ## Soglie
 
 Le decide il server (`server/src/routes/field.ts`, `FIELD_THRESHOLDS`), così il NOC può cambiarle senza pubblicare una nuova app: segnale buono −65 dBm, minimo −75 dBm, CINR 20 dB, sbilanciamento catene 6 dB, capacità minima 100 Mbit/s, porta LAN minima 100 Mbit/s.
+
+## Collaudo dell'installazione
+
+Dall'app: **Storico → job completato → Collaudo**, oppure subito dopo un provisioning riuscito.
+
+1. **Misure radio**: 10 letture in 10 secondi. Il segnale viene mediato (con minimo e massimo) e i controlli della diagnosi vengono applicati alla media.
+2. **Internet dal lato cliente**: con il telefono sulla Wi-Fi del router del cliente, ping e velocità verso il server CDA Net passano dalla nuova linea (mai dai dati mobili). Se il telefono è sulla Wi-Fi di management della CPE, la misura viene segnalata come non eseguita.
+3. **Foto**: fino a 8, con didascalia (Antenna, Staffa/palo, Cablaggio, Router cliente, Altro). Vengono ridotte a 1600 px e raddrizzate prima dell'invio.
+4. **Note** per il NOC.
+
+L'esito (superato, con riserva, non superato) è calcolato dalle soglie del server. Prima dell'invio l'app manda l'esito del provisioning, se è ancora in coda. Le foto non inviate restano nell'app per riprovare.
+
+Sul server: `PUT /api/provisioning/jobs/{id}/acceptance` e `POST /api/provisioning/jobs/{id}/photos` (JPEG, max 3 MB, max 8 per job). Le foto sono salvate su disco in `PHOTOS_DIR` (default `photos/` accanto al database, quindi nel volume `/data` del container) e vengono cancellate insieme al job dalla retention GDPR.
+
+Nella **console web**, Storico → job, la sezione *Collaudo* mostra misure, controlli, note e foto. Il pulsante **Verbale di installazione** apre un verbale stampabile (o salvabile in PDF) con dati dell'installazione, misure, controlli, foto e spazio per le firme di installatore e cliente.
+
+## Sostituzione CPE
+
+Dall'app: **Storico → job completato → Sostituisci CPE**. Si apre il provisioning con cliente, SSID, template e posizione della CPE guasta: basta inserire (o scansionare) **MAC e seriale della CPE nuova**.
+
+La **password PPPoE** si può lasciare vuota: il server la legge dall'ultimo backup UISP della CPE sostituita (dalla chiave del template che contiene `${PPPOE_PASSWORD}`, di norma `ppp.1.password`) e la inserisce nella configurazione. Non viene mai mostrata né salvata. Se UISP non è configurato o il backup non la contiene, l'app chiede di inserirla.
+
+Il nuovo job risulta collegato a quello sostituito ("Sostituisce la CPE del job …" nello storico web). Nel Registro attività resta l'evento *Sostituzione CPE*, con l'origine della password (installatore o backup UISP).
