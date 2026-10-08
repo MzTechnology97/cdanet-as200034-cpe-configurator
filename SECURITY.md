@@ -47,3 +47,12 @@ Prima di dichiarare una versione pronta per la produzione:
 - CI verde (test server, typecheck, smoke test immagine, test e build Android);
 - APK firmato con la chiave stabile;
 - checklist di collaudo hardware in [docs/PROVISIONING.md](docs/PROVISIONING.md) completata sui modelli interessati.
+
+## Verifica in due passaggi (v1.9.0)
+
+- TOTP standard (RFC 6238, 30 s, 6 cifre), compatibile con Google Authenticator, Microsoft Authenticator e simili. Si attiva da **Il mio account** (password + QR code + primo codice).
+- Il segreto è cifrato con la master key. I codici di recupero (8, monouso) sono salvati come hash SHA-256 e mostrati una sola volta.
+- Login: la password da sola restituisce solo un token di 5 minuti, valido esclusivamente per il passo del codice e rifiutato come sessione. I codici già usati non sono riutilizzabili (anti-replay). I tentativi sono limitati come per la password.
+- Un amministratore può rendere il 2FA **obbligatorio per gli admin** (Account → Sicurezza), ma solo dopo averlo attivato sul proprio account. Gli admin senza 2FA vedono solo "Il mio account" finché non lo attivano.
+- Telefono perso: un admin può azzerare il 2FA di un account (Account → utente). Le sessioni vengono revocate.
+- Attivazioni, disattivazioni, codici di recupero usati, cambi di politica e azzeramenti finiscono nel Registro attività e, se configurate, nelle notifiche Telegram di sicurezza.

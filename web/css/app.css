@@ -177,3 +177,6 @@ ul.plain { padding-left: 18px; margin: 6px 0; }
 .photos figure { margin: 0; }
 .photos img { width: 100%; aspect-ratio: 4 / 3; object-fit: cover; border-radius: 8px; border: 1px solid var(--line); background: var(--bg); }
 .chart { width: 100%; height: auto; display: block; margin: 8px 0; }
+.qr { width: 220px; max-width: 100%; background: #fff; padding: 6px; border-radius: 8px; margin: 8px 0; }
+.qr svg { width: 100%; height: auto; display: block; }
+button.link { background: none; border: none; color: var(--brand); padding: 4px 0; cursor: pointer; }

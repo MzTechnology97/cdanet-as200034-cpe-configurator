@@ -85,7 +85,7 @@ async function route() {
   renderChrome(s?.user);
   setMenu(false);
   if (!s?.token) {
-    mount(viewEl, loginView(onLogin));
+    mount(viewEl, loginView(onLogin, onTotp));
     return;
   }
   // #/route?key=value — the query part is handed to the view (e.g. #/profiles?user=5).
@@ -98,14 +98,33 @@ async function route() {
     const content = await r.view({ user: s.user, params: new URLSearchParams(query) });
     mount(viewEl, content);
   } catch (e) {
+    if (e.body?.error === 'mfa_setup_required' && id !== 'account') {
+      location.hash = '#/account';
+      return;
+    }
     mount(viewEl, h('div', { class: 'notice bad' }, e.message || String(e)));
   }
 }
 
+/** Returns { mfaToken } when the account uses two-step verification (code asked by the login view). */
 async function onLogin(username, password) {
   const d = await api('/api/auth/login', { method: 'POST', body: { username, password } });
+  if (d.mfaRequired) return { mfaToken: d.mfaToken };
+  started(d);
+  return {};
+}
+
+async function onTotp(mfaToken, code) {
+  started(await api('/api/auth/login/totp', { method: 'POST', body: { mfaToken, code } }));
+}
+
+function started(d) {
   session.set({ token: d.token, user: d.user, expiresAt: d.expiresAt });
   toast(`Benvenuto ${d.user.username}`);
+  if (d.mfaSetupRequired) {
+    toast('Per gli amministratori la verifica in due passaggi è obbligatoria: attivala ora', 'bad');
+    location.hash = '#/account';
+  }
   route();
 }
 

@@ -16,6 +16,7 @@ export async function usersView({ user: me }) {
           { label: 'Username', key: 'username' },
           { label: 'Ruolo', render: (u) => badge(u.role === 'admin' ? 'Admin' : 'Installatore', u.role === 'admin' ? 'warn' : '') },
           { label: 'Stato', render: (u) => badge(u.active ? 'Attivo' : 'Disabilitato', u.active ? 'good' : 'bad') },
+          { label: '2FA', render: (u) => (u.totpEnabled ? badge('attiva', 'good') : u.role === 'admin' ? badge('no', 'warn') : '—') },
           { label: 'Ultimo accesso', render: (u) => fmtDate(u.lastLoginAt) },
           { label: 'Provisioning', key: 'jobs' },
         ],
@@ -45,6 +46,10 @@ export async function usersView({ user: me }) {
         if (u.active && !confirm(`Disabilitare ${u.username}? Le sessioni attive verranno chiuse.`)) return;
         await patch({ active: !u.active }, u.active ? 'Account disabilitato' : 'Account abilitato');
       });
+    const resetTotp = h('button', {}, 'Azzera verifica in due passaggi');
+    resetTotp.onclick = () =>
+      confirm(`Azzerare la verifica in due passaggi di ${u.username}? (telefono perso) Le sue sessioni verranno chiuse.`) &&
+      busy(resetTotp, () => patch({ resetTotp: true }, 'Verifica in due passaggi azzerata'));
     const role = h('button', {}, u.role === 'admin' ? 'Rendi installatore' : 'Rendi admin');
     role.onclick = () => busy(role, () => patch({ role: u.role === 'admin' ? 'installer' : 'admin' }, 'Ruolo aggiornato'));
     mount(
@@ -53,6 +58,7 @@ export async function usersView({ user: me }) {
         h('h2', {}, `Account ${u.username}`),
         h('p', { class: 'muted small' }, `Creato ${fmtDate(u.createdAt)}`),
         h('div', { class: 'row' }, field('Nuova password', pw), resetBtn),
+        u.totpEnabled ? h('div', { class: 'btns' }, resetTotp) : null,
         h('h3', {}, 'Template airOS'),
         (() => {
           const mine = profiles.flatMap((m) => m.templates).filter((t) => t.audience === 'users' && t.users.some((x) => x.id === u.id));
@@ -93,6 +99,24 @@ export async function usersView({ user: me }) {
     create,
   );
 
+  const sec = await api('/api/admin/security');
+  const policy = h('input', { type: 'checkbox' });
+  policy.checked = sec.totpRequiredForAdmins;
+  policy.onchange = async () => {
+    try {
+      await api('/api/admin/security', { method: 'PUT', body: { totpRequiredForAdmins: policy.checked } });
+      toast(policy.checked ? 'Verifica in due passaggi obbligatoria per gli admin' : 'Verifica in due passaggi facoltativa');
+    } catch (e) {
+      policy.checked = !policy.checked;
+      toast(e.message, 'bad');
+    }
+  };
+  const securityCard = card(
+    h('h2', {}, 'Sicurezza'),
+    h('label', { class: 'check' }, policy, 'Verifica in due passaggi obbligatoria per gli amministratori'),
+    h('p', { class: 'small muted' }, 'Gli admin senza 2FA potranno solo attivarla da "Il mio account". Per abilitarla devi averla già attiva tu. Gli installatori possono attivarla quando vogliono.'),
+  );
+
   await load();
-  return h('div', {}, pageHead('Account', 'Installatori e amministratori. Disabilitazione e reset revocano subito le sessioni.'), card(h('h2', {}, 'Nuovo account'), form), card(list), editor);
+  return h('div', {}, pageHead('Account', 'Installatori e amministratori. Disabilitazione e reset revocano subito le sessioni.'), securityCard, card(h('h2', {}, 'Nuovo account'), form), card(list), editor);
 }

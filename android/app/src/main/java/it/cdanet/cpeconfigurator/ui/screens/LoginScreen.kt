@@ -50,6 +50,8 @@ fun LoginScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) ->
     var error by remember { mutableStateOf<String?>(null) }
     var serverInfo by remember { mutableStateOf<String?>(null) }
     var editBackend by remember { mutableStateOf(false) }
+    var mfaToken by remember { mutableStateOf<String?>(null) }
+    var code by remember { mutableStateOf("") }
 
     LaunchedEffect(savedBackend) { if (backend.isBlank()) backend = savedBackend }
     LaunchedEffect(savedUser) { if (username.isBlank()) username = savedUser }
@@ -70,7 +72,31 @@ fun LoginScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) ->
         UpdateBanner(c, update, onUpdate)
         ErrorBanner(error) { error = null }
 
-        SectionCard("Accesso installatore") {
+        mfaToken?.let { token ->
+            SectionCard("Verifica in due passaggi") {
+                Text("Inserisci il codice di 6 cifre dell'app di autenticazione (o un codice di recupero).", style = MaterialTheme.typography.bodySmall)
+                Field("Codice", code, { code = it.trim().take(9) }, keyboardType = KeyboardType.Number)
+                BusyButton("Verifica", busy, Modifier.fillMaxWidth(), enabled = code.length >= 6) {
+                    scope.launch {
+                        busy = true
+                        error = null
+                        try {
+                            c.api.loginTotp(token, code)
+                            c.settings.setLastUsername(username)
+                        } catch (e: Exception) {
+                            error = e.message ?: e.toString()
+                            if ((e as? it.cdanet.cpeconfigurator.data.ApiException)?.code == "mfa_expired") mfaToken = null
+                        } finally {
+                            code = ""
+                            busy = false
+                        }
+                    }
+                }
+                TextButton(onClick = { mfaToken = null; code = "" }) { Text("Torna indietro") }
+            }
+        }
+
+        if (mfaToken == null) SectionCard("Accesso installatore") {
             Field("Username", username, { username = it.trim() })
             Field("Password", password, { password = it }, password = true)
             BusyButton("Accedi", busy, Modifier.fillMaxWidth(), enabled = username.isNotBlank() && password.isNotBlank()) {
@@ -79,8 +105,8 @@ fun LoginScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) ->
                     error = null
                     try {
                         if (backend != savedBackend) c.settings.setBackendUrl(backend)
-                        c.api.login(username, password)
-                        c.settings.setLastUsername(username)
+                        mfaToken = c.api.login(username, password)
+                        if (mfaToken == null) c.settings.setLastUsername(username)
                     } catch (e: Exception) {
                         error = e.message ?: e.toString()
                     } finally {

@@ -12,6 +12,19 @@ data class LoginRequest(val username: String, val password: String)
 @Serializable
 data class LoginResponse(val token: String, val expiresAt: String, val user: UserDto)
 
+/** /api/auth/login: a session, or (two-step verification) a 5-minute token for the code step. */
+@Serializable
+data class LoginStep(
+    val token: String? = null,
+    val expiresAt: String? = null,
+    val user: UserDto? = null,
+    val mfaRequired: Boolean = false,
+    val mfaToken: String? = null,
+)
+
+@Serializable
+data class TotpLoginRequest(val mfaToken: String, val code: String)
+
 @Serializable
 data class SeriesDto(val points: List<List<Double>> = emptyList(), val min: Double? = null, val avg: Double? = null, val max: Double? = null, val trend: Double? = null)
 

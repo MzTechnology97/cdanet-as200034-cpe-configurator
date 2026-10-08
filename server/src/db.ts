@@ -164,6 +164,14 @@ const MIGRATIONS: string[] = [
   CREATE INDEX job_photos_job ON job_photos(job_id);
   ALTER TABLE provisioning_jobs ADD COLUMN replaces_job_id TEXT;
   `,
+  // 8: two-step verification (TOTP) and recovery codes
+  `
+  ALTER TABLE users ADD COLUMN totp_secret TEXT NOT NULL DEFAULT '';
+  ALTER TABLE users ADD COLUMN totp_pending TEXT NOT NULL DEFAULT '';
+  ALTER TABLE users ADD COLUMN totp_enabled INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE users ADD COLUMN totp_last_step INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE users ADD COLUMN recovery_codes TEXT NOT NULL DEFAULT '[]';
+  `,
 ];
 
 export function openDatabase(path: string): Db {

@@ -20,16 +20,32 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
   const admin = { preHandler: ctx.auth.requireAdmin };
   const actor = (req: { user?: { id: number } }) => req.user?.id ?? null;
 
+  // ---- Security policy ---------------------------------------------------------------
+  app.get('/api/admin/security', admin, async () => ({ totpRequiredForAdmins: ctx.auth.totpRequiredForAdmins() }));
+
+  app.put('/api/admin/security', admin, async (req) => {
+    const b = z.object({ totpRequiredForAdmins: z.boolean() }).strict().parse(req.body);
+    // Never lock out the admin who flips the switch.
+    if (b.totpRequiredForAdmins && !req.user!.totp) throw new HttpError(409, 'enable_totp_first');
+    db.prepare(
+      `INSERT INTO settings(key, value, updated_at, updated_by) VALUES('security.totp_admins', ?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+    ).run(b.totpRequiredForAdmins ? 'required' : 'optional', nowIso(), req.user!.id);
+    recordEvent(db, actor(req), 'security.policy', 'verifica in due passaggi admin', b.totpRequiredForAdmins ? 'obbligatoria' : 'facoltativa');
+    ctx.notify.security(`Verifica in due passaggi per gli amministratori resa <b>${b.totpRequiredForAdmins ? 'obbligatoria' : 'facoltativa'}</b> da ${escapeHtml(req.user!.username)}`);
+    return { totpRequiredForAdmins: b.totpRequiredForAdmins };
+  });
+
   // ---- Installer / admin accounts ------------------------------------------------
   app.get('/api/admin/users', admin, async () =>
     db
       .prepare(
-        `SELECT u.id, u.username, u.role, u.active, u.created_at createdAt, u.last_login_at lastLoginAt,
+        `SELECT u.id, u.username, u.role, u.active, u.created_at createdAt, u.last_login_at lastLoginAt, u.totp_enabled totpEnabled,
                 (SELECT count(*) FROM provisioning_jobs j WHERE j.user_id = u.id) jobs
          FROM users u ORDER BY u.role, u.username`,
       )
       .all()
-      .map((r) => ({ ...r, active: !!(r as { active: number }).active })),
+      .map((r) => ({ ...r, active: !!(r as { active: number }).active, totpEnabled: !!(r as { totpEnabled: number }).totpEnabled })),
   );
 
   app.post('/api/admin/users', admin, async (req, reply) => {
@@ -48,7 +64,7 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
   app.patch('/api/admin/users/:id', admin, async (req) => {
     const id = z.coerce.number().int().positive().parse((req.params as { id: string }).id);
     const b = z
-      .object({ active: z.boolean().optional(), password: password.optional(), role: z.enum(['installer', 'admin']).optional() })
+      .object({ active: z.boolean().optional(), password: password.optional(), role: z.enum(['installer', 'admin']).optional(), resetTotp: z.literal(true).optional() })
       .strict()
       .refine((x) => Object.keys(x).length > 0, 'empty')
       .parse(req.body);
@@ -65,6 +81,10 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
     if (b.password !== undefined) {
       db.prepare('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?').run(hashPassword(b.password), id);
       if (target.role === 'admin') ctx.notify.security(`Password dell'amministratore <b>${escapeHtml(target.username)}</b> reimpostata da ${escapeHtml(req.user!.username)}`);
+    }
+    if (b.resetTotp) {
+      db.prepare("UPDATE users SET totp_secret = '', totp_pending = '', totp_enabled = 0, totp_last_step = 0, recovery_codes = '[]', token_version = token_version + 1 WHERE id = ?").run(id);
+      ctx.notify.security(`Verifica in due passaggi di <b>${escapeHtml(target.username)}</b> azzerata da ${escapeHtml(req.user!.username)}`);
     }
     if (b.role === 'admin' && target.role !== 'admin') ctx.notify.security(`<b>${escapeHtml(target.username)}</b> promosso amministratore da ${escapeHtml(req.user!.username)}`);
     if (b.active !== undefined) db.prepare('UPDATE users SET active = ?, token_version = token_version + 1 WHERE id = ?').run(b.active ? 1 : 0, id);
