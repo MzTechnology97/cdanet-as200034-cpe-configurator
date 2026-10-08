@@ -70,13 +70,28 @@ private fun FormStep(c: AppContainer) {
     val state by c.provisioning.state.collectAsState()
     var models by remember { mutableStateOf(ProvisionForm.MODELS) }
     var showErrors by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { runCatching { c.api.meta() }.getOrNull()?.let { models = it.models } }
+    var configuredSsids by remember { mutableStateOf<Set<String>?>(null) }
+    LaunchedEffect(Unit) {
+        runCatching { c.api.meta() }.getOrNull()?.let { models = it.models }
+        configuredSsids = runCatching { c.api.wirelessNetworks() }.getOrNull()
+    }
+    val parsedMac = Validation.parseMac(form.mac)
     val errors = form.errors()
 
     SectionCard("1 · CPE") {
         Dropdown("Modello", models, form.model, { it }, { m -> c.provisioning.updateForm { it.copy(model = m) } }, Modifier.fillMaxWidth())
-        Field("MAC", form.mac, { v -> c.provisioning.updateForm { it.copy(mac = v) } }, placeholder = "AA:BB:CC:DD:EE:FF",
-            isError = showErrors && !Validation.isMac(form.mac))
+        Field(
+            "MAC",
+            form.mac,
+            { v -> c.provisioning.updateForm { it.copy(mac = v) } },
+            placeholder = "24A43C112233 o 24:A4:3C:11:22:33",
+            isError = showErrors && parsedMac == null,
+            supporting = when {
+                parsedMac != null && parsedMac != form.mac.trim() -> "Verrà usato $parsedMac"
+                showErrors && parsedMac == null -> "12 cifre esadecimali, con o senza : - ."
+                else -> null
+            },
+        )
         Field("Seriale", form.serial, { v -> c.provisioning.updateForm { it.copy(serial = v) } })
         OutlinedButton(onClick = {
             GmsBarcodeScanning.getClient(context).startScan()
@@ -90,6 +105,13 @@ private fun FormStep(c: AppContainer) {
             Dropdown("Distretto", (1..99).toList(), form.district, { it.toString().padStart(2, '0') }, { d -> c.provisioning.updateForm { it.copy(district = d) } }, Modifier.weight(1f))
         }
         KeyValue("SSID", form.ssid)
+        if (configuredSsids?.contains(form.ssid) == false) {
+            Text(
+                "Chiave WPA2 non ancora configurata per ${form.ssid}: un amministratore deve impostarla nella console web (Reti Wi-Fi).",
+                color = MaterialTheme.colorScheme.error,
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
         KeyValue("Country", "Licensed")
     }
 

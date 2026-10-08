@@ -101,6 +101,11 @@ class ApiClient(
     suspend fun myJobs(): List<JobDto> =
         AppJson.decodeFromString(kotlinx.serialization.builtins.ListSerializer(JobDto.serializer()), request("GET", "/api/provisioning/jobs?limit=100"))
 
+    /** SSIDs whose WPA2 key is configured on the server (no secrets). */
+    suspend fun wirelessNetworks(): Set<String> =
+        AppJson.decodeFromString(kotlinx.serialization.builtins.ListSerializer(WirelessNetworkDto.serializer()), request("GET", "/api/wireless-networks"))
+            .map { it.ssid }.toSet()
+
     suspend fun routerOsCatalog(): RosCatalogDto = AppJson.decodeFromString(RosCatalogDto.serializer(), request("GET", "/api/routeros/catalog"))
 
     suspend fun macVendor(mac: String): String {

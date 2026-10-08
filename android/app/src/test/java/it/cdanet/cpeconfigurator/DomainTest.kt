@@ -67,6 +67,12 @@ class ValidationTest {
     @Test fun normalizesMacAndScan() {
         assertEquals("24:A4:3C:11:22:33", Validation.normalizeMac("24a43c112233"))
         assertEquals("24:A4:3C:11:22:33", Validation.normalizeMac("24-a4-3c-11-22-33"))
+        assertEquals("24:A4:3C:11:22:33", Validation.parseMac(" 24a4.3c11.2233 "))
+        assertEquals("24:A4:3C:11:22:33", Validation.parseMac("24:a4:3c:11:22:33"))
+        assertEquals(null, Validation.parseMac("24A43C11223"))
+        assertEquals(null, Validation.parseMac("24A43C11223G"))
+        assertEquals("24:A4:3C:11:22:33", Validation.applyScan(ProvisionForm(), "S/N 24A43C112233 LBE").mac)
+        assertEquals("24:A4:3C:11:22:33", Validation.applyScan(ProvisionForm(), "MAC: 24a4.3c11.2233").mac)
         val f = Validation.applyScan(ProvisionForm(), "24A43C112233")
         assertEquals("24:A4:3C:11:22:33", f.mac)
         assertEquals("24A43C112233", f.serial)

@@ -11,7 +11,7 @@ import { SAMPLE_TEMPLATE, testApp, testConfig } from './helpers.ts';
 
 const REQUEST = {
   model: 'LiteBeam 5AC',
-  mac: 'aa-bb-cc-dd-ee-ff',
+  mac: 'aabbccddeeff', // typed without separators, stored as AA:BB:CC:DD:EE:FF
   serial: 'SN123',
   ssid: 'CDA-NET-N2-D01',
   pppoeUser: 'rossi.mario@cda-net.it',
@@ -163,6 +163,8 @@ describe('API', () => {
 
     const list = await t.app.inject({ method: 'GET', url: '/api/provisioning/jobs', headers: t.auth(adminToken) });
     const jobs = list.json();
+    const byCompactMac = (await t.app.inject({ method: 'GET', url: '/api/provisioning/jobs?q=AABBCCDD', headers: t.auth(adminToken) })).json();
+    assert.ok(byCompactMac.some((j: { mac: string }) => j.mac === 'AA:BB:CC:DD:EE:FF'));
     assert.equal(jobs[0].status, 'success');
     assert.equal(jobs[0].installer, 'tecnico1');
     for (const secret of ['pppoe-transient', 'node2-district1-psk', 'Cpe-Admin-Secret-1']) assert.ok(!list.body.includes(secret));

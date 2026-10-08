@@ -27,10 +27,13 @@ export function ssidFor(node: number, district: number): string {
 }
 
 export const PPPOE_USER_RX = /^[A-Za-z0-9._-]+@cda-net\.it$/i;
-export const MAC_RX = /^(?:[0-9A-Fa-f]{2}[:-]){5}[0-9A-Fa-f]{2}$/;
-
-export function normalizeMac(mac: string): string {
-  return mac.trim().replace(/-/g, ':').toUpperCase();
+/**
+ * Accepts 24A43C112233, 24:a4:3c:11:22:33, 24-A4-3C-11-22-33, 24a4.3c11.2233 (any case)
+ * and returns AA:BB:CC:DD:EE:FF, or null when the input is not a MAC address.
+ */
+export function parseMac(input: string): string | null {
+  const hex = String(input).trim().replace(/[\s:.-]/g, '');
+  return /^[0-9A-Fa-f]{12}$/.test(hex) ? (hex.toUpperCase().match(/../g) as string[]).join(':') : null;
 }
 
 /** `ROSSI.MARIO@cda-net.it` -> `ROSSI MARIO` (SNMP location and Device Name). */

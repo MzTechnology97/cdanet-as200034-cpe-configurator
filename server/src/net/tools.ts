@@ -5,7 +5,7 @@ import dns from 'node:dns/promises';
 import { createConnection } from 'node:net';
 import { networkInterfaces } from 'node:os';
 import { promisify } from 'node:util';
-import { MAC_RX, normalizeMac } from '../domain/policy.ts';
+import { parseMac } from '../domain/policy.ts';
 import { intToIp, ipToInt, parseScanCidr, resolveIPv4, resolvePrivateIPv4 } from './ip.ts';
 import { snmpGet } from './snmp.ts';
 
@@ -276,8 +276,8 @@ export async function bgpView(resource: string) {
 
 const vendorCache = new Map<string, string>();
 export async function macVendor(mac: string) {
-  if (!MAC_RX.test(mac)) throw new Error('mac_non_valido');
-  const norm = normalizeMac(mac);
+  const norm = parseMac(mac);
+  if (!norm) throw new Error('mac_non_valido');
   const oui = norm.slice(0, 8);
   const cached = vendorCache.get(oui);
   if (cached) return { mac: norm, vendor: cached };
