@@ -29,7 +29,8 @@ Lo script:
 2. crea la master key `/etc/cdanet-cpe/secrets/master.key`;
 3. prepara `/opt/cdanet-cpe/.env`;
 4. chiede le credenziali del primo admin (la password non viene salvata nel file);
-5. avvia lo stack e verifica l'health-check.
+5. chiede se installare **OpenStreetMap locale** (vedi sotto);
+6. avvia lo stack e verifica l'health-check.
 
 Rieseguirlo è sicuro: `.env`, chiave e database restano intatti.
 
@@ -40,6 +41,38 @@ sudo cdanet-cpe edit
 ```
 
 > `/opt/cdanet-cpe` è leggibile solo da root, perché contiene `.env` con i segreti: `cd /opt/cdanet-cpe` da utente normale dà *Permission denied*, e `sudo cd` non esiste. Usa `sudo cdanet-cpe …`, che è `docker compose` già puntato alla cartella giusta, oppure `sudo -i`.
+
+### OpenStreetMap locale (ricerca indirizzi)
+
+La ricerca degli indirizzi (Copertura e posizione della CPE) può girare in un container **Nominatim** dello stesso stack: gli indirizzi non escono dal server e non c'è il limite di 1 richiesta al secondo del servizio pubblico.
+
+Al primo avvio l'installer chiede se attivarlo e quale regione importare. Per farlo senza domande, ad esempio su un server di test:
+
+```bash
+sudo CDANET_GEOCODER=local CDANET_GEOCODER_REGION=isole ./deploy/install-debian.sh
+```
+
+| Regione | Contenuto | RAM | Disco libero | Primo import |
+|---|---|---|---|---|
+| `isole` (default) | Sicilia + Sardegna | 4 GB | 25 GB | ~30-90 min |
+| `sud`, `centro`, `nord-est`, `nord-ovest` | macro-area | 4-8 GB | 25-40 GB | 1-3 ore |
+| `italia` | tutta Italia | 8+ GB | 90 GB | diverse ore |
+
+Cosa succede:
+- il container `nominatim` (immagine `mediagis/nominatim:5.3`) scarica l'estratto da Geofabrik, lo importa e poi si aggiorna da solo ogni giorno;
+- PostgreSQL viene dimensionato sulla RAM del server; la password interna del DB è generata casualmente;
+- il servizio non è esposto: lo raggiunge solo l'app, sulla rete interna;
+- **durante l'import** la ricerca usa il servizio pubblico come riserva (`GEOCODER_FALLBACK_URL`), quindi l'app funziona da subito.
+
+Comandi:
+
+```bash
+sudo cdanet-cpe geocoder          # stato: import in corso / pronto, data dei dati
+sudo cdanet-cpe geocoder logs     # log dell'import
+sudo cdanet-cpe geocoder reset    # cancella i dati e rifà l'import (es. cambio regione)
+```
+
+Lo stato si vede anche dalla console: **Connettori → OpenStreetMap → Verifica servizio**. Per tornare al servizio pubblico: `sudo CDANET_GEOCODER=public ./deploy/install-debian.sh`.
 
 ### Repository / pacchetto privato
 

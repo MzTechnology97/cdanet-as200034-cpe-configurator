@@ -7,6 +7,11 @@
 #   sudo ./deploy/install-debian.sh            (from a repository checkout)
 #   curl -fsSL <raw-url>/deploy/install-debian.sh | sudo bash
 #
+# Local OpenStreetMap geocoder (Nominatim container), asked on first run or forced with:
+#   sudo CDANET_GEOCODER=local [CDANET_GEOCODER_REGION=isole] ./deploy/install-debian.sh
+#   sudo CDANET_GEOCODER=public ./deploy/install-debian.sh       (back to the public service)
+#   regions: isole (Sicilia+Sardegna), sud, centro, nord-est, nord-ovest, italia
+#
 # Re-running is safe: existing .env, master key and database are preserved.
 set -Eeuo pipefail
 umask 077
@@ -75,11 +80,13 @@ chmod 0755 /usr/local/bin/cdanet-cpe
 
 ENV_FILE=$DEPLOY_DIR/.env
 FIRST_ADMIN=""
-# Sets KEY=VALUE in .env without interpreting special characters in VALUE.
+# Sets KEY=VALUE in .env (appended when missing) without interpreting special characters in VALUE.
 set_env() {
-  K="$1" V="$2" awk -F= -v OFS== '$1==ENVIRON["K"]{print ENVIRON["K"] "=" ENVIRON["V"]; next} {print}' "$ENV_FILE" >"$ENV_FILE.tmp"
-  mv "$ENV_FILE.tmp" "$ENV_FILE"
+  K="$1" V="$2" awk -F= -v OFS== 'BEGIN{f=0} $1==ENVIRON["K"]{print ENVIRON["K"] "=" ENVIRON["V"]; f=1; next} {print} END{if(!f) print ENVIRON["K"] "=" ENVIRON["V"]}' "$ENV_FILE" >"$ENV_FILE.tmp"
+  cat "$ENV_FILE.tmp" >"$ENV_FILE"; rm -f "$ENV_FILE.tmp"
 }
+get_env() { K="$1" awk -F= '$1==ENVIRON["K"]{sub(/^[^=]*=/, ""); v=$0} END{print v}' "$ENV_FILE" 2>/dev/null; }
+has_tty() { [[ -r /dev/tty ]] && { : </dev/tty; } 2>/dev/null; }
 if [[ ! -f $ENV_FILE ]]; then
   cp "$DEPLOY_DIR/.env.example" "$ENV_FILE"
   if [[ -f $LEGACY_DIR/deploy/.env ]]; then
@@ -109,6 +116,85 @@ if [[ ! -f $ENV_FILE ]]; then
   echo "  creato $ENV_FILE: completare CPE_ADMIN_PASSWORD e UISP_ENROLLMENT prima del provisioning"
 fi
 
+# --- OpenStreetMap: local Nominatim container or public service --------------------------
+GEOCODER_LOCAL=0
+setup_geocoder() {
+  local mode=${CDANET_GEOCODER:-} saved region old_region pbf repl ram_mb disk_gb need_ram need_disk a
+  saved=$(get_env GEOCODER_MODE)
+  if [[ -z $mode ]]; then
+    if [[ -n $saved ]]; then
+      mode=$saved
+    elif has_tty; then
+      echo "  OpenStreetMap locale: la ricerca indirizzi (Copertura, posizione CPE) gira su questo server,"
+      echo "  senza inviare indirizzi all'esterno. Servono almeno 4 GB di RAM e 25 GB di disco liberi."
+      read -rp "  Installare OpenStreetMap locale (Nominatim)? [S/n]: " a </dev/tty
+      if [[ ${a:-S} =~ ^[sSyY] ]]; then mode=local; else mode=public; fi
+    else
+      mode=public
+    fi
+  fi
+  if [[ $mode != local ]]; then
+    set_env GEOCODER_MODE public
+    set_env COMPOSE_PROFILES ""
+    set_env GEOCODER_URL https://nominatim.openstreetmap.org
+    set_env GEOCODER_FALLBACK_URL ""
+    echo "  OpenStreetMap: servizio pubblico (nominatim.openstreetmap.org)"
+    return 0
+  fi
+
+  old_region=$(get_env NOMINATIM_REGION)
+  region=${CDANET_GEOCODER_REGION:-$old_region}
+  if [[ -z $region ]] && has_tty; then
+    read -rp "  Regione OSM da importare [isole] (isole, sud, centro, nord-est, nord-ovest, italia): " region </dev/tty
+  fi
+  region=${region:-isole}
+  case $region in
+    isole|sud|centro|nord-est|nord-ovest)
+      pbf=https://download.geofabrik.de/europe/italy/$region-latest.osm.pbf
+      repl=https://download.geofabrik.de/europe/italy/$region-updates/
+      need_ram=4000; need_disk=25 ;;
+    italia)
+      pbf=https://download.geofabrik.de/europe/italy-latest.osm.pbf
+      repl=https://download.geofabrik.de/europe/italy-updates/
+      need_ram=8000; need_disk=90 ;;
+    *) fail "Regione OSM non valida: $region" ;;
+  esac
+  if [[ -n $old_region && $old_region != "$region" ]] && docker volume inspect cdanet-cpe-configurator_nominatim_data >/dev/null 2>&1; then
+    echo "  ATTENZIONE: i dati già importati sono della regione '$old_region'."
+    echo "  Per passare a '$region' dopo l'installazione: sudo cdanet-cpe geocoder reset"
+  fi
+
+  ram_mb=$(awk '/MemTotal/{print int($2/1024)}' /proc/meminfo)
+  mkdir -p /var/lib/docker
+  disk_gb=$(df -BG --output=avail /var/lib/docker | tail -1 | tr -dc 0-9)
+  if (( ram_mb < need_ram || disk_gb < need_disk )); then
+    echo "  ATTENZIONE: per '$region' servono circa $need_ram MB di RAM e $need_disk GB liberi (disponibili: $ram_mb MB, $disk_gb GB)."
+    echo "  L'import potrebbe essere lento o fallire; nel frattempo la ricerca usa il servizio pubblico come riserva."
+  fi
+
+  # PostgreSQL sized on this server's RAM (the image defaults assume 32+ GB).
+  local sb=$(( ram_mb / 8 )) mw=$(( ram_mb / 4 )) ec=$(( ram_mb / 2 ))
+  (( sb > 2048 )) && sb=2048
+  (( mw > 4096 )) && mw=4096
+  (( mw < 256 )) && mw=256
+  set_env GEOCODER_MODE local
+  set_env COMPOSE_PROFILES geocoder
+  set_env GEOCODER_URL http://nominatim:8080
+  set_env GEOCODER_FALLBACK_URL https://nominatim.openstreetmap.org
+  set_env NOMINATIM_REGION "$region"
+  set_env NOMINATIM_PBF_URL "$pbf"
+  set_env NOMINATIM_REPLICATION_URL "$repl"
+  [[ -n $(get_env NOMINATIM_PASSWORD) ]] || set_env NOMINATIM_PASSWORD "$(openssl rand -hex 24)"
+  set_env NOMINATIM_THREADS "$(nproc)"
+  set_env NOMINATIM_PG_SHARED_BUFFERS "${sb}MB"
+  set_env NOMINATIM_PG_MAINTENANCE_WORK_MEM "${mw}MB"
+  set_env NOMINATIM_PG_EFFECTIVE_CACHE_SIZE "${ec}MB"
+  GEOCODER_LOCAL=1
+  echo "  OpenStreetMap locale: regione '$region' (import automatico al primo avvio, aggiornamento giornaliero)"
+}
+echo "[3b/5] OpenStreetMap"
+setup_geocoder
+
 echo "[4/5] Stop eventuale stack v0.5.x"
 if [[ -f $LEGACY_DIR/deploy/docker-compose.yml && $LEGACY_DIR != "$DEPLOY_DIR" ]]; then
   (cd "$LEGACY_DIR/deploy" && docker compose --env-file .env down --remove-orphans) || true
@@ -136,3 +222,8 @@ echo "=== Installazione completata ==="
 echo "Console: http://$(hostname -I | awk '{print $1}')  (APP_LISTEN=hostname in .env per HTTPS automatico)"
 echo "Aggiornamenti automatici: container 'updater' (log: sudo cdanet-cpe logs -f updater)"
 echo "Comandi: sudo cdanet-cpe help"
+if [[ $GEOCODER_LOCAL == 1 ]]; then
+  echo
+  echo "OpenStreetMap locale: il container 'nominatim' scarica e importa i dati (da ~30 minuti a qualche ora)."
+  echo "  Avanzamento: sudo cdanet-cpe geocoder   (fino al termine la ricerca indirizzi usa il servizio pubblico)"
+fi

@@ -64,6 +64,8 @@ jobs:
         run: |
           cp deploy/.env.example deploy/.env
           docker compose -f deploy/docker-compose.yml --env-file deploy/.env config -q
+          # with the local OpenStreetMap geocoder enabled
+          COMPOSE_PROFILES=geocoder NOMINATIM_PASSWORD=ci docker compose -f deploy/docker-compose.yml --env-file deploy/.env config --services | grep -qx nominatim
       - name: Build image for smoke test
         uses: docker/build-push-action@v6
         with:
