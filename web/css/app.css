@@ -57,7 +57,7 @@ pre { background: var(--surface-2); border: 1px solid var(--line); border-radius
 .product { font-weight: 700; color: var(--brand-ink); white-space: nowrap; }
 .spacer { flex: 1; }
 .session { display: flex; gap: 10px; align-items: center; font-size: .9rem; color: var(--muted); min-width: 0; }
-.session-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.session-name { color: inherit; text-decoration: none; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 #navToggle { display: none; }
 .icon-btn { border: 0; background: transparent; font-size: 1.5rem; line-height: 1; color: var(--ink); cursor: pointer; padding: 8px; min-height: 44px; min-width: 44px; }
 

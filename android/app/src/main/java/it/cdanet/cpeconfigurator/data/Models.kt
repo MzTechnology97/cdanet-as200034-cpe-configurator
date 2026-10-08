@@ -13,6 +13,12 @@ data class LoginRequest(val username: String, val password: String)
 data class LoginResponse(val token: String, val expiresAt: String, val user: UserDto)
 
 @Serializable
+data class PasswordChangeRequest(val currentPassword: String, val newPassword: String)
+
+@Serializable
+data class PasswordChangeResponse(val token: String, val expiresAt: String)
+
+@Serializable
 data class HealthDto(
     val ok: Boolean = false,
     val version: String = "",

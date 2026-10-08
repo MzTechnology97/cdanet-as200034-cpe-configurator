@@ -44,6 +44,9 @@ private val ERRORS = mapOf(
     "uisp_unreachable" to "UISP non raggiungibile dal server",
     "geocoder_unreachable" to "Servizio indirizzi non raggiungibile",
     "address_too_short" to "Indirizzo troppo corto",
+    "wrong_current_password" to "Password attuale non corretta",
+    "password_unchanged" to "La nuova password è uguale a quella attuale",
+    "password_contains_username" to "La password non può contenere il nome utente",
 )
 
 fun apiMessage(code: String): String = ERRORS[code] ?: code
@@ -86,6 +89,19 @@ class ApiClient(
         val r = AppJson.decodeFromString(LoginResponse.serializer(), request("POST", "/api/auth/login", body, auth = false))
         session.set(SessionState(r.token, r.user, r.expiresAt))
         return r
+    }
+
+    /** Own password change: other sessions are revoked, this one continues with the new token. */
+    suspend fun changePassword(current: String, new: String) {
+        val body = AppJson.encodeToJsonElement(PasswordChangeRequest.serializer(), PasswordChangeRequest(current, new))
+        val r = AppJson.decodeFromString(PasswordChangeResponse.serializer(), request("POST", "/api/auth/password", body))
+        session.state.value?.let { session.set(it.copy(token = r.token, expiresAt = r.expiresAt)) }
+    }
+
+    /** Closes every session of the account (this one included). */
+    suspend fun logoutAll() {
+        request("POST", "/api/auth/logout-all")
+        session.clear()
     }
 
     suspend fun meta(): MetaDto = AppJson.decodeFromString(MetaDto.serializer(), request("GET", "/api/meta"))
