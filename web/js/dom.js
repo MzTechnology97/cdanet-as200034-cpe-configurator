@@ -80,7 +80,8 @@ export function table(columns, rows, onRow) {
     h(
       'table',
       {},
-      h('thead', {}, h('tr', {}, columns.map((c) => h('th', {}, c.label)))),
+      // c.header (a Node, e.g. a "select all" checkbox) overrides the text label in the header row.
+      h('thead', {}, h('tr', {}, columns.map((c) => h('th', {}, c.header ?? c.label)))),
       h(
         'tbody',
         {},
