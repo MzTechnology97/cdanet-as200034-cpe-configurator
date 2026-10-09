@@ -30,6 +30,9 @@ import androidx.compose.ui.unit.dp
 import it.cdanet.cpeconfigurator.core.AppContainer
 import it.cdanet.cpeconfigurator.data.CpeLocation
 import it.cdanet.cpeconfigurator.data.OutageItemDto
+import it.cdanet.cpeconfigurator.data.OutageTelegramDto
+import it.cdanet.cpeconfigurator.data.OutageZoneItemDto
+import it.cdanet.cpeconfigurator.data.TelegramLinkDto
 import it.cdanet.cpeconfigurator.data.OutagesDto
 import it.cdanet.cpeconfigurator.outages.OutageAlerts
 import it.cdanet.cpeconfigurator.ui.BadRed
@@ -43,11 +46,12 @@ import kotlinx.coroutines.launch
 private val KIND = mapOf("guasto_mt" to "Guasto media tensione", "guasto_bt" to "Guasto bassa tensione", "lavoro" to "Lavoro programmato", "altro" to "Interruzione")
 private fun hm(s: String?) = s?.replace('T', ' ')?.let { "${it.substring(8, 10)}/${it.substring(5, 7)} ${it.substring(11)}" } ?: "—"
 
-/** Guasti Enel: outages in the CDA Net zones, and background notifications on this phone. */
+/** Guasti Enel: outages in the zones of interest, and notifications on this phone and on Telegram. */
 @Composable
 fun OutagesScreen(c: AppContainer) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
+    val admin = c.session.isAdmin
     var data by remember { mutableStateOf<OutagesDto?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -75,7 +79,7 @@ fun OutagesScreen(c: AppContainer) {
         ErrorBanner(error) { error = null }
         SectionCard("Notifiche sul telefono") {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Avvisami dei guasti nelle zone CDA Net", modifier = Modifier.weight(1f))
+                Text(if (admin) "Avvisami dei guasti nelle zone CDA Net" else "Avvisami dei guasti nelle mie zone", modifier = Modifier.weight(1f))
                 Switch(checked = alerts, onCheckedChange = { on ->
                     if (!on) {
                         OutageAlerts.disable(context)
@@ -96,22 +100,31 @@ fun OutagesScreen(c: AppContainer) {
             }
             Text("Controllo ogni 15 minuti anche ad app chiusa, con un accesso in sola lettura ai guasti (revocato se cambi password o esci da tutti i dispositivi).", style = MaterialTheme.typography.bodySmall)
         }
+        TelegramCard(c)
         BusyButton("Aggiorna", busy, Modifier.fillMaxWidth(), primary = false) { scope.launch { load() } }
-        if (c.session.isAdmin) ZoneEditor(c) { scope.launch { load() } }
+        if (!admin) MyZones(c) { scope.launch { load() } }
+        if (admin) ZoneEditor(c, personal = false) { scope.launch { load() } }
         val d = data ?: return@Column
         val at = d.lastRun?.at ?: d.generatedAt
-        Text(at?.let { "Ultimo controllo del server: ${it.replace('T', ' ').take(16)} · fonte e-distribuzione" } ?: "Il server non ha ancora controllato", style = MaterialTheme.typography.bodySmall)
+        Text(
+            when {
+                at == null -> "In attesa del primo aggiornamento"
+                admin -> "Ultimo controllo del server: ${at.replace('T', ' ').take(16)} · fonte e-distribuzione"
+                else -> "Aggiornato: ${at.replace('T', ' ').take(16)}"
+            },
+            style = MaterialTheme.typography.bodySmall,
+        )
         if (!d.scope.all) {
-            SectionCard("Assegnati a te") {
+            SectionCard("POP/AP assegnati a te") {
                 if (d.scope.assigned.isEmpty()) {
-                    Text("Nessun POP, AP o zona assegnati: chiedi all'amministratore di assegnarteli.", color = WarnAmber)
+                    Text("Nessuno: vedi i guasti nelle tue zone, senza i POP/AP potenzialmente impattati.", style = MaterialTheme.typography.bodySmall)
                 } else {
                     Text(d.scope.assigned.joinToString(" · ") { itemLabel(it) }, style = MaterialTheme.typography.bodySmall)
                 }
             }
         }
-        if (d.active.isEmpty() && (d.scope.all || d.scope.assigned.isNotEmpty())) {
-            SectionCard { Text(if (d.scope.all) "Nessun guasto né lavoro nelle zone di interesse." else "Nessun guasto né lavoro sui tuoi POP/AP.") }
+        if (d.active.isEmpty()) {
+            SectionCard { Text(if (admin) "Nessun guasto né lavoro nelle zone di interesse." else "Nessun guasto né lavoro nelle tue zone.") }
         }
         d.active.forEach { o ->
             SectionCard {
@@ -139,9 +152,102 @@ private fun itemLabel(i: OutageItemDto) = when {
     else -> "Zona ${i.name}"
 }
 
-/** Admin: new area of interest from the phone (GPS with automatic address, address search or typed coordinates). */
+/** Personal Telegram: the bot set by the admin writes to the user's own chat (link via Start, or the chat id). */
 @Composable
-private fun ZoneEditor(c: AppContainer, onAdded: () -> Unit) {
+private fun TelegramCard(c: AppContainer) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var t by remember { mutableStateOf<OutageTelegramDto?>(null) }
+    var link by remember { mutableStateOf<TelegramLinkDto?>(null) }
+    var chatId by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) { t = runCatching { c.api.outageTelegram() }.getOrNull() }
+    fun act(block: suspend () -> OutageTelegramDto?) {
+        scope.launch {
+            busy = true
+            msg = null
+            runCatching { block() }.onSuccess { r -> if (r != null) t = r }.onFailure { msg = it.message }
+            busy = false
+        }
+    }
+    val s = t ?: return
+    SectionCard("Notifiche su Telegram") {
+        msg?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        when {
+            !s.available -> Text("Le notifiche Telegram personali non sono attive: chiedi all'amministratore.", style = MaterialTheme.typography.bodySmall)
+            s.linked -> {
+                Text("Telegram collegato (chat ${s.chatHint}): ricevi i guasti nelle tue zone e sui POP/AP assegnati.", style = MaterialTheme.typography.bodySmall)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Anche i lavori programmati", modifier = Modifier.weight(1f))
+                    Switch(checked = s.planned, onCheckedChange = { p -> act { c.api.outageTelegramSet(null, p) } })
+                }
+                BusyButton("Scollega Telegram", busy, Modifier.fillMaxWidth(), primary = false) { act { c.api.outageTelegramUnlink() } }
+            }
+            else -> {
+                Text("Ricevi su Telegram i guasti nelle tue zone e sui POP/AP che ti sono assegnati.", style = MaterialTheme.typography.bodySmall)
+                val l = link
+                if (l == null) {
+                    BusyButton("Collega Telegram", busy, Modifier.fillMaxWidth()) {
+                        scope.launch {
+                            busy = true
+                            runCatching { c.api.outageTelegramLink() }
+                                .onSuccess { r ->
+                                    link = r
+                                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(r.url))) }
+                                }
+                                .onFailure { msg = it.message }
+                            busy = false
+                        }
+                    }
+                } else {
+                    Text("1. Nel bot @${l.bot} premi Avvia.\n2. Torna qui e premi Verifica (entro ${l.expiresInMin} minuti).", style = MaterialTheme.typography.bodySmall)
+                    TextButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(l.url))) } }) { Text("Apri il bot") }
+                    BusyButton("Verifica", busy, Modifier.fillMaxWidth()) { act { c.api.outageTelegramVerify().also { link = null } } }
+                }
+                Field("Oppure il tuo ID Telegram", chatId, { chatId = it.trim() }, keyboardType = KeyboardType.Number)
+                BusyButton("Usa questo ID", busy, Modifier.fillMaxWidth(), primary = false, enabled = chatId.length >= 3) { act { c.api.outageTelegramSet(chatId, null) } }
+                Text("Prima di usare l'ID scrivi almeno un messaggio al bot.", style = MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
+
+/** Installer: own areas of interest (list, delete, add). */
+@Composable
+private fun MyZones(c: AppContainer, onChanged: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var zones by remember { mutableStateOf<List<OutageZoneItemDto>>(emptyList()) }
+    var msg by remember { mutableStateOf<String?>(null) }
+    suspend fun reload() {
+        runCatching { c.api.myOutageZones() }.onSuccess { zones = it }.onFailure { msg = it.message }
+    }
+    LaunchedEffect(Unit) { reload() }
+    SectionCard("Le mie zone di interesse") {
+        msg?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        if (zones.isEmpty()) Text("Nessuna zona: aggiungine una qui sotto (massimo 20).", style = MaterialTheme.typography.bodySmall)
+        zones.forEach { z ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("${z.name} · ${z.radiusKm} km", modifier = Modifier.weight(1f))
+                TextButton(onClick = {
+                    scope.launch {
+                        runCatching { c.api.deleteMyOutageZone(z.id) }.onFailure { msg = it.message }
+                        reload()
+                        onChanged()
+                    }
+                }) { Text("Elimina") }
+            }
+        }
+    }
+    ZoneEditor(c, personal = true) {
+        scope.launch { reload() }
+        onChanged()
+    }
+}
+
+/** New area of interest from the phone (GPS with automatic address, address search or typed coordinates). */
+@Composable
+private fun ZoneEditor(c: AppContainer, personal: Boolean, onAdded: () -> Unit) {
     val scope = rememberCoroutineScope()
     var open by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
@@ -151,7 +257,7 @@ private fun ZoneEditor(c: AppContainer, onAdded: () -> Unit) {
     var label by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf<String?>(null) }
-    SectionCard("Zone di interesse (admin)") {
+    SectionCard(if (personal) "Nuova zona" else "Zone condivise (admin)") {
         if (!open) {
             TextButton(onClick = { open = true }) { Text("Aggiungi una zona da qui") }
             return@SectionCard
@@ -179,7 +285,9 @@ private fun ZoneEditor(c: AppContainer, onAdded: () -> Unit) {
             scope.launch {
                 busy = true
                 msg = runCatching {
-                    c.api.createOutageZone(name.trim(), lat.toDouble(), lon.toDouble(), radius.toDoubleOrNull() ?: 2.0)
+                    val r = radius.toDoubleOrNull() ?: 2.0
+                    if (personal) c.api.createMyOutageZone(name.trim(), lat.toDouble(), lon.toDouble(), r)
+                    else c.api.createOutageZone(name.trim(), lat.toDouble(), lon.toDouble(), r)
                     name = ""; lat = ""; lon = ""; label = ""
                     onAdded()
                     "Zona salvata: entra nel prossimo controllo (entro 10 minuti)."

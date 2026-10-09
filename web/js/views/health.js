@@ -1,10 +1,11 @@
 import { api, download } from '../api.js';
 import { isOn } from '../modules.js';
 import { badge, busy, card, field, fmtDate, h, mount, pageHead, stat, table } from '../dom.js';
+import { nms } from '../terms.js';
 
 const ISSUES = {
   offline: ['offline', 'bad'],
-  not_in_uisp: ['non trovata in UISP', 'bad'],
+  not_in_uisp: ['non trovata in rete', 'bad'],
   weak_signal: ['segnale debole', 'bad'],
   signal_drop: ['segnale calato', 'warn'],
   ethernet: ['porta LAN', 'warn'],
@@ -47,10 +48,10 @@ export async function healthView({ user }) {
           stat('Segnale debole', t.weak_signal),
           stat('Segnale calato dal collaudo', t.signal_drop),
           stat('Porta LAN lenta / half', t.ethernet),
-          stat('Non trovate in UISP', t.not_in_uisp),
+          stat(nms('Non trovate in UISP', 'Non trovate in rete'), t.not_in_uisp),
         ),
-        h('p', { class: 'small muted' }, `Stato UISP del ${fmtDate(data.generatedAt)}. "Segnale calato": almeno ${data.thresholds.signalDropDb} dB in meno rispetto al collaudo.`),
-        data.uisp ? null : h('div', { class: 'notice warn' }, 'UISP non raggiungibile: stato attuale non disponibile.'),
+        h('p', { class: 'small muted' }, `${nms('Stato UISP', 'Stato')} del ${fmtDate(data.generatedAt)}. "Segnale calato": almeno ${data.thresholds.signalDropDb} dB in meno rispetto al collaudo.`),
+        data.uisp ? null : h('div', { class: 'notice warn' }, nms('UISP non raggiungibile: stato attuale non disponibile.', 'Stato attuale non disponibile, riprova più tardi.')),
       ),
       card(
         h('h2', {}, `CPE (${rows.length})`),
@@ -86,7 +87,7 @@ export async function healthView({ user }) {
   try {
     await load();
   } catch (e) {
-    mount(out, h('div', { class: 'notice bad' }, e.body?.error === 'uisp_not_configured' ? 'UISP non configurato: impostalo in Connettori.' : e.message));
+    mount(out, h('div', { class: 'notice bad' }, e.body?.error === 'uisp_not_configured' ? nms('UISP non configurato: impostalo in Connettori.', 'Servizio non disponibile: contatta l’amministratore.') : e.message));
   }
   return h(
     'div',

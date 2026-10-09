@@ -1,3 +1,4 @@
+import { isAdminUser } from './terms.js';
 const KEY = 'cdaSession';
 
 /** Human-readable messages for API error codes. */
@@ -65,11 +66,25 @@ export const session = {
   },
 };
 
+/** Installers get neutral messages (no data sources, no module names). */
+const INSTALLER_MESSAGES = {
+  drift_no_backup: 'Nessun backup della CPE disponibile',
+  drift_backup_unreadable: 'Il backup della CPE non è leggibile',
+  pppoe_password_required: 'Password PPPoE necessaria (non recuperabile dalla CPE sostituita)',
+  module_disabled: 'Funzione non disponibile per il tuo account',
+  uisp_not_configured: 'Servizio non disponibile: contatta l’amministratore',
+  uisp_tls_error: 'Servizio di rete non disponibile: contatta l’amministratore',
+  uisp_unreachable: 'Servizio di rete non raggiungibile, riprova più tardi',
+  uisp_auth_failed: 'Servizio di rete non disponibile: contatta l’amministratore',
+  runtime_secret_missing: 'Configurazione del server incompleta: contatta l’amministratore',
+};
+
 export class ApiError extends Error {
   constructor(status, body) {
     const code = body?.error ?? `HTTP ${status}`;
     const detail = body?.issues?.map((i) => `${i.path}: ${i.message}`).join('; ');
-    super((MESSAGES[code] ?? code) + (detail ? ` (${detail})` : ''));
+    const installer = !isAdminUser() && INSTALLER_MESSAGES[code];
+    super(installer || (MESSAGES[code] ?? code) + (detail ? ` (${detail})` : ''));
     this.status = status;
     this.body = body;
   }

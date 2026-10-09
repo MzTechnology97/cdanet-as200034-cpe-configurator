@@ -1,5 +1,6 @@
 import { api } from '../api.js';
 import { badge, busy, card, field, h, mount, pageHead, table } from '../dom.js';
+import { nms } from '../terms.js';
 
 /**
  * Coverage check: nearest APs to a position (address, coordinates or this device's GPS).
@@ -46,7 +47,9 @@ export async function coverageView() {
           h('p', { class: 'small muted' }, `${label} · ${la.toFixed(5)}, ${lo.toFixed(5)} · `, h('a', { href: osmLink(la, lo), target: '_blank', rel: 'noopener' }, 'apri il punto su OpenStreetMap')),
           r.aps.length
             ? apTable(r.aps)
-            : h('div', { class: 'notice warn' }, `Nessun AP con posizione entro ${r.maxKm} km: verifica la posizione o le coordinate degli AP in UISP.`),
+            : h('div', { class: 'notice warn' }, r.restricted && !r.assignedCount
+                ? 'Nessun POP/AP assegnato al tuo account: chiedi all’amministratore.'
+                : nms(`Nessun AP con posizione entro ${r.maxKm} km: verifica la posizione o le coordinate degli AP in UISP.`, `Nessun AP${r.restricted ? ' tra quelli assegnati' : ''} entro ${r.maxKm} km da questo punto.`)),
           h('p', { class: 'small muted' }, 'Il puntamento è l’azimut dalla posizione della CPE verso l’AP (0° = nord, senso orario). La copertura effettiva dipende da visibilità ottica, ostacoli e allineamento.'),
         ),
       );

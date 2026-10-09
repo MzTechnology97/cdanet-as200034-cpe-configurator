@@ -95,6 +95,10 @@ export async function buildApp(
       if (modules.enabled('telegram')) void telegram.notify('power_outage', html);
     },
     isOn: () => modules.enabled('power_outages') || (db.prepare("SELECT 1 FROM user_modules WHERE module = 'power_outages' AND enabled = 1 LIMIT 1").get() !== undefined),
+    sendPersonal: (chatId, html) => {
+      if (modules.enabled('telegram')) void telegram.sendTo(chatId, html);
+    },
+    userOn: (id) => modules.stateFor(id).power_outages,
   });
   ctx.notify = createNotifier(db, cfg, telegram, () => ctx.uisp, version, () => modules.enabled('telegram'));
 

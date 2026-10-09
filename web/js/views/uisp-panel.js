@@ -1,6 +1,7 @@
 import { api, download } from '../api.js';
 import { isOn } from '../modules.js';
 import { badge, busy, fmtDate, h, mount, stat, table, toast } from '../dom.js';
+import { nms } from '../terms.js';
 
 const ERRORS = {
   uisp_not_configured: 'UISP non configurato: impostalo in Connettori.',
@@ -15,7 +16,7 @@ const err = (e) => ERRORS[e.body?.error] ?? e.message;
 
 /** UISP section of a provisioning job: live status, acceptance and backups. */
 export function uispPanel(job, isAdmin) {
-  const box = h('div', {}, h('p', { class: 'muted small' }, 'Lettura stato da UISP…'));
+  const box = h('div', {}, h('p', { class: 'muted small' }, nms('Lettura stato da UISP…', 'Lettura stato…')));
 
   async function load() {
     let s;
@@ -26,14 +27,14 @@ export function uispPanel(job, isAdmin) {
       return;
     }
     if (!s.configured) {
-      mount(box, h('p', { class: 'small muted' }, 'Integrazione UISP non configurata.'));
+      mount(box, h('p', { class: 'small muted' }, nms('Integrazione UISP non configurata.', 'Stato di rete non disponibile.')));
       return;
     }
     const d = s.device;
     if (!d) {
       const retry = h('button', {}, 'Ricontrolla');
       retry.onclick = () => busy(retry, load);
-      mount(box, h('div', { class: 'notice warn' }, 'CPE non ancora presente in UISP (ricerca per MAC). Dopo il riavvio può servire qualche minuto.'), retry);
+      mount(box, h('div', { class: 'notice warn' }, nms('CPE non ancora presente in UISP (ricerca per MAC). Dopo il riavvio può servire qualche minuto.', 'CPE non ancora vista in rete. Dopo il riavvio può servire qualche minuto.')), retry);
       return;
     }
     const pending = !d.authorized;
@@ -151,7 +152,7 @@ export function uispPanel(job, isAdmin) {
       h(
         'div',
         { class: 'grid' },
-        stat('UISP', pending ? 'In attesa di accettazione' : 'Accettata'),
+        stat(nms('UISP', 'Rete'), pending ? 'In attesa di accettazione' : 'Accettata'),
         stat('Stato', d.status === 'active' ? 'online' : d.status),
         stat('Segnale', d.signal != null ? `${d.signal} dBm` : '—'),
         stat('AP', d.apName ?? '—'),
@@ -183,7 +184,7 @@ function signalChart(st) {
   const W = 640, H = 180, P = 28;
   const pts = st.signal.points;
   const all = [...pts, ...st.remoteSignal.points].map((p) => p[1]);
-  if (!pts.length) return h('p', { class: 'small muted' }, 'Nessun dato di segnale in UISP per il periodo.');
+  if (!pts.length) return h('p', { class: 'small muted' }, nms('Nessun dato di segnale in UISP per il periodo.', 'Nessun dato di segnale per il periodo.'));
   const t0 = pts[0][0], t1 = pts[pts.length - 1][0] || t0 + 1;
   const lo = Math.min(-80, ...all) - 2, hi = Math.max(-45, ...all) + 2;
   const x = (t) => P + ((t - t0) / Math.max(1, t1 - t0)) * (W - P - 8);
@@ -213,7 +214,7 @@ function signalHistory(job) {
   const btns = h('div', { class: 'btns' });
   async function show(range) {
     [...btns.children].forEach((b) => b.classList.toggle('primary', b.dataset.range === range));
-    mount(out, h('p', { class: 'small muted' }, 'Lettura statistiche da UISP…'));
+    mount(out, h('p', { class: 'small muted' }, nms('Lettura statistiche da UISP…', 'Lettura statistiche…')));
     try {
       const st = await api(`/api/provisioning/jobs/${job.id}/uisp/statistics?range=${range}`);
       const s = st.signal;
@@ -241,7 +242,7 @@ function signalHistory(job) {
     btns.append(b);
   }
   show('week');
-  return h('div', {}, h('h3', {}, 'Storico segnale (UISP)'), btns, out);
+  return h('div', {}, h('h3', {}, nms('Storico segnale (UISP)', 'Storico segnale')), btns, out);
 }
 
 /** Dashboard card: UISP connection test. */

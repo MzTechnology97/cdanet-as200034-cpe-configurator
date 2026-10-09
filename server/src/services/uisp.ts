@@ -282,8 +282,10 @@ export function createUisp(opts: UispOptions) {
       };
     },
 
-    async nearestAps(from: LatLon, limit: number, maxKm: number) {
+    /** Nearest APs; [allow] limits them (installers: only the assigned POPs/APs). */
+    async nearestAps(from: LatLon, limit: number, maxKm: number, allow?: (ap: { id: string; siteId: string | null }) => boolean) {
       return (await aps())
+        .filter((d) => !allow || allow({ id: d.id, siteId: d.siteId ?? null }))
         .map((d) => {
           const m = distanceM(from, d.location);
           const b = bearingDeg(from, d.location);

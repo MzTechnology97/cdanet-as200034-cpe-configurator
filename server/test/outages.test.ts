@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { buildApp } from '../src/app.ts';
 import { openDatabase } from '../src/db.ts';
 import { parseReverse } from '../src/services/geocode.ts';
-import { impactOf, mapFeature, parseEnelDate, scopeOutage, zonesOf } from '../src/services/outages.ts';
+import { impactOf, mapFeature, parseEnelDate, scopeOutage, zoneBoxes, zonesOf } from '../src/services/outages.ts';
 import { fakeUisp } from './fake-uisp.ts';
 import { ADMIN, testConfig } from './helpers.ts';
 
@@ -52,6 +52,20 @@ describe('Guasti Enel (e-distribuzione)', () => {
     assert.equal(scopeOutage(o, new Set(['ap:a2'])), null);
   });
 
+  it('queries far-apart zones separately', () => {
+    const near = zoneBoxes([
+      { lat: 37.6, lon: 14.1, radiusKm: 3 },
+      { lat: 37.62, lon: 14.15, radiusKm: 3 },
+    ]);
+    assert.equal(near.length, 1);
+    const far = zoneBoxes([
+      { lat: 37.6, lon: 14.1, radiusKm: 3 },
+      { lat: 38.9, lon: 16.5, radiusKm: 2 },
+      { lat: 37.62, lon: 14.15, radiusKm: 3 },
+    ]);
+    assert.equal(far.length, 2);
+  });
+
   it('turns a GPS position into an Italian address', () => {
     const r = parseReverse({
       display_name: 'Via Roma, 12, Enna, Libero consorzio comunale di Enna, Sicilia, 94100, Italia',
@@ -70,6 +84,8 @@ describe('Guasti Enel (e-distribuzione)', () => {
     ];
     const queries: string[] = [];
     const sent: string[] = [];
+    const direct: Array<{ chat: string; text: string }> = [];
+    let startCode = '';
     const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
       const url = new URL(String(input));
       if (url.host === 'dpa-portalgis.enel.com') {
@@ -80,7 +96,11 @@ describe('Guasti Enel (e-distribuzione)', () => {
         return Response.json({ display_name: 'Via Roma 1, Enna', address: { road: 'Via Roma', house_number: '1', town: 'Enna', county: 'Enna', postcode: '94100' } });
       }
       if (url.host === 'api.telegram.org') {
-        sent.push(JSON.parse(String(init?.body)).text);
+        if (url.pathname.endsWith('/getMe')) return Response.json({ ok: true, result: { username: 'cdanet_bot' } });
+        if (url.pathname.endsWith('/getUpdates')) return Response.json({ ok: true, result: [{ message: { text: `/start ${startCode}`, chat: { id: 777, type: 'private', first_name: 'Luca' } } }] });
+        const b = JSON.parse(String(init?.body));
+        if (String(b.chat_id) === '-1001') sent.push(b.text);
+        else direct.push({ chat: String(b.chat_id), text: b.text });
         return Response.json({ ok: true, result: {} });
       }
       return uisp.fetchImpl(input, init);
@@ -132,28 +152,54 @@ describe('Guasti Enel (e-distribuzione)', () => {
     const mine = async () => (await call('GET', '/api/outages', undefined, T)).json();
     assert.equal((await mine()).scope.all, false);
     assert.deepEqual((await mine()).active, [], 'nothing assigned yet');
-    const people = (await call('GET', '/api/admin/outages/assignments')).json().users;
+    const cov = async (headers: Record<string, string>) => (await call('GET', '/api/coverage?lat=37.6&lon=14.1', undefined, headers)).json();
+    assert.deepEqual((await cov(T)).aps, [], 'coverage only on assigned POPs/APs');
+    assert.equal((await cov(T)).restricted, true);
+    assert.ok((await cov(H)).aps.length >= 2, 'admins: every AP');
+    const people = (await call('GET', '/api/admin/assignments')).json().users;
     const tid = people.find((p: { username: string }) => p.username === 'tecnico').id;
-    assert.equal((await call('PUT', `/api/admin/outages/assignments/${tid}`, { items: [{ key: 'pop:site-n2', name: 'Nodo 2 - Monte' }] })).statusCode, 200);
+    assert.equal((await call('PUT', `/api/admin/assignments/${tid}`, { items: [{ key: 'pop:site-n2', name: 'Nodo 2 - Monte' }] })).statusCode, 200);
     const seen = await mine();
     const o10 = seen.active.find((o: { id: number }) => o.id === 10);
     assert.ok(o10, JSON.stringify(seen.active));
     assert.ok(o10.impact.some((i: { name: string }) => i.name === 'AP N2 D01'), 'the POP covers its APs');
+    assert.deepEqual((await cov(T)).aps.map((a: { name: string }) => a.name), ['AP N2 D01'], 'coverage: APs of the assigned POP');
     assert.equal(seen.scope.assigned[0].name, 'Nodo 2 - Monte');
     assert.equal(seen.lastRun, null, 'polling details are for admins');
     const zoneKey = cfg.zones[0].id;
-    await call('PUT', `/api/admin/outages/assignments/${tid}`, { items: [{ key: zoneKey, name: 'Centro Enna' }] });
+    await call('PUT', `/api/admin/assignments/${tid}`, { items: [{ key: zoneKey, name: 'Centro Enna' }] });
     assert.deepEqual((await mine()).active.map((o: { id: number }) => o.id), [11]);
     const tFeed = (await app.inject({ method: 'GET', url: '/api/outages/feed', headers: { authorization: `Bearer ${(await call('POST', '/api/outages/device-token', undefined, T)).json().token}` } })).json();
     assert.deepEqual(tFeed.active.map((o: { id: number }) => o.id), [11], 'app notifications filtered too');
-    assert.equal((await call('PUT', '/api/admin/outages/assignments/1', { items: [] })).statusCode, 400, 'admins see everything');
-    assert.equal((await call('PUT', `/api/admin/outages/assignments/${tid}`, { items: [{ key: 'bad key', name: 'x' }] })).statusCode, 400);
-    assert.equal((await call('GET', '/api/admin/outages/assignments', undefined, T)).statusCode, 403);
+    assert.equal((await call('PUT', '/api/admin/assignments/1', { items: [] })).statusCode, 400, 'admins see everything');
+    assert.equal((await call('PUT', `/api/admin/assignments/${tid}`, { items: [{ key: 'bad key', name: 'x' }] })).statusCode, 400);
+    assert.equal((await call('GET', '/api/admin/assignments', undefined, T)).statusCode, 403);
+
+    // installers set their own areas: those outages reach them (app + personal Telegram), not the team's group
+    await call('PUT', `/api/admin/assignments/${tid}`, { items: [] });
+    const z1 = (await call('POST', '/api/outages/zones', { name: 'Casa mia', lat: 38.9, lon: 16.5, radiusKm: 2 }, T)).json().id;
+    const z2 = (await call('POST', '/api/outages/zones', { name: 'Vicino AP', lat: 37.605, lon: 14.105, radiusKm: 1 }, T)).json().id;
+    assert.equal((await call('GET', '/api/outages/zones', undefined, T)).json().zones.length, 2);
+    assert.equal((await call('DELETE', `/api/outages/zones/${cfg.zones[0].id.slice(1)}`, undefined, T)).statusCode, 404, 'not their zone');
+    // personal Telegram with the admin's bot: link code + Start in the bot
+    const link = (await call('POST', '/api/outages/telegram/link', {}, T)).json();
+    assert.equal(link.url, `https://t.me/cdanet_bot?start=${link.code}`);
+    startCode = link.code;
+    const linked = (await call('POST', '/api/outages/telegram/verify', {}, T)).json();
+    assert.equal(linked.linked, true, JSON.stringify(linked));
+    assert.ok(direct.some((m) => m.chat === '777' && m.text.includes('riceverai qui')));
+    assert.equal((await call('PUT', '/api/outages/telegram', { chatId: 'abc' }, T)).statusCode, 400);
 
     // second poll: same outages -> no new messages
     await call('POST', '/api/admin/outages/refresh');
     await ctx.telegram.idle();
     assert.equal(sent.length, 2);
+    assert.ok(queries.length >= 3, 'the far personal zone is a separate query');
+    const mineNow = await mine();
+    assert.deepEqual(mineNow.active.map((o: { id: number }) => o.id).sort(), [10, 12]);
+    assert.deepEqual(mineNow.active.find((o: { id: number }) => o.id === 10).impact, [], 'POP/AP only when assigned');
+    assert.ok(direct.some((m) => m.chat === '777' && m.text.includes('FUORI ZONA')), 'personal Telegram');
+    assert.ok(!sent.some((t) => t.includes('FUORI ZONA')), 'not on the group');
 
     // planned works off; the fault ends -> restoration message
     await call('PUT', '/api/admin/outages/config', { includePlanned: false });
@@ -163,7 +209,10 @@ describe('Guasti Enel (e-distribuzione)', () => {
     assert.ok(sent.some((t) => t.includes('Ripristinato') && t.includes('ENNA ALTA')));
     const after = (await call('GET', '/api/outages?recent=1')).json();
     assert.equal(after.active.length, 0);
-    assert.equal(after.recent.length, 2);
+    assert.equal(after.recent.length, 3);
+    assert.ok(!sent.some((t) => t.includes('Ripristinato') && t.includes('FUORI ZONA')));
+    assert.ok(direct.some((m) => m.text.includes('Ripristinato') && m.text.includes('FUORI ZONA')));
+    for (const id of [z1, z2]) assert.equal((await call('DELETE', `/api/outages/zones/${id}`, undefined, T)).statusCode, 200);
 
     // app background feed: scoped token works only on the feed, never as a session
     const device = (await call('POST', '/api/outages/device-token')).json().token;

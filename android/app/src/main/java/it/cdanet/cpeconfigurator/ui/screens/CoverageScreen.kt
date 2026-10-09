@@ -123,7 +123,14 @@ fun NearbyAps(c: AppContainer, location: CpeLocation, onPick: ((CoverageAp) -> U
     val d = data
     when {
         d == null && error == null -> Text("Ricerca AP vicini…", color = MaterialTheme.colorScheme.onSurfaceVariant)
-        d != null && d.aps.isEmpty() -> Text("Nessun AP entro ${d.maxKm} km.", color = MaterialTheme.colorScheme.error)
+        d != null && d.aps.isEmpty() -> Text(
+            when {
+                d.restricted && d.assignedCount == 0 -> "Nessun POP/AP assegnato al tuo account: chiedi all'amministratore."
+                d.restricted -> "Nessun AP tra quelli assegnati entro ${d.maxKm} km."
+                else -> "Nessun AP entro ${d.maxKm} km."
+            },
+            color = MaterialTheme.colorScheme.error,
+        )
         d != null -> d.aps.forEachIndexed { i, ap ->
             if (i > 0) HorizontalDivider()
             Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {

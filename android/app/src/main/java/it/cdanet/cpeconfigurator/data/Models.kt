@@ -122,6 +122,19 @@ data class OutageItemDto(val key: String = "", val name: String = "")
 data class OutageScopeDto(val all: Boolean = true, val assigned: List<OutageItemDto> = emptyList())
 
 @Serializable
+data class OutageZoneItemDto(val id: String = "", val name: String = "", val lat: Double = 0.0, val lon: Double = 0.0, val radiusKm: Double = 0.0)
+
+@Serializable
+data class MyZonesDto(val zones: List<OutageZoneItemDto> = emptyList())
+
+/** Personal Telegram notifications (bot configured by the admin). */
+@Serializable
+data class OutageTelegramDto(val available: Boolean = false, val linked: Boolean = false, val chatHint: String = "", val planned: Boolean = true)
+
+@Serializable
+data class TelegramLinkDto(val bot: String = "", val code: String = "", val url: String = "", val expiresInMin: Int = 15)
+
+@Serializable
 data class OutagesDto(val active: List<OutageDto> = emptyList(), val lastRun: OutageRunDto? = null, val generatedAt: String? = null, val scope: OutageScopeDto = OutageScopeDto())
 
 @Serializable
@@ -198,7 +211,7 @@ data class CoverageAp(
 )
 
 @Serializable
-data class CoverageDto(val maxKm: Int, val aps: List<CoverageAp>)
+data class CoverageDto(val maxKm: Int, val aps: List<CoverageAp>, val restricted: Boolean = false, val assignedCount: Int? = null)
 
 @Serializable
 /** isDefault = default for the signed-in installer (personal default if any, else the model default). */

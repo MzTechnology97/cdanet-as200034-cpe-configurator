@@ -33,18 +33,21 @@ Console → **Guasti Enel** → "POP e AP da UISP" (admin):
 
 Un guasto più vicino di un raggio configurabile (default **1 km**, 0,1–5 km) a un POP o a un AP monitorato viene segnalato come **impatto probabile** anche fuori dalle zone: in console è in cima all'elenco con i POP/AP coinvolti, la distanza e le CPE collegate; su Telegram il messaggio inizia con 🚨 e riporta "Potenzialmente impattati".
 
-## Assegnazioni agli installatori
+## Cosa vede l'installatore
 
-Console → **Guasti Enel** → "Assegnazioni agli installatori" (admin): per ogni installatore si scelgono i POP, gli AP e le zone manuali di sua competenza (un POP include tutti i suoi AP; se è attiva la selezione, si sceglie tra quelli monitorati).
+- **Le sue zone di interesse**: ogni installatore crea le proprie (massimo 20) da web o app, con GPS, indirizzo o coordinate, e vede guasti e lavori in quelle zone.
+- **POP/AP potenzialmente impattati**: solo per i POP e gli AP che l'amministratore gli ha assegnato (un POP include tutti i suoi AP). Senza assegnazioni vede i guasti nelle sue zone, senza POP/AP.
+- Vede anche i guasti sui POP/AP e sulle zone condivise che gli sono stati assegnati.
 - Gli **amministratori vedono tutto**.
-- Ogni **installatore vede solo i guasti che toccano ciò che gli è assegnato**, con i soli POP/AP suoi: sul web, nell'app e nelle notifiche sul telefono. Senza assegnazioni non vede guasti e gli viene detto di chiederle all'amministratore.
-- Le notifiche Telegram al gruppo restano complete.
+- Nella console e nell'app l'installatore non vede riferimenti a UISP, alla fonte dei dati o ai moduli.
+
+Le assegnazioni si fanno in Console → **Account** → "POP/AP assegnati agli installatori" e valgono anche per la **verifica copertura** (vedi [UISP.md](UISP.md)).
 
 ## Zone di interesse
 
 Console → **Guasti Enel** (admin):
 - **zone automatiche attorno a ogni AP e POP monitorato** (raggio configurabile, default 3 km), aggiornate da sole;
-- **zone manuali** per aree extra (es. una frazione): nome, raggio e posizione, in tre modi:
+- **zone condivise** per aree extra (es. una frazione): nome, raggio e posizione, in tre modi:
   - **GPS** del dispositivo ("Usa GPS di questo dispositivo"; nel browser serve la console in HTTPS), con via, civico, città, provincia e CAP compilati automaticamente;
   - **indirizzo** (via, civico, città, provincia, CAP → "Cerca indirizzo");
   - **coordinate a mano**, con "Indirizzo dalle coordinate" per ricavare la via;
@@ -58,8 +61,9 @@ L'elenco mostra per ogni evento: tipo, località, zona o AP più vicino con la d
 
 ## Notifiche
 
-- **Telegram**: evento "Guasti Enel" in Connettori → Telegram. Un messaggio per ogni nuovo evento nelle zone e uno al ripristino.
-- **App Android**: Guasti Enel → "Avvisami dei guasti nelle zone CDA Net" (per gli installatori: solo sui POP/AP/zone assegnati). Il telefono controlla ogni 15 minuti, anche ad app chiusa (WorkManager), e mostra una notifica Android per ogni nuovo evento. I lavori programmati sono facoltativi.
+- **Telegram al gruppo** (admin): evento "Guasti Enel" in Connettori → Telegram. Un messaggio per ogni nuovo evento nelle zone condivise, attorno ai POP/AP o con POP/AP impattati, e uno al ripristino. Le zone personali degli installatori **non** vanno al gruppo.
+- **Telegram personale** (ogni utente): Guasti Enel → Notifiche → **Collega Telegram**. Si apre il bot configurato dall'amministratore, si preme *Avvia* e poi *Verifica*; in alternativa si inserisce il proprio ID Telegram (dopo aver scritto almeno un messaggio al bot). Arrivano solo i guasti che l'utente può vedere (le sue zone e i POP/AP assegnati), con i lavori programmati facoltativi. Si scollega in ogni momento. Richiede il bot configurato in Connettori → Telegram e il modulo "Notifiche Telegram" attivo.
+- **App Android**: Guasti Enel → "Avvisami dei guasti nelle mie zone". Il telefono controlla ogni 15 minuti, anche ad app chiusa (WorkManager), e mostra una notifica Android per ogni nuovo evento che l'utente può vedere. I lavori programmati sono facoltativi.
   - Per farlo l'app riceve un **token in sola lettura** valido solo per l'elenco dei guasti: non apre sessioni, scade in 90 giorni e viene revocato se l'utente cambia password o esce da tutti i dispositivi.
   - Su Android 13+ viene chiesto il permesso di notifica.
 

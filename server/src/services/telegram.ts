@@ -39,6 +39,7 @@ export function createTelegram(db: Db, sealer: Sealer, opts: { fetchImpl?: typeo
   const f = opts.fetchImpl ?? fetch;
   let queue: Promise<unknown> = Promise.resolve();
   let last = 0;
+  let bot: { token: string; username: string } | null = null;
 
   const read = () => {
     const r = db
@@ -131,6 +132,44 @@ export function createTelegram(db: Db, sealer: Sealer, opts: { fetchImpl?: typeo
         if (chat) seen.set(String(chat.id), { id: String(chat.id), title: chat.title ?? chat.username ?? chat.first_name ?? '', type: chat.type ?? '' });
       }
       return [...seen.values()];
+    },
+
+    /** The bot set by the admin can also write to single users (personal notifications). */
+    personalAvailable(): boolean {
+      return !!read()?.stored.tokenSealed;
+    },
+
+    /** Username of the configured bot (cached per token). */
+    async botName(): Promise<string> {
+      const s = read()?.stored;
+      if (!s?.tokenSealed) throw new HttpError(503, 'telegram_not_configured');
+      const token = sealer.open(s.tokenSealed);
+      if (bot?.token !== token) bot = { token, username: String(((await api(token, 'getMe', {})) as { username?: string }).username ?? '') };
+      return bot.username;
+    },
+
+    /** Private chat that sent "/start <code>" to the bot (personal linking), or null. */
+    async findStart(code: string): Promise<{ id: string; name: string } | null> {
+      const s = read()?.stored;
+      if (!s?.tokenSealed) throw new HttpError(503, 'telegram_not_configured');
+      const updates = (await api(sealer.open(s.tokenSealed), 'getUpdates', { limit: 100, allowed_updates: ['message'] })) as Array<Record<string, unknown>>;
+      for (const u of [...(updates ?? [])].reverse()) {
+        const m = u.message as { text?: string; chat?: { id: number; type?: string; first_name?: string; username?: string } } | undefined;
+        if (m?.chat?.type === 'private' && m.text?.trim() === `/start ${code}`) return { id: String(m.chat.id), name: m.chat.username ?? m.chat.first_name ?? '' };
+      }
+      return null;
+    },
+
+    /** Direct message to one chat with the admin's bot; [strict] reports errors (linking), otherwise queued and never throws. */
+    async sendTo(chatId: string, html: string, strict = false) {
+      const s = read()?.stored;
+      if (!s?.tokenSealed) {
+        if (strict) throw new HttpError(503, 'telegram_not_configured');
+        return;
+      }
+      const token = sealer.open(s.tokenSealed);
+      if (strict) await api(token, 'sendMessage', { chat_id: chatId, text: html, parse_mode: 'HTML', disable_web_page_preview: true });
+      else await enqueue(token, chatId, html);
     },
 
     /** Fire-and-forget notification for an enabled event. */

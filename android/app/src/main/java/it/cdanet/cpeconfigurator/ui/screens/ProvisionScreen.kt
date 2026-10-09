@@ -92,7 +92,7 @@ private fun FormStep(c: AppContainer) {
             Text("CPE sostituita: ${form.replacesLabel}", fontWeight = FontWeight.SemiBold)
             Text(
                 "Cliente, SSID, posizione e template restano quelli della CPE guasta: inserisci MAC e seriale della nuova. " +
-                    "La password PPPoE si può lasciare vuota: il server la recupera dall'ultimo backup UISP della CPE sostituita.",
+                    "La password PPPoE si può lasciare vuota: il server la recupera dall'ultimo backup della CPE sostituita.",
                 style = MaterialTheme.typography.bodySmall,
             )
             OutlinedButton(onClick = { c.provisioning.reset() }) { Text("Annulla sostituzione") }
@@ -141,7 +141,7 @@ private fun FormStep(c: AppContainer) {
     }
 
     SectionCard("Posizione CPE e AP vicini") {
-        Text("La posizione viene salvata nello storico e scritta nella CPE (UISP la mostra sulla mappa).", style = MaterialTheme.typography.bodySmall)
+        Text("La posizione viene salvata nello storico e scritta nella CPE.", style = MaterialTheme.typography.bodySmall)
         LocationPicker(c, form.location, form.locationLabel) { l, label -> c.provisioning.updateForm { it.copy(location = l, locationLabel = label) } }
         if (c.moduleOn("coverage")) form.location?.let { l ->
             NearbyAps(c, l, onPick = { ap -> c.provisioning.updateForm { it.copy(node = ap.node ?: it.node, district = ap.district ?: it.district) } })
@@ -168,7 +168,7 @@ private fun FormStep(c: AppContainer) {
         Field("Username RADIUS / PPPoE", form.pppoeUser, { v -> c.provisioning.updateForm { it.copy(pppoeUser = v.trim()) } },
             readOnly = form.replaces != null, placeholder = "cognome.nome@cda-net.it", supporting = form.customerName.takeIf { it.isNotBlank() }?.let { "Device Name / SNMP location: $it" })
         Field("Password PPPoE", form.pppoePassword, { v -> c.provisioning.updateForm { it.copy(pppoePassword = v) } }, password = true,
-            supporting = if (form.replaces != null) "Facoltativa: vuota = presa dal backup UISP della CPE sostituita" else "Usata solo per questo provisioning, mai salvata")
+            supporting = if (form.replaces != null) "Facoltativa: vuota = presa dal backup della CPE sostituita" else "Usata solo per questo provisioning, mai salvata")
     }
 
     if (showErrors && errors.isNotEmpty()) Banner(errors.joinToString("\n"), MaterialTheme.colorScheme.error)
@@ -265,7 +265,7 @@ private fun DoneStep(c: AppContainer, onAcceptance: () -> Unit) {
     val ok = state.success == true
     SectionCard(if (ok) "Configurazione applicata" else "Provisioning non completato") {
         Banner(
-            if (ok) "La CPE si sta riavviando. Verifica associazione al nodo, PPPoE, UISP e management HTTPS 20443."
+            if (ok) "La CPE si sta riavviando. Verifica associazione al nodo, PPPoE e management HTTPS 20443."
             else state.error ?: "Errore sconosciuto",
             if (ok) GoodGreen else MaterialTheme.colorScheme.error,
         )

@@ -219,6 +219,13 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY(user_id, key)
   );
   `,
+  // 12: personal areas of interest of installers (owner_id NULL = shared zone of the admins)
+  `
+  ALTER TABLE outage_zones ADD COLUMN owner_id INTEGER REFERENCES users(id) ON DELETE CASCADE;
+  CREATE INDEX outage_zones_owner ON outage_zones(owner_id);
+  ALTER TABLE users ADD COLUMN telegram_chat_id TEXT NOT NULL DEFAULT '';
+  ALTER TABLE users ADD COLUMN telegram_planned INTEGER NOT NULL DEFAULT 1;
+  `,
 ];
 
 export function openDatabase(path: string): Db {

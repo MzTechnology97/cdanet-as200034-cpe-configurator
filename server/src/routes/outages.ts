@@ -1,3 +1,4 @@
+import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { HttpError, type AuthUser } from '../auth.ts';
@@ -12,21 +13,113 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
   const admin = { preHandler: [ctx.auth.requireAdmin, ctx.modules.require('power_outages')] };
   const { db } = ctx;
 
-  /** Admins see everything; installers only the POPs/APs/zones the admin assigned to them. */
-  const keysFor = (u: AuthUser) => (u.role === 'admin' ? undefined : new Set(ctx.outages.assignments(u.id).map((i) => i.key)));
+  /**
+   * Admins see everything. Installers see the outages in their own zones and in what the admin assigned
+   * to them; the potentially affected POPs/APs only for the assigned ones.
+   */
+  const keysFor = (u: AuthUser) => ctx.outages.keysFor(u.id, u.role);
 
   const view = (u: AuthUser) => ({
     generatedAt: ctx.outages.status()?.at ?? null,
     lastRun: u.role === 'admin' ? ctx.outages.status() : null,
     source: 'e-distribuzione',
     labels: KIND_LABEL,
-    scope: u.role === 'admin' ? { all: true, assigned: [] } : { all: false, assigned: ctx.outages.assignments(u.id) },
+    scope: u.role === 'admin' ? { all: true, assigned: [], zones: [] } : { all: false, assigned: ctx.outages.assignments(u.id), zones: ctx.outages.manualZones(u.id) },
     active: ctx.outages.active(keysFor(u)),
   });
 
   app.get('/api/outages', user, async (req) => {
     const { recent } = z.object({ recent: z.coerce.boolean().default(false) }).parse(req.query);
     return { ...view(req.user!), ...(recent ? { recent: ctx.outages.recent(48, keysFor(req.user!)) } : {}) };
+  });
+
+  // ---- Personal areas of interest (every user with the module) -------------------------------
+  const zoneBody = z.object({ name: z.string().trim().min(2).max(80), lat: z.number(), lon: z.number(), radiusKm: z.number().min(0.2).max(50) }).strict();
+  const MAX_PERSONAL_ZONES = 20;
+
+  app.get('/api/outages/zones', user, async (req) => ({ zones: ctx.outages.manualZones(req.user!.id) }));
+
+  app.post('/api/outages/zones', user, async (req, reply) => {
+    const b = zoneBody.parse(req.body);
+    if (!isValidLatLon(b.lat, b.lon)) throw new HttpError(400, 'invalid_position');
+    if (ctx.outages.manualZones(req.user!.id).length >= MAX_PERSONAL_ZONES) throw new HttpError(400, 'too_many_zones');
+    const r = db
+      .prepare('INSERT INTO outage_zones(name, lat, lon, radius_km, created_at, created_by, owner_id) VALUES(?,?,?,?,?,?,?)')
+      .run(b.name, b.lat, b.lon, b.radiusKm, nowIso(), req.user!.id, req.user!.id);
+    recordEvent(db, req.user!.id, 'outages.my_zone_add', b.name, `${b.radiusKm} km`);
+    return reply.code(201).send({ id: Number(r.lastInsertRowid) });
+  });
+
+  app.delete('/api/outages/zones/:id', user, async (req) => {
+    const id = z.coerce.number().int().positive().parse((req.params as { id: string }).id);
+    const z0 = db.prepare('SELECT name FROM outage_zones WHERE id = ? AND owner_id = ?').get(id, req.user!.id) as { name: string } | undefined;
+    if (!z0) throw new HttpError(404, 'zone_not_found');
+    db.prepare('DELETE FROM outage_zones WHERE id = ?').run(id);
+    recordEvent(db, req.user!.id, 'outages.my_zone_delete', z0.name, '');
+    return { ok: true };
+  });
+
+  // ---- Personal Telegram (bot configured by the admin, each user links their own chat) ------
+  const links = new Map<string, { userId: number; expires: number }>();
+  const telegramState = (userId: number) => {
+    const r = db.prepare('SELECT telegram_chat_id chat, telegram_planned planned FROM users WHERE id = ?').get(userId) as { chat: string; planned: number };
+    return {
+      available: ctx.modules.enabled('telegram') && ctx.telegram.personalAvailable(),
+      linked: !!r.chat,
+      chatHint: r.chat ? `…${r.chat.slice(-4)}` : '',
+      planned: !!r.planned,
+    };
+  };
+  const requireTelegram = () => {
+    if (!ctx.modules.enabled('telegram') || !ctx.telegram.personalAvailable()) throw new HttpError(503, 'telegram_not_configured');
+  };
+  const linkChat = async (userId: number, chatId: string) => {
+    await ctx.telegram.sendTo(chatId, '✅ <b>CDA Net</b>: riceverai qui le notifiche dei guasti Enel nelle tue zone.', true);
+    db.prepare('UPDATE users SET telegram_chat_id = ? WHERE id = ?').run(chatId, userId);
+  };
+
+  app.get('/api/outages/telegram', user, async (req) => telegramState(req.user!.id));
+
+  /** Link code: the user opens the bot and presses Start, then "Verifica". */
+  app.post('/api/outages/telegram/link', user, async (req) => {
+    requireTelegram();
+    const bot = await ctx.telegram.botName();
+    for (const [k, v] of links) if (v.expires < Date.now() || v.userId === req.user!.id) links.delete(k);
+    const code = randomBytes(6).toString('hex');
+    links.set(code, { userId: req.user!.id, expires: Date.now() + 15 * 60_000 });
+    return { bot, code, url: `https://t.me/${bot}?start=${code}`, expiresInMin: 15 };
+  });
+
+  app.post('/api/outages/telegram/verify', user, async (req) => {
+    requireTelegram();
+    const code = [...links].find(([, v]) => v.userId === req.user!.id && v.expires > Date.now())?.[0];
+    if (!code) throw new HttpError(400, 'link_expired');
+    const chat = await ctx.telegram.findStart(code);
+    if (!chat) throw new HttpError(409, 'start_not_found');
+    await linkChat(req.user!.id, chat.id);
+    links.delete(code);
+    recordEvent(db, req.user!.id, 'outages.telegram_link', req.user!.username, 'Telegram personale collegato');
+    return telegramState(req.user!.id);
+  });
+
+  app.put('/api/outages/telegram', user, async (req) => {
+    const b = z
+      .object({ chatId: z.string().trim().regex(/^-?\d{3,20}$/).optional(), planned: z.boolean().optional() })
+      .strict()
+      .parse(req.body);
+    if (b.chatId) {
+      requireTelegram();
+      await linkChat(req.user!.id, b.chatId);
+      recordEvent(db, req.user!.id, 'outages.telegram_link', req.user!.username, 'Telegram personale collegato (ID)');
+    }
+    if (b.planned !== undefined) db.prepare('UPDATE users SET telegram_planned = ? WHERE id = ?').run(b.planned ? 1 : 0, req.user!.id);
+    return telegramState(req.user!.id);
+  });
+
+  app.delete('/api/outages/telegram', user, async (req) => {
+    db.prepare("UPDATE users SET telegram_chat_id = '' WHERE id = ?").run(req.user!.id);
+    recordEvent(db, req.user!.id, 'outages.telegram_unlink', req.user!.username, '');
+    return telegramState(req.user!.id);
   });
 
   /** Read-only token for the app's background notifications (outage feed only). */
@@ -59,7 +152,11 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
   // ---- Admin: zones and settings -----------------------------------------------------------
   app.get('/api/admin/outages/config', admin, async () => ({
     config: ctx.outages.config(),
-    zones: ctx.outages.manualZones(),
+    zones: ctx.outages.manualZones('shared'),
+    personalZones: ctx.outages
+      .manualZones('all')
+      .filter((x) => x.ownerId != null)
+      .map((x) => ({ ...x, owner: (db.prepare('SELECT username FROM users WHERE id = ?').get(x.ownerId!) as { username: string } | undefined)?.username ?? '' })),
     apZonesCount: (await ctx.outages.zones()).filter((z) => z.source === 'ap').length,
     source: OUTAGE_SOURCE,
   }));
@@ -93,15 +190,28 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
     return { selectionOnly: r.config.selectionOnly, items: r.items };
   });
 
-  app.get('/api/admin/outages/assignments', admin, async () => {
+  // POP/AP assignments are general (Guasti Enel and coverage check): admin only, whatever the modules.
+  const adminOnly = { preHandler: [ctx.auth.requireAdmin] };
+
+  /** POPs and APs of UISP for the assignment picker. */
+  app.get('/api/admin/infrastructure', adminOnly, async () => {
+    if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
+    return ctx.uisp.infrastructure();
+  });
+
+  app.get('/api/admin/assignments', adminOnly, async () => {
     const all = ctx.outages.allAssignments();
     const users = db.prepare("SELECT id, username, role, active FROM users WHERE role = 'installer' ORDER BY username").all() as Array<{ id: number; username: string; role: string; active: number }>;
     return {
-      users: users.map((u) => ({ id: u.id, username: u.username, active: !!u.active, outagesModule: ctx.modules.stateFor(u.id).power_outages, items: all.get(u.id) ?? [] })),
+      zones: ctx.outages.manualZones('shared'),
+      users: users.map((u) => {
+        const m = ctx.modules.stateFor(u.id);
+        return { id: u.id, username: u.username, active: !!u.active, modules: { power_outages: m.power_outages, coverage: m.coverage }, items: all.get(u.id) ?? [] };
+      }),
     };
   });
 
-  app.put('/api/admin/outages/assignments/:userId', admin, async (req) => {
+  app.put('/api/admin/assignments/:userId', adminOnly, async (req) => {
     const userId = z.coerce.number().int().positive().parse((req.params as { userId: string }).userId);
     const u = db.prepare('SELECT username, role FROM users WHERE id = ?').get(userId) as { username: string; role: string } | undefined;
     if (!u) throw new HttpError(404, 'user_not_found');
@@ -123,7 +233,7 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   app.post('/api/admin/outages/zones', admin, async (req, reply) => {
-    const b = z.object({ name: z.string().trim().min(2).max(80), lat: z.number(), lon: z.number(), radiusKm: z.number().min(0.2).max(50) }).strict().parse(req.body);
+    const b = zoneBody.parse(req.body);
     if (!isValidLatLon(b.lat, b.lon)) throw new HttpError(400, 'invalid_position');
     const r = db.prepare('INSERT INTO outage_zones(name, lat, lon, radius_km, created_at, created_by) VALUES(?,?,?,?,?,?)').run(b.name, b.lat, b.lon, b.radiusKm, nowIso(), req.user!.id);
     recordEvent(db, req.user!.id, 'outages.zone_add', b.name, `${b.radiusKm} km`);
