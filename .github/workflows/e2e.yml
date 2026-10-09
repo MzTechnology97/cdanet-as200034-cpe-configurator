@@ -131,8 +131,9 @@ jobs:
           done
           [ "$code" = 202 ] || [ "$code" = 409 ]
           for i in $(seq 1 40); do
-            s=$(curl -fsS -H "$H" http://localhost/api/admin/infra)
-            echo "$s" | jq -e '(.pending | not) and .status.result == "ok"' >/dev/null && break
+            # Caddy and the app restart while the agent applies the change: a dropped connection is retried
+            s=$(curl -fsS -H "$H" http://localhost/api/admin/infra || true)
+            echo "$s" | jq -e '(.pending | not) and .status.result == "ok"' >/dev/null 2>&1 && break
             sleep 3
           done
           echo "$s" | jq .
