@@ -51,8 +51,10 @@ fun LineOfSightDialog(c: AppContainer, lat: Double, lon: Double, apId: String, a
                         Notice(
                             when (d.verdict) {
                                 "clear" -> "Visibilità libera: nessun rilievo sulla linea e zona di Fresnel libera."
-                                "fresnel" -> "Si vede, ma il terreno entra nella zona di Fresnel: il segnale può calare. Alza il palo di ${fmt(d.raiseCpeM)} m."
-                                else -> "Ostruita dal terreno a ${km(d.worst?.d ?: 0)} dalla CPE. Serve un palo più alto di ${fmt(d.raiseCpeM)} m oppure un altro AP."
+                                "fresnel" -> "Si vede, ma il terreno entra nella zona di Fresnel: il segnale può calare. " +
+                                    if (d.raiseCpeM <= MAX_MAST_M) "Alza il palo di ${fmt(d.raiseCpeM)} m." else "Meglio un altro AP."
+                                else -> "Ostruita dal terreno a ${km(d.worst?.d ?: 0)} dalla CPE. " +
+                                    if (d.raiseCpeM <= MAX_MAST_M) "Serve un palo più alto di ${fmt(d.raiseCpeM)} m oppure un altro AP." else "Nessun palo realistico la libera: scegli un altro AP."
                             },
                             when (d.verdict) { "clear" -> NoticeKind.Good; "fresnel" -> NoticeKind.Warn; else -> NoticeKind.Bad },
                         )
@@ -107,6 +109,9 @@ private fun ProfileChart(d: LosDto) {
         }
     }
 }
+
+/** Beyond this extra height a mast is not a realistic answer: another AP is. */
+private const val MAX_MAST_M = 12.0
 
 private fun fmt(v: Double) = if (v % 1.0 == 0.0) v.toInt().toString() else "%.1f".format(java.util.Locale.ITALY, v)
 

@@ -47,7 +47,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.PathEffect
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
@@ -162,12 +161,9 @@ fun FieldConnection(c: AppContainer, mode: FieldMode) {
 
 @Composable
 private fun KeepScreenOnWhileRunning(c: AppContainer, mode: FieldMode) {
-    val view = LocalView.current
     DisposableEffect(Unit) {
-        view.keepScreenOn = true
         c.field.start(mode)
         onDispose {
-            view.keepScreenOn = false
             c.field.onSample = null
             c.field.stop()
         }
@@ -198,6 +194,8 @@ fun AlignmentScreen(c: AppContainer) {
         FieldConnection(c, FieldMode.Alignment)
         st.status?.let { s ->
             AlignmentGauge(s, t, st.peak, st.history)
+            // beep (higher = better), the signal read aloud, a tap on each new peak: right under the number
+            RoofAids(c) { feedback = it }
             SectionCard("Collegamento") {
                 KeyValue("AP", listOfNotNull(s.apName, s.apMac).joinToString(" · ").ifBlank { "non agganciata" })
                 KeyValue("SSID", s.essid ?: "—")
@@ -209,8 +207,6 @@ fun AlignmentScreen(c: AppContainer) {
                 s.noise?.let { KeyValue("Rumore", "$it dBm") }
             }
         }
-        // beep (higher = better), the signal read aloud, a tap on each new peak
-        RoofAids(c) { feedback = it }
         OutlinedButton(onClick = { c.field.resetPeak(); feedback?.resetPeak() }) { Text("Azzera picco e grafico") }
         SurveyCard(c, st.status?.apMac)
     }

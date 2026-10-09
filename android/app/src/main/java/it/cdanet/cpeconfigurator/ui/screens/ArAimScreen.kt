@@ -116,7 +116,6 @@ fun ArAimScreen(c: AppContainer, liveSignal: Boolean = false) {
         val activity = context.activity()
         val before = activity?.requestedOrientation
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        view.keepScreenOn = true
         orientation.start(t.fromLatitude, t.fromLongitude)
         // from the guided installation: live signal of the CPE with the alignment beep
         val tone = if (liveSignal) AlignmentTone() else null
@@ -130,7 +129,6 @@ fun ArAimScreen(c: AppContainer, liveSignal: Boolean = false) {
                 c.field.stop()
             }
             orientation.stop()
-            view.keepScreenOn = false
             if (activity != null && before != null) activity.requestedOrientation = before
         }
     }

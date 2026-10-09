@@ -47,7 +47,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import it.cdanet.cpeconfigurator.core.AppContainer
@@ -377,13 +376,10 @@ private fun CpeStep(c: AppContainer, content: @Composable () -> Unit) {
     }
     if (ready == null) return
     WifiRequired(c, CPE_WIFI, "Segnale e configurazione si leggono direttamente dalla CPE.") {
-        val view = LocalView.current
         val relink by c.install.state.collectAsState()
         DisposableEffect(Unit) {
-            view.keepScreenOn = true
             if (relink.relink?.running != true) c.field.start(FieldMode.Alignment)
             onDispose {
-                view.keepScreenOn = false
                 c.field.onSample = null
                 c.field.stop()
             }
