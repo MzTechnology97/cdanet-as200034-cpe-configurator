@@ -111,7 +111,7 @@ const localTime = (s) => (s ? s.replace('T', ' ').replace(/^(\d{4})-(\d{2})-(\d{
  * Draws the Guasti Enel map data (/api/outages/map) on [target] (map or layer group): zones,
  * POPs/APs (real point or approximate area) and outages; returns the layers to fit.
  */
-export function drawOutages(target, d) {
+export function drawOutages(target, d, onOutage = null) {
   const L = window.L;
   const layers = [];
   for (const z of d.zones ?? []) {
@@ -128,11 +128,11 @@ export function drawOutages(target, d) {
     );
   }
   for (const o of d.outages ?? []) {
-    layers.push(
-      L.circleMarker([o.lat, o.lon], { radius: 7, color: o.impacted ? COLORS.impacted : COLORS[o.kind], fillColor: COLORS[o.kind], weight: o.impacted ? 3 : 1.5, fillOpacity: 0.9 })
-        .bindPopup(popup(o.label, `${o.place} (${o.province})`, `${o.customers} clienti Enel`, o.expectedRestore ? `ripristino previsto ${localTime(o.expectedRestore)}` : null, o.impacted ? 'POP/AP potenzialmente impattati' : null))
-        .addTo(target),
-    );
+    const marker = L.circleMarker([o.lat, o.lon], { radius: 7, color: o.impacted ? COLORS.impacted : COLORS[o.kind], fillColor: COLORS[o.kind], weight: o.impacted ? 3 : 1.5, fillOpacity: 0.9 })
+      .bindPopup(popup(o.label, `${o.place} (${o.province})`, `${o.customers} clienti Enel`, o.expectedRestore ? `ripristino previsto ${localTime(o.expectedRestore)}` : null, o.impacted ? 'POP/AP potenzialmente impattati' : null))
+      .addTo(target);
+    layers.push(marker);
+    onOutage?.(o, marker);
   }
   return layers;
 }

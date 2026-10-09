@@ -65,6 +65,7 @@ Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). 
 
 ## Già rilasciato
 
+- v1.32.2: Guasti Enel nell'app con righe compatte e "Sulla mappa" sulla mappa della pagina.
 - v1.32.1: mappa locale servita a tile singole dal server (niente letture a intervalli: le WebView Android le rifiutavano).
 - v1.32.0: regione OpenStreetMap dal portale, SSID dei rilanci (…-R<n>).
 - v1.31.1: collegamenti PtP esclusi da copertura, Trova l'AP, Stato rete e Salute CPE (SSID CDA-NET-N…-D…).
