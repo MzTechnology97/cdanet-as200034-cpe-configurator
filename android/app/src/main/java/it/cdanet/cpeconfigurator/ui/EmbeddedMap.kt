@@ -1,0 +1,85 @@
+package it.cdanet.cpeconfigurator.ui
+
+import android.annotation.SuppressLint
+import android.content.Intent
+import android.net.Uri
+import android.net.http.SslError
+import android.webkit.SslErrorHandler
+import android.webkit.WebResourceRequest
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import it.cdanet.cpeconfigurator.core.AppContainer
+import it.cdanet.cpeconfigurator.network.TestTls
+
+/**
+ * The console's map page (Leaflet + Protomaps on our server) inside the app. The page has no
+ * session: [script] (JavaScript, e.g. `window.cdaOutages({...})`) passes it the data the app
+ * already received, and is re-run whenever it changes. [onReady] gets the page for live updates.
+ */
+@SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
+@Composable
+fun EmbeddedMap(c: AppContainer, script: String?, modifier: Modifier = Modifier, onReady: (WebView) -> Unit = {}) {
+    val baseUrl by produceState<String?>(null) { value = c.api.base().trimEnd('/') }
+    val base = baseUrl ?: run {
+        Text("Caricamento mappa…", modifier.padding(14.dp))
+        return
+    }
+    var page by remember { mutableStateOf<WebView?>(null) }
+    var loaded by remember { mutableStateOf(false) }
+    DisposableEffect(Unit) { onDispose { page?.destroy() } }
+    LaunchedEffect(loaded, script) {
+        val p = page
+        if (loaded && p != null) {
+            onReady(p)
+            if (script != null) p.evaluateJavascript(script, null)
+        }
+    }
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            WebView(ctx).apply {
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                // pan/zoom the map instead of scrolling the screen around it
+                setOnTouchListener { v, _ ->
+                    v.parent?.requestDisallowInterceptTouchEvent(true)
+                    false
+                }
+                webViewClient = object : WebViewClient() {
+                    override fun onPageFinished(view: WebView, url: String) {
+                        loaded = true
+                    }
+
+                    // test option "unverified server certificate": only for our server
+                    @SuppressLint("WebViewClientOnReceivedSslError")
+                    override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: SslError) {
+                        if (TestTls.enabled && error.url.startsWith(base)) handler.proceed() else handler.cancel()
+                    }
+
+                    // only our map page inside the app; anything else opens outside
+                    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                        val url = request.url.toString()
+                        if (url.startsWith(base)) return false
+                        runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+                        return true
+                    }
+                }
+                loadUrl("$base/map-embed.html")
+                page = this
+            }
+        },
+    )
+}

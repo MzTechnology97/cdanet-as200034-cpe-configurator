@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { badge, busy, card, field, fmtDate, h, mount, pageHead, stat, table, toast } from '../dom.js';
-import { createMap, fit, legend, MAP_COLORS as C, popup } from '../map.js';
+import { createMap, drawOutages, fit, legend, MAP_COLORS as C } from '../map.js';
 import { itemLabel, itemNames, picker } from './infra-picker.js';
 
 const KIND = { guasto_mt: ['Guasto MT', 'bad'], guasto_bt: ['Guasto BT', 'warn'], lavoro: ['Lavoro programmato', ''], altro: ['Interruzione', 'warn'] };
@@ -123,29 +123,8 @@ function outagesMap(admin) {
   (async () => {
     const map = await createMap(el);
     if (!map) return;
-    const L = window.L;
     const d = await api('/api/outages/map');
-    const layers = [];
-    for (const z of d.zones) {
-      layers.push(L.circle([z.lat, z.lon], { radius: z.radiusKm * 1000, color: z.personal ? C.personal : C.zone, weight: 1, dashArray: '4 4', fillOpacity: 0.04 }).bindPopup(popup(`Zona ${z.name}`, `raggio ${z.radiusKm} km`)).addTo(map));
-    }
-    for (const i of d.infra) {
-      const color = i.impacted ? C.impacted : C[i.type];
-      const title = `${i.type === 'pop' ? 'POP' : 'AP'} ${i.name}`;
-      const info = [i.stations != null ? `${i.stations} CPE` : null, i.impacted ? 'potenzialmente impattato da un guasto' : null];
-      layers.push(
-        i.approx
-          ? L.circle([i.approx.lat, i.approx.lon], { radius: i.approx.radiusM, color, weight: 1, fillOpacity: 0.12 }).bindPopup(popup(title, ...info, 'posizione approssimativa')).addTo(map)
-          : L.circleMarker([i.lat, i.lon], { radius: i.type === 'pop' ? 8 : 5, color, weight: 2, fillOpacity: 0.85 }).bindPopup(popup(title, ...info)).addTo(map),
-      );
-    }
-    for (const o of d.outages) {
-      layers.push(
-        L.circleMarker([o.lat, o.lon], { radius: 7, color: o.impacted ? C.impacted : C[o.kind], fillColor: C[o.kind], weight: o.impacted ? 3 : 1.5, fillOpacity: 0.9 })
-          .bindPopup(popup(o.label, `${o.place} (${o.province})`, `${o.customers} clienti Enel`, o.expectedRestore ? `ripristino previsto ${local(o.expectedRestore)}` : null, o.impacted ? 'POP/AP potenzialmente impattati' : null))
-          .addTo(map),
-      );
-    }
+    const layers = drawOutages(map, d);
     fit(map, layers);
   })().catch((e) => (note.textContent = e.message));
   return box;

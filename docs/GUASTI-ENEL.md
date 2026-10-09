@@ -35,7 +35,7 @@ Un guasto più vicino di un raggio configurabile (default **1 km**, 0,1–5 km) 
 
 ## Mappa
 
-In cima alla pagina una mappa (Protomaps, ospitata sul nostro server: vedi [MAPPE.md](MAPPE.md)) mostra guasti, zone, POP e AP, con quelli potenzialmente impattati in rosso. Gli installatori vedono POP e AP solo come **area approssimativa**.
+Anche nell'**app** (Guasti Enel → Mappa) c'è la stessa mappa, con gli stessi limiti per gli installatori. In cima alla pagina della console una mappa (Protomaps, ospitata sul nostro server: vedi [MAPPE.md](MAPPE.md)) mostra guasti, zone, POP e AP, con quelli potenzialmente impattati in rosso. Gli installatori vedono POP e AP solo come **area approssimativa**.
 
 ## Cosa vede l'installatore
 
