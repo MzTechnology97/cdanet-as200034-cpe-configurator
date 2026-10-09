@@ -58,6 +58,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import androidx.compose.material3.FilterChip
+import it.cdanet.cpeconfigurator.tools.topology.TopologyRun
+import it.cdanet.cpeconfigurator.tools.topology.TopologyScanner
 
 private fun csvCell(v: Any?): String = v?.toString().orEmpty().let { if (it.any { c -> c == ';' || c == '"' || c == '\n' }) "\"" + it.replace("\"", "\"\"") + "\"" else it }
 
@@ -95,6 +97,11 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
     var sort by remember { mutableStateOf("IP") }
     var openHost by remember { mutableStateOf<String?>(null) }
     var showMap by remember { mutableStateOf(false) }
+    var useSnmp by remember { mutableStateOf(true) }
+    var useDiscovery by remember { mutableStateOf(true) }
+    var communities by remember { mutableStateOf("public") }
+    var topo by remember { mutableStateOf<TopologyRun?>(null) }
+    var topoBusy by remember { mutableStateOf<String?>(null) }
 
     fun start() {
         error = null
@@ -156,12 +163,50 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
                 }
             }
             if (showMap) {
-                SectionCard("Mappa di rete") {
-                    Text("Mappa logica della LAN scansionata: dispositivi dietro al gateway raggruppati per tipo. Tocca un dispositivo per i dettagli.", style = MaterialTheme.typography.bodySmall)
-                    NetworkMapView(hosts.toList(), link?.gateway) { h ->
-                        filter = h.ip
-                        openHost = h.ip
-                        showMap = false
+                SectionCard("Topologia") {
+                    SwitchRow("SNMP (LLDP/CDP, tabelle MAC degli switch, ARP del router)", useSnmp) { useSnmp = it }
+                    if (useSnmp) Field("Community SNMP v2c (separate da virgola)", communities, { communities = it }, supporting = "Predefinita: public. Le community restano sul telefono.")
+                    SwitchRow("Discovery multi-vendor (MikroTik, Ubiquiti, Hikvision, Dahua, ONVIF, UPnP, mDNS, Netgear)", useDiscovery) { useDiscovery = it }
+                    BusyButton(topoBusy ?: "Costruisci mappa", topoBusy != null, Modifier.fillMaxWidth(), enabled = topoBusy == null && job == null) {
+                        scope.launch {
+                            topoBusy = "Avvio…"
+                            runCatching {
+                                TopologyScanner(c.network).run(
+                                    hosts.toList(),
+                                    link?.gateway,
+                                    if (useSnmp) communities.split(',').map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("public") } else emptyList(),
+                                    useDiscovery,
+                                ) { topoBusy = it }
+                            }.onSuccess { r ->
+                                topo = r
+                                // discovery enriches the host list (names, MACs, types, devices the scan missed)
+                                hosts.clear()
+                                hosts += r.hosts
+                            }.onFailure { error = it.message ?: it.toString() }
+                            topoBusy = null
+                        }
+                    }
+                    val t = topo?.result
+                    Text(
+                        when {
+                            t == null -> "Mappa base dal gateway (dispositivi raggruppati per tipo). \"Costruisci mappa\" prova SNMP e discovery per la topologia reale."
+                            t.mode == "snmp" -> "Topologia da SNMP: ${t.snmpDevices} apparati, ${t.links} collegamenti LLDP/CDP, ${t.placedOnPorts} dispositivi collocati sulla porta dello switch; gli altri sotto il gateway."
+                            else -> "Nessun apparato ha risposto via SNMP: mappa base dal gateway."
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    val open = { h: ScanHost -> filter = h.ip; openHost = h.ip; showMap = false }
+                    if (t != null) NetworkMapView(t.layout, open) else NetworkMapView(hosts.toList(), link?.gateway, open)
+                }
+                topo?.found?.takeIf { it.isNotEmpty() }?.let { found ->
+                    SectionCard("Discovery: ${found.size} dispositivi") {
+                        found.sortedBy { Ip.parse(it.ip) ?: Long.MAX_VALUE }.forEach { f ->
+                            Text("${f.ip} · ${f.vendor}${f.model?.let { " $it" } ?: ""}", fontWeight = FontWeight.SemiBold)
+                            Text(
+                                listOfNotNull(f.protocol, f.name, f.mac, f.firmware, f.details.entries.joinToString(" · ") { "${it.key} ${it.value}" }.ifBlank { null }).joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall,
+                            )
+                        }
                     }
                 }
                 return@Column
