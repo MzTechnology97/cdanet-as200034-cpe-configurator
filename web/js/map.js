@@ -10,7 +10,6 @@ const COLORS = { guasto_mt: '#dc2626', guasto_bt: '#f59e0b', lavoro: '#94a3b8', 
 export const MAP_COLORS = COLORS;
 
 let vendor = null;
-let config = null;
 
 const script = (src) =>
   new Promise((res, rej) => {
@@ -44,14 +43,16 @@ const attached = (el) =>
 export async function createMap(el, { center = [37.57, 14.27], zoom = 9 } = {}) {
   await Promise.all([loadVendor(), attached(el)]);
   if (!el.isConnected) return null;
-  config ??= await api('/api/map/config');
+  // read every time: the basemap may have been installed meanwhile
+  const config = await api('/api/map/config');
   const L = window.L;
   const map = L.map(el, { center, zoom, scrollWheelZoom: false });
   if (config.basemap && window.protomapsL) {
     const dark = matchMedia('(prefers-color-scheme: dark)').matches;
     window.protomapsL.leafletLayer({ url: config.basemap.url, flavor: dark ? 'dark' : 'light', lang: 'it', maxDataZoom: config.basemap.maxZoom }).addTo(map);
   } else {
-    L.tileLayer(config.fallback.url, { maxZoom: 19, attribution: config.fallback.attribution }).addTo(map);
+    // OpenStreetMap's tile policy requires a Referer (the console sends none by default)
+    L.tileLayer(config.fallback.url, { maxZoom: 19, attribution: config.fallback.attribution, referrerPolicy: 'strict-origin-when-cross-origin' }).addTo(map);
   }
   map.on('focus', () => map.scrollWheelZoom.enable());
   map.on('blur', () => map.scrollWheelZoom.disable());

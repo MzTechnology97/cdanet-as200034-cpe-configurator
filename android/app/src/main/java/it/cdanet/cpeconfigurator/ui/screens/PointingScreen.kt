@@ -54,6 +54,7 @@ import it.cdanet.cpeconfigurator.ui.WarnAmber
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
+import it.cdanet.cpeconfigurator.network.TestTls
 
 private fun km(m: Int) = if (m < 1000) "$m m" else "%.2f km".format(java.util.Locale.ITALY, m / 1000.0)
 
@@ -202,6 +203,12 @@ private fun PointingMap(c: AppContainer, d: PointingDto, modifier: Modifier) {
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView, url: String) {
                         loaded = true
+                    }
+
+                    // test option "unverified server certificate": only for our server
+                    @SuppressLint("WebViewClientOnReceivedSslError")
+                    override fun onReceivedSslError(view: WebView, handler: android.webkit.SslErrorHandler, error: android.net.http.SslError) {
+                        if (TestTls.enabled && error.url.startsWith(base)) handler.proceed() else handler.cancel()
                     }
 
                     // Only our map page inside the app; anything else opens outside.

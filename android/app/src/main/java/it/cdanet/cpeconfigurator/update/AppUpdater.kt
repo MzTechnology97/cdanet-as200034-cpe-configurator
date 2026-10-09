@@ -17,6 +17,7 @@ import java.io.File
 import java.io.IOException
 import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
+import it.cdanet.cpeconfigurator.network.TestTls
 
 @Serializable
 data class UpdateInfo(
@@ -54,7 +55,7 @@ class AppUpdater(private val context: Context, private val settings: Settings) {
 
     suspend fun check(): UpdateInfo? = withContext(Dispatchers.IO) {
         val base = settings.backendUrlNow()
-        http.newCall(Request.Builder().url("$base/api/mobile/update").header("Cache-Control", "no-cache").build()).execute().use { r ->
+        TestTls.wrap(http).newCall(Request.Builder().url("$base/api/mobile/update").header("Cache-Control", "no-cache").build()).execute().use { r ->
             if (!r.isSuccessful) throw IOException("Canale aggiornamenti HTTP ${r.code}")
             val info = AppJson.decodeFromString(UpdateInfo.serializer(), r.body?.string().orEmpty())
             info.takeIf { it.available && it.versionCode > installedVersionCode() }
@@ -77,7 +78,7 @@ class AppUpdater(private val context: Context, private val settings: Settings) {
         dir.listFiles()?.forEach { it.delete() }
         val out = File(dir, "CDA-Net-CPE-${info.versionName}.apk")
         val md = MessageDigest.getInstance("SHA-256")
-        http.newCall(Request.Builder().url(url).build()).execute().use { r ->
+        TestTls.wrap(http).newCall(Request.Builder().url(url).build()).execute().use { r ->
             if (!r.isSuccessful) throw IOException("Download APK HTTP ${r.code}")
             val body = r.body ?: throw IOException("Download APK vuoto")
             var total = 0L

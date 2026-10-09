@@ -14,6 +14,7 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.io.IOException
 import java.util.concurrent.TimeUnit
+import it.cdanet.cpeconfigurator.network.TestTls
 
 class ApiException(val status: Int, val code: String, message: String) : IOException(message)
 
@@ -83,7 +84,7 @@ class ApiClient(
             if (auth) session.token?.let { b.header("Authorization", "Bearer $it") }
             if (client) b.header("X-CDA-Client", clientHeader)
             b.method(method, body?.toString()?.toRequestBody(jsonType) ?: if (method == "GET") null else "{}".toRequestBody(jsonType))
-            http.newCall(b.build()).execute().use { r ->
+            TestTls.wrap(http).newCall(b.build()).execute().use { r ->
                 val text = r.body?.string().orEmpty()
                 if (!r.isSuccessful) {
                     val err = runCatching { AppJson.decodeFromString(ApiErrorDto.serializer(), text) }.getOrNull()
@@ -136,7 +137,7 @@ class ApiClient(
         val url = (base() + "/api/provisioning/jobs/$jobId/photos").toHttpUrl().newBuilder().addQueryParameter("caption", caption).build()
         val b = Request.Builder().url(url).post(jpeg.toRequestBody("image/jpeg".toMediaType()))
         session.token?.let { b.header("Authorization", "Bearer $it") }
-        http.newCall(b.build()).execute().use { r ->
+        TestTls.wrap(http).newCall(b.build()).execute().use { r ->
             if (!r.isSuccessful) {
                 val code = runCatching { AppJson.decodeFromString(ApiErrorDto.serializer(), r.body?.string().orEmpty()).error }.getOrNull()?.ifBlank { null } ?: "HTTP ${r.code}"
                 throw ApiException(r.code, code, apiMessage(code))

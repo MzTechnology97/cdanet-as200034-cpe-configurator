@@ -88,6 +88,8 @@ sudo cdanet-cpe https-ca > cdanet-root-ca.crt
 
 Windows: doppio clic → Installa certificato → "Autorità di certificazione radice attendibili". Android: Impostazioni → Sicurezza → Crittografia e credenziali → Installa un certificato → Certificato CA. Senza la CA il browser chiede di accettare il certificato (e può richiederlo di nuovo dopo il rinnovo).
 
+**App Android**: accetta la CA installata dall'utente sul telefono (consigliato). Solo per i test c'è anche Impostazioni → Server → **"Accetta certificato non verificato (solo test)"**: vale solo verso il server CDA Net (API, aggiornamenti, notifiche, mappa) e va spento appena possibile.
+
 L'HTTPS serve anche per il GPS del browser (zone dei guasti da "Usa GPS di questo dispositivo").
 
 ### Mappe (Protomaps)

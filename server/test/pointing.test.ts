@@ -5,6 +5,8 @@ import { buildApp } from '../src/app.ts';
 import { openDatabase } from '../src/db.ts';
 import { elevationAngle, sampleHgt, tileName } from '../src/services/dem.ts';
 import { gpsAltitude } from '../src/services/uisp.ts';
+import { resolveApAltitude } from '../src/routes/pointing.ts';
+import { sectorWidth } from '../src/domain/coverage-model.ts';
 import { fakeUisp } from './fake-uisp.ts';
 import { ADMIN, testConfig } from './helpers.ts';
 
@@ -30,6 +32,19 @@ describe('Puntamento: terreno e tilt', () => {
     assert.equal(gpsAltitude({ location: { latitude: 37.6, longitude: 14.1, altitude: 932.4 } }), 932.4);
     assert.equal(gpsAltitude({ overview: { gps: { altitude: '871' } } }), 871);
     assert.equal(gpsAltitude({ location: { latitude: 37.6, longitude: 14.1 } }), null);
+  });
+
+  it('resolves the AP altitude as UISP reports it on the real network', () => {
+    // LAP-GPS: GPS altitude a.s.l.
+    assert.deepEqual(resolveApAltitude(954, 940, 15), { altitude: 954, from: 'gps' });
+    // non-GPS AP: small value = height above the ground typed in UISP
+    assert.deepEqual(resolveApAltitude(6, 520, 15), { altitude: 526, from: 'uisp' });
+    // nothing reported: terrain + site/default antenna height
+    assert.deepEqual(resolveApAltitude(null, 520, 10.07), { altitude: 530.07, from: 'terreno' });
+    assert.deepEqual(resolveApAltitude(null, null, 15), { altitude: null, from: null });
+    assert.equal(sectorWidth('LAP-120'), 120);
+    assert.equal(sectorWidth('PrismAP-5-45'), 45);
+    assert.equal(sectorWidth('LAP-GPS'), 90);
   });
 
   it('computes the tilt with earth curvature', () => {

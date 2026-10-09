@@ -8,6 +8,8 @@
     <base-config cleartextTrafficPermitted="true">
         <trust-anchors>
             <certificates src="system" />
+            <!-- CAs installed by the user: e.g. the CDA Net server's own HTTPS CA (sudo cdanet-cpe https-ca) -->
+            <certificates src="user" />
         </trust-anchors>
     </base-config>
 </network-security-config>

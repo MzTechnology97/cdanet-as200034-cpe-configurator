@@ -66,7 +66,14 @@ export function servedArc(bearings: number[]): { center: number; width: number }
   return { center: Math.round((start + (360 - gap) / 2) % 360), width: Math.round(width) };
 }
 
-export function buildApModel(ap: LatLon, clients: ClientSample[]): ApModel {
+/** Horizontal beamwidth from the AP model name (LAP-120 → 120°, PrismAP-5-45 → 45°…); 90° otherwise. */
+export function sectorWidth(model: string | null | undefined): number {
+  const m = /(?:^|[^0-9])(30|45|60|90|120)(?:[^0-9]|$)/.exec(model ?? '');
+  return m ? Number(m[1]) : 90;
+}
+
+/** [heading]: the antenna azimuth set in UISP, used instead of the arc guessed from the customers. */
+export function buildApModel(ap: LatLon, clients: ClientSample[], heading: { center: number; width: number } | null = null): ApModel {
   const samples = clients.map((c) => ({ d: Math.max(30, distanceM(ap, c)), b: bearingDeg(ap, c), s: c.signal }));
   const ds = samples.map((s) => s.d).sort((a, b) => a - b);
   const servedM = ds.length ? Math.round(ds[Math.min(ds.length - 1, Math.floor(ds.length * 0.9))]!) : null;
@@ -84,7 +91,7 @@ export function buildApModel(ap: LatLon, clients: ClientSample[]): ApModel {
     const rmse = Math.sqrt(sig.reduce((acc, s, i) => acc + (s.s - (a + n * x[i]!)) ** 2, 0) / sig.length);
     fit = { a, n, rmse: Math.max(3, rmse), from: sig.length };
   }
-  return { samples, sector: servedArc(samples.map((s) => s.b)), servedM, fit };
+  return { samples, sector: heading ?? servedArc(samples.map((s) => s.b)), servedM, fit };
 }
 
 /** Expected signal of a CPE at distance [d] and bearing [b] from the AP. */

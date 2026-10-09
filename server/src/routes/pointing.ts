@@ -8,6 +8,19 @@ import { isValidLatLon } from '../domain/geo.ts';
 import { estimateSignal, type ApModel } from '../domain/coverage-model.ts';
 import { elevationAngle } from '../services/dem.ts';
 
+/**
+ * Altitude of the AP antenna, metres a.s.l. UISP's location.altitude is the GPS altitude on GPS
+ * APs; on the others it holds small values (a height above the ground typed in UISP). Otherwise:
+ * terrain + antenna height (site height in UISP, else the admin default). Pure, unit-tested.
+ */
+export function resolveApAltitude(reported: number | null, ground: number | null, height: number): { altitude: number | null; from: 'gps' | 'uisp' | 'terreno' | null } {
+  if (reported !== null) {
+    if (ground !== null ? reported >= ground - 30 : reported >= 100) return { altitude: reported, from: 'gps' };
+    if (ground !== null && reported >= 0 && reported < 100) return { altitude: ground + reported, from: 'uisp' };
+  }
+  return ground === null ? { altitude: null, from: null } : { altitude: ground + height, from: 'terreno' };
+}
+
 export interface PointingConfig {
   /** Height of the AP antennas above the ground (UISP has no field for it). */
   apHeightM: number;
@@ -67,9 +80,7 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
       restricted: !!keys,
       assignedCount: keys ? [...keys].filter((k) => !k.startsWith('z')).length : null,
       aps: aps.map(({ lat, lon, siteId: _site, stations: _st, ...a }, i) => {
-        const g = apGround[i] ?? null;
-        // the AP's own GPS altitude when UISP has it, else terrain + configured antenna height
-        const altitude = a.gpsAltitude ?? (g === null ? null : g + c.apHeightM);
+        const { altitude, from: altitudeFrom } = resolveApAltitude(a.gpsAltitude, apGround[i] ?? null, a.siteHeight ?? c.apHeightM);
         const base = {
           id: a.id,
           name: a.name,
@@ -79,7 +90,7 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
           bearing: a.bearing,
           direction: a.direction,
           altitude,
-          altitudeFrom: a.gpsAltitude !== null ? ('gps' as const) : altitude !== null ? ('terreno' as const) : null,
+          altitudeFrom,
           tiltDeg: altitude !== null && from !== null ? elevationAngle(a.distanceM, from, altitude) : null,
           estimate: (() => {
             const m = models.get(a.id);

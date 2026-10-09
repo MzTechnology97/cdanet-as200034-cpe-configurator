@@ -1,6 +1,7 @@
 package it.cdanet.cpeconfigurator.data
 
 import android.content.Context
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -10,6 +11,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import java.net.URL
+import it.cdanet.cpeconfigurator.network.TestTls
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
@@ -17,6 +19,17 @@ private val Context.dataStore by preferencesDataStore(name = "settings")
 class Settings(private val context: Context) {
     private val backendKey = stringPreferencesKey("backend_url")
     private val usernameKey = stringPreferencesKey("last_username")
+    private val insecureKey = booleanPreferencesKey("insecure_tls_test")
+
+    /** TEST ONLY: accept the server's unverified (self-signed) certificate. */
+    val insecureTls: Flow<Boolean> = context.dataStore.data.map { it[insecureKey] ?: false }
+
+    suspend fun insecureTlsNow(): Boolean = insecureTls.first()
+
+    suspend fun setInsecureTls(value: Boolean) {
+        context.dataStore.edit { it[insecureKey] = value }
+        TestTls.enabled = value
+    }
 
     val backendUrl: Flow<String> = context.dataStore.data.map { it[backendKey] ?: BuildConfig.DEFAULT_BACKEND_URL }
     val lastUsername: Flow<String> = context.dataStore.data.map { it[usernameKey] ?: "" }
