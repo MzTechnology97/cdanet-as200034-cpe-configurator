@@ -102,7 +102,7 @@ class IpScanner(private val wifi: Network?) {
         // 2. ICMP for the hosts that did not answer on TCP.
         if (icmp) {
             val pingSem = Semaphore(16)
-            ips.filter { it !in alive }.map { ip ->
+            ips.filter { !alive.containsKey(it) }.map { ip ->
                 async(Dispatchers.IO) {
                     pingSem.withPermit {
                         coroutineContext.ensureActive()
@@ -112,7 +112,7 @@ class IpScanner(private val wifi: Network?) {
                 }
             }.awaitAll()
         }
-        ubnt.forEach { d -> d.ip?.let { if (it in ips && it !in alive) alive[it] = (alive[it]?.first ?: 0) to "Ubiquiti" } }
+        ubnt.forEach { d -> d.ip?.let { if (it in ips && !alive.containsKey(it)) alive[it] = (alive[it]?.first ?: 0) to "Ubiquiti" } }
         self.filter { it in ips }.forEach { alive.putIfAbsent(it, 0 to "questo telefono") }
 
         // 3. Names: reverse DNS and NetBIOS (with MAC) in parallel.

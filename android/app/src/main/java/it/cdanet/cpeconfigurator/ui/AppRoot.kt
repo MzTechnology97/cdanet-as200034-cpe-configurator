@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import it.cdanet.cpeconfigurator.core.AppContainer
 import it.cdanet.cpeconfigurator.ui.screens.AcceptanceScreen
+import it.cdanet.cpeconfigurator.ui.WifiRequired
 import it.cdanet.cpeconfigurator.ui.screens.AlignmentScreen
 import it.cdanet.cpeconfigurator.ui.screens.CameraScreen
 import it.cdanet.cpeconfigurator.ui.screens.CompassScreen
@@ -157,26 +158,26 @@ fun AppRoot(c: AppContainer) {
                 when (screen) {
                     Screen.Home -> HomeScreen(c, offline = session == null, onNavigate = ::go, onLogin = { offline = false })
                     Screen.Provision -> ProvisionScreen(c, onOpenCpeWeb = { go(Screen.CpeWeb) }, onLogin = { offline = false }, onAcceptance = { go(Screen.Acceptance) })
-                    Screen.CpeWeb -> CpeWebScreen(c)
+                    Screen.CpeWeb -> WifiRequired(c, "alla Wi-Fi di management della CPE", "Il primo avvio si fa sull'interfaccia web della CPE, raggiungibile solo in rete locale.") { CpeWebScreen(c) }
                     Screen.Wifi -> WifiScreen(c)
                     Screen.Network -> NetworkScreen(c)
-                    Screen.Discovery -> DiscoveryScreen(c)
+                    Screen.Discovery -> WifiRequired(c, "alla Wi-Fi della rete locale da analizzare", "La discovery funziona solo sulla stessa LAN.") { DiscoveryScreen(c) }
                     Screen.Coverage -> CoverageScreen(
                         c,
                         onCompass = if (c.moduleOn("compass")) ({ t: it.cdanet.cpeconfigurator.field.CompassTarget -> c.compassTarget.value = t; go(Screen.Compass) }) else null,
                     )
-                    Screen.Alignment -> AlignmentScreen(c)
-                    Screen.Diagnosis -> DiagnosisScreen(c)
+                    Screen.Alignment -> WifiRequired(c, "alla Wi-Fi della CPE (management, es. \"LBE-5AC-Gen2:xxxx\") oppure a quella del router del cliente", "Il segnale si legge direttamente dalla CPE.") { AlignmentScreen(c) }
+                    Screen.Diagnosis -> WifiRequired(c, "alla Wi-Fi della CPE (management, es. \"LBE-5AC-Gen2:xxxx\") oppure a quella del router del cliente", "La diagnosi interroga la CPE in rete locale.") { DiagnosisScreen(c) }
                     Screen.Acceptance -> AcceptanceScreen(c)
                     Screen.Compass -> CompassScreen(c)
                     Screen.CpeHealth -> CpeHealthScreen(c)
-                    Screen.IpScanner -> IpScannerScreen(c, onPortScan = { c.portScanTarget.value = it; go(Screen.PortScanner) })
-                    Screen.PortScanner -> PortScannerScreen(c)
+                    Screen.IpScanner -> WifiRequired(c, "alla Wi-Fi della rete locale da analizzare", "Lo scanner esamina la subnet della Wi-Fi collegata.") { IpScannerScreen(c, onPortScan = { c.portScanTarget.value = it; go(Screen.PortScanner) }) }
+                    Screen.PortScanner -> WifiRequired(c, "alla Wi-Fi della rete locale da analizzare", "Le porte di host privati si verificano dalla stessa rete locale.") { PortScannerScreen(c) }
                     Screen.NetDiag -> NetDiagScreen(c)
-                    Screen.Snmp -> SnmpScreen(c)
-                    Screen.Camera -> CameraScreen(c)
+                    Screen.Snmp -> WifiRequired(c, "alla Wi-Fi della rete locale da analizzare", "Gli apparati SNMP si interrogano in rete locale.") { SnmpScreen(c) }
+                    Screen.Camera -> WifiRequired(c, "alla Wi-Fi della rete delle telecamere", "ONVIF, SADP e RTSP funzionano sulla rete locale.") { CameraScreen(c) }
                     Screen.Remote -> RemoteScreen(c)
-                    Screen.RouterOs -> RouterOsScreen(c)
+                    Screen.RouterOs -> WifiRequired(c, "alla Wi-Fi della rete del MikroTik", "La consultazione avviene in SSH verso il router in rete locale.") { RouterOsScreen(c) }
                     Screen.History -> HistoryScreen(
                         c,
                         onAcceptance = { c.selectedJob.value = it; go(Screen.Acceptance) },

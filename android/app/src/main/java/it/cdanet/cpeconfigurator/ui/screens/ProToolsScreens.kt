@@ -19,6 +19,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateOf
@@ -102,7 +103,8 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
                 val parsed = Ip.parseScanCidr(cidr, minPrefix = 22)
                 val wl = c.network.wifiLink()
                 val selfIps = wl?.addresses.orEmpty().map { it.substringBefore('/') }.toSet()
-                val ubntJob = if (ubnt) async { runCatching { UbntDiscovery.discover(c.network, 3_000) }.getOrDefault(emptyList()) } else null
+                val ubntJob: kotlinx.coroutines.Deferred<List<it.cdanet.cpeconfigurator.tools.UbntDevice>>? =
+                    if (ubnt) async { runCatching { UbntDiscovery.discover(c.network, 3_000) }.getOrDefault(emptyList()) } else null
                 progress = IpScanner.Progress(0, 1, 0, "Avvio")
                 val ubntList = ubntJob?.await().orEmpty()
                 val found = IpScanner(net).scan(parsed, icmp, ubntList, wl?.gateway, selfIps, wl?.dns?.firstOrNull { it.contains('.') }) { progress = it }
@@ -411,9 +413,11 @@ fun NetDiagScreen(c: AppContainer) {
         }
 
         SectionCard("Wake-on-LAN") {
+            val onWifi by c.network.wifiConnected.collectAsState()
+            if (!onWifi) Text("Serve la Wi-Fi della rete del PC da accendere: il magic packet viaggia in broadcast sulla LAN.", color = WarnAmber)
             Field("MAC del PC da accendere", wolMac, { wolMac = it.trim() }, placeholder = "AA:BB:CC:DD:EE:FF")
             Field("Broadcast", wolBcast, { wolBcast = it.trim() }, keyboardType = KeyboardType.Uri)
-            BusyButton("Invia magic packet", false, Modifier.fillMaxWidth(), primary = false) {
+            BusyButton("Invia magic packet", false, Modifier.fillMaxWidth(), primary = false, enabled = onWifi) {
                 scope.launch {
                     error = runCatching { NetDiag.wakeOnLan(wolMac, wolBcast, c.network.wifiNetwork()); null }.getOrElse { it.message }
                     if (error == null) error = "Magic packet inviato a $wolBcast (UDP 9 e 7)"
