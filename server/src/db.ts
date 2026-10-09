@@ -334,6 +334,27 @@ const MIGRATIONS: string[] = [
   CREATE INDEX work_orders_assigned ON work_orders(assigned_to, day);
   ALTER TABLE provisioning_jobs ADD COLUMN work_order_id INTEGER REFERENCES work_orders(id) ON DELETE SET NULL;
   `,
+  // 18: airOS firmware images uploaded by the admin, flashed from the app in the field
+  `
+  CREATE TABLE firmware_images(
+    id INTEGER PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    filename TEXT NOT NULL,
+    platform TEXT NOT NULL,
+    version TEXT NOT NULL,
+    build TEXT NOT NULL,
+    size INTEGER NOT NULL,
+    sha256 TEXT NOT NULL UNIQUE,
+    md5 TEXT NOT NULL
+  );
+  `,
+  // 19: phone keys of the persistent login expire (sliding, with a hard cap); NULL = older
+  // biometric keys, valid until revoked as before
+  `
+  ALTER TABLE auth_devices ADD COLUMN expires_at TEXT;
+  ALTER TABLE auth_devices ADD COLUMN persistent INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function openDatabase(path: string): Db {

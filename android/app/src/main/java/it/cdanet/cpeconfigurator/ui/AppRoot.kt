@@ -245,6 +245,22 @@ fun AppRoot(c: AppContainer) {
         LoginScreen(c, update = update, onUpdate = { update = it }, onOffline = { offline = true })
         return
     }
+    LaunchedEffect(session?.user?.id) {
+        if (session != null) {
+            allowAutoLogin()
+            ensureRemembered(c)
+        }
+    }
+    val locked by c.locked.collectAsState()
+    if (locked && session != null) {
+        LockScreen(c, onLogout = {
+            c.locked.value = false
+            scope.launch { logoutPhone(c) }
+            offline = false
+            stack = listOf(Screen.Home)
+        })
+        return
+    }
 
     BackHandler(enabled = stack.size > 1) { back() }
     QuickLoginOffer(c)
@@ -392,7 +408,8 @@ fun AppRoot(c: AppContainer) {
                     // the installer guide of the server (/wiki/): its links outside the guide open in the browser
                     Screen.Guide -> ServerPage(c, "/wiki/", "Guida", modifier = Modifier.fillMaxSize(), insidePrefix = "/wiki/", document = true)
                     Screen.Settings -> SettingsScreen(c, update = update, onUpdate = { update = it }, onLogout = {
-                        c.session.clear()
+                        // "Esci" really signs out: the phone forgets its key, next time the password is needed
+                        scope.launch { logoutPhone(c) }
                         offline = false
                         stack = listOf(Screen.Home)
                     })

@@ -142,18 +142,18 @@ function totpCard(a) {
   return card(h('h2', {}, 'Verifica in due passaggi'), box);
 }
 
-/** Phones with the fingerprint/face quick login of the app: list and revoke. */
+/** Phones signed in to the app (persistent login or fingerprint/face): list and revoke. */
 function quickLoginCard() {
   const box = h('div', {});
   async function load() {
     const { devices } = await api('/api/auth/devices');
     const rows = devices.map((d) => {
-      const off = h('button', { type: 'button', class: 'danger small' }, 'Revoca');
+      const off = h('button', { type: 'button', class: 'danger small' }, 'Scollega');
       off.onclick = () =>
-        confirm(`Revocare l’accesso rapido di ${d.name}?`) &&
+        confirm(`Scollegare ${d.name}? Al prossimo avvio l’app chiederà la password.`) &&
         busy(off, async () => {
           await api(`/api/auth/devices/${d.id}`, { method: 'DELETE' });
-          toast('Accesso rapido revocato');
+          toast('Telefono scollegato');
           await load();
         });
       return h(
@@ -162,23 +162,25 @@ function quickLoginCard() {
         h('b', {}, d.name || 'Telefono'),
         ' ',
         badge(d.active ? 'attivo' : 'scaduto', d.active ? 'good' : ''),
-        h('div', { class: 'small muted' }, `Attivato ${fmtDate(d.createdAt)} · ultimo uso ${fmtDate(d.lastUsedAt)}`),
+        ' ',
+        badge(d.persistent ? 'resta collegato' : 'impronta o volto', ''),
+        h('div', { class: 'small muted' }, `Attivato ${fmtDate(d.createdAt)} · ultimo uso ${fmtDate(d.lastUsedAt)}${d.expiresAt ? ` · scade ${fmtDate(d.expiresAt)} se non usato` : ''}`),
         off,
       );
     });
     mount(
       box,
       card(
-        h('h2', {}, 'Accesso rapido dai telefoni'),
+        h('h2', {}, 'Telefoni collegati'),
         h(
           'p',
           { class: 'small muted' },
-          'Nell’app CDA Net si entra con impronta o volto (Impostazioni → Accesso rapido). La password non resta sul telefono; "Esci da tutti i dispositivi" o il cambio password revocano anche questi accessi.',
+          'Dopo il primo accesso l’app resta collegata (la sessione si rinnova a ogni apertura e scade dopo 30 giorni senza uso); in Impostazioni si può chiedere impronta o volto a ogni apertura. La password non resta sul telefono; "Esci da tutti i dispositivi", il cambio password o la disattivazione dell’account scollegano anche i telefoni.',
         ),
-        ...(rows.length ? rows : [h('p', { class: 'small' }, 'Nessun telefono con l’accesso rapido.')]),
+        ...(rows.length ? rows : [h('p', { class: 'small' }, 'Nessun telefono collegato.')]),
       ),
     );
   }
-  load().catch((e) => mount(box, card(h('h2', {}, 'Accesso rapido dai telefoni'), h('div', { class: 'notice bad' }, e.message))));
+  load().catch((e) => mount(box, card(h('h2', {}, 'Telefoni collegati'), h('div', { class: 'notice bad' }, e.message))));
   return box;
 }

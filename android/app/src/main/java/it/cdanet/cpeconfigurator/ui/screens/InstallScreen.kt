@@ -96,6 +96,8 @@ fun InstallScreen(
     onAlignment: () -> Unit,
     onAcceptance: () -> Unit,
 ) {
+    // the whole installation happens on the roof: the display stays on until it is closed
+    it.cdanet.cpeconfigurator.ui.KeepScreenOn()
     val st by c.install.state.collectAsState()
     val prov by c.provisioning.state.collectAsState()
     val form by c.provisioning.form.collectAsState()

@@ -22,6 +22,8 @@ const envSchema = z.object({
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   TRUST_PROXY: z.string().default('loopback,uniquelocal'),
   DB_PATH: z.string().default('./data/cdanet.sqlite'),
+  // airOS firmware images for the field upgrade (default: 'firmware' next to the database).
+  FIRMWARE_DIR: z.string().optional(),
   // Acceptance-test photos (default: 'photos' next to the database).
   PHOTOS_DIR: z.string().optional(),
   // Protomaps basemap (default: maps/basemap.pmtiles next to the database).
@@ -101,6 +103,7 @@ export interface Config {
   trustProxy: string;
   dbPath: string;
   photosDir: string;
+  firmwareDir: string;
   /** IEEE OUI registries cache (MAC vendors). */
   ouiDir: string;
   /** Protomaps basemap (PMTiles) served to the console maps. */
@@ -186,6 +189,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     dem: { url: e.DEM_URL, dir: e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-dem-${process.pid}`) : join(dirname(e.DB_PATH), 'dem') },
     mapFile: e.MAP_FILE || (e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-map-${process.pid}.pmtiles`) : join(dirname(e.DB_PATH), 'maps', 'basemap.pmtiles')),
     infraDir: e.INFRA_DIR || (e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-infra-${process.pid}`) : join(dirname(e.DB_PATH), 'infra')),
+    firmwareDir: e.FIRMWARE_DIR || (e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-firmware-${process.pid}`) : join(dirname(e.DB_PATH), 'firmware')),
     photosDir: e.PHOTOS_DIR || (e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-photos-${process.pid}`) : join(dirname(e.DB_PATH), 'photos')),
     staticDir: resolve(e.STATIC_DIR),
     masterKey: masterKey ?? loadMasterKey(e.SECRETS_KEY_FILE),

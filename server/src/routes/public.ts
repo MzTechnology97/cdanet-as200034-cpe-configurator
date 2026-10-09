@@ -56,10 +56,10 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     return session(u, req.ip);
   };
 
-  async function session(u: { id: number; username: string; role: 'admin' | 'installer'; token_version: number; totp_enabled?: number }, ip: string) {
+  async function session(u: { id: number; username: string; role: 'admin' | 'installer'; token_version: number; totp_enabled?: number }, ip: string, notify = true) {
     ctx.db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').run(nowIso(), u.id);
     const { token, expiresAt } = await ctx.auth.issueToken(u);
-    if (u.role === 'admin') ctx.notify.adminLogin(u.id, u.username, ip);
+    if (u.role === 'admin' && notify) ctx.notify.adminLogin(u.id, u.username, ip);
     const mfaSetupRequired = u.role === 'admin' && ctx.auth.totpRequiredForAdmins() && !u.totp_enabled;
     return { token, expiresAt, user: { id: u.id, username: u.username, role: u.role }, ...(mfaSetupRequired ? { mfaSetupRequired: true } : {}) };
   }
@@ -226,6 +226,13 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
   // it gets a random device key, kept in the Android keystore behind the biometric prompt.
   // The server keeps only its hash; the key stops working with logout-all, a password change,
   // an admin reset or when it is removed (Il mio account / app settings).
+  // Persistent login: the app stays signed in with the phone's key; the key expires after
+  // DEVICE_IDLE_DAYS without use and in any case DEVICE_MAX_DAYS after the login with the password.
+  const DEVICE_IDLE_DAYS = 30;
+  const DEVICE_MAX_DAYS = 180;
+  const DAY_MS = 24 * 3600 * 1000;
+  const deviceExpiry = (createdAt: string, now = Date.now()) =>
+    new Date(Math.min(now + DEVICE_IDLE_DAYS * DAY_MS, Date.parse(createdAt) + DEVICE_MAX_DAYS * DAY_MS)).toISOString();
   const deviceRow = ctx.db.prepare('SELECT d.*, u.username, u.role, u.active, u.token_version tv, u.totp_enabled FROM auth_devices d JOIN users u ON u.id = d.user_id WHERE d.id = ?');
   const sha = (s: string) => createHash('sha256').update(s).digest('hex');
   const trusted = (req: FastifyRequest) => {
@@ -235,27 +242,32 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.post('/api/auth/devices', { preHandler: ctx.auth.requireUser }, async (req, reply) => {
     trusted(req);
-    const b = z.object({ name: z.string().trim().min(1).max(60) }).strict().parse(req.body);
+    const b = z.object({ name: z.string().trim().min(1).max(60), persistent: z.boolean().optional() }).strict().parse(req.body);
     const u = selfRow.get(req.user!.id) as SelfRow;
     // a few phones per account: the oldest ones make room
     const old = ctx.db.prepare('SELECT id FROM auth_devices WHERE user_id = ? ORDER BY created_at DESC').all(u.id) as Array<{ id: string }>;
     for (const o of old.slice(4)) ctx.db.prepare('DELETE FROM auth_devices WHERE id = ?').run(o.id);
     const id = randomUUID();
     const secret = randomBytes(32).toString('base64url');
+    const created = nowIso();
+    const expiresAt = deviceExpiry(created);
     ctx.db
-      .prepare('INSERT INTO auth_devices(id, user_id, secret_hash, name, token_version, created_at) VALUES(?,?,?,?,?,?)')
-      .run(id, u.id, sha(secret), b.name, u.token_version, nowIso());
-    recordEvent(ctx.db, u.id, 'account.quick_login_on', u.username, `accesso rapido attivato su ${b.name}`);
+      .prepare('INSERT INTO auth_devices(id, user_id, secret_hash, name, token_version, created_at, expires_at, persistent) VALUES(?,?,?,?,?,?,?,?)')
+      .run(id, u.id, sha(secret), b.name, u.token_version, created, expiresAt, b.persistent ? 1 : 0);
+    recordEvent(ctx.db, u.id, 'account.quick_login_on', u.username, `${b.persistent ? 'accesso persistente' : 'accesso rapido'} attivato su ${b.name}`);
     reply.header('Cache-Control', 'no-store');
-    return reply.code(201).send({ id, secret });
+    return reply.code(201).send({ id, secret, expiresAt });
   });
 
   app.get('/api/auth/devices', { preHandler: ctx.auth.requireUser }, async (req) => {
     const u = selfRow.get(req.user!.id) as SelfRow;
     const rows = ctx.db
-      .prepare('SELECT id, name, created_at createdAt, last_used_at lastUsedAt, token_version tv FROM auth_devices WHERE user_id = ? ORDER BY created_at DESC')
-      .all(u.id) as Array<{ id: string; name: string; createdAt: string; lastUsedAt: string | null; tv: number }>;
-    return { devices: rows.map(({ tv, ...d }) => ({ ...d, active: tv === u.token_version })) };
+      .prepare('SELECT id, name, created_at createdAt, last_used_at lastUsedAt, expires_at expiresAt, persistent, token_version tv FROM auth_devices WHERE user_id = ? ORDER BY created_at DESC')
+      .all(u.id) as Array<{ id: string; name: string; createdAt: string; lastUsedAt: string | null; expiresAt: string | null; persistent: number; tv: number }>;
+    const now = nowIso();
+    return {
+      devices: rows.map(({ tv, persistent, ...d }) => ({ ...d, persistent: !!persistent, active: tv === u.token_version && (!d.expiresAt || d.expiresAt > now) })),
+    };
   });
 
   app.delete('/api/auth/devices/:id', { preHandler: ctx.auth.requireUser }, async (req) => {
@@ -268,10 +280,23 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.post('/api/auth/device-login', async (req) => {
     trusted(req);
-    const b = z.object({ id: z.string().uuid(), secret: z.string().min(20).max(100) }).strict().parse(req.body);
+    const b = z.object({ id: z.string().uuid(), secret: z.string().min(20).max(100) }).parse(req.body);
     if (limiter.blocked(req.ip, `device:${b.id}`)) throw new HttpError(429, 'too_many_attempts');
     const d = deviceRow.get(b.id) as
-      | { user_id: number; secret_hash: string; token_version: number; name: string; username: string; role: 'admin' | 'installer'; active: number; tv: number; totp_enabled: number }
+      | {
+          user_id: number;
+          secret_hash: string;
+          token_version: number;
+          name: string;
+          created_at: string;
+          expires_at: string | null;
+          persistent: number;
+          username: string;
+          role: 'admin' | 'installer';
+          active: number;
+          tv: number;
+          totp_enabled: number;
+        }
       | undefined;
     const ok = !!d && timingSafeEqual(Buffer.from(sha(b.secret)), Buffer.from(d.secret_hash)) && !!d.active && d.token_version === d.tv;
     if (!d || !ok) {
@@ -279,9 +304,15 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
       throw new HttpError(401, 'device_revoked');
     }
     limiter.clear(req.ip, `device:${b.id}`);
-    ctx.db.prepare('UPDATE auth_devices SET last_used_at = ? WHERE id = ?').run(nowIso(), b.id);
+    if (d.expires_at && d.expires_at <= nowIso()) {
+      // the persistent login ran out: a login with the password is needed (and registers the phone again)
+      ctx.db.prepare('DELETE FROM auth_devices WHERE id = ?').run(b.id);
+      throw new HttpError(401, 'device_expired');
+    }
+    const deviceExpiresAt = d.expires_at ? deviceExpiry(d.created_at) : null;
+    ctx.db.prepare('UPDATE auth_devices SET last_used_at = ?, expires_at = COALESCE(?, expires_at) WHERE id = ?').run(nowIso(), deviceExpiresAt, b.id);
     recordEvent(ctx.db, d.user_id, 'account.quick_login', d.username, d.name);
-    return session({ id: d.user_id, username: d.username, role: d.role, token_version: d.tv, totp_enabled: d.totp_enabled }, req.ip);
+    return { ...(await session({ id: d.user_id, username: d.username, role: d.role, token_version: d.tv, totp_enabled: d.totp_enabled }, req.ip, !d.persistent)), deviceExpiresAt };
   });
 
   app.get('/api/meta', { preHandler: ctx.auth.requireUser }, async (req) => ({

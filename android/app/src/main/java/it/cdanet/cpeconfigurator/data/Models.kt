@@ -10,7 +10,7 @@ data class UserDto(val id: Int, val username: String, val role: String)
 data class LoginRequest(val username: String, val password: String)
 
 @Serializable
-data class LoginResponse(val token: String, val expiresAt: String, val user: UserDto)
+data class LoginResponse(val token: String, val expiresAt: String, val user: UserDto, val deviceExpiresAt: String? = null)
 
 /** /api/auth/login: a session, or (two-step verification) a 5-minute token for the code step. */
 @Serializable
@@ -508,7 +508,7 @@ data class WirelessNetworkDto(val ssid: String, val updatedAt: String = "")
 
 /** Key of this phone for the quick (biometric) login: memory only until encrypted in the keystore. */
 @Serializable
-data class DeviceKeyDto(val id: String, val secret: String) {
+data class DeviceKeyDto(val id: String, val secret: String, val expiresAt: String? = null) {
     override fun toString(): String = "DeviceKeyDto(id=$id)"
 }
 
@@ -557,3 +557,18 @@ data class LosDto(
     val raiseCpeM: Double = 0.0,
     val chart: List<LosPointDto> = emptyList(),
 )
+
+/** An airOS image of the target version the server offers for the field upgrade. */
+@Serializable
+data class FirmwareImageDto(
+    val id: Int,
+    val platform: String,
+    val version: String,
+    val build: String = "",
+    val size: Long = 0,
+    val sha256: String,
+    val md5: String,
+)
+
+@Serializable
+data class FirmwareListDto(val target: String = "", val items: List<FirmwareImageDto> = emptyList())

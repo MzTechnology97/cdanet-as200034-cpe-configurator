@@ -61,6 +61,7 @@ private fun km(m: Int) = if (m < 1000) "$m m" else "%.2f km".format(java.util.Lo
  */
 @Composable
 fun PointingScreen(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (CompassTarget) -> Unit) {
+    it.cdanet.cpeconfigurator.ui.KeepScreenOn()
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var data by remember { mutableStateOf<PointingDto?>(null) }
