@@ -40,6 +40,8 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 | 14 | **Mappa Guasti Enel nell'app** (stessa mappa della console, POP/AP approssimati per gli installatori) | il colpo d'occhio anche sul campo | ✅ v1.20.0 |
 | 15 | **Salute CPE per tutti i clienti** (admin: tutte le CPE in UISP) e **assegnazione delle CPE storiche agli installatori** | manutenzione anche dei clienti installati prima dell'app | ✅ v1.21.0 |
 | 16 | **Hikvision SADP completo** (attivazione, rete, porte, azioni) e **mappa di rete** della LAN scansionata nell'app | strumenti TVCC e di rete da tecnico | ✅ v1.22.0 |
+| 17 | **Wi-Fi Analyzer stile WiFiman**: spettro, occupazione canali e consigliati, segnale nel tempo, dettagli reti e connessione | analisi Wi-Fi dal campo | ✅ v1.23.0 |
+| 18 | **Topologia di rete**: discovery multi-vendor (MikroTik MNDP, Ubiquiti, Hikvision SADP, Dahua, ONVIF, UPnP/SSDP, mDNS, NetBIOS, Netgear NSDP, TP-Link) + SNMP (community `public` predefinita o manuali) con LLDP/CDP, tabelle MAC e ARP; senza SNMP mappa base dal gateway | mappa reale della LAN del cliente | ⏳ in corso |
 | 4 | Scansione degli AP visibili dalla CPE | scegliere l'AP migliore | ⏳ (serve una CPE reale per verificare il comando airOS) |
 
 ## Già rilasciato

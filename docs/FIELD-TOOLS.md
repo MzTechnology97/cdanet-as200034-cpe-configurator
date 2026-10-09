@@ -154,6 +154,14 @@ Tutti questi strumenti richiedono la **Wi-Fi della rete da analizzare**. Se il t
 - Da ogni host si passa al **port scanner** o si apre l'interfaccia web.
 - **Mappa di rete** (strumento locale, nessun dato dal server): mappa logica della LAN scansionata, Internet → gateway → dispositivi raggruppati per tipo (rete, Ubiquiti, MikroTik, telecamere/NVR, PC, NAS, stampanti, telefoni, TV, IoT); si scorre in entrambe le direzioni e toccando un dispositivo si aprono i dettagli. È "logica": dal telefono non si vede a quale porta di quale switch è collegato un dispositivo.
 
+### Wi-Fi Analyzer (stile WiFiman)
+- **Connessione attuale**: segnale e qualità, BSSID, canale/banda/larghezza, standard (Wi-Fi 4…7), velocità TX/RX, sicurezza, IP e gateway; si aggiorna da sola.
+- **Spettro** per banda (2.4 / 5 / 6 GHz): ogni rete è una curva larga quanto il suo canale (20/40/80/160 MHz) con il picco al suo segnale; in grassetto la rete a cui sei collegato; canali DFS in arancio.
+- **Canali**: occupazione di ogni canale (reti sovrapposte e loro potenza) e **canali consigliati** per il router del cliente (2.4 GHz solo 1/6/11; 5 GHz prima i non-DFS).
+- **Segnale nel tempo** delle reti principali (ultimi ~2 minuti), utile spostando telefono o antenna.
+- **Reti**: SSID, BSSID e produttore (registro IEEE), canale, larghezza, standard, sicurezza (aperte e WEP in rosso), distanza indicativa.
+- Android consente 4 scansioni ogni 2 minuti: i risultati si leggono ogni 3 s e una nuova scansione parte ogni 30 s (per aggiornamenti più rapidi: Opzioni sviluppatore → disattiva "Limitazione scansione Wi-Fi"). Serve il permesso di posizione.
+
 ### Hikvision SADP (TVCC)
 - Ricerca di telecamere, NVR e DVR Hikvision con il protocollo SADP (UDP 37020): sonda inviata due volte in multicast e broadcast, risposte ascoltate anche sul gruppo multicast (molti apparati rispondono lì).
 - Per ogni dispositivo: modello, seriale, firmware, MAC, IP/maschera/gateway, DHCP o statico, porte HTTP e SDK, canali, Hik-Connect e **stato di attivazione**: quelli **non attivati** (password di amministrazione ancora da impostare) sono evidenziati in cima.
