@@ -67,6 +67,9 @@ private fun FieldConnection(c: AppContainer, mode: FieldMode) {
     val st by c.field.state.collectAsState()
     var manual by remember { mutableStateOf("") }
     var showManual by remember { mutableStateOf(false) }
+    var showCreds by remember { mutableStateOf(false) }
+    var user by remember { mutableStateOf("ubnt") }
+    var pass by remember { mutableStateOf("") }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         when {
             st.connecting && st.status == null -> Banner("Ricerca della CPE sulla Wi-Fi collegata…", WarnAmber)
@@ -87,6 +90,23 @@ private fun FieldConnection(c: AppContainer, mode: FieldMode) {
         if (showManual) {
             Field("IP della CPE", manual, { manual = it.trim() }, keyboardType = KeyboardType.Uri, placeholder = "es. 192.168.1.254")
             OutlinedButton(onClick = { c.field.start(mode, manual.ifBlank { null }) }, enabled = manual.isNotBlank()) { Text("Collega a questo IP") }
+        }
+        st.credentialsUsed?.takeIf { st.status != null && it != "CDA Net" }?.let {
+            Text("Collegata con credenziali $it: la CPE non usa le credenziali standard CDA Net.", style = MaterialTheme.typography.bodySmall, color = WarnAmber)
+        }
+        if (st.authFailed || showCreds) {
+            SectionCard("Credenziali della CPE") {
+                Text("Usate solo per questa sessione e tenute in memoria: non vengono salvate né inviate al server.", style = MaterialTheme.typography.bodySmall)
+                Field("Utente", user, { user = it })
+                Field("Password", pass, { pass = it }, password = true)
+                OutlinedButton(onClick = {
+                    c.field.useManualCredentials(user, pass)
+                    pass = ""
+                    c.field.start(mode, manual.ifBlank { null })
+                }, enabled = user.isNotBlank() && pass.isNotEmpty()) { Text("Collega con queste credenziali") }
+            }
+        } else {
+            TextButton(onClick = { showCreds = true }) { Text("Credenziali diverse") }
         }
     }
 }

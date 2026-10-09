@@ -23,6 +23,8 @@ Le credenziali CDA Net della CPE (`CPE_ADMIN_USERNAME`/`CPE_ADMIN_PASSWORD`) arr
 
 L'app le richiede subito dopo il login, così gli strumenti funzionano anche più tardi sul tetto senza Internet.
 
+Ordine dei tentativi sulla CPE: credenziali **inserite a mano** (se presenti), poi quelle **CDA Net**, poi quelle **di fabbrica** airOS (`ubnt`/`ubnt`). Se la CPE le rifiuta tutte (CPE configurata a mano o prima dell'app con altre credenziali) l'app si ferma — niente tentativi ripetuti — e mostra **Credenziali della CPE** per inserire utente e password: valgono solo per quella sessione, restano in memoria e non vengono mai salvate né inviate al server. Si possono inserire anche prima con "Credenziali diverse". Quando la CPE si apre con credenziali non standard l'app lo segnala.
+
 Lo stato si legge da `/status.cgi` dopo il login su `/api/auth`, cioè la stessa API usata dall'interfaccia web della CPE. Il certificato della CPE è autofirmato, quindi non viene verificato: per questo il client accetta solo indirizzi privati.
 
 ## Puntamento antenna
