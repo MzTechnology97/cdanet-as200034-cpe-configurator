@@ -58,8 +58,8 @@ export function createAuth(db: Db, secret: Uint8Array, ttlHours: number) {
    * Long-lived token for the app's background checks (power outages): it only opens
    * the outage feed, never a session; revoked with the account's sessions.
    */
-  async function issueFeedToken(u: { id: number; username: string; token_version: number }) {
-    return new SignJWT({ username: u.username, tv: u.token_version, scope: 'outages' })
+  async function issueFeedToken(u: { id: number; username: string; token_version: number }, scope: 'outages' | 'feed' = 'outages') {
+    return new SignJWT({ username: u.username, tv: u.token_version, scope })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(String(u.id))
       .setIssuer(ISSUER)
@@ -68,12 +68,13 @@ export function createAuth(db: Db, secret: Uint8Array, ttlHours: number) {
       .sign(secret);
   }
 
-  async function verifyFeedToken(req: FastifyRequest): Promise<AuthUser> {
+  /** [scopes]: "outages" opens only the outage feed; "feed" (app 1.32.15+) also the notifications. */
+  async function verifyFeedToken(req: FastifyRequest, scopes: string[] = ['outages', 'feed']): Promise<AuthUser> {
     const m = /^Bearer\s+(\S+)$/i.exec(req.headers.authorization ?? '');
     try {
       if (!m) throw new Error('missing');
       const { payload } = await jwtVerify(m[1] as string, secret, { issuer: ISSUER, algorithms: ['HS256'] });
-      if (payload.scope !== 'outages') throw new Error('scope');
+      if (typeof payload.scope !== 'string' || !scopes.includes(payload.scope)) throw new Error('scope');
       const row = userStmt.get(Number(payload.sub)) as { id: number; username: string; role: Role; active: number; token_version: number } | undefined;
       if (!row || !row.active || row.token_version !== payload.tv) throw new Error('revoked');
       return { id: row.id, username: row.username, role: row.role };

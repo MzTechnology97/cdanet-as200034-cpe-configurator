@@ -10,6 +10,10 @@ export const NOTIFY_KINDS = {
   review_pending: { label: 'Collaudo con segnale pessimo da approvare', audience: 'noc', telegram: false },
   review_decision: { label: 'Esito dell’approvazione del NOC', audience: 'installer', telegram: true },
   install_activated: { label: 'Installazione attivata dal NOC', audience: 'installer', telegram: true },
+  work_order_assigned: { label: 'Intervento assegnato o modificato', audience: 'installer', telegram: true },
+  work_order_reminder: { label: 'Promemoria degli interventi (24 h, 2 h, 1 h, 30 min prima)', audience: 'installer', telegram: true },
+  work_order_late: { label: 'Intervento in ritardo o non fatto', audience: 'installer', telegram: true },
+  work_order_noc: { label: 'Interventi in ritardo o non fatti (NOC)', audience: 'noc', telegram: true },
 } as const;
 export type NotifyKind = keyof typeof NOTIFY_KINDS;
 export const isNotifyKind = (k: string): k is NotifyKind => k in NOTIFY_KINDS;

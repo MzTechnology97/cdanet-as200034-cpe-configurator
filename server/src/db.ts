@@ -355,6 +355,12 @@ const MIGRATIONS: string[] = [
   ALTER TABLE auth_devices ADD COLUMN expires_at TEXT;
   ALTER TABLE auth_devices ADD COLUMN persistent INTEGER NOT NULL DEFAULT 0;
   `,
+  // 20: alerts already sent for a work order (reminders before the start, late, missed)
+  `
+  ALTER TABLE work_orders ADD COLUMN reminders TEXT NOT NULL DEFAULT '';
+  ALTER TABLE work_orders ADD COLUMN late_at TEXT;
+  ALTER TABLE work_orders ADD COLUMN missed_at TEXT;
+  `,
 ];
 
 export function openDatabase(path: string): Db {

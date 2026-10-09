@@ -2,6 +2,7 @@ import type { Config } from '../config.ts';
 import { nowIso, type Db } from '../db.ts';
 import { KO_KINDS, KO_REASONS, KO_STEPS } from '../routes/ko.ts';
 import { createInbox } from './inbox.ts';
+import { dueAlerts, inWords, orderStart } from '../domain/work-order-time.ts';
 import { escapeHtml as e, type Telegram } from './telegram.ts';
 import type { Uisp } from './uisp.ts';
 
@@ -203,8 +204,66 @@ export function createNotifier(
     return true;
   }
 
+  /** A work order assigned (or moved) to an installer: they hear it at once. */
+  function workOrderAssigned(o: { id: number; assignedTo: number | null; day: string; slot: string; kindLabel: string; customer: string; address: string }, changed = false) {
+    if (o.assignedTo == null) return;
+    const when = `${o.day.split('-').reverse().join('/')}${o.slot ? ` · ${o.slot}` : ''}`;
+    inbox.push([o.assignedTo], {
+      kind: 'work_order_assigned',
+      title: `📋 ${changed ? 'Intervento modificato' : 'Nuovo intervento'}: ${o.customer}`,
+      lines: [`${when} · ${o.kindLabel}`, o.address].filter(Boolean),
+    });
+  }
+
+  /**
+   * Reminders before each order, late and missed orders (installer and NOC): every minute. Each
+   * alert is sent once, remembered on the order.
+   */
+  function workOrderAlerts(now = new Date()) {
+    const today = romeDay(now);
+    const rows = db
+      .prepare(
+        `SELECT w.id, w.assigned_to assignedTo, w.day, w.slot, w.kind, w.customer, w.address, w.status, w.reminders, w.late_at lateAt, w.missed_at missedAt, u.username
+           FROM work_orders w LEFT JOIN users u ON u.id = w.assigned_to
+          WHERE w.status IN ('open','started') AND w.assigned_to IS NOT NULL AND w.day >= ?`,
+      )
+      .all(new Date(now.getTime() - 3 * 86400_000).toISOString().slice(0, 10)) as Array<{
+      id: number;
+      assignedTo: number;
+      day: string;
+      slot: string;
+      kind: string;
+      customer: string;
+      address: string;
+      status: string;
+      reminders: string;
+      lateAt: string | null;
+      missedAt: string | null;
+      username: string | null;
+    }>;
+    const when = (o: { day: string; slot: string }) => `${o.day.split('-').reverse().join('/')}${o.slot ? ` · ${o.slot}` : ` · dalle ${orderStart(o.day, o.slot).toLocaleTimeString('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', minute: '2-digit' })}`}`;
+    for (const o of rows) {
+      for (const a of dueAlerts(o, now, today)) {
+        if (a.type === 'reminder') {
+          inbox.push([o.assignedTo], { kind: 'work_order_reminder', title: `⏰ Intervento ${inWords(orderStart(o.day, o.slot), now)}: ${o.customer}`, lines: [when(o), o.address].filter(Boolean) });
+          db.prepare('UPDATE work_orders SET reminders = ? WHERE id = ?').run(a.sent.join(','), o.id);
+        } else if (a.type === 'late') {
+          inbox.push([o.assignedTo], { kind: 'work_order_late', title: `⚠️ Intervento in ritardo: ${o.customer}`, lines: [when(o), 'Non risulta iniziato: toccalo in Oggi con Inizia, oppure Rimanda con il motivo.'] });
+          inbox.push('noc', { kind: 'work_order_noc', title: `⚠️ Intervento in ritardo: ${o.customer}`, lines: [when(o), `Installatore: ${o.username ?? '—'}`, 'Non risulta iniziato 30 minuti dopo l’orario previsto.'] });
+          db.prepare('UPDATE work_orders SET late_at = ? WHERE id = ?').run(nowIso(), o.id);
+        } else {
+          inbox.push([o.assignedTo], { kind: 'work_order_late', title: `❌ Intervento non fatto: ${o.customer}`, lines: [when(o), 'Il giorno è passato senza esito: segnala all’ufficio cosa è successo.'] });
+          inbox.push('noc', { kind: 'work_order_noc', title: `❌ Intervento mancato: ${o.customer}`, lines: [when(o), `Installatore: ${o.username ?? '—'}`, `Stato: ${o.status === 'started' ? 'iniziato ma non chiuso' : 'mai iniziato'}`] });
+          db.prepare('UPDATE work_orders SET missed_at = ? WHERE id = ?').run(nowIso(), o.id);
+        }
+      }
+    }
+  }
+
   let timers: NodeJS.Timeout[] = [];
   return {
+    workOrderAssigned,
+    workOrderAlerts,
     inbox,
     provisioningResult,
     installKo,
@@ -226,7 +285,14 @@ export function createNotifier(
           log(`notify summary: ${(err as Error).message}`);
         }
       };
-      timers = [setTimeout(tick, 30_000), setInterval(tick, 5 * 60_000)];
+      const alerts = () => {
+        try {
+          workOrderAlerts();
+        } catch (err) {
+          log(`notify work orders: ${(err as Error).message}`);
+        }
+      };
+      timers = [setTimeout(tick, 30_000), setInterval(tick, 5 * 60_000), setInterval(alerts, 60_000)];
       timers.forEach((t) => t.unref());
     },
     stop() {

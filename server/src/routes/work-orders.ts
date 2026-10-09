@@ -122,7 +122,9 @@ export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
       .run(now, req.user!.id, now, b.assignedTo ?? null, b.day, b.slot, b.kind, b.customer, b.address, b.lat ?? null, b.lon ?? null, b.contact, b.pppoeUser, b.pppoePassword ? ctx.sealer.seal(b.pppoePassword) : '', b.model, b.notes);
     const id = Number(r.lastInsertRowid);
     recordEvent(db, req.user!.id, 'work_order.create', `#${id}`, `${b.day} ${b.customer}`);
-    return reply.code(201).send({ item: view(get(id)!) });
+    const item = view(get(id)!);
+    ctx.notify.workOrderAssigned(item);
+    return reply.code(201).send({ item });
   });
 
   app.put('/api/admin/work-orders/:id', admin, async (req) => {
@@ -140,9 +142,18 @@ export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
     }
     if (b.pppoePassword !== undefined) cols.push(['pppoe_ciphertext', b.pppoePassword ? ctx.sealer.seal(b.pppoePassword) : '']);
     cols.push(['updated_at', nowIso()]);
+    // a new day or time: the reminders and the late/missed alerts start again
+    if ((b.day !== undefined && b.day !== cur.day) || (b.slot !== undefined && b.slot !== cur.slot) || (b.assignedTo !== undefined && b.assignedTo !== cur.assignedTo)) {
+      cols.push(['reminders', ''], ['late_at', null], ['missed_at', null]);
+    }
     db.prepare(`UPDATE work_orders SET ${cols.map(([c]) => `${c} = ?`).join(', ')} WHERE id = ?`).run(...cols.map(([, v]) => v), id);
-    recordEvent(db, req.user!.id, 'work_order.update', `#${id}`, cols.map(([c]) => (c === 'pppoe_ciphertext' ? 'password' : c)).filter((c) => c !== 'updated_at').join(', '));
-    return { item: view(get(id)!) };
+    recordEvent(db, req.user!.id, 'work_order.update', `#${id}`, cols.map(([c]) => (c === 'pppoe_ciphertext' ? 'password' : c)).filter((c) => !['updated_at', 'reminders', 'late_at', 'missed_at'].includes(c)).join(', '));
+    const item = view(get(id)!);
+    // the installer hears about a new assignment, a new day or time
+    if (item.assignedTo != null && item.status !== 'cancelled' && (item.assignedTo !== cur.assignedTo || item.day !== cur.day || item.slot !== cur.slot)) {
+      ctx.notify.workOrderAssigned(item, item.assignedTo === cur.assignedTo);
+    }
+    return { item };
   });
 
   app.delete('/api/admin/work-orders/:id', admin, async (req) => {
