@@ -28,6 +28,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import it.cdanet.cpeconfigurator.tools.pro.MapCategory
 import it.cdanet.cpeconfigurator.tools.pro.NetworkMap
+import it.cdanet.cpeconfigurator.tools.pro.NetworkMapLayout
 import it.cdanet.cpeconfigurator.tools.pro.ScanHost
 
 private fun categoryColor(c: MapCategory?): Color = when (c) {
@@ -51,6 +52,12 @@ private fun categoryColor(c: MapCategory?): Color = when (c) {
 @Composable
 fun NetworkMapView(hosts: List<ScanHost>, gatewayIp: String?, onHost: (ScanHost) -> Unit) {
     val layout = remember(hosts, gatewayIp) { NetworkMap.build(hosts, gatewayIp) }
+    NetworkMapView(layout, onHost)
+}
+
+/** Draws a computed map (base map or SNMP topology). */
+@Composable
+fun NetworkMapView(layout: NetworkMapLayout, onHost: (ScanHost) -> Unit) {
     val line = MaterialTheme.colorScheme.outline
     val surface = MaterialTheme.colorScheme.surface
     Box(Modifier.fillMaxWidth().height(480.dp).horizontalScroll(rememberScrollState()).verticalScroll(rememberScrollState())) {

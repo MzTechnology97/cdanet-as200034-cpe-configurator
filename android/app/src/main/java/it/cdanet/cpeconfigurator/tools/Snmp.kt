@@ -154,4 +154,77 @@ object Snmp {
             throw IOException("Timeout SNMP")
         }
     }
+
+    // ---- Tables (GETBULK walk) for the network topology ---------------------------------------
+
+    /** One varbind with its raw value (MAC addresses are binary octet strings). */
+    class Var(val oid: String, val tag: Int, val raw: ByteArray) {
+        val text: String get() = value(tag, raw).orEmpty()
+        val int: Long? get() = if (tag in setOf(0x02, 0x41, 0x42, 0x43, 0x46)) value(tag, raw)?.toLongOrNull() else null
+        /** 6-byte octet string as "AA:BB:CC:DD:EE:FF", else null. */
+        val mac: String? get() = if (tag == 0x04 && raw.size == 6) raw.joinToString(":") { "%02X".format(it) } else null
+        val endOfView: Boolean get() = tag in 0x80..0x82
+    }
+
+    fun bulkRequest(community: String, oid: String, requestId: Int, maxRepetitions: Int): ByteArray {
+        val vbs = tlv(0x30, tlv(0x06, encodeOid(oid)) + byteArrayOf(0x05, 0x00))
+        val pdu = tlv(0xa5, integer(requestId) + integer(0) + integer(maxRepetitions) + tlv(0x30, vbs))
+        return tlv(0x30, integer(1) + tlv(0x04, community.toByteArray(Charsets.UTF_8)) + pdu)
+    }
+
+    fun parseVars(buf: ByteArray, length: Int = buf.size): Pair<Int, List<Var>> {
+        val msg = read(buf, 0, length)
+        val parts = children(msg.value)
+        val pdu = parts.getOrNull(2) ?: throw IOException("Risposta SNMP non valida")
+        if (pdu.tag != 0xa2) throw IOException("PDU SNMP non valida")
+        val fields = children(pdu.value)
+        if (fields.size < 4) throw IOException("PDU SNMP incompleta")
+        val vars = children(fields[3].value).mapNotNull { vb ->
+            val kv = children(vb.value)
+            if (kv.size == 2) Var(decodeOid(kv[0].value), kv[1].tag, kv[1].value) else null
+        }
+        return value(0x02, fields[0].value)!!.toInt() to vars
+    }
+
+    /**
+     * All rows under [root] (GETBULK, v2c). Stops at the end of the subtree, after [maxRows] or at
+     * the first timeout of a page (what was read so far is returned).
+     */
+    fun walk(host: String, community: String, root: String, maxRows: Int = 4000, timeoutMs: Int = 1500): List<Var> {
+        val out = mutableListOf<Var>()
+        var next = root
+        DatagramSocket().use { s ->
+            s.soTimeout = timeoutMs
+            val addr = InetAddress.getByName(host)
+            val buf = ByteArray(65535)
+            while (out.size < maxRows) {
+                val id = Random.nextInt(1, Int.MAX_VALUE)
+                val msg = bulkRequest(community, next, id, 25)
+                var page: List<Var>? = null
+                for (attempt in 0..1) {
+                    s.send(DatagramPacket(msg, msg.size, addr, 161))
+                    try {
+                        while (page == null) {
+                            val p = DatagramPacket(buf, buf.size)
+                            s.receive(p)
+                            val (rid, vars) = parseVars(buf, p.length)
+                            if (rid == id) page = vars
+                        }
+                        break
+                    } catch (_: java.net.SocketTimeoutException) {
+                    }
+                }
+                val vars = page ?: break
+                var advanced = false
+                for (v in vars) {
+                    if (v.endOfView || !v.oid.startsWith("$root.")) return out
+                    out += v
+                    next = v.oid
+                    advanced = true
+                }
+                if (!advanced) break
+            }
+        }
+        return out
+    }
 }

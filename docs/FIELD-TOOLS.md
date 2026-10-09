@@ -162,6 +162,14 @@ Tutti questi strumenti richiedono la **Wi-Fi della rete da analizzare**. Se il t
 - **Reti**: SSID, BSSID e produttore (registro IEEE), canale, larghezza, standard, sicurezza (aperte e WEP in rosso), distanza indicativa.
 - Android consente 4 scansioni ogni 2 minuti: i risultati si leggono ogni 3 s e una nuova scansione parte ogni 30 s (per aggiornamenti più rapidi: Opzioni sviluppatore → disattiva "Limitazione scansione Wi-Fi"). Serve il permesso di posizione.
 
+### Topologia di rete (scanner IP → Mappa di rete)
+Strumento locale: tutto avviene dal telefono collegato alla Wi-Fi della LAN, nulla passa dal server.
+- **Discovery multi-vendor** (in parallelo, ~4 s): MikroTik **MNDP**, Ubiquiti, Hikvision **SADP**, **Dahua** DHDiscover, **ONVIF**, **UPnP/SSDP** con lettura della descrizione del dispositivo (router e ONT TP-Link, Tenda, Huawei, Netgear, D-Link, AVM Fritz!Box, ZTE…), **mDNS/DNS-SD** (stampanti, NAS Synology/QNAP, Chromecast, Apple, Sonos, Shelly, Hue, Axis…), Netgear **NSDP**. Nomi, produttori, MAC e tipi arricchiscono l'elenco dello scanner e aggiungono i dispositivi che lo scanner non aveva visto.
+- **SNMP v2c**: prova la community `public` (o quelle inserite, separate da virgola) su tutti gli host; dagli apparati che rispondono legge **LLDP** e **CDP** (chi è collegato a quale porta), la **tabella MAC** degli switch (BRIDGE-MIB e Q-BRIDGE-MIB) e la **tabella ARP** dei router.
+- **Mappa**: Internet → gateway → switch/router collegati (con le porte), ogni dispositivo sulla porta di accesso dello switch dove è stato visto (la porta con meno MAC, escluse uplink e collegamenti tra apparati). Gli apparati senza LLDP vengono collocati dove gli switch vedono il loro MAC.
+- **Senza SNMP** (nessun apparato risponde): mappa base dal gateway, con i dispositivi raggruppati per tipo.
+- Limiti: gli switch non gestiti non si vedono (i dispositivi dietro di loro risultano sulla stessa porta dello switch a monte); MikroTik espone poco via SNMP. LLDP/CDP "ascoltati" direttamente non sono possibili da un'app Android senza root.
+
 ### Hikvision SADP (TVCC)
 - Ricerca di telecamere, NVR e DVR Hikvision con il protocollo SADP (UDP 37020): sonda inviata due volte in multicast e broadcast, risposte ascoltate anche sul gruppo multicast (molti apparati rispondono lì).
 - Per ogni dispositivo: modello, seriale, firmware, MAC, IP/maschera/gateway, DHCP o statico, porte HTTP e SDK, canali, Hik-Connect e **stato di attivazione**: quelli **non attivati** (password di amministrazione ancora da impostare) sono evidenziati in cima.
