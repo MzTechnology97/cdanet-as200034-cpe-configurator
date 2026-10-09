@@ -90,6 +90,12 @@ data class MetaDto(
 data class OutageZoneDto(val name: String = "", val distanceM: Int = 0)
 
 @Serializable
+data class OutageImpactDto(val type: String = "", val name: String = "", val distanceM: Int = 0, val stations: Int? = null)
+
+@Serializable
+data class ReverseGeocodeDto(val label: String = "", val street: String = "", val houseNumber: String = "", val city: String = "", val province: String = "", val postcode: String = "")
+
+@Serializable
 data class OutageDto(
     val id: Long,
     val kind: String,
@@ -102,6 +108,7 @@ data class OutageDto(
     val lat: Double,
     val lon: Double,
     val zones: List<OutageZoneDto> = emptyList(),
+    val impact: List<OutageImpactDto> = emptyList(),
 )
 
 @Serializable

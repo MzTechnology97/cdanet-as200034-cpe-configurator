@@ -39,9 +39,37 @@ export interface OutageConfig {
   apZones: boolean;
   apRadiusKm: number;
   includePlanned: boolean;
+  /** POPs/APs closer than this to an outage are reported as potentially affected. */
+  impactRadiusKm: number;
 }
 
-const DEFAULT_CONFIG: OutageConfig = { apZones: true, apRadiusKm: 3, includePlanned: true };
+const DEFAULT_CONFIG: OutageConfig = { apZones: true, apRadiusKm: 3, includePlanned: true, impactRadiusKm: 1 };
+
+/** A POP (UISP site) or AP very close to an outage: probably without mains power. */
+export interface Impact {
+  type: 'pop' | 'ap';
+  id: string;
+  name: string;
+  distanceM: number;
+  /** CPEs on the AP (or on all APs of the POP). */
+  stations: number | null;
+}
+
+export interface Infra {
+  pops: Array<{ id: string; name: string; lat: number; lon: number; stations: number | null }>;
+  aps: Array<{ id: string; name: string; lat: number; lon: number; stations: number | null; siteId: string | null }>;
+}
+
+/** POPs and APs within [radiusKm] of an outage, nearest first (pure, unit-tested). */
+export function impactOf(o: LatLon, infra: Infra, radiusKm: number): Impact[] {
+  const max = radiusKm * 1000;
+  const near = <T extends { lat: number; lon: number }>(xs: T[]) =>
+    xs.map((x) => ({ x, d: Math.round(distanceM(o, { lat: x.lat, lon: x.lon })) })).filter((v) => v.d <= max);
+  return [
+    ...near(infra.pops).map(({ x, d }) => ({ type: 'pop' as const, id: x.id, name: x.name, distanceM: d, stations: x.stations })),
+    ...near(infra.aps).map(({ x, d }) => ({ type: 'ap' as const, id: x.id, name: x.name, distanceM: d, stations: x.stations })),
+  ].sort((a, b) => a.distanceM - b.distanceM);
+}
 
 /** "09/10/2026 15:50" (Italian local time) -> ISO; null when missing. */
 export function parseEnelDate(v: unknown): string | null {
@@ -117,6 +145,26 @@ export function createOutages(
       source: 'manual' as const,
     }));
 
+  /** UISP POPs (sites with a position) and APs, with the CPE count of each. */
+  async function infra(): Promise<Infra> {
+    const u = opts.getUisp();
+    if (!u) return { pops: [], aps: [] };
+    try {
+      const [aps, sites] = await Promise.all([u.apsWithLocation(), u.sites()]);
+      const perSite = new Map<string, number>();
+      for (const a of aps) if (a.siteId) perSite.set(a.siteId, (perSite.get(a.siteId) ?? 0) + (a.stations ?? 0));
+      return {
+        pops: sites
+          .filter((s) => s.location && s.type !== 'endpoint')
+          .map((s) => ({ id: s.id, name: s.name, lat: s.location!.lat, lon: s.location!.lon, stations: perSite.get(s.id) ?? null })),
+        aps: aps.map((a) => ({ id: a.id, name: a.name || a.ssid || a.id, lat: a.location.lat, lon: a.location.lon, stations: a.stations, siteId: a.siteId })),
+      };
+    } catch (err) {
+      opts.log?.(`outages: UISP infrastructure unavailable (${(err as Error).message})`);
+      return { pops: [], aps: [] };
+    }
+  }
+
   async function zones(): Promise<Zone[]> {
     const c = config();
     const out = manualZones();
@@ -169,7 +217,13 @@ export function createOutages(
     return out;
   }
 
-  const describe = (o: PowerOutage, where: Array<{ zone: Zone; distanceM: number }>) => {
+  const impactText = (imp: Impact[]) => {
+    if (!imp.length) return '';
+    const fmt = (i: Impact) => `${i.type === 'pop' ? 'POP' : 'AP'} <b>${e(i.name)}</b> ${i.distanceM} m${i.stations != null ? ` (${i.stations} CPE)` : ''}`;
+    return `\n⚠️ <b>Potenzialmente impattati</b>: ${imp.slice(0, 5).map(fmt).join(' · ')}${imp.length > 5 ? ` e altri ${imp.length - 5}` : ''}`;
+  };
+
+  const describe = (o: PowerOutage, where: Array<{ zone: Zone; distanceM: number }>, imp: Impact[] = []) => {
     const near = where[0]!;
     const dist = near.distanceM >= 1000 ? `${(near.distanceM / 1000).toFixed(1)} km` : `${near.distanceM} m`;
     const fmt = (s: string | null) => (s ? s.replace('T', ' ').slice(5).replace(/^(\d{2})-(\d{2})/, '$2/$1') : '—');
@@ -177,7 +231,8 @@ export function createOutages(
       `<b>${e(KIND_LABEL[o.kind])}</b> · ${e(o.place)} (${e(o.province)})\n` +
       `${near.zone.source === 'ap' ? 'AP' : 'Zona'} <b>${e(near.zone.name)}</b> a ${dist}${where.length > 1 ? ` (+${where.length - 1} altre)` : ''}\n` +
       `Clienti disalimentati: ${o.customers} · dal ${fmt(o.start)} · ripristino previsto ${fmt(o.expectedRestore)}\n` +
-      `<a href="https://www.openstreetmap.org/?mlat=${o.lat}&mlon=${o.lon}#map=15/${o.lat}/${o.lon}">mappa</a> · fonte e-distribuzione`
+      `<a href="https://www.openstreetmap.org/?mlat=${o.lat}&mlon=${o.lon}#map=15/${o.lat}/${o.lon}">mappa</a> · fonte e-distribuzione` +
+      impactText(imp)
     );
   };
 
@@ -187,10 +242,11 @@ export function createOutages(
     try {
       const zs = await zones();
       const all = await fetchBox(zs);
+      const inf = await infra();
       const inside = all
         .filter((o) => c.includePlanned || o.kind !== 'lavoro')
-        .map((o) => ({ o, where: zonesOf(o, zs) }))
-        .filter((x) => x.where.length > 0);
+        .map((o) => ({ o, where: zonesOf(o, zs), impact: impactOf(o, inf, c.impactRadiusKm) }))
+        .filter((x) => x.where.length > 0 || x.impact.length > 0);
       const now = nowIso();
       const known = new Map((db.prepare('SELECT id, notified FROM power_outages WHERE ended_at IS NULL').all() as Array<{ id: number; notified: number }>).map((r) => [r.id, r]));
       const upsert = db.prepare(
@@ -198,11 +254,12 @@ export function createOutages(
          ON CONFLICT(id) DO UPDATE SET data = excluded.data, zones = excluded.zones, last_seen = excluded.last_seen, ended_at = NULL`,
       );
       const seen = new Set<number>();
-      for (const { o, where } of inside) {
+      for (const { o, where, impact } of inside) {
         seen.add(o.id);
-        upsert.run(o.id, JSON.stringify(o), JSON.stringify(where.map((w) => ({ id: w.zone.id, name: w.zone.name, source: w.zone.source, distanceM: w.distanceM }))), now, now);
+        upsert.run(o.id, JSON.stringify({ ...o, impact }), JSON.stringify(where.map((w) => ({ id: w.zone.id, name: w.zone.name, source: w.zone.source, distanceM: w.distanceM }))), now, now);
         if (!known.has(o.id) && opts.isOn()) {
-          opts.notify((o.kind === 'lavoro' ? '🛠️ ' : '⚡ ') + describe(o, where));
+          const whereFor = where.length ? where : impact.slice(0, 1).map((i) => ({ zone: { id: i.id, name: i.name, lat: 0, lon: 0, radiusKm: 0, source: 'ap' as const }, distanceM: i.distanceM }));
+          opts.notify((impact.length ? '🚨 ' : o.kind === 'lavoro' ? '🛠️ ' : '⚡ ') + describe(o, whereFor, impact));
           db.prepare('UPDATE power_outages SET notified = 1 WHERE id = ?').run(o.id);
         }
       }
@@ -212,7 +269,9 @@ export function createOutages(
         db.prepare('UPDATE power_outages SET ended_at = ? WHERE id = ?').run(now, id);
         const o = JSON.parse(row.data) as PowerOutage;
         const z = JSON.parse(row.zones) as Array<{ name: string }>;
-        if (opts.isOn()) opts.notify(`✅ <b>Ripristinato</b> · ${e(KIND_LABEL[o.kind])} · ${e(o.place)} (${e(o.province)}) · ${e(z[0]?.name ?? '')}`);
+        const imp = (o as PowerOutage & { impact?: Impact[] }).impact ?? [];
+        const extra = imp.length ? ` · POP/AP coinvolti: ${imp.slice(0, 3).map((i) => e(i.name)).join(', ')}` : '';
+        if (opts.isOn()) opts.notify(`✅ <b>Ripristinato</b> · ${e(KIND_LABEL[o.kind])} · ${e(o.place)} (${e(o.province)}) · ${e(z[0]?.name ?? '')}${extra}`);
       }
       // keep 30 days of history
       db.prepare('DELETE FROM power_outages WHERE ended_at IS NOT NULL AND ended_at < ?').run(new Date(Date.now() - 30 * 86400_000).toISOString());
@@ -226,8 +285,12 @@ export function createOutages(
 
   function active() {
     return (db.prepare('SELECT data, zones, first_seen FROM power_outages WHERE ended_at IS NULL').all() as Array<{ data: string; zones: string; first_seen: string }>)
-      .map((r) => ({ ...(JSON.parse(r.data) as PowerOutage), zones: JSON.parse(r.zones) as Array<{ id: string; name: string; source: string; distanceM: number }>, firstSeen: r.first_seen }))
-      .sort((a, b) => (a.kind === 'lavoro' ? 1 : 0) - (b.kind === 'lavoro' ? 1 : 0) || b.customers - a.customers);
+      .map((r) => {
+        const d = JSON.parse(r.data) as PowerOutage & { impact?: Impact[] };
+        return { ...d, impact: d.impact ?? [], zones: JSON.parse(r.zones) as Array<{ id: string; name: string; source: string; distanceM: number }>, firstSeen: r.first_seen };
+      })
+      // impacted POPs/APs first, then faults, then by customers
+      .sort((a, b) => (b.impact.length ? 1 : 0) - (a.impact.length ? 1 : 0) || (a.kind === 'lavoro' ? 1 : 0) - (b.kind === 'lavoro' ? 1 : 0) || b.customers - a.customers);
   }
 
   function recent(hours = 48) {

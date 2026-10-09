@@ -2,7 +2,8 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { buildApp } from '../src/app.ts';
 import { openDatabase } from '../src/db.ts';
-import { mapFeature, parseEnelDate, zonesOf } from '../src/services/outages.ts';
+import { parseReverse } from '../src/services/geocode.ts';
+import { impactOf, mapFeature, parseEnelDate, zonesOf } from '../src/services/outages.ts';
 import { fakeUisp } from './fake-uisp.ts';
 import { ADMIN, testConfig } from './helpers.ts';
 
@@ -31,6 +32,29 @@ describe('Guasti Enel (e-distribuzione)', () => {
     assert.ok(z[0]!.distanceM < 200);
   });
 
+  it('finds POPs and APs very close to an outage', () => {
+    const infra = {
+      pops: [{ id: 's1', name: 'POP Monte', lat: 37.6, lon: 14.1, stations: 40 }],
+      aps: [
+        { id: 'a1', name: 'AP N2', lat: 37.6005, lon: 14.1005, stations: 12, siteId: 's1' },
+        { id: 'a2', name: 'AP lontano', lat: 37.7, lon: 14.3, stations: 3, siteId: null },
+      ],
+    };
+    const imp = impactOf({ lat: 37.6048, lon: 14.1 }, infra, 1);
+    assert.deepEqual(imp.map((i) => `${i.type}:${i.name}`), ['ap:AP N2', 'pop:POP Monte']);
+    assert.equal(imp[1]!.stations, 40);
+    assert.equal(impactOf({ lat: 37.62, lon: 14.1 }, infra, 1).length, 0);
+  });
+
+  it('turns a GPS position into an Italian address', () => {
+    const r = parseReverse({
+      display_name: 'Via Roma, 12, Enna, Libero consorzio comunale di Enna, Sicilia, 94100, Italia',
+      address: { road: 'Via Roma', house_number: '12', town: 'Enna', county: 'Libero consorzio comunale di Enna', 'ISO3166-2-lvl6': 'IT-EN', postcode: '94100' },
+    })!;
+    assert.deepEqual({ ...r, label: '' }, { label: '', street: 'Via Roma', houseNumber: '12', city: 'Enna', province: 'Enna', postcode: '94100' });
+    assert.equal(parseReverse({ error: 'Unable to geocode' }), null);
+  });
+
   it('polls, stores outages in the zones, notifies new ones and restorations; app feed token', async () => {
     const uisp = fakeUisp();
     let features = [
@@ -45,6 +69,9 @@ describe('Guasti Enel (e-distribuzione)', () => {
       if (url.host === 'dpa-portalgis.enel.com') {
         queries.push(url.search);
         return Response.json({ features, exceededTransferLimit: false });
+      }
+      if (url.host === 'nominatim.openstreetmap.org' && url.pathname === '/reverse') {
+        return Response.json({ display_name: 'Via Roma 1, Enna', address: { road: 'Via Roma', house_number: '1', town: 'Enna', county: 'Enna', postcode: '94100' } });
       }
       if (url.host === 'api.telegram.org') {
         sent.push(JSON.parse(String(init?.body)).text);
@@ -73,6 +100,15 @@ describe('Guasti Enel (e-distribuzione)', () => {
     await ctx.telegram.idle();
     assert.equal(sent.length, 2);
     assert.ok(sent.some((t) => t.includes('Guasto media tensione') && t.includes('ENNA ALTA')));
+    // ENNA ALTA is ~700 m from AP N2 D01 and its POP (Nodo 2 - Monte): flagged as potentially affected
+    const mt = r1.active.find((o: { id: number }) => o.id === 10);
+    assert.ok(mt.impact.some((i: { type: string; name: string }) => i.type === 'ap' && i.name === 'AP N2 D01'), JSON.stringify(mt.impact));
+    assert.ok(mt.impact.some((i: { type: string }) => i.type === 'pop'));
+    assert.equal(r1.active[0].id, 10, 'impacted outages first');
+    assert.ok(sent.some((t) => t.startsWith('🚨') && t.includes('Potenzialmente impattati')));
+    const rev = (await call('GET', '/api/geocode/reverse?lat=37.56&lon=14.28')).json();
+    assert.equal(rev.street, 'Via Roma');
+    assert.equal(rev.postcode, '94100');
 
     // second poll: same outages -> no new messages
     await call('POST', '/api/admin/outages/refresh');

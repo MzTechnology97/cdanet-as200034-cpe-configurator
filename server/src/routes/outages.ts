@@ -38,7 +38,17 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!ctx.modules.stateFor(u.id).power_outages) throw new HttpError(404, 'module_disabled');
     return {
       generatedAt: ctx.outages.status()?.at ?? null,
-      active: ctx.outages.active().map((o) => ({ id: o.id, kind: o.kind, label: KIND_LABEL[o.kind], place: o.place, province: o.province, customers: o.customers, expectedRestore: o.expectedRestore, zone: o.zones[0]?.name ?? '' })),
+      active: ctx.outages.active().map((o) => ({
+        id: o.id,
+        kind: o.kind,
+        label: KIND_LABEL[o.kind],
+        place: o.place,
+        province: o.province,
+        customers: o.customers,
+        expectedRestore: o.expectedRestore,
+        zone: o.zones[0]?.name ?? o.impact[0]?.name ?? '',
+        impact: o.impact.slice(0, 5).map((i) => `${i.type === 'pop' ? 'POP' : 'AP'} ${i.name} (${i.distanceM} m)`),
+      })),
     };
   });
 
@@ -51,7 +61,10 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
   }));
 
   app.put('/api/admin/outages/config', admin, async (req) => {
-    const b = z.object({ apZones: z.boolean().optional(), apRadiusKm: z.number().min(0.5).max(30).optional(), includePlanned: z.boolean().optional() }).strict().parse(req.body);
+    const b = z
+      .object({ apZones: z.boolean().optional(), apRadiusKm: z.number().min(0.5).max(30).optional(), includePlanned: z.boolean().optional(), impactRadiusKm: z.number().min(0.1).max(5).optional() })
+      .strict()
+      .parse(req.body);
     const c = ctx.outages.setConfig(b, req.user!.id);
     recordEvent(db, req.user!.id, 'outages.config', 'Guasti Enel', JSON.stringify(b));
     return c;

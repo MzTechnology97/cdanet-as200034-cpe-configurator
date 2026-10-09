@@ -25,13 +25,16 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import it.cdanet.cpeconfigurator.core.AppContainer
+import it.cdanet.cpeconfigurator.data.CpeLocation
 import it.cdanet.cpeconfigurator.data.OutagesDto
 import it.cdanet.cpeconfigurator.outages.OutageAlerts
 import it.cdanet.cpeconfigurator.ui.BadRed
 import it.cdanet.cpeconfigurator.ui.BusyButton
 import it.cdanet.cpeconfigurator.ui.ErrorBanner
+import it.cdanet.cpeconfigurator.ui.Field
 import it.cdanet.cpeconfigurator.ui.SectionCard
 import it.cdanet.cpeconfigurator.ui.WarnAmber
 import kotlinx.coroutines.launch
@@ -93,6 +96,7 @@ fun OutagesScreen(c: AppContainer) {
             Text("Controllo ogni 15 minuti anche ad app chiusa, con un accesso in sola lettura ai guasti (revocato se cambi password o esci da tutti i dispositivi).", style = MaterialTheme.typography.bodySmall)
         }
         BusyButton("Aggiorna", busy, Modifier.fillMaxWidth(), primary = false) { scope.launch { load() } }
+        if (c.session.isAdmin) ZoneEditor(c) { scope.launch { load() } }
         val d = data ?: return@Column
         Text(d.lastRun?.at?.let { "Ultimo controllo del server: ${it.replace('T', ' ').take(16)} · fonte e-distribuzione" } ?: "Il server non ha ancora controllato", style = MaterialTheme.typography.bodySmall)
         if (d.active.isEmpty()) {
@@ -103,10 +107,67 @@ fun OutagesScreen(c: AppContainer) {
                 Text(KIND[o.kind] ?: o.cause, fontWeight = FontWeight.SemiBold, color = when (o.kind) { "guasto_mt" -> BadRed; "lavoro" -> MaterialTheme.colorScheme.onSurfaceVariant; else -> WarnAmber })
                 Text("${o.place} (${o.province})", style = MaterialTheme.typography.titleMedium)
                 o.zones.firstOrNull()?.let { z -> Text("${z.name} a ${if (z.distanceM >= 1000) "%.1f km".format(z.distanceM / 1000.0) else "${z.distanceM} m"}", style = MaterialTheme.typography.bodySmall) }
+                if (o.impact.isNotEmpty()) {
+                    Text("Potenzialmente impattati:", color = BadRed, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
+                    o.impact.take(5).forEach { i ->
+                        Text("• ${if (i.type == "pop") "POP" else "AP"} ${i.name} a ${i.distanceM} m" + (i.stations?.let { " · $it CPE" } ?: ""), color = BadRed, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
                 Text("${o.customers} clienti Enel · dal ${hm(o.start)} · ripristino previsto ${hm(o.expectedRestore)}", style = MaterialTheme.typography.bodySmall)
                 TextButton(onClick = {
                     runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:${o.lat},${o.lon}?q=${o.lat},${o.lon}"))) }
                 }) { Text("Apri sulla mappa") }
+            }
+        }
+    }
+}
+
+/** Admin: new area of interest from the phone (GPS with automatic address, address search or typed coordinates). */
+@Composable
+private fun ZoneEditor(c: AppContainer, onAdded: () -> Unit) {
+    val scope = rememberCoroutineScope()
+    var open by remember { mutableStateOf(false) }
+    var name by remember { mutableStateOf("") }
+    var radius by remember { mutableStateOf("2") }
+    var lat by remember { mutableStateOf("") }
+    var lon by remember { mutableStateOf("") }
+    var label by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf<String?>(null) }
+    SectionCard("Zone di interesse (admin)") {
+        if (!open) {
+            TextButton(onClick = { open = true }) { Text("Aggiungi una zona da qui") }
+            return@SectionCard
+        }
+        msg?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        LocationPicker(c, lat.toDoubleOrNull()?.let { la -> lon.toDoubleOrNull()?.let { lo -> CpeLocation(la, lo, null, "manual") } }, label) { loc, lab ->
+            lat = "%.6f".format(java.util.Locale.ROOT, loc.latitude)
+            lon = "%.6f".format(java.util.Locale.ROOT, loc.longitude)
+            label = lab
+            if (name.isBlank()) {
+                scope.launch {
+                    runCatching { c.api.reverseGeocode(loc.latitude, loc.longitude) }.getOrNull()?.let { r ->
+                        name = listOf(r.street, r.city).filter { s -> s.isNotBlank() }.joinToString(", ")
+                    }
+                }
+            }
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Field("Latitudine", lat, { lat = it.replace(',', '.').trim() }, Modifier.weight(1f), keyboardType = KeyboardType.Decimal)
+            Field("Longitudine", lon, { lon = it.replace(',', '.').trim() }, Modifier.weight(1f), keyboardType = KeyboardType.Decimal)
+        }
+        Field("Nome della zona", name, { name = it })
+        Field("Raggio (km)", radius, { radius = it.replace(',', '.') }, keyboardType = KeyboardType.Decimal)
+        BusyButton("Salva zona", busy, Modifier.fillMaxWidth(), enabled = name.trim().length >= 2 && lat.toDoubleOrNull() != null && lon.toDoubleOrNull() != null) {
+            scope.launch {
+                busy = true
+                msg = runCatching {
+                    c.api.createOutageZone(name.trim(), lat.toDouble(), lon.toDouble(), radius.toDoubleOrNull() ?: 2.0)
+                    name = ""; lat = ""; lon = ""; label = ""
+                    onAdded()
+                    "Zona salvata: entra nel prossimo controllo (entro 10 minuti)."
+                }.getOrElse { it.message }
+                busy = false
             }
         }
     }

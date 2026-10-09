@@ -15,6 +15,32 @@ export interface GeocodeResult {
   type: string;
 }
 
+export interface ReverseResult {
+  label: string;
+  street: string;
+  houseNumber: string;
+  city: string;
+  province: string;
+  postcode: string;
+}
+
+/** Nominatim /reverse (jsonv2, addressdetails) -> Italian address parts. */
+export function parseReverse(j: unknown): ReverseResult | null {
+  const o = (j ?? {}) as { display_name?: string; address?: Record<string, string>; error?: string };
+  if (o.error || !o.address) return null;
+  const a = o.address;
+  // Italian provinces: "county" (e.g. "Enna") or the ISO code IT-EN.
+  const iso = a['ISO3166-2-lvl6'];
+  return {
+    label: o.display_name ?? '',
+    street: a.road ?? a.pedestrian ?? a.footway ?? a.path ?? a.hamlet ?? '',
+    houseNumber: a.house_number ?? '',
+    city: a.city ?? a.town ?? a.village ?? a.municipality ?? '',
+    province: (a.county ?? '').replace(/^Libero consorzio comunale di |^Provincia di |^Citt[àa] metropolitana di /i, '') || (iso ? iso.replace(/^IT-/, '') : ''),
+    postcode: a.postcode ?? '',
+  };
+}
+
 export interface GeocoderOptions {
   url: string;
   fallbackUrl?: string | undefined;
@@ -35,6 +61,7 @@ export const isPublicNominatim = (url: string) => {
 export function createGeocoder(opts: GeocoderOptions) {
   const f = opts.fetchImpl ?? fetch;
   const cache = new Map<string, { at: number; value: GeocodeResult[] }>();
+  const revCache = new Map<string, { at: number; value: ReverseResult | null }>();
   let last = 0;
   let queue: Promise<unknown> = Promise.resolve();
 
@@ -110,6 +137,28 @@ export function createGeocoder(opts: GeocoderOptions) {
       }
       cache.set(key, { at: Date.now(), value });
       if (cache.size > 2000) cache.delete(cache.keys().next().value as string);
+      return value;
+    },
+
+    /** GPS position -> street, number, city, province, postcode (to fill address forms). */
+    async reverse(lat: number, lon: number): Promise<ReverseResult | null> {
+      const key = `${lat.toFixed(5)},${lon.toFixed(5)}`;
+      const hit = revCache.get(key);
+      if (hit && Date.now() - hit.at < 24 * 3600_000) return hit.value;
+      const params = { lat: String(lat), lon: String(lon), format: 'jsonv2', addressdetails: '1', zoom: '18' };
+      let r: Response;
+      try {
+        r = await get(opts.url, '/reverse', params, 10_000);
+        if (r.status >= 500 && opts.fallbackUrl) throw new Error('primary down');
+      } catch {
+        if (!opts.fallbackUrl) throw new HttpError(502, 'geocoder_unreachable');
+        r = await get(opts.fallbackUrl, '/reverse', params, 10_000).catch(() => {
+          throw new HttpError(502, 'geocoder_unreachable');
+        });
+      }
+      if (!r.ok) throw new HttpError(502, 'geocoder_error', { status: r.status });
+      const value = parseReverse(await r.json());
+      revCache.set(key, { at: Date.now(), value });
       return value;
     },
 

@@ -37,6 +37,7 @@ data class FeedOutage(
     val customers: Int = 0,
     val expectedRestore: String? = null,
     val zone: String = "",
+    val impact: List<String> = emptyList(),
 )
 
 @Serializable
@@ -107,8 +108,9 @@ object OutageAlerts {
                 notify(
                     c,
                     o.id.toInt(),
-                    "${if (o.kind == "lavoro") "🛠️" else "⚡"} ${o.label}: ${o.place}",
-                    "${o.zone.ifBlank { o.province }} · ${o.customers} clienti Enel" + (o.expectedRestore?.let { " · ripristino previsto ${it.replace('T', ' ').substring(11)}" } ?: ""),
+                    "${if (o.impact.isNotEmpty()) "🚨" else if (o.kind == "lavoro") "🛠️" else "⚡"} ${o.label}: ${o.place}",
+                    (if (o.impact.isNotEmpty()) "Potenzialmente impattati: ${o.impact.joinToString(", ")}\n" else "") +
+                        "${o.zone.ifBlank { o.province }} · ${o.customers} clienti Enel" + (o.expectedRestore?.let { " · ripristino previsto ${it.replace('T', ' ').substring(11)}" } ?: ""),
                 )
             }
             if (fresh.size > 5) notify(c, 2, "Altri ${fresh.size - 5} guasti nelle zone", "Apri Guasti Enel nell'app per l'elenco completo.")
