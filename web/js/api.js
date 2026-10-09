@@ -3,6 +3,10 @@ const KEY = 'cdaSession';
 
 /** Human-readable messages for API error codes. */
 const MESSAGES = {
+  infra_agent_missing: 'Agente di aggiornamento non attivo: serve una volta l’installer per abilitarlo',
+  infra_request_pending: 'C’è già una richiesta in corso: attendi l’esito',
+  invalid_value: 'Valore non valido',
+  nothing_to_apply: 'Nessuna modifica',
   invalid_credentials: 'Username o password non corretti',
   too_many_attempts: 'Troppi tentativi: riprova tra qualche minuto',
   unauthorized: 'Sessione scaduta: accedi di nuovo',

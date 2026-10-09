@@ -61,7 +61,10 @@ case "${1:-}" in
     ;;
   map)
     case "${2:-status}" in
-      update) dc --profile maps run --rm maptiles ;;
+      update)
+        if grep -q '^MAP_MODE=off' "$DEPLOY_DIR/.env"; then echo "Mappe locali disattivate (MAP_MODE=off): niente da scaricare."; exit 0; fi
+        dc --profile maps run --rm maptiles
+        ;;
       remove)
         dc --profile maps run --rm --entrypoint rm maptiles -f /data/maps/basemap.pmtiles
         echo "Mappa rimossa: la console usa le mappe pubbliche di OpenStreetMap."

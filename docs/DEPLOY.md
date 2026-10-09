@@ -123,7 +123,20 @@ Console → **Amministrazione → Impostazioni server** (solo admin): i parametr
 
 I segreti sono cifrati con la chiave master del server e **non vengono mai mostrati** (solo "impostata/non impostata"); nel Registro attività compare quali parametri sono cambiati, mai i valori. Quasi tutto vale subito; durata delle sessioni e rilasci valgono dopo **Riavvia l'app ora** (pulsante nella stessa pagina). La nuova password CPE vale per le CPE configurate da quel momento: quelle già installate mantengono la loro (per quelle gli strumenti di campo permettono di inserirla a mano).
 
-Restano nel `.env` i parametri dell'infrastruttura (indirizzo/HTTPS di Caddy, aggiornamenti automatici, regione di mappe e geocoder) e i segreti di base (`JWT_SECRET`, chiave master).
+### Infrastruttura (applicata dall'agente di aggiornamento)
+
+Nella stessa pagina, la scheda **Infrastruttura** cambia i parametri che riguardano gli altri container:
+- **Indirizzo e HTTPS**: `APP_LISTEN` (`:80` oppure un nome per HTTPS con certificato pubblico) e gli indirizzi HTTPS autofirmati `HTTPS_SITES` (il certificato senza nome viene emesso per il primo indirizzo);
+- **Aggiornamenti automatici**: attivi/disattivi, intervallo di controllo, finestra oraria (es. `02-05`), canale (`stable` oppure una versione da bloccare, es. `1.26.0`);
+- **Mappe della console**: mappa locale Protomaps o mappe pubbliche OpenStreetMap, regione o area personalizzata, e **Aggiorna la mappa ora**.
+
+Come funziona: l'app non può riavviare gli altri container, quindi scrive la richiesta nel volume dati (`/data/infra/request.env`); il container **updater** la raccoglie entro 10 secondi, **la valida di nuovo** (solo queste chiavi, solo valori ammessi: niente può finire nel `.env` oltre a questi parametri), aggiorna il `.env`, ricrea Caddy o scarica la mappa se serve e scrive l'esito, che compare nella pagina. Una richiesta alla volta; ogni richiesta finisce nel Registro attività.
+
+L'updater inoltre, dopo ogni aggiornamento riuscito, applica i file di deploy della nuova versione (compose, Caddyfile, script dell'updater e della mappa), validati prima con `docker compose config` e con copia di sicurezza: non serve più rieseguire l'installer per gli aggiornamenti.
+
+> **Una sola volta:** sui server installati prima della v1.27.0 l'updater non ha ancora accesso in scrittura: la scheda mostra *Agente di aggiornamento non ancora attivo*. Basta rieseguire una volta l'installer (`curl … | sudo bash`, come per l'installazione); da lì in poi niente più SSH.
+
+Restano nel `.env` solo i segreti di base (`JWT_SECRET`, chiave master) e la configurazione del geocoder OpenStreetMap locale.
 
 ## Reti Wi-Fi (chiavi WPA2) in blocco
 

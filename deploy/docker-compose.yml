@@ -107,9 +107,13 @@ services:
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
       # Same absolute path as on the host so relative bind mounts resolve correctly.
-      - ${DEPLOY_DIR:-/opt/cdanet-cpe}:${DEPLOY_DIR:-/opt/cdanet-cpe}:ro
+      # Writable: the updater applies the settings changed from the console to .env and
+      # refreshes the deploy files shipped in each new image.
+      - ${DEPLOY_DIR:-/opt/cdanet-cpe}:${DEPLOY_DIR:-/opt/cdanet-cpe}
       - ./updater:/updater:ro
       - updater_state:/state
+      # Requests from the console (Impostazioni server -> Infrastruttura) and their outcome.
+      - appdata:/appdata
       # Optional registry credentials (private GHCR package): docker login writes here.
       - ${REGISTRY_AUTH_DIR:-/root/.docker}:/docker-config:ro
     logging:
