@@ -19,7 +19,9 @@
   <ol>
     <li><a href="#prima">Prima di partire</a></li>
     <li><a href="#accesso">Primo avvio e accesso</a></li>
-    <li><a href="#home">La schermata principale</a></li>
+    <li><a href="#home">La schermata principale</a>
+      <ol><li><a href="#interventi">Interventi di oggi</a></li></ol>
+    </li>
     <li><a href="#installazione">Nuova installazione passo per passo</a>
       <ol>
         <li><a href="#passo1">Configurazione</a></li>
@@ -32,8 +34,16 @@
     </li>
     <li><a href="#ripuntamento">Ripuntamento, cambio AP, sostituzione</a></li>
     <li><a href="#dopo">Dopo l'installazione</a></li>
-    <li><a href="#campo">Strumenti di campo</a></li>
-    <li><a href="#monitoraggio">Stato rete e guasti Enel</a></li>
+    <li><a href="#campo">Strumenti di campo</a>
+      <ol>
+        <li><a href="#apvicini">AP vicini</a></li>
+        <li><a href="#visibilita">Visibilità verso l'AP</a></li>
+        <li><a href="#firmware">Aggiornare il firmware</a></li>
+      </ol>
+    </li>
+    <li><a href="#monitoraggio">Stato rete e guasti Enel</a>
+      <ol><li><a href="#aree">Aree e avvisi</a></li></ol>
+    </li>
     <li><a href="#rete">Strumenti di rete</a></li>
     <li><a href="#impostazioni">Impostazioni</a></li>
     <li><a href="#console">La console web</a></li>
@@ -45,7 +55,7 @@
 <main>
 <h1 id="inizio">Guida installatore</h1>
 <p class="lead">Una nuova installazione dall'inizio alla fine con l'app CDA Net CPE, più tutti gli strumenti che usi in campo e in ufficio.</p>
-<div class="note">Le schermate vengono dall'app vera (versione 1.32.9, con la nuova grafica) e dalla console web, usate con l'account installatore di prova <b>tecnico.demo</b>. Clienti, AP, indirizzi e misure sono <b>dati dimostrativi</b>, non clienti o apparati reali. <b>Tocca una schermata per ingrandirla</b>: con le frecce passi alle altre, con <i>Dimensione reale</i> leggi i dettagli, con Indietro torni alla guida.</div>
+<div class="note">Le schermate vengono dall'app vera (versione 1.32.12) e dalla console web, usate con l'account installatore di prova <b>tecnico.demo</b>. Clienti, AP, indirizzi e misure sono <b>dati dimostrativi</b>, non clienti o apparati reali. <b>Tocca una schermata per ingrandirla</b>: con le frecce passi alle altre, con <i>Dimensione reale</i> leggi i dettagli, con Indietro torni alla guida.</div>
 
 <h2 id="prima">1. Prima di partire</h2>
 <div class="card">
@@ -53,8 +63,8 @@
     <li><b>Telefono Android</b> con l'app <b>CDA Net CPE</b> installata e aggiornata. L'app si aggiorna da sola: se c'è una versione nuova va installata prima di poter lavorare.</li>
     <li><b>Account installatore</b> (utente e password) ricevuto dall'amministratore. Vedi solo le tue installazioni e i POP/AP che ti sono stati assegnati.</li>
     <li><b>Internet sul telefono</b> per preparare la configurazione. Dopo, mentre lavori sulla CPE, Internet non serve più.</li>
-    <li>La <b>CPE</b> nuova (o resettata), con l'etichetta di MAC e seriale leggibile, alimentatore PoE e cavo.</li>
-    <li>I dati del cliente: <b>utente e password PPPoE</b> (RADIUS) e l'indirizzo dell'installazione.</li>
+    <li>La <b>CPE</b> nuova (o resettata), con l'etichetta di MAC e seriale leggibile (MAC e seriale si prendono sempre dall'etichetta), alimentatore PoE e cavo.</li>
+    <li>I dati del cliente: <b>utente e password PPPoE</b> (RADIUS) e l'indirizzo dell'installazione. Se l'intervento te l'ha assegnato l'ufficio, li trovi già nell'app (vedi <a href="#interventi">Interventi di oggi</a>).</li>
   </ul>
 </div>
 <div class="tip">Alcune funzioni possono non comparire sul tuo account: le attiva l'amministratore. Se ti serve uno strumento che non vedi, chiedi a lui.</div>
@@ -67,29 +77,36 @@
   <figure><img src="img/app-login.jpg" alt="Schermata di accesso" loading="lazy"><figcaption>Accesso installatore, con il server CDA Net e Verifica collegamento.</figcaption></figure>
   <figure><img src="img/app-aggiornamento.jpg" alt="Aggiornamento obbligatorio" loading="lazy"><figcaption>Se esce una versione nuova l'app la scarica da sola: autorizza l'installazione e conferma.</figcaption></figure>
 </div>
-<h3>Accesso rapido con impronta o volto</h3>
-<p>Dopo il primo accesso con la password l'app propone l'<b>accesso rapido</b>: tocca <b>Attiva</b> e da quel momento al login basta impronta o volto. La password non viene salvata sul telefono. Serve un'impronta o il volto già registrato nelle impostazioni di sicurezza del telefono. Si disattiva da <a href="#impostazioni">Impostazioni</a>.</p>
+<h3>Resti collegato</h3>
+<p>Dopo il primo accesso con la password l'app <b>resta collegata</b>: le volte successive si apre direttamente, senza password. La sessione si rinnova a ogni apertura e scade solo se non usi l'app per 30 giorni. Torna la richiesta della password se cambi la password, se tocchi <b>Esci</b>, dopo una reinstallazione dell'app o se l'amministratore disattiva l'account. La password non viene mai salvata sul telefono.</p>
+<p>Per più sicurezza, in <a href="#impostazioni">Impostazioni</a> attiva <b>Sblocco con impronta o volto a ogni apertura</b>: l'app chiede impronta o volto ogni volta che la apri o ci torni dopo più di un minuto.</p>
 <h3>Aggiornamento obbligatorio</h3>
 <p>Quando il server pubblica una versione nuova dell'app, quella vecchia non permette più di accedere: compare <i>Aggiornamento obbligatorio</i>, il download parte da solo e viene verificato. La prima volta Android chiede di <b>consentire l'installazione da questa origine</b>: tocca <b>Apri l'autorizzazione</b>, attiva l'interruttore, torna indietro e tocca <b>Ho autorizzato, installa</b>.</p>
 <p>Il tema chiaro o scuro segue quello del telefono.</p>
 
 <h2 id="home">3. La schermata principale</h2>
-<p>In alto c'è il riquadro arancione con il tuo nome e i due interventi che fai più spesso: <b>Nuova installazione</b> e <b>Ripuntamento o cambio AP</b>. Se hai un intervento lasciato a metà, al loro posto compare <b>Riprendi l'intervento</b>.</p>
-<p>Sotto, gli strumenti sono divisi in gruppi, ognuno con la sua icona:</p>
+<p>In basso c'è la barra con le quattro aree dell'app, sempre a portata di pollice:</p>
 <ul>
-  <li><b>Il mio lavoro</b>: Storico, <a href="#notifiche">Notifiche</a>, Le mie CPE;</li>
-  <li><b>Rete e guasti</b>: Stato rete, Guasti Enel, Copertura;</li>
-  <li><b>In campo</b>: Trova l'AP, Puntamento antenna, Diagnosi CPE;</li>
-  <li><b>Strumenti di rete</b>: Wi-Fi Analyzer, scanner, diagnostica, TVCC, MikroTik, accesso remoto;</li>
-  <li><b>Aiuto</b>: questa guida.</li>
+  <li><b>Oggi</b>: la schermata principale;</li>
+  <li><b>Installa</b>: le tue installazioni (<a href="#dopo">da completare, storico, stato delle CPE</a>);</li>
+  <li><b>Rete</b>: <a href="#monitoraggio">stato della rete, guasti Enel, aree di interesse e AP vicini</a>;</li>
+  <li><b>Strumenti</b>: <a href="#campo">CPE collegata</a>, <a href="#rete">strumenti di rete</a> e questa guida.</li>
 </ul>
-<p>In alto a destra, in ogni schermata, la <b>campanella</b> apre le <a href="#notifiche">Notifiche</a> (il numero rosso indica quelle da leggere) e l'<b>ingranaggio</b> le <a href="#impostazioni">Impostazioni</a>.</p>
+<p>In <b>Oggi</b>, in alto, il riquadro arancione con il tuo nome e i due interventi che fai più spesso: <b>Nuova installazione</b> e <b>Ripuntamento o cambio AP</b>. Se hai un intervento lasciato a metà compare <b>Riprendi l'intervento</b>. Sotto trovi gli <a href="#interventi">interventi di oggi</a> assegnati dall'ufficio, i contatori (installazioni da completare, notifiche, guasti nelle tue zone, CPE con problemi: toccane uno per aprirlo) e le scorciatoie.</p>
+<p>In alto a destra, in ogni schermata: la <b>lente</b> cerca un cliente, un MAC o un SSID tra le tue installazioni e le tue CPE; la <b>campanella</b> apre le <a href="#notifiche">Notifiche</a> (il numero rosso indica quelle da leggere); l'<b>ingranaggio</b> apre le <a href="#impostazioni">Impostazioni</a>.</p>
 <div class="shots">
-  <figure><img src="img/app-home.jpg" alt="Home dell'app" loading="lazy"><figcaption>Home: nuova installazione o ripuntamento, poi Il mio lavoro e Rete e guasti.</figcaption></figure>
-  <figure><img src="img/app-home2.jpg" alt="Home, strumenti di campo e di rete" loading="lazy"><figcaption>Più in basso: In campo e Strumenti di rete.</figcaption></figure>
-  <figure><img src="img/app-home3.jpg" alt="Home, altri strumenti e guida" loading="lazy"><figcaption>In fondo: gli altri strumenti di rete e la Guida, con la versione dell'app.</figcaption></figure>
+  <figure><img src="img/app-home.jpg" alt="Oggi" loading="lazy"><figcaption>Oggi: nuova installazione o ripuntamento e gli interventi del giorno.</figcaption></figure>
+  <figure><img src="img/app-home2.jpg" alt="Oggi, contatori e scorciatoie" loading="lazy"><figcaption>Contatori e scorciatoie; in basso le quattro aree.</figcaption></figure>
+  <figure><img src="img/app-cerca.jpg" alt="Ricerca" loading="lazy"><figcaption>Ricerca per cliente, MAC o SSID.</figcaption></figure>
 </div>
-<p>Questa guida si apre anche dall'app, dal riquadro <b>Guida</b>.</p>
+<h3 id="interventi">Interventi di oggi</h3>
+<p>Gli interventi che l'ufficio ti ha assegnato per oggi compaiono in <b>Oggi</b> con cliente, fascia oraria, tipo (nuova installazione, ripuntamento, guasto, sopralluogo), indirizzo, contatto e note:</p>
+<ul>
+  <li><b>Inizia</b>: per una nuova installazione apre il <a href="#passo1">passo 1</a> con cliente, posizione, modello e utente PPPoE già compilati. La password PPPoE la conosce solo il server: non la vedi e non devi scriverla.</li>
+  <li><b>Naviga</b>: apre il navigatore verso l'indirizzo.</li>
+  <li><b>Rimanda</b>: scrivi il motivo (per esempio <i>cliente assente</i>); l'ufficio lo vede subito.</li>
+</ul>
+<p>Quando il provisioning riesce, l'intervento si chiude da solo. Con Internet l'app scarica in anticipo anche gli AP intorno a ogni indirizzo, così <a href="#apvicini">AP vicini</a> funziona pure su un tetto senza segnale.</p>
 <p>Se compare un avviso arancione in alto (per esempio <i>collaudi in attesa di invio</i>) non devi fare nulla: i dati partono da soli appena il telefono torna online.</p>
 
 <h2 id="installazione">4. Nuova installazione passo per passo</h2>
@@ -110,14 +127,15 @@
 <h3 id="passo1">Passo 1 · Configurazione</h3>
 <ol class="steps">
   <li><b>Modello</b>: scegli il modello della CPE. Il <i>Template</i> si imposta da solo. Se compare "Nessun template airOS per …" quel modello non è ancora pronto: avvisa l'amministratore.</li>
-  <li><b>MAC</b> e <b>Seriale</b>: scrivili dall'etichetta oppure tocca <b>Scansiona etichetta (barcode/QR)</b>. Sotto il campo vedi il MAC nel formato che verrà usato.</li>
-  <li><b>Posizione CPE e AP consigliati</b>: tocca <b>Usa GPS del telefono</b> stando nel punto dove monterai l'antenna, oppure cerca l'indirizzo. L'app propone gli <b>AP consigliati da qui</b> con distanza, direzione, tilt e segnale stimato; il primo è già scelto, con <b>Usa</b> ne prendi un altro.</li>
+  <li><b>MAC</b> e <b>Seriale</b>: tocca <b>Scansiona etichetta (barcode/QR)</b> sull'etichetta della CPE (o scrivili da lì). Il MAC dell'etichetta è quello della LAN, lo stesso che usa la rete per riconoscere la CPE. Sotto il campo vedi il MAC nel formato che verrà usato. Prima di scrivere la configurazione l'app controlla che il MAC sia proprio quello della CPE collegata.</li>
+  <li><b>Rileva il modello dalla CPE</b>: collegato alla Wi-Fi della CPE, l'app chiede alla CPE il suo modello e lo imposta.</li>
+  <li><b>Posizione CPE e AP consigliati</b>: tocca <b>Usa GPS del telefono</b> stando nel punto dove monterai l'antenna, oppure cerca l'indirizzo. L'app propone gli <b>AP consigliati da qui</b> con distanza, direzione, tilt e segnale stimato; il primo è già scelto, con <b>Usa</b> ne prendi un altro. Con <a href="#visibilita">Visibilità</a> controlli prima di salire se il terreno copre l'AP.</li>
   <li><b>Wireless Station</b>: nodo, distretto ed eventuale <b>Rilancio</b> si compilano dall'AP scelto; l'SSID risultante è del tipo <code>CDA-NET-N2-D01</code> (con rilancio <code>CDA-NET-N2-D01-R1</code>).</li>
   <li><b>Router / PPPoE</b>: utente e password PPPoE del cliente. Dall'utente l'app ricava il nome del dispositivo (es. <i>CLIENTE DEMO11</i>). La password serve solo per questo provisioning e non viene salvata.</li>
   <li>Con <b>Verifica piano</b> vedi l'elenco di tutto quello che verrà scritto nella CPE. Poi tocca <b>Prepara provisioning</b>.</li>
 </ol>
 <div class="shots">
-  <figure><img src="img/app-config.jpg" alt="Passo 1, modello, MAC e GPS" loading="lazy"><figcaption>Modello, template, MAC/seriale e posizione dal GPS.</figcaption></figure>
+  <figure><img src="img/app-config.jpg" alt="Passo 1, modello, MAC e seriale" loading="lazy"><figcaption>Modello, template, MAC e seriale dall'etichetta, Rileva il modello dalla CPE.</figcaption></figure>
   <figure><img src="img/app-config2.jpg" alt="AP consigliati" loading="lazy"><figcaption>AP consigliati con segnale stimato; sotto, nodo, distretto, rilancio e SSID.</figcaption></figure>
   <figure><img src="img/app-prepara.jpg" alt="PPPoE e preparazione" loading="lazy"><figcaption>Dati PPPoE e Verifica piano: tutto quello che verrà scritto nella CPE.</figcaption></figure>
 </div>
@@ -154,10 +172,16 @@
 </div>
 
 <h3 id="passo5">Passo 5 · Puntamento</h3>
-<p>Il numero grande è il <b>segnale ricevuto dalla CPE</b>, aggiornato di continuo, con il valore <b>atteso</b> calcolato dall'AP e il <b>picco</b> raggiunto. Il grafico mostra l'andamento: la linea verde tratteggiata è la soglia "buono", quella rossa il minimo accettabile. Con il <b>bip</b> attivo il tono sale quando il segnale migliora: ruota lentamente l'antenna in orizzontale, poi in verticale, e fermati sul picco.</p>
+<p>Il numero grande è il <b>segnale ricevuto dalla CPE</b>, aggiornato di continuo, con il valore <b>atteso</b> calcolato dall'AP e il <b>picco</b> raggiunto. Il grafico mostra l'andamento: la linea verde tratteggiata è la soglia "buono", quella rossa il minimo accettabile. Ruota lentamente l'antenna in orizzontale, poi in verticale, e fermati sul picco. Sotto il numero ci sono gli aiuti per il tetto, da usare con il telefono in tasca o appoggiato al palo:</p>
+<ul>
+  <li><b>Bip</b>: il tono sale quando il segnale migliora;</li>
+  <li><b>Voce</b>: l'app legge il segnale ad alta voce (<i>meno 58</i>);</li>
+  <li><b>Vibra al picco</b>: una vibrazione ogni volta che superi il picco raggiunto.</li>
+</ul>
+<p>Durante il puntamento, la bussola, il mirino e tutta l'installazione lo schermo resta acceso.</p>
 <p>Sotto trovi la <b>direzione dell'AP</b> (azimut, tilt, distanza) e i pulsanti per <b>Mirino in realtà aumentata</b>, <b>Bussola verso l'AP</b>, <b>Mappa e lista degli AP</b> e il <b>Puntamento a schermo intero</b>. <b>Azzera picco e grafico</b> ricomincia la misura.</p>
 <div class="shots">
-  <figure><img src="img/app-puntamento.jpg" alt="Puntamento" loading="lazy"><figcaption>−61 dBm (ottimo), atteso −60, picco −59, catene bilanciate, con il grafico.</figcaption></figure>
+  <figure><img src="img/app-puntamento.jpg" alt="Puntamento" loading="lazy"><figcaption>−62 dBm (ottimo), atteso −60, picco −60, catene bilanciate; sotto Bip, Voce e Vibra al picco.</figcaption></figure>
   <figure><img src="img/app-puntamento2.jpg" alt="Direzione dell'AP" loading="lazy"><figcaption>Direzione dell'AP e strumenti di puntamento.</figcaption></figure>
   <figure><img src="img/app-mirino.jpg" alt="Mirino in realtà aumentata" loading="lazy"><figcaption>Mirino AR: porta il cerchio sull'obiettivo seguendo le indicazioni ("gira a sinistra", "alza"). Qui lo sfondo è la fotocamera di prova dell'emulatore; sul telefono vedi il paesaggio.</figcaption></figure>
 </div>
@@ -199,10 +223,14 @@
 
 <h2 id="ripuntamento">5. Ripuntamento, cambio AP, sostituzione</h2>
 <p><b>CPE già installata: ripuntamento o cambio AP</b> salta configurazione e scrittura: ti colleghi alla Wi-Fi della CPE o del router del cliente, l'app trova la CPE e riparti da <a href="#passo3">Verifica della CPE</a>. Se la CPE era stata installata con l'app, collaudo e foto finali si aggiungono a quell'installazione; altrimenti il collaudo si può condividere ma non salvare sul server.</p>
-<p>Ci arrivi anche da <a href="#dopo">Le mie CPE</a> con il pulsante <b>Ripuntamento</b> su una CPE con segnale calato.</p>
+<p>Ci arrivi anche da <a href="#dopo">Installa → Stato CPE</a> con il pulsante <b>Ripuntamento</b> su una CPE con segnale calato.</p>
 <p><b>Sostituzione CPE</b> (antenna guasta): dallo <a href="#dopo">Storico</a> apri l'installazione e tocca <b>Sostituisci CPE</b>. Parte una nuova installazione con i dati del cliente già compilati: inserisci il MAC della CPE nuova e prosegui come al <a href="#passo1">passo 1</a>.</p>
 
 <h2 id="dopo">6. Dopo l'installazione</h2>
+<p>Tutto si trova in <b>Installa</b>, nella barra in basso, con tre schede: <b>Da completare</b> (installazioni con collaudo mancante, rifiutato dal NOC o scrittura fallita, con il pulsante per riprenderle), <b>Storico</b> e <b>Stato CPE</b>.</p>
+<div class="shots">
+  <figure><img src="img/app-installazioni.jpg" alt="Installazioni da completare" loading="lazy"><figcaption>Da completare: un collaudo rifiutato dal NOC e una scrittura fallita.</figcaption></figure>
+</div>
 <h3>Storico</h3>
 <p>Tutti i tuoi provisioning, con esito (<i>Preparato</i>, <i>Completato</i>, <i>Fallito</i> con il motivo), collaudo, eventuali rimandi o KO e approvazione del NOC. Da qui apri <b>Storico segnale (7 giorni)</b>, <b>Collaudo / foto</b> e <b>Sostituisci CPE</b>.</p>
 <h3 id="notifiche">Notifiche</h3>
@@ -210,7 +238,7 @@
 <div class="shots">
   <figure><img src="img/app-notifiche.jpg" alt="Notifiche" loading="lazy"><figcaption>Esiti del NOC: una installazione rifiutata con la nota, una accettata.</figcaption></figure>
 </div>
-<h3>Le mie CPE</h3>
+<h3>Stato CPE (le mie CPE)</h3>
 <p>Lo stato attuale delle CPE che hai installato, confrontato con il collaudo: <i>offline</i>, <i>segnale debole</i>, <i>segnale calato</i> (almeno 6 dB in meno rispetto al collaudo), porta LAN lenta. Puoi cercare per cliente, MAC, AP o SSID e filtrare. Tocca una CPE per i dettagli, lo storico di 7 giorni e il ripuntamento.</p>
 <div class="shots">
   <figure><img src="img/app-storico.jpg" alt="Storico" loading="lazy"><figcaption>Storico: esito, collaudo e decisione del NOC per ogni installazione.</figcaption></figure>
@@ -219,40 +247,67 @@
 </div>
 
 <h2 id="campo">7. Strumenti di campo</h2>
-<h3>Trova l'AP</h3>
-<p>Gli AP vicini sulla <b>mappa</b> (aree approssimative, con la linea di puntamento dalla tua posizione) e in <b>lista</b> con distanza, altitudine, azimut, tilt e segnale stimato. Imposta l'<b>altezza della CPE dal suolo</b> per un tilt più preciso. Da ogni AP apri <b>Mirino (fotocamera)</b> o <b>Bussola</b>. I ponti radio non compaiono: solo AP a cui si possono agganciare i clienti.</p>
+<h3>CPE collegata</h3>
+<p>Tutto quello che fai con la CPE in mano, collegandoti una sola volta alla sua Wi-Fi (o a quella del router del cliente). La apri da <b>Strumenti</b> o dalle scorciatoie di <b>Oggi</b>. Ha cinque schede:</p>
+<ul>
+  <li><b>Diagnosi</b>: per i guasti. Ti dice in rosso cosa non va (non agganciata, PPPoE non attivo, cavo LAN, firmware, riavvii frequenti); con <b>Condividi rapporto</b> mandi il riepilogo al NOC.</li>
+  <li><b>Puntamento</b>: lo stesso strumento del <a href="#passo5">passo 5</a>, con Bip, Voce e Vibra al picco.</li>
+  <li><b>AP visibili</b>: la scansione fatta dalla radio della CPE, con l'aggancio a un altro AP (vedi <a href="#passo4">passo 4</a>).</li>
+  <li><b>Collaudo</b>: misure, test Internet, foto e note (vedi <a href="#passo6">passo 6</a>).</li>
+  <li><b>Firmware</b>: porta la CPE alla versione richiesta (vedi <a href="#firmware">sotto</a>).</li>
+</ul>
 <div class="shots">
-  <figure><img src="img/app-trova-ap.jpg" alt="Trova l'AP, mappa" loading="lazy"><figcaption>Mappa: la freccia rossa sei tu, la linea punta all'AP.</figcaption></figure>
-  <figure><img src="img/app-trova-ap-lista.jpg" alt="Trova l'AP, lista" loading="lazy"><figcaption>Lista: azimut e tilt rispetto al nord vero.</figcaption></figure>
-</div>
-<h3>Copertura</h3>
-<p>Prima del sopralluogo: dal GPS o da un indirizzo vedi gli AP più vicini con mappa, distanza, direzione e segnale stimato dalle CPE già collegate in zona. Ogni AP ha <b>Mappa</b> e <b>Bussola</b>.</p>
-<h3>Puntamento antenna e Diagnosi CPE</h3>
-<p><b>Puntamento antenna</b> è lo stesso strumento del passo 5, utilizzabile da solo. <b>Diagnosi CPE</b> serve per i guasti: collegato alla CPE (o al router del cliente) ti dice in rosso cosa non va (non agganciata, PPPoE non attivo, cavo LAN, firmware, riavvii frequenti) e con <b>Condividi rapporto</b> mandi il riepilogo al NOC.</p>
-<div class="shots">
-  <figure><img src="img/app-copertura.jpg" alt="Copertura" loading="lazy"><figcaption>Copertura dal GPS: mappa e AP più vicini con direzione e segnale stimato.</figcaption></figure>
-  <figure><img src="img/app-diagnosi.jpg" alt="Diagnosi senza problemi" loading="lazy"><figcaption>Diagnosi: nessun problema.</figcaption></figure>
+  <figure><img src="img/app-cpe-diagnosi.jpg" alt="CPE collegata, diagnosi" loading="lazy"><figcaption>CPE collegata, Diagnosi: nessun problema.</figcaption></figure>
   <figure><img src="img/app-diagnosi-guasto.jpg" alt="Diagnosi con guasto" loading="lazy"><figcaption>Diagnosi: CPE non agganciata e PPPoE giù, con cosa controllare.</figcaption></figure>
+</div>
+<h3 id="apvicini">AP vicini</h3>
+<p>In <b>Rete → AP vicini</b>. Con <b>Da qui</b> parti dal GPS del telefono, con <b>Da un indirizzo</b> prepari il sopralluogo dall'ufficio. Vedi gli AP sulla <b>mappa</b> (aree approssimative, con la linea di puntamento dalla tua posizione) e in <b>lista</b> con distanza, altitudine, azimut, tilt e segnale stimato dalle CPE già collegate in zona. Imposta l'<b>altezza della CPE dal suolo</b> per un tilt più preciso. Da ogni AP apri <b>Mirino</b>, <b>Bussola</b> o <b>Visibilità</b>. I ponti radio non compaiono: solo AP a cui si possono agganciare i clienti.</p>
+<p><b>Senza rete</b>: ogni ricerca riuscita resta sul telefono per 14 giorni, e quelle intorno agli interventi del giorno vengono scaricate in anticipo. Se sul tetto non c'è segnale, l'app usa i dati salvati entro 400 m e te lo dice. La mappa invece richiede Internet: usa lista, bussola e mirino.</p>
+<h3 id="visibilita">Visibilità verso l'AP</h3>
+<p>Prima di salire, <b>Visibilità</b> disegna il profilo del terreno tra te e l'AP, la linea di vista e la zona che deve restare libera per un buon segnale (60% della prima zona di Fresnel). Dice se la vista è <b>libera</b>, se il terreno <b>entra nella zona di Fresnel</b> (il segnale può calare) o se è <b>ostruita</b>, e di quanto alzare il palo; quando nessun palo realistico basta, ti suggerisce un altro AP. Conta solo il terreno: edifici e alberi vanno verificati a vista.</p>
+<div class="shots">
+  <figure><img src="img/app-ap-vicini.jpg" alt="AP vicini, lista" loading="lazy"><figcaption>AP vicini da qui: distanza, azimut, tilt, segnale stimato.</figcaption></figure>
+  <figure><img src="img/app-visibilita.jpg" alt="Visibilità verso l'AP" loading="lazy"><figcaption>Visibilità: terreno che copre l'AP a 3,5 km, meglio un altro AP.</figcaption></figure>
+  <figure><img src="img/app-trova-ap.jpg" alt="AP vicini, mappa" loading="lazy"><figcaption>Mappa: la freccia rossa sei tu, la linea punta all'AP.</figcaption></figure>
+</div>
+<h3 id="firmware">Aggiornare il firmware della CPE</h3>
+<p>La configurazione si scrive solo su CPE con il firmware richiesto (8.7.4). Se la CPE ne ha un altro, l'app blocca la scrittura e ti manda qui. Questa funzione è disponibile se l'ha attivata l'amministratore.</p>
+<ol class="steps">
+  <li><b>Con Internet</b>, in <b>CPE collegata → Firmware</b>, tocca <b>Scarica</b> sul firmware della piattaforma che usi (es. <i>XC · 8.7.4</i>). Il file resta sul telefono, controllato.</li>
+  <li>Sulla <b>Wi-Fi della CPE</b> tocca <b>Leggi la versione della CPE</b>: vedi piattaforma e versione attuali.</li>
+  <li>Tocca <b>Aggiorna a 8.7.4</b> e conferma. L'app controlla che il firmware sia quello della piattaforma della CPE e che sia arrivato integro, poi la CPE si aggiorna e si riavvia da sola (3-5 minuti).</li>
+</ol>
+<div class="warnbox">Durante l'aggiornamento <b>non togliere alimentazione alla CPE</b> e non chiudere l'app: se la scrittura si interrompe la CPE può non ripartire. Se Android lascia la Wi-Fi della CPE durante il riavvio, ricollegati: l'app aspetta e poi rilegge la versione.</div>
+<div class="shots">
+  <figure><img src="img/app-firmware.jpg" alt="Firmware" loading="lazy"><figcaption>Firmware 8.7.4 già sul telefono, pronto per la CPE.</figcaption></figure>
 </div>
 
 <h2 id="monitoraggio">8. Stato rete e guasti Enel</h2>
-<h3>Stato rete</h3>
+<p>In <b>Rete</b>, nella barra in basso, con quattro schede: <b>Stato</b>, <b>Guasti</b>, <b>Aree e avvisi</b> e <a href="#apvicini">AP vicini</a>.</p>
+<h3>Stato</h3>
 <p>I POP e gli AP che ti sono assegnati, aggiornati ogni minuto: raggiungibili o no, AP con molte CPE offline (probabile problema di settore) e il simbolo ⚡ quando c'è un guasto Enel vicino. All'apertura vedi solo quelli <b>con problemi</b>; con <b>Tutti</b> li vedi tutti.</p>
-<h3>Guasti Enel</h3>
+<h3>Guasti</h3>
 <p>Le interruzioni della rete elettrica nelle tue zone: mappa e lista compatta (guasti in media tensione in rosso, bassa tensione in arancio, lavori programmati in grigio). Tocca una riga per i dettagli: ripristino previsto, POP/AP potenzialmente impattati, <b>Sulla mappa</b> (centra la mappa sul guasto) e <b>Navigatore</b>.</p>
-<p>In alto attivi le <b>notifiche sul telefono</b> (anche ad app chiusa) e, se l'amministratore ha attivato il bot, le <b>notifiche Telegram</b> personali con <b>Collega Telegram</b>. In <b>Le mie zone di interesse</b> aggiungi fino a 20 zone (dal GPS o da indirizzo, con raggio in km).</p>
+<h3 id="aree">Aree e avvisi</h3>
+<p><b>Notifiche sul telefono</b>: attivale per essere avvisato anche ad app chiusa. <b>Le mie aree di interesse</b> sono i luoghi che vuoi seguire anche fuori dai POP/AP che ti sono assegnati: casa, una frazione, il paese di un cliente. Aggiungi un'area dal GPS o da un indirizzo, con il raggio. Per ogni area scegli quali avvisi ricevere:</p>
+<ul>
+  <li><b>Guasti MT</b> (media tensione), <b>Guasti BT</b> (bassa tensione), <b>Lavori</b> programmati;</li>
+  <li>con l'interruttore la metti <b>in pausa</b>: non ti avvisa, ma i guasti restano in elenco;</li>
+  <li><b>Raggio</b> cambia l'estensione, <b>Elimina</b> la toglie.</li>
+</ul>
+<p>Accanto al nome vedi quanti guasti ci sono ora nell'area. Le stesse regole valgono per le notifiche Telegram, che si collegano in <a href="#impostazioni">Impostazioni</a>.</p>
 <div class="shots">
-  <figure><img src="img/app-stato-rete.jpg" alt="Stato rete" loading="lazy"><figcaption>Stato rete: POP Demo Monte aperto, con i due AP vicini a un guasto Enel.</figcaption></figure>
-  <figure><img src="img/app-guasti.jpg" alt="Guasti Enel" loading="lazy"><figcaption>Guasti Enel: legenda della mappa, POP/AP assegnati e lista compatta.</figcaption></figure>
+  <figure><img src="img/app-stato-rete.jpg" alt="Stato rete" loading="lazy"><figcaption>Stato: POP Demo Monte con un guasto Enel vicino.</figcaption></figure>
+  <figure><img src="img/app-guasti.jpg" alt="Guasti Enel" loading="lazy"><figcaption>Guasti: mappa e lista compatta.</figcaption></figure>
   <figure><img src="img/app-guasti-dettaglio.jpg" alt="Dettaglio guasto" loading="lazy"><figcaption>Dettaglio: POP e AP potenzialmente impattati, Sulla mappa, Navigatore.</figcaption></figure>
-  <figure><img src="img/app-guasti-zona.jpg" alt="Zone di interesse" loading="lazy"><figcaption>Nuova zona di interesse dal GPS.</figcaption></figure>
+  <figure><img src="img/app-aree.jpg" alt="Aree e avvisi" loading="lazy"><figcaption>Aree di interesse con le regole di ciascuna.</figcaption></figure>
 </div>
 
 <h2 id="rete">9. Strumenti di rete</h2>
-<p>Funzionano anche senza accesso al server (<i>Continua senza accesso</i>), sulla rete a cui è collegato il telefono:</p>
+<p>In <b>Strumenti</b>, nella barra in basso, divisi per gruppi (con la CPE, rete del cliente, aiuto). Funzionano anche senza accesso al server (<i>Continua senza accesso</i>), sulla rete a cui è collegato il telefono:</p>
 <table>
   <tr><th>Strumento</th><th>A cosa serve</th></tr>
-  <tr><td>Wi-Fi Analyzer</td><td>Reti, canali e segnale intorno a te, per scegliere il canale del router del cliente</td></tr>
+  <tr><td>Wi-Fi Analyzer</td><td>Reti, canali e segnale intorno a te; <b>Router del cliente</b> dice canale e larghezza da impostare (2.4 e 5 GHz) e se cambiarli</td></tr>
   <tr><td>Strumenti di rete</td><td>Stato connessione, ping, traceroute, DNS, speed test verso il server CDA Net</td></tr>
   <tr><td>Scanner IP</td><td>Host attivi nella LAN: nome, produttore, tipo di apparato, porte principali; elenco o mappa di rete, esportazione CSV</td></tr>
   <tr><td>Port scanner</td><td>Porte aperte su un host, con banner, header HTTP e certificati TLS</td></tr>
@@ -263,27 +318,34 @@
   <tr><td>MikroTik · RouterOS</td><td>Consultazione in sola lettura via SSH</td></tr>
   <tr><td>Accesso remoto</td><td>SSH e Remote Desktop con app esterne</td></tr>
 </table>
+<h3>Canale del router del cliente</h3>
+<p>Nel <b>Wi-Fi Analyzer</b>, vicino al router del cliente, il riquadro <b>Router del cliente</b> sceglie la rete del router (quella a cui è collegato il telefono, o una delle più forti) e riconosce da solo le due bande dello stesso router (es. <i>Casa</i> e <i>Casa_5G</i>). Per ogni banda vedi il canale attuale, quanto è libero e se <b>va bene</b> o è <b>da cambiare</b>, con canale e larghezza consigliati: in 2.4 GHz solo 1, 6 o 11 a 20 MHz; in 5 GHz 80 MHz quando un blocco intero è libero, preferendo i canali non DFS.</p>
+<div class="shots">
+  <figure><img src="img/app-strumenti.jpg" alt="Strumenti" loading="lazy"><figcaption>Strumenti: con la CPE e per la rete del cliente.</figcaption></figure>
+  <figure><img src="img/app-wifi-router.jpg" alt="Router del cliente" loading="lazy"><figcaption>Router del cliente: canale 6 va bene in 2.4 GHz, consigliato 36 a 80 MHz in 5 GHz.</figcaption></figure>
+</div>
 
 <h2 id="impostazioni">10. Impostazioni</h2>
-<p>Dall'ingranaggio: il tuo account e la scadenza della sessione, <b>Esci</b>, <b>Cambia password</b> (almeno 12 caratteri), <b>Accesso rapido</b> con impronta o volto, <b>Notifiche su Telegram</b>, <b>Esci da tutti i dispositivi</b> (telefono perso) e l'indirizzo del server.</p>
+<p>Dall'ingranaggio: il tuo account, <b>Esci</b> (scollega questo telefono: la prossima volta serve la password), <b>Cambia password</b> (almeno 12 caratteri), <b>Accesso su questo telefono</b> (fino a quando resti collegato e l'opzione <b>Sblocco con impronta o volto a ogni apertura</b>), <b>Notifiche su Telegram</b>, <b>Esci da tutti i dispositivi</b> (telefono perso) e l'indirizzo del server.</p>
 <div class="shots">
-  <figure><img src="img/app-impostazioni.jpg" alt="Impostazioni, account" loading="lazy"><figcaption>Account, cambio password e accesso rapido.</figcaption></figure>
-  <figure><img src="img/app-impostazioni2.jpg" alt="Impostazioni, accesso rapido e sessioni" loading="lazy"><figcaption>Sessioni, server, esiti in coda e versione dell'app.</figcaption></figure>
+  <figure><img src="img/app-impostazioni.jpg" alt="Impostazioni, account" loading="lazy"><figcaption>Account, cambio password e accesso su questo telefono.</figcaption></figure>
+  <figure><img src="img/app-impostazioni2.jpg" alt="Impostazioni, Telegram e sessioni" loading="lazy"><figcaption>Telegram, sessioni, server ed esiti in coda.</figcaption></figure>
 </div>
 
 <h2 id="console">11. La console web</h2>
 <p>Dal computer apri l'indirizzo del server e accedi con lo stesso utente dell'app. La configurazione delle CPE si fa solo dall'app; la console serve per consultare, esportare e stampare.</p>
 <table>
   <tr><th>Voce</th><th>Cosa trovi</th></tr>
+  <tr><td>I miei interventi</td><td>Gli interventi assegnati dall'ufficio, per giorno, con stato e note</td></tr>
   <tr><td>Storico provisioning</td><td>I tuoi provisioning con ricerca, filtri per esito e date, esportazione CSV; apri il collaudo e stampa il verbale</td></tr>
   <tr><td>Le mie CPE</td><td>Stato delle tue CPE rispetto al collaudo, con filtri, ricerca, storico ed esportazione CSV</td></tr>
-  <tr><td>Guasti Enel</td><td>Riepilogo, mappa e lista dei guasti nelle tue zone; gestione delle zone di interesse e di Telegram</td></tr>
+  <tr><td>Guasti Enel</td><td>Riepilogo, mappa e lista dei guasti nelle tue zone; le tue aree di interesse con le regole di ciascuna</td></tr>
   <tr><td>Stato rete</td><td>I tuoi POP e AP: in funzione, non raggiungibili, molte CPE offline, guasto Enel vicino</td></tr>
   <tr><td>Template disponibili</td><td>I modelli di CPE pronti per l'installazione</td></tr>
   <tr><td>Copertura</td><td>AP più vicini a un indirizzo o a coordinate, con mappa e segnale stimato</td></tr>
   <tr><td>Strumenti di rete</td><td>Ping, traceroute, DNS, scansioni eseguite dal server (punto di vista NOC)</td></tr>
   <tr><td>MikroTik · RouterOS</td><td>Consultazione in sola lettura</td></tr>
-  <tr><td>Il mio account</td><td>Password, verifica in due passaggi, sessioni, Telegram</td></tr>
+  <tr><td>Il mio account</td><td>Password, verifica in due passaggi, sessioni, telefoni collegati (scollegali da qui se perdi il telefono), Telegram</td></tr>
 </table>
 <div class="shots">
   <figure class="wide"><img src="img/web-jobs.jpg" alt="Console, storico provisioning" loading="lazy"><figcaption>Storico provisioning.</figcaption></figure>
@@ -311,6 +373,10 @@
   <tr><td>Porta LAN a 100 Mbit/s o half duplex</td><td>Cavo o connettore danneggiato: rifai i plug o cambia cavo.</td></tr>
   <tr><td>PPPoE non attivo</td><td>Controlla utente e password PPPoE o lo stato dell'abbonamento con l'ufficio.</td></tr>
   <tr><td>Collaudo in attesa di invio</td><td>Nessuna azione: parte da solo appena c'è rete.</td></tr>
+  <tr><td>"Sessione scaduta: accedi di nuovo con la password"</td><td>Non hai usato l'app per 30 giorni, hai cambiato password o l'amministratore ha scollegato il telefono: accedi di nuovo.</td></tr>
+  <tr><td>"Firmware rilevato … è richiesto 8.7.4"</td><td>Aggiorna la CPE da <a href="#firmware">CPE collegata → Firmware</a>, poi riprova con lo stesso pacchetto.</td></tr>
+  <tr><td>Visibilità ostruita</td><td>Il terreno copre l'AP: prova un altro AP o un punto più alto; edifici e alberi vanno controllati a vista.</td></tr>
+  <tr><td>AP vicini: "uso gli AP salvati"</td><td>Sei senza rete: i dati sono quelli salvati vicino a te. Azimut e tilt sono calcolati da quel punto.</td></tr>
 </table>
 
 <h2 id="glossario">13. Glossario</h2>
