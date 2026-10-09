@@ -97,6 +97,18 @@ class ApiClient(
             }
         }
 
+    /**
+     * Plain GET of a page or file of our server for the embedded map (no session), with the same
+     * certificate trust as the API: WebView's own TLS would reject a self-signed test server.
+     * Blocking: called on WebView's request thread. The caller closes the response.
+     */
+    fun fetchForWebView(url: String, headers: Map<String, String>): okhttp3.Response {
+        val b = Request.Builder().url(url)
+        // only what a static page needs: byte ranges (PMTiles) and content negotiation
+        headers.filterKeys { it.equals("Range", true) || it.equals("Accept", true) || it.equals("If-Range", true) }.forEach { (k, v) -> b.header(k, v) }
+        return TestTls.wrap(http).newCall(b.build()).execute()
+    }
+
     suspend fun health(): HealthDto = AppJson.decodeFromString(HealthDto.serializer(), request("GET", "/api/health", auth = false))
 
     /** Returns the mfa token when the account uses two-step verification (then call [loginTotp]). */
