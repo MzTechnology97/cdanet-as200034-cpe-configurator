@@ -79,7 +79,7 @@ object OutageAlerts {
     private fun channel(c: Context) {
         if (Build.VERSION.SDK_INT >= 26) {
             c.getSystemService(NotificationManager::class.java).createNotificationChannel(
-                NotificationChannel(CHANNEL, "Guasti Enel", NotificationManager.IMPORTANCE_DEFAULT).apply { description = "Guasti e lavori e-distribuzione nelle zone CDA Net" },
+                NotificationChannel(CHANNEL, "Guasti Enel", NotificationManager.IMPORTANCE_DEFAULT).apply { description = "Guasti e lavori della rete elettrica nelle tue zone" },
             )
         }
     }

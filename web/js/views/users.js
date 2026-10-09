@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { loadModules } from '../modules.js';
 import { badge, busy, card, field, fmtDate, h, mount, pageHead, table, toast } from '../dom.js';
+import { assignmentsCard } from './infra-picker.js';
 
 export async function usersView({ user: me }) {
   const list = h('div', {});
@@ -121,7 +122,7 @@ export async function usersView({ user: me }) {
   );
 
   await load();
-  return h('div', {}, pageHead('Account', 'Installatori e amministratori. Disabilitazione e reset revocano subito le sessioni.'), securityCard, card(h('h2', {}, 'Nuovo account'), form), card(list), editor);
+  return h('div', {}, pageHead('Account', 'Installatori e amministratori. Disabilitazione e reset revocano subito le sessioni.'), securityCard, card(h('h2', {}, 'Nuovo account'), form), card(list), editor, assignmentsCard());
 }
 
 /** Per-user module overrides: default (global setting), on, off. */

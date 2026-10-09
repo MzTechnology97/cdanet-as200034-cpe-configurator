@@ -39,8 +39,8 @@ fun SignalHistory(c: AppContainer, job: JobDto) {
     Column {
         when {
             error != null -> Text("Storico non disponibile: $error", style = MaterialTheme.typography.bodySmall, color = BadRed)
-            d == null -> Text("Lettura storico da UISP…", style = MaterialTheme.typography.bodySmall)
-            d.signal.points.isEmpty() -> Text("Nessun dato di segnale in UISP negli ultimi 7 giorni.", style = MaterialTheme.typography.bodySmall)
+            d == null -> Text("Lettura storico…", style = MaterialTheme.typography.bodySmall)
+            d.signal.points.isEmpty() -> Text("Nessun dato di segnale negli ultimi 7 giorni.", style = MaterialTheme.typography.bodySmall)
             else -> {
                 SeriesChart(d.signal, d.remoteSignal)
                 KeyValue("Segnale min / medio / max", "${d.signal.min?.roundToInt()} / ${d.signal.avg?.roundToInt()} / ${d.signal.max?.roundToInt()} dBm")

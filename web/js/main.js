@@ -18,6 +18,7 @@ import { statsView } from './views/stats.js';
 import { toolsView } from './views/tools.js';
 import { usersView } from './views/users.js';
 import { wirelessView } from './views/wireless.js';
+import { setAdmin } from './terms.js';
 
 const ROUTES = [
   { group: 'Operatività' },
@@ -99,6 +100,7 @@ async function route() {
     mount(viewEl, loginView(onLogin, onTotp));
     return;
   }
+  setAdmin(s.user.role === 'admin');
   if (!modulesLoaded()) {
     await loadModules();
     renderChrome(s.user);

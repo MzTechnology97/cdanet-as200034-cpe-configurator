@@ -33,6 +33,8 @@ export interface Zone {
   lon: number;
   radiusKm: number;
   source: 'manual' | 'ap';
+  /** Personal zone of an installer (null/undefined = shared zone of the admins, or a UISP POP/AP). */
+  ownerId?: number | null;
 }
 
 export interface OutageConfig {
@@ -94,6 +96,27 @@ export function impactOf(o: LatLon, infra: Infra, radiusKm: number): Impact[] {
   ].sort((a, b) => a.distanceM - b.distanceM);
 }
 
+const shortDate = (s: string | null) => (s ? s.replace('T', ' ').slice(5).replace(/^(\d{2})-(\d{2})/, '$2/$1') : '—');
+
+/** Personal Telegram message (the outage already reduced to what the user may see). */
+export function personalText(o: PowerOutage & { impact: Impact[]; zones: Array<{ name: string; distanceM?: number }> }, kind: 'new' | 'restored'): string {
+  const z = o.zones[0];
+  const where = z ? ` · ${e(z.name)}${z.distanceM != null ? ` a ${z.distanceM >= 1000 ? `${(z.distanceM / 1000).toFixed(1)} km` : `${z.distanceM} m`}` : ''}` : '';
+  const imp = o.impact.length
+    ? `\n⚠️ <b>Potenzialmente impattati</b>: ${o.impact
+        .slice(0, 5)
+        .map((i) => `${i.type === 'pop' ? 'POP' : 'AP'} <b>${e(i.name)}</b> ${i.distanceM} m${i.stations != null ? ` (${i.stations} CPE)` : ''}`)
+        .join(' · ')}`
+    : '';
+  if (kind === 'restored') return `✅ <b>Ripristinato</b> · ${e(KIND_LABEL[o.kind])} · ${e(o.place)} (${e(o.province)})${where}`;
+  return (
+    `${o.impact.length ? '🚨' : o.kind === 'lavoro' ? '🛠️' : '⚡'} <b>${e(KIND_LABEL[o.kind])}</b> · ${e(o.place)} (${e(o.province)})${where}\n` +
+    `Clienti disalimentati: ${o.customers} · dal ${shortDate(o.start)} · ripristino previsto ${shortDate(o.expectedRestore)}\n` +
+    `<a href="https://www.openstreetmap.org/?mlat=${o.lat}&mlon=${o.lon}#map=15/${o.lat}/${o.lon}">mappa</a> · fonte e-distribuzione` +
+    imp
+  );
+}
+
 /** "09/10/2026 15:50" (Italian local time) -> ISO; null when missing. */
 export function parseEnelDate(v: unknown): string | null {
   const m = typeof v === 'string' ? /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})/.exec(v) : null;
@@ -132,6 +155,35 @@ export const KIND_LABEL: Record<PowerOutage['kind'], string> = {
   altro: 'Interruzione',
 };
 
+type Box = [number, number, number, number];
+
+/** Bounding boxes of the zones, merging the ones closer than [gapDeg]: far-apart areas become separate queries. */
+export function zoneBoxes(zs: Array<Pick<Zone, 'lat' | 'lon' | 'radiusKm'>>, gapDeg = 0.1): Box[] {
+  const boxes: Box[] = zs.map((z) => {
+    const dLat = z.radiusKm / 111;
+    const dLon = dLat / Math.max(0.1, Math.cos((z.lat * Math.PI) / 180));
+    return [z.lon - dLon, z.lat - dLat, z.lon + dLon, z.lat + dLat];
+  });
+  const near = (a: Box, b: Box) => a[0] - gapDeg <= b[2] && b[0] - gapDeg <= a[2] && a[1] - gapDeg <= b[3] && b[1] - gapDeg <= a[3];
+  let merged = true;
+  while (merged) {
+    merged = false;
+    for (let i = 0; i < boxes.length && !merged; i++) {
+      for (let j = i + 1; j < boxes.length; j++) {
+        const a = boxes[i]!;
+        const b = boxes[j]!;
+        if (near(a, b)) {
+          boxes[i] = [Math.min(a[0], b[0]), Math.min(a[1], b[1]), Math.max(a[2], b[2]), Math.max(a[3], b[3])];
+          boxes.splice(j, 1);
+          merged = true;
+          break;
+        }
+      }
+    }
+  }
+  return boxes;
+}
+
 /** Zones containing an outage, nearest first. */
 export function zonesOf(o: LatLon, zones: Zone[]): Array<{ zone: Zone; distanceM: number }> {
   return zones
@@ -142,7 +194,17 @@ export function zonesOf(o: LatLon, zones: Zone[]): Array<{ zone: Zone; distanceM
 
 export function createOutages(
   db: Db,
-  opts: { fetchImpl?: typeof fetch; getUisp: () => Uisp | null; notify: (html: string) => void; isOn: () => boolean; log?: (m: string) => void },
+  opts: {
+    fetchImpl?: typeof fetch;
+    getUisp: () => Uisp | null;
+    notify: (html: string) => void;
+    isOn: () => boolean;
+    log?: (m: string) => void;
+    /** Personal Telegram message to one user (bot of the admin). */
+    sendPersonal?: (chatId: string, html: string) => void;
+    /** The user may receive outage notifications (module on for them). */
+    userOn?: (userId: number) => boolean;
+  },
 ) {
   const f = opts.fetchImpl ?? fetch;
   let lastRun: { at: string; ok: boolean; error?: string; fetched: number } | null = null;
@@ -161,12 +223,14 @@ export function createOutages(
     return next;
   }
 
-  const manualZones = (): Zone[] =>
-    (db.prepare('SELECT id, name, lat, lon, radius_km radiusKm FROM outage_zones ORDER BY name').all() as Array<Omit<Zone, 'id' | 'source'> & { id: number }>).map((z) => ({
-      ...z,
-      id: `z${z.id}`,
-      source: 'manual' as const,
-    }));
+  /** Manual zones: 'shared' = the admins' ones, a user id = that installer's personal ones, 'all' = every zone. */
+  const manualZones = (owner: 'shared' | 'all' | number = 'shared'): Zone[] => {
+    const where = owner === 'all' ? '' : owner === 'shared' ? 'WHERE owner_id IS NULL' : 'WHERE owner_id = ?';
+    const rows = db.prepare(`SELECT id, name, lat, lon, radius_km radiusKm, owner_id ownerId FROM outage_zones ${where} ORDER BY name`).all(...(typeof owner === 'number' ? [owner] : [])) as Array<
+      Omit<Zone, 'id' | 'source'> & { id: number }
+    >;
+    return rows.map((z) => ({ ...z, id: `z${z.id}`, source: 'manual' as const }));
+  };
 
   // ---- POPs/APs selected from UISP and assignments to installers --------------------------
   const selection = (): ItemRef[] => db.prepare('SELECT key, name FROM outage_selection ORDER BY name').all() as unknown as ItemRef[];
@@ -215,6 +279,33 @@ export function createOutages(
     return assignments(userId);
   }
 
+  /**
+   * What a user sees: admins everything (undefined); installers their own zones plus the
+   * POPs/APs/zones assigned by the admin (impacts only for the assigned ones).
+   */
+  const keysFor = (userId: number, role: string): Set<string> | undefined =>
+    role === 'admin' ? undefined : new Set([...assignments(userId).map((i) => i.key), ...manualZones(userId).map((z) => z.id)]);
+
+  type Stored = PowerOutage & { impact: Impact[]; zones: Array<{ id: string; name: string; source?: string; distanceM?: number; ownerId?: number | null }> };
+
+  /** Personal Telegram messages: each linked user gets what they may see, nothing else. */
+  function personal(kind: 'new' | 'restored', rec: Stored) {
+    if (!opts.sendPersonal) return;
+    const users = db.prepare("SELECT id, role, telegram_chat_id chat, telegram_planned planned FROM users WHERE active = 1 AND telegram_chat_id <> ''").all() as Array<{
+      id: number;
+      role: string;
+      chat: string;
+      planned: number;
+    }>;
+    for (const u of users) {
+      if (opts.userOn && !opts.userOn(u.id)) continue;
+      if (rec.kind === 'lavoro' && !u.planned) continue;
+      const keys = keysFor(u.id, u.role);
+      const v = keys ? scopeOutage(rec, keys) : rec;
+      if (v) opts.sendPersonal(u.chat, personalText(v, kind));
+    }
+  }
+
   /** UISP POPs (sites with a position) and APs with the CPE count of each (only the selected ones in selection mode). */
   async function infra(): Promise<Infra> {
     const u = opts.getUisp();
@@ -240,7 +331,7 @@ export function createOutages(
 
   async function zones(): Promise<Zone[]> {
     const c = config();
-    const out = manualZones();
+    const out = manualZones('all');
     const u = opts.getUisp();
     if (c.apZones && u) {
       try {
@@ -261,16 +352,15 @@ export function createOutages(
     return out;
   }
 
-  /** All outages inside the bounding box of the zones (paged, max 1000 per call). */
+  /** All outages inside the boxes of the zones (one query per group of nearby zones, deduplicated). */
   async function fetchBox(zs: Zone[]): Promise<PowerOutage[]> {
-    if (!zs.length) return [];
-    const pad = (z: Zone) => z.radiusKm / 111;
-    const box = [
-      Math.min(...zs.map((z) => z.lon - pad(z) / Math.cos((z.lat * Math.PI) / 180))),
-      Math.min(...zs.map((z) => z.lat - pad(z))),
-      Math.max(...zs.map((z) => z.lon + pad(z) / Math.cos((z.lat * Math.PI) / 180))),
-      Math.max(...zs.map((z) => z.lat + pad(z))),
-    ];
+    const byId = new Map<number, PowerOutage>();
+    for (const box of zoneBoxes(zs)) for (const o of await fetchOne(box)) byId.set(o.id, o);
+    return [...byId.values()];
+  }
+
+  /** Outages in one box (paged, max 1000 per call). */
+  async function fetchOne(box: Box): Promise<PowerOutage[]> {
     const out: PowerOutage[] = [];
     for (let offset = 0; offset < 10_000; offset += 1000) {
       const q = new URLSearchParams({
@@ -338,9 +428,20 @@ export function createOutages(
       const seen = new Set<number>();
       for (const { o, where, impact } of inside) {
         seen.add(o.id);
-        upsert.run(o.id, JSON.stringify({ ...o, impact }), JSON.stringify(where.map((w) => ({ id: w.zone.id, name: w.zone.name, source: w.zone.source, distanceM: w.distanceM }))), now, now);
+        upsert.run(
+          o.id,
+          JSON.stringify({ ...o, impact }),
+          JSON.stringify(where.map((w) => ({ id: w.zone.id, name: w.zone.name, source: w.zone.source, distanceM: w.distanceM, ownerId: w.zone.ownerId ?? null }))),
+          now,
+          now,
+        );
+        // Telegram (the team's group) only for shared zones, POP/AP zones and impacts: personal zones notify on the installer's phone.
+        const shared = where.filter((w) => w.zone.ownerId == null);
         if (!known.has(o.id) && opts.isOn()) {
-          const whereFor = where.length ? where : impact.slice(0, 1).map((i) => ({ zone: { id: i.id, name: i.name, lat: 0, lon: 0, radiusKm: 0, source: 'ap' as const }, distanceM: i.distanceM }));
+          personal('new', { ...o, impact, zones: where.map((w) => ({ id: w.zone.id, name: w.zone.name, source: w.zone.source, distanceM: w.distanceM, ownerId: w.zone.ownerId ?? null })) });
+        }
+        if (!known.has(o.id) && opts.isOn() && (shared.length || impact.length)) {
+          const whereFor = shared.length ? shared : impact.slice(0, 1).map((i) => ({ zone: { id: i.id, name: i.name, lat: 0, lon: 0, radiusKm: 0, source: 'ap' as const }, distanceM: i.distanceM }));
           opts.notify((impact.length ? '🚨 ' : o.kind === 'lavoro' ? '🛠️ ' : '⚡ ') + describe(o, whereFor, impact));
           db.prepare('UPDATE power_outages SET notified = 1 WHERE id = ?').run(o.id);
         }
@@ -350,10 +451,11 @@ export function createOutages(
         const row = db.prepare('SELECT data, zones FROM power_outages WHERE id = ?').get(id) as { data: string; zones: string };
         db.prepare('UPDATE power_outages SET ended_at = ? WHERE id = ?').run(now, id);
         const o = JSON.parse(row.data) as PowerOutage;
-        const z = JSON.parse(row.zones) as Array<{ name: string }>;
+        if (opts.isOn()) personal('restored', { ...o, impact: (o as Stored).impact ?? [], zones: JSON.parse(row.zones) as Stored['zones'] });
+        const z = (JSON.parse(row.zones) as Array<{ name: string; ownerId?: number | null }>).filter((x) => x.ownerId == null);
         const imp = (o as PowerOutage & { impact?: Impact[] }).impact ?? [];
         const extra = imp.length ? ` · POP/AP coinvolti: ${imp.slice(0, 3).map((i) => e(i.name)).join(', ')}` : '';
-        if (opts.isOn()) opts.notify(`✅ <b>Ripristinato</b> · ${e(KIND_LABEL[o.kind])} · ${e(o.place)} (${e(o.province)}) · ${e(z[0]?.name ?? '')}${extra}`);
+        if (opts.isOn() && (z.length || imp.length)) opts.notify(`✅ <b>Ripristinato</b> · ${e(KIND_LABEL[o.kind])} · ${e(o.place)} (${e(o.province)}) · ${e(z[0]?.name ?? '')}${extra}`);
       }
       // keep 30 days of history
       db.prepare('DELETE FROM power_outages WHERE ended_at IS NOT NULL AND ended_at < ?').run(new Date(Date.now() - 30 * 86400_000).toISOString());
@@ -397,6 +499,7 @@ export function createOutages(
     config,
     setConfig,
     manualZones,
+    keysFor,
     zones,
     infra,
     selection,

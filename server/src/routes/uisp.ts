@@ -86,9 +86,14 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       .object({ lat: z.coerce.number(), lon: z.coerce.number(), limit: z.coerce.number().int().min(1).max(10).default(5) })
       .parse(req.query);
     if (!isValidLatLon(q.lat, q.lon)) throw new HttpError(400, 'invalid_position');
-    const aps = await uisp().nearestAps({ lat: q.lat, lon: q.lon }, q.limit, ctx.uispSettings.coverageMaxKm);
+    // Installers check coverage only on the POPs/APs assigned to them by the admin.
+    const keys = req.user!.role === 'admin' ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
+    const allow = keys ? (a: { id: string; siteId: string | null }) => keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`)) : undefined;
+    const aps = await uisp().nearestAps({ lat: q.lat, lon: q.lon }, q.limit, ctx.uispSettings.coverageMaxKm, allow);
     return {
       maxKm: ctx.uispSettings.coverageMaxKm,
+      restricted: !!keys,
+      assignedCount: keys ? [...keys].filter((k) => !k.startsWith('z')).length : null,
       aps: aps.map((a) => {
         const m = a.ssid ? SSID_PARTS.exec(a.ssid) : null;
         return { ...a, node: m ? Number(m[1]) : null, district: m ? Number(m[2]) : null };

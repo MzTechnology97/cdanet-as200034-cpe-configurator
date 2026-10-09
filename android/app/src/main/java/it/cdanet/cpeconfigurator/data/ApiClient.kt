@@ -34,19 +34,25 @@ private val ERRORS = mapOf(
     "ssid_secret_not_configured" to "Chiave WPA2 non configurata per questo SSID: avvisa un amministratore",
     "provision_profile_missing" to "Profilo airOS mancante per questo modello: avvisa un amministratore",
     "cpe_admin_secret_missing" to "Credenziali CPE non configurate sul server",
-    "runtime_secret_missing" to "Segreto runtime mancante sul server (UISP)",
+    "runtime_secret_missing" to "Configurazione del server incompleta: contatta l'amministratore",
     "profile_board_match_missing" to "Profilo senza board match: avvisa un amministratore",
     "job_not_found" to "Provisioning non trovato sul server",
     "job_already_completed" to "Esito già registrato con valore diverso",
     "target_non_privato" to "Consentiti solo target su reti private/CGNAT",
     "template_not_allowed" to "Template non disponibile per il tuo account",
-    "uisp_not_configured" to "UISP non configurato sul server",
-    "uisp_unreachable" to "UISP non raggiungibile dal server",
+    "uisp_not_configured" to "Servizio non disponibile: contatta l'amministratore",
+    "uisp_unreachable" to "Servizio di rete non raggiungibile, riprova più tardi",
+    "start_not_found" to "Non trovo ancora il tuo messaggio: apri il bot, premi Avvia e riprova",
+    "link_expired" to "Codice scaduto: premi di nuovo Collega Telegram",
+    "telegram_not_configured" to "Notifiche Telegram non attive: chiedi all'amministratore",
+    "telegram_error" to "Telegram ha rifiutato il messaggio: scrivi prima al bot e controlla l'ID",
+    "too_many_zones" to "Hai già 20 zone: eliminane una",
+    "zone_not_found" to "Zona non trovata",
     "geocoder_unreachable" to "Servizio indirizzi non raggiungibile",
     "address_too_short" to "Indirizzo troppo corto",
-    "pppoe_password_required" to "Password PPPoE necessaria: non è stato possibile recuperarla dal backup UISP della CPE sostituita",
+    "pppoe_password_required" to "Password PPPoE necessaria: non è stato possibile recuperarla dal backup della CPE sostituita",
     "replace_same_mac" to "Il MAC è quello della CPE sostituita: inserisci quello della CPE nuova",
-    "module_disabled" to "Funzionalità disattivata dall'amministratore",
+    "module_disabled" to "Funzione non disponibile per il tuo account",
     "job_not_completed" to "Esito del provisioning non ancora registrato sul server",
     "too_many_photos" to "Troppe foto per questo job (massimo 8)",
     "photo_not_jpeg" to "La foto deve essere in formato JPEG",
@@ -169,6 +175,31 @@ class ApiClient(
 
     suspend fun reverseGeocode(lat: Double, lon: Double): ReverseGeocodeDto =
         AppJson.decodeFromString(ReverseGeocodeDto.serializer(), request("GET", "/api/geocode/reverse?lat=$lat&lon=$lon"))
+
+    suspend fun myOutageZones(): List<OutageZoneItemDto> = AppJson.decodeFromString(MyZonesDto.serializer(), request("GET", "/api/outages/zones")).zones
+
+    /** Personal area of interest of the user. */
+    suspend fun createMyOutageZone(name: String, lat: Double, lon: Double, radiusKm: Double) {
+        request("POST", "/api/outages/zones", buildJsonObject { put("name", name); put("lat", lat); put("lon", lon); put("radiusKm", radiusKm) })
+    }
+
+    suspend fun deleteMyOutageZone(id: String) {
+        request("DELETE", "/api/outages/zones/${id.removePrefix("z")}")
+    }
+
+    suspend fun outageTelegram(): OutageTelegramDto = AppJson.decodeFromString(OutageTelegramDto.serializer(), request("GET", "/api/outages/telegram"))
+
+    suspend fun outageTelegramLink(): TelegramLinkDto = AppJson.decodeFromString(TelegramLinkDto.serializer(), request("POST", "/api/outages/telegram/link"))
+
+    suspend fun outageTelegramVerify(): OutageTelegramDto = AppJson.decodeFromString(OutageTelegramDto.serializer(), request("POST", "/api/outages/telegram/verify"))
+
+    suspend fun outageTelegramSet(chatId: String?, planned: Boolean?): OutageTelegramDto =
+        AppJson.decodeFromString(
+            OutageTelegramDto.serializer(),
+            request("PUT", "/api/outages/telegram", buildJsonObject { chatId?.let { put("chatId", it) }; planned?.let { put("planned", it) } }),
+        )
+
+    suspend fun outageTelegramUnlink(): OutageTelegramDto = AppJson.decodeFromString(OutageTelegramDto.serializer(), request("DELETE", "/api/outages/telegram"))
 
     /** Admin: new area of interest for power outages. */
     suspend fun createOutageZone(name: String, lat: Double, lon: Double, radiusKm: Double) {

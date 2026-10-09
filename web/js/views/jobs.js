@@ -4,6 +4,7 @@ import { busy, card, field, fmtDate, h, mount, pageHead, statusBadge, table } fr
 import { acceptanceBadge, acceptancePanel } from './acceptance-panel.js';
 import { osmLink } from './coverage.js';
 import { uispPanel } from './uisp-panel.js';
+import { nms } from '../terms.js';
 
 export async function jobsView({ user, params }) {
   // #/jobs?q=… (links from Telegram notifications)
@@ -46,7 +47,7 @@ export async function jobsView({ user, params }) {
           { label: 'CPE', render: (j) => h('div', {}, j.model, j.template ? h('div', { class: 'small muted' }, `Template: ${j.template}`) : null, h('div', { class: 'small muted mono' }, j.mac)) },
           { label: 'SSID', key: 'ssid' },
           !isOn('acceptance') ? null : { label: 'Collaudo', render: (j) => (j.acceptance ? h('span', {}, acceptanceBadge(j.acceptance), j.photos ? h('span', { class: 'small muted' }, ` · ${j.photos} foto`) : '') : j.photos ? h('span', { class: 'small muted' }, `${j.photos} foto`) : '—') },
-          { label: 'UISP', render: (j) => (j.uispAuthorizedAt ? h('span', { class: 'small' }, `✓ ${j.uispSite}`) : j.status === 'success' ? h('span', { class: 'small muted' }, 'da accettare') : '—') },
+          { label: nms('UISP', 'Rete'), render: (j) => (j.uispAuthorizedAt ? h('span', { class: 'small' }, `✓ ${j.uispSite}`) : j.status === 'success' ? h('span', { class: 'small muted' }, 'da accettare') : '—') },
           user.role === 'admin' ? { label: 'Installatore', key: 'installer' } : null,
         ].filter(Boolean),
         jobs,
@@ -88,7 +89,7 @@ export async function jobsView({ user, params }) {
           : h('p', { class: 'small muted' }, 'Non registrata.'),
         j.status === 'success' && isOn('acceptance') ? [h('h3', {}, 'Collaudo'), acceptancePanel(j)] : null,
         j.replacesJobId ? h('p', { class: 'small muted' }, `Sostituisce la CPE del job ${j.replacesJobId}`) : null,
-        j.status === 'success' ? [h('h3', {}, 'UISP'), uispPanel(j, user.role === 'admin')] : null,
+        j.status === 'success' ? [h('h3', {}, nms('UISP', 'Stato in rete')), uispPanel(j, user.role === 'admin')] : null,
         j.stages?.length ? [h('h3', {}, 'Fasi'), h('ol', {}, j.stages.map((s) => h('li', {}, s)))] : null,
         j.error ? [h('h3', {}, 'Errore'), h('pre', {}, j.error)] : null,
       ),

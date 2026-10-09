@@ -30,11 +30,11 @@ import kotlinx.coroutines.launch
 
 private val ISSUES = mapOf(
     "offline" to "offline",
-    "not_in_uisp" to "non trovata in UISP",
+    "not_in_uisp" to "non trovata in rete",
     "weak_signal" to "segnale debole",
     "signal_drop" to "segnale calato",
     "ethernet" to "porta LAN",
-    "pending" to "da accettare in UISP",
+    "pending" to "in attesa di attivazione",
     "low_capacity" to "capacità bassa",
     "firmware" to "firmware",
 )
