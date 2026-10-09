@@ -62,6 +62,7 @@ Funzioni scritte e testate senza l'apparato reale: vanno provate su una CPE di l
 
 ## Già rilasciato
 
+- v1.31.1: collegamenti PtP esclusi da copertura, Trova l'AP, Stato rete e Salute CPE (SSID CDA-NET-N…-D…).
 - v1.31.0: aggiornamento obbligatorio e automatico dell'app.
 - v1.30.0: accesso rapido con impronta o volto nell'app, credenziali salvabili nel browser.
 - v1.29.0: notifiche Telegram personali per tutti gli account, con il solo token del bot.

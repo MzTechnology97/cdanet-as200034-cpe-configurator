@@ -144,8 +144,18 @@ export function normalizeSite(raw: unknown): UispSite {
 }
 
 export const isAp = (d: UispDevice) => d.role === 'ap' || d.role === 'accesspoint';
-/** Point-to-point link ends (backhaul): AP role but no customers to cover. */
-export const isPtp = (d: Pick<UispDevice, 'wirelessMode'>) => /(^|-)ptp$/.test(d.wirelessMode);
+/** Customer APs follow the CDA Net naming: SSID "CDA-NET-N<pop>-D<district>". */
+export const CUSTOMER_AP_SSID = /^CDA-NET-N\d+-D[A-Za-z0-9_-]+$/i;
+/** "PTP Matrice vs A.7", "PTMP San Giovannello", "PtP Monte-Valle"… */
+const BACKHAUL_NAME = /(^|[^a-z])pt(m)?p([^a-z]|$)/i;
+
+/**
+ * Point-to-point / backhaul links: by radio mode, by name (PTP…, PTMP…) or because their SSID is
+ * not a CDA Net customer one (backhaul radios are often set up as APs). Never coverage targets,
+ * never customer APs, and their far ends are not customer CPEs.
+ */
+export const isPtp = (d: Pick<UispDevice, 'wirelessMode'> & Partial<Pick<UispDevice, 'ssid' | 'name'>>) =>
+  /(^|-)ptp$/.test(d.wirelessMode) || (!!d.name && BACKHAUL_NAME.test(d.name)) || (!!d.ssid && !CUSTOMER_AP_SSID.test(d.ssid));
 
 export type StatsRange = 'day' | 'week' | 'month';
 const RANGE_MS: Record<StatsRange, number> = { day: 86_400_000, week: 7 * 86_400_000, month: 30 * 86_400_000 };
@@ -340,7 +350,8 @@ export function createUisp(opts: UispOptions) {
     async infrastructure() {
       const [ds, ss] = await Promise.all([devices(), sites()]);
       const pops = ss.filter((s) => s.type !== 'endpoint');
-      const allAps = ds.filter(isAp);
+      // customer APs only: the backhaul links are not APs to monitor or assign
+      const allAps = ds.filter((d) => isAp(d) && !isPtp(d));
       const siteById = new Map(ss.map((s) => [s.id, s]));
       const ap = (d: UispDevice) => {
         const site = d.siteId ? siteById.get(d.siteId) : undefined;
