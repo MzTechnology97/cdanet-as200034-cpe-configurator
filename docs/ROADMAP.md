@@ -15,7 +15,7 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 |   | ↳ Bussola verso l'AP (con verifica calibrazione e disturbi magnetici) | | ✅ v1.4.0 |
 |   | ↳ Storico segnale da UISP (web e app) con riconoscimento del degrado lento | | ✅ v1.4.0 |
 |   | ↳ Configurazione cambiata rispetto al template (da backup UISP) | | ✅ v1.5.0 |
-|   | ↳ Scansione degli AP visibili dalla CPE (da verificare su una CPE reale) | | ⏳ |
+|   | ↳ Scansione degli AP visibili dalla CPE | | ✅ v1.25.0 (da verificare su CPE reale) |
 |   | ↳ Discovery Ubiquiti, produttori in scansione LAN, canale consigliato nel Wi-Fi Analyzer | | ✅ v1.6.0 |
 | 3 | **Export CSV dello storico provisioning**, con i filtri della pagina e l'intervallo di date | report per NOC e amministrazione | ✅ v1.8.0 |
 | 4 | **Connettore notifiche Telegram**: provisioning fallito, CPE da accettare in UISP, UISP giù/su, eventi di sicurezza, riepilogo serale; configurazione e test da Connettori, vedi [NOTIFICHE.md](NOTIFICHE.md) | il NOC sa subito cosa è successo sul campo | ✅ v1.7.0 |
@@ -42,12 +42,29 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 | 16 | **Hikvision SADP completo** (attivazione, rete, porte, azioni) e **mappa di rete** della LAN scansionata nell'app | strumenti TVCC e di rete da tecnico | ✅ v1.22.0 |
 | 17 | **Wi-Fi Analyzer stile WiFiman**: spettro, occupazione canali e consigliati, segnale nel tempo, dettagli reti e connessione | analisi Wi-Fi dal campo | ✅ v1.23.0 |
 | 18 | **Topologia di rete**: discovery multi-vendor (MikroTik MNDP, Ubiquiti, Hikvision SADP, Dahua, ONVIF, UPnP/SSDP, mDNS, NetBIOS, Netgear NSDP, TP-Link) + SNMP (community `public` predefinita o manuali) con LLDP/CDP, tabelle MAC e ARP; senza SNMP mappa base dal gateway | mappa reale della LAN del cliente | ✅ v1.24.0 |
-| 4 | Scansione degli AP visibili dalla CPE | scegliere l'AP migliore | ✅ v1.25.0 (da verificare su CPE reale) |
 | 19 | **Impostazioni server dal portale** (credenziali e chiave UISP delle CPE, rete CPE, provisioning, rilasci) al posto del `.env` | niente SSH sul server | ✅ v1.26.0 |
 | 20 | **Infrastruttura dal portale** (indirizzo/HTTPS, aggiornamenti automatici e canale, mappe) applicata dall'agente di aggiornamento, che aggiorna da solo anche i file di deploy | niente SSH neanche per l'infrastruttura | ✅ v1.27.0 |
 | 21 | **Installazione CPE guidata**: AP consigliati dal GPS, scrittura, convalida, aggancio con scansione AP della CPE e cambio AP, puntamento con mirino AR e segnale, verifica finale (SNR, modulazione) e collaudo; percorso **ripuntamento** per CPE già installate | un unico percorso dal .cfg al collaudo | ✅ v1.28.0 |
 
+## Da verificare sul campo
+
+Funzioni scritte e testate senza l'apparato reale: vanno provate su una CPE di laboratorio (o sul telefono) prima dell'uso in produzione.
+
+| Voce | Cosa provare |
+|---|---|
+| Scansione AP dalla CPE (v1.25) | che `survey.json.cgi` risponda su airOS 8.7.4 e che l'elenco corrisponda a quello della pagina web della CPE |
+| Cambio AP dall'installazione guidata (v1.28) | su una CPE di laboratorio: SSID e chiave WPA2 riscritti, "Lock to AP" sbloccato, riavvio e aggancio al nuovo AP |
+| Modulazione nella verifica finale (v1.28) | che `status.cgi` riporti `rx_idx`/`tx_idx`: se mancano la riga non compare |
+| Mappe nell'app (v1.28) | Guasti Enel e Trova l'AP sul telefono con il server a certificato autofirmato |
+
 ## Già rilasciato
+
+- v1.28.0: installazione CPE guidata (AP consigliati, cambio AP, mirino AR con segnale, collaudo) e ripuntamento; Salute CPE nell'app con ricerca, filtri e lista compatta; mappe dell'app tramite il client dell'app.
+- v1.27.0: infrastruttura dal portale (indirizzo/HTTPS, aggiornamenti, mappe) tramite l'agente di aggiornamento, che aggiorna anche i file di deploy.
+- v1.26.0: impostazioni server dal portale (password CPE e parametri del `.env`).
+- v1.25.0: AP visibili dalla CPE, credenziali CPE alternative negli strumenti di campo.
+- v1.22.0–v1.24.0: Hikvision SADP, mappa e topologia di rete, Wi-Fi Analyzer.
+- v1.13.0–v1.21.0: strumenti di rete professionali, Guasti Enel (POP/AP, zone, mappe), Stato rete, Trova l'AP, Salute CPE per tutti i clienti.
 
 - v1.12.0: moduli per singolo utente.
 - v1.11.0: funzionalità a moduli, salute CPE installate.
