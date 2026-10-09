@@ -60,8 +60,19 @@ data class AirosStatus(
     val eth: EthStatus?,
     val pppoeEnabled: Boolean?,
     val pppoeIp: String?,
+    /** MAC addresses of the CPE's own interfaces (to find its installation job). */
+    val macs: List<String> = emptyList(),
+    /** 802.11ac MCS index (0-9) and spatial streams of the link, when reported. */
+    val rxMcs: Int? = null,
+    val txMcs: Int? = null,
+    val rxNss: Int? = null,
+    val txNss: Int? = null,
 ) {
     val chainImbalance: Int? get() = if (chains.size >= 2) abs(chains[0] - chains[1]) else null
+    val snr: Int? get() = if (signal != null && noise != null) signal - noise else null
+    /** "256QAM 5/6 ×2" for the downlink (what the CPE receives). */
+    val rxModulation: String? get() = modulation(rxMcs, rxNss)
+    val txModulation: String? get() = modulation(txMcs, txNss)
 
     companion object {
         private val json = Json { ignoreUnknownKeys = true }
@@ -108,8 +119,18 @@ data class AirosStatus(
                 eth = eth0?.let { EthStatus(it.bool("plugged") ?: false, it.int("speed") ?: 0, it.bool("duplex") ?: true, it.int("cable_len")) },
                 pppoeEnabled = root.obj("services")?.bool("pppoe"),
                 pppoeIp = ppp?.str("ipaddr")?.takeIf { it.isNotBlank() && it != "0.0.0.0" },
+                macs = interfaces.mapNotNull { it.str("hwaddr")?.uppercase() }.filter { it.matches(Regex("([0-9A-F]{2}:){5}[0-9A-F]{2}")) && it != "00:00:00:00:00:00" }.distinct(),
+                rxMcs = sta?.int("rx_idx")?.takeIf { it in 0..11 },
+                txMcs = sta?.int("tx_idx")?.takeIf { it in 0..11 },
+                rxNss = sta?.int("rx_nss")?.takeIf { it in 1..4 },
+                txNss = sta?.int("tx_nss")?.takeIf { it in 1..4 },
             )
         }
+
+        private val MCS = listOf("BPSK 1/2", "QPSK 1/2", "QPSK 3/4", "16QAM 1/2", "16QAM 3/4", "64QAM 2/3", "64QAM 3/4", "64QAM 5/6", "256QAM 3/4", "256QAM 5/6", "1024QAM 3/4", "1024QAM 5/6")
+
+        /** Modulation of an 802.11ac MCS index, with the number of streams ("×2" = MIMO 2x2). */
+        fun modulation(mcs: Int?, nss: Int?): String? = mcs?.let { MCS.getOrNull(it) }?.let { m -> if (nss != null && nss > 1) "$m ×$nss" else m }
 
         private fun JsonObject.obj(k: String) = this[k] as? JsonObject
         private fun JsonObject.prim(k: String) = this[k] as? JsonPrimitive

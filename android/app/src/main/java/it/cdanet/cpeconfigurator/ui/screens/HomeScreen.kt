@@ -26,7 +26,7 @@ import it.cdanet.cpeconfigurator.ui.WarnAmber
 private data class Tile(val screen: Screen, val title: String, val subtitle: String, val needsLogin: Boolean = false, val module: String? = null)
 
 private val TILES = listOf(
-    Tile(Screen.Provision, "Provisioning CPE", "airMAX AC · prepara online, applica sulla Wi-Fi della CPE"),
+    Tile(Screen.Provision, "Installazione CPE", "Nuova installazione o ripuntamento: configurazione, aggancio all'AP migliore, puntamento AR, collaudo"),
     Tile(Screen.History, "Storico", "I miei provisioning e risultati in attesa di invio", needsLogin = true),
     Tile(Screen.CpeHealth, "Le mie CPE", "Stato delle CPE che ho installato, rispetto al collaudo", needsLogin = true, module = "cpe_health"),
     Tile(Screen.NetStatus, "Stato rete", "POP e AP: raggiungibili, CPE offline, guasti Enel vicini", needsLogin = true, module = "network_status"),
@@ -61,7 +61,7 @@ fun HomeScreen(c: AppContainer, offline: Boolean, onNavigate: (Screen) -> Unit, 
             session?.let { Text("Ciao ${it.user.username}", style = MaterialTheme.typography.titleMedium, modifier = Modifier.padding(vertical = 6.dp)) }
         }
         if (prov.pkg != null && prov.phase != Phase.Done) {
-            Banner("Provisioning preparato per ${prov.pkg?.summary?.deviceName}: apri Provisioning CPE per completarlo.", WarnAmber)
+            Banner("Provisioning preparato per ${prov.pkg?.summary?.deviceName}: apri Installazione CPE per completarlo.", WarnAmber)
         }
         val acc by c.acceptanceQueue.pending.collectAsState()
         if (acc.isNotEmpty()) {

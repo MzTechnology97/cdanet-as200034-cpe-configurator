@@ -97,6 +97,18 @@ class ApiClient(
             }
         }
 
+    /**
+     * Plain GET of a page or file of our server for the embedded map (no session), with the same
+     * certificate trust as the API: WebView's own TLS would reject a self-signed test server.
+     * Blocking: called on WebView's request thread. The caller closes the response.
+     */
+    fun fetchForWebView(url: String, headers: Map<String, String>): okhttp3.Response {
+        val b = Request.Builder().url(url)
+        // only what a static page needs: byte ranges (PMTiles) and content negotiation
+        headers.filterKeys { it.equals("Range", true) || it.equals("Accept", true) || it.equals("If-Range", true) }.forEach { (k, v) -> b.header(k, v) }
+        return TestTls.wrap(http).newCall(b.build()).execute()
+    }
+
     suspend fun health(): HealthDto = AppJson.decodeFromString(HealthDto.serializer(), request("GET", "/api/health", auth = false))
 
     /** Returns the mfa token when the account uses two-step verification (then call [loginTotp]). */
@@ -127,6 +139,16 @@ class ApiClient(
         val body = buildJsonObject { put("purpose", purpose) }
         return AppJson.decodeFromString(it.cdanet.cpeconfigurator.field.FieldAccess.serializer(), request("POST", "/api/field/access", body, client = true))
     }
+
+    /** WPA2 key of the CDA Net SSID a CPE is being moved to (Android client only, audited). */
+    suspend fun relink(ssid: String, cpeMac: String?, from: String?): RelinkDto {
+        val body = buildJsonObject { put("ssid", ssid); cpeMac?.let { put("mac", it) }; from?.let { put("from", it.take(64)) } }
+        return AppJson.decodeFromString(RelinkDto.serializer(), request("POST", "/api/field/relink", body, client = true))
+    }
+
+    /** Installation job of an installed CPE, from its MAC addresses. */
+    suspend fun cpeJob(macs: List<String>): JobDto? =
+        AppJson.decodeFromString(CpeJobDto.serializer(), request("GET", "/api/field/cpe?macs=" + java.net.URLEncoder.encode(macs.take(8).joinToString(","), "UTF-8"))).job
 
     suspend fun putAcceptance(jobId: String, report: it.cdanet.cpeconfigurator.field.AcceptanceReport) {
         request("PUT", "/api/provisioning/jobs/$jobId/acceptance", AppJson.encodeToJsonElement(it.cdanet.cpeconfigurator.field.AcceptanceReport.serializer(), report))

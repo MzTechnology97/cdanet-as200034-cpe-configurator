@@ -2,6 +2,28 @@
 
 Strumenti per l'installatore su una CPE **già provisionata**: puntamento, diagnosi guasti e, a seguire, collaudo e sostituzione.
 
+## Installazione CPE (procedura guidata, v1.28)
+
+La voce **Installazione CPE** (prima "Provisioning CPE") chiede che intervento fare e poi guida passo per passo. Gli strumenti sono quelli descritti più sotto, messi in ordine.
+
+**Nuova installazione**:
+1. **Configurazione**: modello, MAC, cliente, PPPoE. Con il **GPS del telefono** l'app propone gli **AP consigliati**: solo AP CDA Net con chiave WPA2 configurata, ordinati per segnale stimato dai clienti già installati e poi per distanza. "Usa" imposta nodo e distretto. Poi il server prepara il `.cfg`.
+2. **Scrittura nella CPE**: Wi-Fi di management della CPE, primo avvio se serve, scrittura e riavvio (come prima).
+3. **Verifica della CPE**: dopo il riavvio l'app rilegge la CPE e convalida la configurazione: SSID previsto, nome dispositivo, credenziali CDA Net attive, firmware, PPPoE e cavo LAN.
+4. **Aggancio all'AP**: stato del collegamento (segnale, SNR, modulazione). Se la CPE non si aggancia, parte da sola la **scansione degli AP che la CPE sente**. Sono mostrati solo gli AP CDA Net, e su richiesta anche le altre reti. Il **consigliato** è quello con segnale migliore: a parità entro 3 dB vince il più vicino. **Aggancia** sposta la CPE su quell'AP:
+   - il server consegna la chiave WPA2 del nuovo SSID solo all'app, e l'operazione finisce nel Registro attività senza la chiave;
+   - l'app riscrive SSID e chiave nella CPE via SSH, sblocca un eventuale "Lock to AP" (o lo imposta sul nuovo AP, se richiesto), salva e riavvia;
+   - l'app aspetta che la CPE si agganci al nuovo AP.
+
+   Se la CPE è già agganciata ma un altro AP si sente meglio di almeno 6 dB, l'app lo segnala.
+5. **Puntamento**: segnale in tempo reale con bip, picco e grafico; direzione, tilt e distanza dell'AP agganciato. Da qui si aprono il **mirino in realtà aumentata** (che mostra anche il segnale della CPE e suona il bip), la bussola, la mappa "Trova l'AP" e il puntamento a schermo intero.
+6. **Verifica finale e collaudo**: segnale, SNR, CINR, modulazione in ricezione e trasmissione, capacità airMAX, segnale lato AP, catene, LAN e PPPoE, con il verdetto delle soglie del NOC. **Apri il collaudo** porta alle misure mediate, al test di velocità dal lato cliente, alle foto e alle note (verbale dalla console).
+
+**CPE già installata: ripuntamento o cambio AP**: salta configurazione e scrittura e parte dal passo 3.
+- L'app riconosce la CPE dai suoi MAC e la cerca tra le installazioni visibili al tecnico: le sue e quelle delle CPE assegnate da Salute CPE.
+- Se la trova, collaudo e foto vanno in quella installazione.
+- Altrimenti (CPE installata prima dell'app) ripuntamento e cambio AP funzionano lo stesso, e il rapporto finale si condivide con il NOC.
+
 ## Come il telefono raggiunge la CPE
 
 L'app prova da sola, in quest'ordine:

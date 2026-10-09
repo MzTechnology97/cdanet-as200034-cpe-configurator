@@ -5,7 +5,9 @@ import android.content.Intent
 import android.net.Uri
 import android.net.http.SslError
 import android.webkit.SslErrorHandler
+import android.webkit.WebResourceError
 import android.webkit.WebResourceRequest
+import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.padding
@@ -39,6 +41,11 @@ fun EmbeddedMap(c: AppContainer, script: String?, modifier: Modifier = Modifier,
     }
     var page by remember { mutableStateOf<WebView?>(null) }
     var loaded by remember { mutableStateOf(false) }
+    var failure by remember { mutableStateOf<String?>(null) }
+    failure?.let {
+        Text("Mappa non disponibile: $it", modifier.padding(14.dp), color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+        return
+    }
     DisposableEffect(Unit) { onDispose { page?.destroy() } }
     LaunchedEffect(loaded, script) {
         val p = page
@@ -61,6 +68,33 @@ fun EmbeddedMap(c: AppContainer, script: String?, modifier: Modifier = Modifier,
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView, url: String) {
                         loaded = true
+                    }
+
+                    // Pages and files of our server go through the app's HTTP client: same certificate
+                    // trust as the API (server CA or the test option), byte ranges for the basemap.
+                    override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? {
+                        val url = request.url.toString()
+                        if (request.method != "GET" || !url.startsWith("$base/")) return null
+                        return try {
+                            val r = c.api.fetchForWebView(url, request.requestHeaders.orEmpty())
+                            if (r.code in 300..399) {
+                                r.close()
+                                return null
+                            }
+                            val type = r.header("Content-Type").orEmpty()
+                            val mime = type.substringBefore(';').trim().ifBlank { "application/octet-stream" }
+                            val charset = Regex("charset=([^;]+)", RegexOption.IGNORE_CASE).find(type)?.groupValues?.get(1)?.trim()
+                            val headers = r.headers.names().associateWith { r.header(it).orEmpty() }
+                                .filterKeys { !it.equals("Content-Type", true) && !it.equals("Content-Encoding", true) && !it.equals("Transfer-Encoding", true) && !it.equals("Content-Length", true) }
+                            WebResourceResponse(mime, charset, r.code, r.message.ifBlank { if (r.code == 206) "Partial Content" else "OK" }, headers, r.body?.byteStream())
+                        } catch (e: Exception) {
+                            if (request.isForMainFrame) failure = e.message ?: e.toString()
+                            null
+                        }
+                    }
+
+                    override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) {
+                        if (request.isForMainFrame) failure = error.description?.toString() ?: "errore di rete"
                     }
 
                     // test option "unverified server certificate": only for our server

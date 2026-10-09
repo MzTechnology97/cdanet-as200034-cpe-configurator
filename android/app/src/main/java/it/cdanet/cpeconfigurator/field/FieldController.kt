@@ -24,6 +24,7 @@ import java.time.Instant
 data class FieldAccess(
     val credentials: CredentialsDto,
     val hosts: List<String>,
+    val sshPort: Int = 22,
     val targetFirmware: String? = null,
     val thresholds: FieldThresholds = FieldThresholds(),
     val expiresAt: String,
@@ -60,6 +61,8 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
     @Volatile private var access: FieldAccess? = null
     /** Typed by the technician for a CPE with non-standard credentials: memory only, never saved or sent. */
     @Volatile private var manual: CredentialsDto? = null
+    /** Credentials the CPE accepted on the last connection (SSH uses the same ones). */
+    @Volatile private var working: CredentialsDto? = null
 
     fun useManualCredentials(username: String, password: String) {
         manual = CredentialsDto(username.trim(), password).takeIf { it.username.isNotBlank() && it.password.isNotEmpty() }
@@ -83,6 +86,7 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
         stop()
         access = null
         client = null
+        working = null
     }
 
     fun start(mode: FieldMode, manualHost: String? = null) {
@@ -148,6 +152,22 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
         }
     }
 
+    /**
+     * Moves the CPE to another AP (new SSID and WPA2 key), over SSH with the credentials that
+     * opened its web UI. The CPE reboots: polling stops and the caller restarts it afterwards.
+     */
+    suspend fun relink(ssid: String, psk: String, lockMac: String?, sshPort: Int?, onStage: (String) -> Unit) = withContext(Dispatchers.IO) {
+        val c = client ?: connect(null).also { client = it }
+        val cr = working ?: throw IllegalStateException("Credenziali della CPE non disponibili: ricollegati alla CPE")
+        val host = c.baseUrl.substringAfter("://").substringBefore('/').substringBefore(':')
+        stop()
+        try {
+            network.onWifi { it.cdanet.cpeconfigurator.install.CpeRelinker(onStage).relink(host, listOfNotNull(sshPort, access?.sshPort, 22), cr.username, cr.password, ssid, psk, lockMac) }
+        } finally {
+            client = null
+        }
+    }
+
     /** Gateway of the current Wi-Fi first (CPE in router mode or its management Wi-Fi), then the configured IPs. */
     private suspend fun connect(manualHost: String?): AirosClient = withContext(Dispatchers.IO) {
         val a = access
@@ -173,6 +193,7 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
                 for ((cr, label) in creds) {
                     try {
                         val cl = AirosClient(url, wifi.socketFactory).apply { login(cr.username, cr.password) }
+                        working = cr
                         _state.update { it.copy(authFailed = false, credentialsUsed = label) }
                         return@withContext cl
                     } catch (e: AirosAuthException) {

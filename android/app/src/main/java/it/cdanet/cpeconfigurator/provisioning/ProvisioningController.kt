@@ -56,6 +56,9 @@ data class ProvisioningState(
     val probe: String? = null,
     val success: Boolean? = null,
     val error: String? = null,
+    /** Job written successfully (kept after the package and its secrets are dropped). */
+    val doneJobId: String? = null,
+    val doneSummary: it.cdanet.cpeconfigurator.data.JobSummaryDto? = null,
 )
 
 /**
@@ -150,6 +153,8 @@ class ProvisioningController(
                 error = if (ok) null else result.error,
                 // Secrets are dropped after a successful write; a failed attempt may be retried.
                 pkg = if (ok) null else pkg,
+                doneJobId = if (ok) pkg.jobId else null,
+                doneSummary = if (ok) pkg.summary else null,
             )
         }
     }
