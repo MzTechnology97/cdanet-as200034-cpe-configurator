@@ -22,11 +22,13 @@ export const MODULES = [
   { key: 'csv_export', label: 'Export CSV', area: 'web', description: 'Esportazione dello storico provisioning per Excel.', default: true },
   { key: 'network_tools', label: 'Strumenti di rete', area: 'web + app', description: 'Ping, traceroute, DNS, discovery, SNMP, TVCC, speed test, Wi-Fi analyzer.', default: true },
   { key: 'routeros', label: 'MikroTik · RouterOS', area: 'web + app', description: 'Consultazione in sola lettura di apparati RouterOS.', default: true },
-  { key: 'telegram', label: 'Notifiche Telegram', area: 'server', description: 'Messaggi al gruppo del NOC (configurazione in Connettori).', default: true },
+  { key: 'telegram', label: 'Notifiche Telegram', area: 'server', description: 'Messaggi al gruppo del NOC (configurazione in Connettori).', default: true, global: true },
 ] as const;
 
 export type ModuleKey = (typeof MODULES)[number]['key'];
 const KEYS = new Set<string>(MODULES.map((m) => m.key));
+/** Server-side features: not per user. */
+const GLOBAL_ONLY = new Set<string>(MODULES.filter((m) => 'global' in m && m.global).map((m) => m.key));
 export const isModuleKey = (k: string): k is ModuleKey => KEYS.has(k);
 
 export function createModules(db: Db) {
@@ -46,14 +48,51 @@ export function createModules(db: Db) {
 
   const enabled = (k: ModuleKey) => state()[k];
 
+  const overridesOf = (userId: number): Partial<Record<ModuleKey, boolean>> =>
+    Object.fromEntries(
+      (db.prepare('SELECT module, enabled FROM user_modules WHERE user_id = ?').all(userId) as Array<{ module: string; enabled: number }>)
+        .filter((r) => isModuleKey(r.module) && !GLOBAL_ONLY.has(r.module))
+        .map((r) => [r.module, !!r.enabled]),
+    );
+
+  /** Effective modules of a user: the user's override, else the global setting. */
+  function stateFor(userId: number | undefined): Record<ModuleKey, boolean> {
+    const s = state();
+    return userId ? { ...s, ...overridesOf(userId) } : s;
+  }
+
   return {
     state,
+    stateFor,
     enabled,
     anyEnabled: (...keys: ModuleKey[]) => keys.some((k) => enabled(k)),
 
     list() {
       const s = state();
-      return MODULES.map((m) => ({ ...m, enabled: s[m.key] }));
+      const counts = new Map(
+        (db.prepare('SELECT module, SUM(enabled = 1) on_count, SUM(enabled = 0) off_count FROM user_modules GROUP BY module').all() as Array<{ module: string; on_count: number; off_count: number }>).map((r) => [r.module, r]),
+      );
+      return MODULES.map((m) => ({ ...m, enabled: s[m.key], usersOn: counts.get(m.key)?.on_count ?? 0, usersOff: counts.get(m.key)?.off_count ?? 0 }));
+    },
+
+    /** Modules of one user for the admin page: global value, override (null = default), effective. */
+    listFor(userId: number) {
+      const s = state();
+      const o = overridesOf(userId);
+      return MODULES.filter((m) => !GLOBAL_ONLY.has(m.key)).map((m) => ({ key: m.key, label: m.label, area: m.area, global: s[m.key], override: o[m.key] ?? null, effective: o[m.key] ?? s[m.key] }));
+    },
+
+    setFor(userId: number, changes: Partial<Record<ModuleKey, boolean | null>>) {
+      const del = db.prepare('DELETE FROM user_modules WHERE user_id = ? AND module = ?');
+      const put = db.prepare(
+        `INSERT INTO user_modules(user_id, module, enabled, updated_at) VALUES(?,?,?,?)
+         ON CONFLICT(user_id, module) DO UPDATE SET enabled = excluded.enabled, updated_at = excluded.updated_at`,
+      );
+      for (const [k, v] of Object.entries(changes)) {
+        if (!isModuleKey(k) || GLOBAL_ONLY.has(k)) continue;
+        if (v === null || v === undefined) del.run(userId, k);
+        else put.run(userId, k, v ? 1 : 0, nowIso());
+      }
     },
 
     update(changes: Partial<Record<ModuleKey, boolean>>, userId: number) {
@@ -65,10 +104,11 @@ export function createModules(db: Db) {
       return state();
     },
 
-    /** preHandler: 404 when none of the given modules is enabled. */
+    /** preHandler (after authentication): 404 when none of the given modules is enabled for the user. */
     require(...keys: ModuleKey[]) {
-      return async (_req: FastifyRequest, _reply: FastifyReply) => {
-        if (!keys.some((k) => enabled(k))) throw new HttpError(404, 'module_disabled', { module: keys[0] });
+      return async (req: FastifyRequest, _reply: FastifyReply) => {
+        const s = stateFor(req.user?.id);
+        if (!keys.some((k) => s[k])) throw new HttpError(404, 'module_disabled', { module: keys[0] });
       };
     },
   };

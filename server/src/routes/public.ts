@@ -219,7 +219,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     return { ok: true };
   });
 
-  app.get('/api/meta', { preHandler: ctx.auth.requireUser }, async () => ({
+  app.get('/api/meta', { preHandler: ctx.auth.requireUser }, async (req) => ({
     version: ctx.version,
     models: SUPPORTED_MODELS,
     targetFirmware: TARGET_FIRMWARE,
@@ -230,7 +230,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     managementPorts: MANAGEMENT_PORTS,
     jobTtlMinutes: ctx.cfg.jobTtlMinutes,
     uisp: !!ctx.uisp,
-    modules: ctx.modules.state(),
+    modules: ctx.modules.stateFor(req.user!.id),
     coverageMaxKm: ctx.uispSettings.coverageMaxKm,
   }));
 

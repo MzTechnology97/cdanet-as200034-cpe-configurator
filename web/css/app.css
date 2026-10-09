@@ -183,3 +183,4 @@ button.link { background: none; border: none; color: var(--brand); padding: 4px 
 .modules { display: grid; gap: 4px; }
 .module-row { display: flex; gap: 12px; align-items: flex-start; padding: 10px 4px; border-bottom: 1px solid var(--line); color: var(--ink); }
 .module-row input { margin-top: 4px; }
+.module-row .grow { flex: 1; }

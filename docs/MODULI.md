@@ -26,6 +26,15 @@ Ogni modifica finisce nel Registro attività ("Funzionalità modificate").
 | MikroTik · RouterOS | web + app | attivo |
 | Notifiche Telegram | server | attivo (se configurate in Connettori) |
 
+## Moduli per singolo utente
+
+In **Account → utente → Funzionalità per questo utente** ogni modulo ha tre valori:
+- **Predefinito**: segue l'impostazione generale (indicata tra parentesi);
+- **Attivo per questo utente**: anche se in generale è spento. Utile per provare un modulo con pochi installatori, per esempio *Salute CPE installate*;
+- **Disattivo per questo utente**: anche se in generale è acceso.
+
+Il server applica il risultato per utente: API, `/api/meta`, menu web e app. Nella pagina Funzionalità ogni modulo indica quante eccezioni ci sono ("attivo per 2, spento per 1"). Le **notifiche Telegram** sono un modulo del server e valgono per tutti. Le modifiche finiscono nel Registro attività ("Funzionalità di un utente modificate").
+
 Restano sempre attivi: provisioning, storico, profili airOS, reti Wi-Fi, account, connettori, registro attività.
 
 Le credenziali CPE per gli strumenti di campo vengono consegnate all'app solo se è attivo almeno uno tra Puntamento, Diagnosi e Collaudo. Lo speed test resta disponibile per il collaudo anche con gli Strumenti di rete spenti.

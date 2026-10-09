@@ -33,6 +33,25 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
     return ctx.modules.list();
   });
 
+  /** Modules of a single user: null = follow the global setting. */
+  app.get('/api/admin/users/:id/modules', admin, async (req) => {
+    const id = z.coerce.number().int().positive().parse((req.params as { id: string }).id);
+    if (!db.prepare('SELECT 1 FROM users WHERE id = ?').get(id)) throw new HttpError(404, 'user_not_found');
+    return ctx.modules.listFor(id);
+  });
+
+  app.put('/api/admin/users/:id/modules', admin, async (req) => {
+    const id = z.coerce.number().int().positive().parse((req.params as { id: string }).id);
+    const target = db.prepare('SELECT username FROM users WHERE id = ?').get(id) as { username: string } | undefined;
+    if (!target) throw new HttpError(404, 'user_not_found');
+    const body = z.record(z.string(), z.boolean().nullable()).parse(req.body);
+    const changes = Object.fromEntries(Object.entries(body).filter(([k]) => isModuleKey(k))) as Partial<Record<ModuleKey, boolean | null>>;
+    if (!Object.keys(changes).length) throw new HttpError(400, 'invalid_request');
+    ctx.modules.setFor(id, changes);
+    recordEvent(db, actor(req), 'modules.user', target.username, Object.entries(changes).map(([k, v]) => `${k}=${v === null ? 'predefinito' : v ? 'on' : 'off'}`).join(' · '));
+    return ctx.modules.listFor(id);
+  });
+
   // ---- Security policy ---------------------------------------------------------------
   app.get('/api/admin/security', admin, async () => ({ totpRequiredForAdmins: ctx.auth.totpRequiredForAdmins() }));
 
