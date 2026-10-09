@@ -11,7 +11,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -22,7 +21,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import it.cdanet.cpeconfigurator.R
@@ -61,11 +59,7 @@ fun FirmwareScreen(c: AppContainer) {
     var outcome by remember { mutableStateOf<Pair<String, NoticeKind>?>(null) }
 
     // the CPE must not lose the phone halfway: display on while reading or flashing
-    val view = LocalView.current
-    DisposableEffect(flashing) {
-        view.keepScreenOn = flashing
-        onDispose { view.keepScreenOn = false }
-    }
+    if (flashing) it.cdanet.cpeconfigurator.ui.KeepScreenOn()
 
     LaunchedEffect(Unit) {
         runCatching { c.api.firmwareList() }

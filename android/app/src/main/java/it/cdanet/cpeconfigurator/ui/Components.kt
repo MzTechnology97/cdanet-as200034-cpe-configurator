@@ -353,3 +353,22 @@ fun CheckRow(title: String, verdict: it.cdanet.cpeconfigurator.field.Verdict, de
         }
     }
 }
+
+/**
+ * Keeps the display on while shown: pointing on the roof with the hands on the antenna, the
+ * screen must not go dark. Counted per window, so overlapping screens (transitions, tabs) work.
+ */
+@Composable
+fun KeepScreenOn() {
+    val view = androidx.compose.ui.platform.LocalView.current
+    androidx.compose.runtime.DisposableEffect(view) {
+        val n = (view.getTag(R.id.keep_screen_on_count) as? Int ?: 0) + 1
+        view.setTag(R.id.keep_screen_on_count, n)
+        view.keepScreenOn = true
+        onDispose {
+            val left = (view.getTag(R.id.keep_screen_on_count) as? Int ?: 1) - 1
+            view.setTag(R.id.keep_screen_on_count, left)
+            if (left <= 0) view.keepScreenOn = false
+        }
+    }
+}

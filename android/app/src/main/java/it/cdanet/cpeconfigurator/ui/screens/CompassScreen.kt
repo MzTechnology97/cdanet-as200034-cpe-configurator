@@ -43,6 +43,7 @@ import kotlin.math.roundToInt
  */
 @Composable
 fun CompassScreen(c: AppContainer) {
+    it.cdanet.cpeconfigurator.ui.KeepScreenOn()
     val target by c.compassTarget.collectAsState()
     val t = target ?: run {
         Text("Scegli un AP dalla Copertura e premi \"Bussola\".")

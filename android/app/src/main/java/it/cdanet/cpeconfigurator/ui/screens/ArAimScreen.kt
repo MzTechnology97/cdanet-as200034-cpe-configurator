@@ -90,6 +90,7 @@ private fun backCameraFov(context: Context): Pair<Double, Double> = runCatching 
  */
 @Composable
 fun ArAimScreen(c: AppContainer, liveSignal: Boolean = false) {
+    it.cdanet.cpeconfigurator.ui.KeepScreenOn()
     val target by c.compassTarget.collectAsState()
     val t = target ?: run {
         Text("Scegli un AP da \"Trova l'AP\".", Modifier.padding(14.dp))

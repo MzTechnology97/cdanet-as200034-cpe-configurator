@@ -187,6 +187,7 @@ private fun rememberFieldAccess(c: AppContainer): Boolean {
 /** Antenna alignment: big live signal, pitch-following beep, peak hold, trend. */
 @Composable
 fun AlignmentScreen(c: AppContainer) {
+    it.cdanet.cpeconfigurator.ui.KeepScreenOn()
     if (!rememberFieldAccess(c)) return
     val st by c.field.state.collectAsState()
     KeepScreenOnWhileRunning(c, FieldMode.Alignment)

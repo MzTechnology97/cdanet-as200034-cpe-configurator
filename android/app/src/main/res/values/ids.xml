@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- KeepScreenOn: how many screens ask for the display to stay on -->
+    <item name="keep_screen_on_count" type="id" />
+</resources>
