@@ -50,6 +50,23 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 | 24 | **Aggiornamento obbligatorio dell'app**: controllo all'avvio, ogni 15 minuti e al rifiuto del server; download automatico; senza l'ultima versione niente login né uso (disattivabile in Impostazioni server) | tutti i tecnici sempre sulla stessa versione | ✅ v1.31.0 |
 | 25 | **Regione OpenStreetMap dal portale** (reimport da zero con conferma) e **SSID dei rilanci** `CDA-NET-N<pop>-D<distretto>-R<n>` in reti Wi-Fi, provisioning, cambio AP e copertura | niente SSH anche per il geocoder; AP di rilancio gestiti come gli altri | ✅ v1.32.0 |
 
+## CRM ISP Billing (da fare, dopo il connettore)
+
+Vedi [CRM.md](CRM.md).
+- **Lettura**:
+  - cerca il cliente e compila PPPoE, nome, indirizzo e coordinate;
+  - verifica l'account RADIUS e il profilo prima di preparare il `.cfg`;
+  - controllo "PPPoE autenticato" nel collaudo (online, MAC e IP), con velocità confrontata con il profilo;
+  - stato RADIUS e clienti sospesi/morosi in Salute CPE e Stato rete;
+  - attività e team nell'agenda interventi (tabella `work_orders`, da coordinare);
+  - articolo e modello dal seriale.
+- **Scrittura**:
+  - account RADIUS creato dal server con password generata, che va direttamente nella CPE;
+  - stato del cliente `active` dopo il collaudo o l'approvazione NOC;
+  - campi personalizzati (MAC, modello, AP/SSID, collaudo) e coordinate GPS;
+  - azioni RADIUS dal NOC (disconnetti, sospendi, riattiva).
+- **Da chiedere a ISP Billing**: scrittura delle attività (esito, stato), elenco tecnici, scarico a magazzino del seriale sul cliente, webhook.
+
 ## Da verificare sul campo
 
 Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). Funzioni scritte e testate senza l'apparato reale: vanno provate su una CPE di laboratorio (o sul telefono) prima dell'uso in produzione.
@@ -65,6 +82,7 @@ Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). 
 
 ## Già rilasciato
 
+- v1.32.17: connettore CRM ISP Billing in Connettori (chiave cifrata, test per modulo); nessun dato ancora letto o scritto.
 - v1.32.7: Segnala KO (rimandata con motivo e giorno, o KO definitivo con motivazione) senza bloccare i ritentativi; scrittura nella CPE ritentabile; approvazione del NOC per i collaudi con segnale pessimo; pagina Notifiche (console e app) con scelta di cosa ricevere anche su Telegram.
 - v1.32.6: Reti Wi-Fi da UISP con la chiave WPA2 comune: solo gli SSID ancora da importare, per nodo e selezionabili; export CSV con le chiavi in chiaro (con password).
 - v1.32.3: Discovery LAN nell'app con lista compatta, tipo di dispositivo e azioni (web, copia IP, porte).

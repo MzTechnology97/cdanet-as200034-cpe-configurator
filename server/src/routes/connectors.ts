@@ -44,6 +44,7 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
       contact: ctx.cfg.geocoder.contact ?? '',
     },
     telegram: ctx.modules.enabled('telegram') ? { ...ctx.telegram.view(), publicUrl: ctx.cfg.publicUrl ?? '' } : null,
+    crm: ctx.crm.view(),
   }));
 
   app.put('/api/admin/connectors/uisp', admin, async (req) => {
@@ -130,5 +131,43 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
       const tls = /certificate|self[- ]signed|unable to verify|CERT_|SSL/i.test(detail);
       return { ok: false, error: tls ? 'uisp_tls_error' : (err.code ?? 'uisp_error'), status: err.extra?.status ?? null, detail: detail.slice(0, 200) };
     }
+  });
+
+  // ---- CRM (ISP Billing) ----------------------------------------------------------------------
+  const crmBody = z
+    .object({
+      enabled: z.boolean(),
+      url: z
+        .string()
+        .trim()
+        .max(300)
+        .regex(/^https:\/\/[^\s/$.?#][^\s]*$/i, 'Serve un indirizzo https://')
+        .transform((v) => v.replace(/\/+(api(\/docs)?\/?)?$/i, '')), // accept the docs URL too
+      apiId: z.string().trim().max(100).regex(/^[A-Za-z0-9._-]*$/, 'API ID non valido'),
+      apiKey: z.string().trim().max(500).regex(/^[!-~]*$/, 'API key non valida').optional(),
+    })
+    .strict();
+
+  app.put('/api/admin/connectors/crm', admin, async (req) => {
+    const b = crmBody.parse(req.body);
+    ctx.crm.save({ ...b, apiKey: b.apiKey || undefined }, req.user!.id);
+    recordEvent(ctx.db, req.user!.id, 'connector.crm.update', b.url, `${b.enabled ? 'attivo' : 'disattivato'} · API ID ${b.apiId || '—'}${b.apiKey ? ' · nuova chiave' : ''}`);
+    return ctx.crm.view();
+  });
+
+  app.delete('/api/admin/connectors/crm', admin, async (req) => {
+    ctx.crm.reset();
+    recordEvent(ctx.db, req.user!.id, 'connector.crm.reset', 'CRM', 'configurazione rimossa');
+    return ctx.crm.view();
+  });
+
+  /** Tests the values in the form (key optional: the saved one is used) without saving them. */
+  app.post('/api/admin/connectors/crm/test', admin, async (req) => {
+    const b = crmBody.partial({ enabled: true }).parse(req.body ?? {});
+    const apiKey = b.apiKey || ctx.crm.savedKey();
+    if (!b.url || !b.apiId || !apiKey) throw new HttpError(400, 'crm_incomplete');
+    const r = await ctx.crm.build({ url: b.url, apiId: b.apiId, apiKey }).test();
+    recordEvent(ctx.db, req.user!.id, 'connector.crm.test', b.url, 'modules' in r ? `${r.modules.filter((m) => m.ok).length}/${r.modules.length} moduli leggibili` : `errore ${r.error}`);
+    return r;
   });
 }
