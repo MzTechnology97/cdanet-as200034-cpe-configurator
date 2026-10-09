@@ -156,6 +156,7 @@ describe('Guasti Enel (e-distribuzione)', () => {
     assert.deepEqual((await cov(T)).aps, [], 'coverage only on assigned POPs/APs');
     assert.equal((await cov(T)).restricted, true);
     assert.ok((await cov(H)).aps.length >= 2, 'admins: every AP');
+    assert.ok(!(await cov(H)).aps.some((a: { name: string }) => a.name.startsWith('PtP')), 'PtP links are not coverage targets');
     const people = (await call('GET', '/api/admin/assignments')).json().users;
     const tid = people.find((p: { username: string }) => p.username === 'tecnico').id;
     assert.equal((await call('PUT', `/api/admin/assignments/${tid}`, { items: [{ key: 'pop:site-n2', name: 'Nodo 2 - Monte' }] })).statusCode, 200);

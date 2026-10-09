@@ -15,6 +15,8 @@ export interface UispDevice {
   mac: string | null;
   model: string;
   role: string;
+  /** overview.wirelessMode: "ap-ptmp", "ap-ptp", "sta-ptmp"… (empty when not reported). */
+  wirelessMode: string;
   authorized: boolean;
   status: string;
   firmware: string;
@@ -102,6 +104,7 @@ export function normalizeDevice(raw: unknown): UispDevice {
     mac: parseMac(str(id.mac) ?? ''),
     model: str(id.modelName) ?? str(id.model) ?? '',
     role: role || (mode.startsWith('ap') ? 'ap' : mode.startsWith('sta') ? 'station' : ''),
+    wirelessMode: mode,
     authorized: id.authorized !== false,
     status: str(ov.status) ?? 'unknown',
     firmware: str(id.firmwareVersion) ?? '',
@@ -141,6 +144,8 @@ export function normalizeSite(raw: unknown): UispSite {
 }
 
 export const isAp = (d: UispDevice) => d.role === 'ap' || d.role === 'accesspoint';
+/** Point-to-point link ends (backhaul): AP role but no customers to cover. */
+export const isPtp = (d: Pick<UispDevice, 'wirelessMode'>) => /(^|-)ptp$/.test(d.wirelessMode);
 
 export type StatsRange = 'day' | 'week' | 'month';
 const RANGE_MS: Record<StatsRange, number> = { day: 86_400_000, week: 7 * 86_400_000, month: 30 * 86_400_000 };
@@ -190,14 +195,14 @@ export function createUisp(opts: UispOptions) {
   const ttl = (opts.cacheSeconds ?? 60) * 1000;
   const cache = new Map<string, { at: number; value: unknown }>();
 
-  async function call(method: string, path: string, body?: unknown, raw = false): Promise<Response | unknown> {
+  async function call(method: string, path: string, body?: unknown, raw = false, timeoutMs = 20_000): Promise<Response | unknown> {
     let r: Response;
     try {
       r = await f(`${base}${path}`, {
         method,
         headers: { 'x-auth-token': opts.token, Accept: 'application/json', ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
         body: body !== undefined ? JSON.stringify(body) : undefined,
-        signal: AbortSignal.timeout(raw ? 120_000 : 20_000),
+        signal: AbortSignal.timeout(raw ? 120_000 : timeoutMs),
       });
     } catch (e) {
       throw new HttpError(502, 'uisp_unreachable', { detail: (e as Error).message.slice(0, 200) });
@@ -212,17 +217,41 @@ export function createUisp(opts: UispOptions) {
     return text ? JSON.parse(text) : null;
   }
 
+  const inflight = new Map<string, Promise<unknown>>();
+  /** Answers older than this are not served while refreshing. */
+  const STALE_MAX_MS = 15 * 60_000;
+
+  /**
+   * Cache with one load at a time per key and stale-while-revalidate: on a big network UISP can
+   * take 15-20 s to build the site list, so pages get the previous answer while it refreshes.
+   */
   async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
     const hit = cache.get(key);
     if (hit && Date.now() - hit.at < ttl) return hit.value as T;
-    const value = await load();
-    cache.set(key, { at: Date.now(), value });
-    return value;
+    let p = inflight.get(key) as Promise<T> | undefined;
+    if (!p) {
+      p = load()
+        .then((value) => {
+          cache.set(key, { at: Date.now(), value });
+          return value;
+        })
+        .finally(() => inflight.delete(key));
+      inflight.set(key, p);
+    }
+    if (hit && Date.now() - hit.at < STALE_MAX_MS) {
+      p.catch(() => {}); // refreshed in background; errors are reported on the next cold call
+      return hit.value as T;
+    }
+    return p;
   }
 
-  const devices = () => cached('devices', async () => ((await call('GET', '/devices')) as unknown[]).map(normalizeDevice));
-  const sites = () => cached('sites', async () => ((await call('GET', '/sites')) as unknown[]).map(normalizeSite));
-  const invalidate = () => cache.clear();
+  // Full lists can be slow on large networks (1000+ devices): longer timeout than single calls.
+  const devices = () => cached('devices', async () => ((await call('GET', '/devices', undefined, false, 60_000)) as unknown[]).map(normalizeDevice));
+  const sites = () => cached('sites', async () => ((await call('GET', '/sites', undefined, false, 60_000)) as unknown[]).map(normalizeSite));
+  const invalidate = () => {
+    cache.clear();
+    inflight.clear();
+  };
 
   /** AP coordinates: device location, else its site location. */
   async function aps(): Promise<Array<UispDevice & { location: LatLon; siteHeight: number | null }>> {
@@ -249,8 +278,9 @@ export function createUisp(opts: UispOptions) {
         deployment: str(ver.deployment),
         latencyMs: Date.now() - started,
         devices: ds.length,
-        aps: ds.filter(isAp).length,
-        apsWithLocation: (await aps()).length,
+        aps: ds.filter((d) => isAp(d) && !isPtp(d)).length,
+        ptpLinks: ds.filter((d) => isAp(d) && isPtp(d)).length,
+        apsWithLocation: (await aps()).filter((d) => !isPtp(d)).length,
         pending: ds.filter((d) => !d.authorized).length,
         sites: ss.length,
       };
@@ -354,6 +384,8 @@ export function createUisp(opts: UispOptions) {
     /** Nearest APs; [allow] limits them (installers: only the assigned POPs/APs). */
     async nearestAps(from: LatLon, limit: number, maxKm: number, allow?: (ap: { id: string; siteId: string | null }) => boolean) {
       return (await aps())
+        // coverage targets: PtMP APs only, never the PtP backhaul links
+        .filter((d) => !isPtp(d))
         .filter((d) => !allow || allow({ id: d.id, siteId: d.siteId ?? null }))
         .map((d) => {
           const m = distanceM(from, d.location);

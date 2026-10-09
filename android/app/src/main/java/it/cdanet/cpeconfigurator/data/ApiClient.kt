@@ -191,6 +191,9 @@ class ApiClient(
     suspend fun pointing(lat: Double, lon: Double, height: Double?): PointingDto =
         AppJson.decodeFromString(PointingDto.serializer(), request("GET", "/api/pointing?lat=$lat&lon=$lon" + (height?.let { "&height=$it" } ?: "")))
 
+    /** Guasti Enel map data, passed as is to the embedded map page. */
+    suspend fun outagesMapJson(): String = request("GET", "/api/outages/map")
+
     suspend fun networkStatus(): NetworkStatusDto = AppJson.decodeFromString(NetworkStatusDto.serializer(), request("GET", "/api/network/status"))
 
     suspend fun outageTelegram(): OutageTelegramDto = AppJson.decodeFromString(OutageTelegramDto.serializer(), request("GET", "/api/outages/telegram"))

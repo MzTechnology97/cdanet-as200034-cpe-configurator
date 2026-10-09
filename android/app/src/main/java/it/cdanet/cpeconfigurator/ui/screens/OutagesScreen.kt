@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
@@ -37,6 +38,7 @@ import it.cdanet.cpeconfigurator.data.OutagesDto
 import it.cdanet.cpeconfigurator.outages.OutageAlerts
 import it.cdanet.cpeconfigurator.ui.BadRed
 import it.cdanet.cpeconfigurator.ui.BusyButton
+import it.cdanet.cpeconfigurator.ui.EmbeddedMap
 import it.cdanet.cpeconfigurator.ui.ErrorBanner
 import it.cdanet.cpeconfigurator.ui.Field
 import it.cdanet.cpeconfigurator.ui.SectionCard
@@ -114,6 +116,15 @@ fun OutagesScreen(c: AppContainer) {
             },
             style = MaterialTheme.typography.bodySmall,
         )
+        var mapJson by remember(d) { mutableStateOf<String?>(null) }
+        LaunchedEffect(d) { mapJson = runCatching { c.api.outagesMapJson() }.getOrNull() }
+        SectionCard("Mappa") {
+            EmbeddedMap(c, mapJson?.let { "window.cdaOutages($it)" }, Modifier.fillMaxWidth().height(360.dp))
+            Text(
+                "Rosso: guasti MT e POP/AP potenzialmente impattati · arancio: guasti BT · grigio: lavori · tratteggio: zone" + if (admin) "" else " · POP/AP come area approssimativa",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
         if (!d.scope.all) {
             SectionCard("POP/AP assegnati a te") {
                 if (d.scope.assigned.isEmpty()) {

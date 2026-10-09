@@ -1,4 +1,4 @@
-import { createMap, fit, MAP_COLORS as C, popup, towards } from './map.js';
+import { createMap, drawOutages, fit, MAP_COLORS as C, popup, towards } from './map.js';
 
 /**
  * Map page embedded in the Android app ("Trova l'AP"). It has no session: the app passes the data
@@ -38,6 +38,15 @@ window.cdaShow = async (d) => {
     }
   }
   fit(map, layers);
+};
+
+/** Guasti Enel map (data of /api/outages/map, already scoped by the server for the user). */
+window.cdaOutages = async (d) => {
+  const map = await ready;
+  if (!map || !d) return;
+  layer.clearLayers();
+  arrow = null;
+  fit(map, drawOutages(layer, d));
 };
 
 /** Phone heading (degrees, true north): rotates the position arrow. */

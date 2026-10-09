@@ -1,11 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
-import android.annotation.SuppressLint
-import android.content.Intent
-import android.net.Uri
-import android.webkit.WebResourceRequest
 import android.webkit.WebView
-import android.webkit.WebViewClient
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -28,7 +23,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -38,7 +32,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
 import it.cdanet.cpeconfigurator.core.AppContainer
 import it.cdanet.cpeconfigurator.data.AppJson
 import it.cdanet.cpeconfigurator.data.PointingApDto
@@ -47,6 +40,7 @@ import it.cdanet.cpeconfigurator.field.CompassSensor
 import it.cdanet.cpeconfigurator.field.CompassTarget
 import it.cdanet.cpeconfigurator.network.LocationHelper
 import it.cdanet.cpeconfigurator.ui.BusyButton
+import it.cdanet.cpeconfigurator.ui.EmbeddedMap
 import it.cdanet.cpeconfigurator.ui.ErrorBanner
 import it.cdanet.cpeconfigurator.ui.Field
 import it.cdanet.cpeconfigurator.ui.SectionCard
@@ -54,7 +48,6 @@ import it.cdanet.cpeconfigurator.ui.WarnAmber
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.roundToInt
-import it.cdanet.cpeconfigurator.network.TestTls
 
 private fun km(m: Int) = if (m < 1000) "$m m" else "%.2f km".format(java.util.Locale.ITALY, m / 1000.0)
 
@@ -164,64 +157,23 @@ fun PointingScreen(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (
     }
 }
 
-/** The console's map page (Protomaps on our server) with the data passed in; the arrow follows the phone heading. */
-@SuppressLint("SetJavaScriptEnabled")
+/** The console's map page with the data passed in; the arrow follows the phone heading. */
 @Composable
 private fun PointingMap(c: AppContainer, d: PointingDto, modifier: Modifier) {
     val context = LocalContext.current
-    // server address (read from the settings store): the page loads once it is known
-    val baseUrl by produceState<String?>(null) { value = c.api.base().trimEnd('/') }
-    val base = baseUrl ?: run {
-        Text("Caricamento mappa…", Modifier.padding(14.dp))
-        return
-    }
-    var page by remember { mutableStateOf<WebView?>(null) }
-    var loaded by remember { mutableStateOf(false) }
     val json = remember(d) { AppJson.encodeToString(PointingDto.serializer(), d) }
     val sensor = remember { CompassSensor(context) }
     val reading by sensor.reading.collectAsState()
+    var page by remember { mutableStateOf<WebView?>(null) }
     DisposableEffect(Unit) {
         sensor.start(d.from.lat, d.from.lon)
-        onDispose {
-            sensor.stop()
-            page?.destroy()
-        }
+        onDispose { sensor.stop() }
     }
-    LaunchedEffect(loaded, json) { if (loaded) page?.evaluateJavascript("window.cdaShow($json)", null) }
-    LaunchedEffect(loaded) {
-        while (loaded) {
+    LaunchedEffect(page) {
+        while (page != null) {
             reading?.let { page?.evaluateJavascript("window.cdaHeading(${it.heading.roundToInt()})", null) }
             delay(250)
         }
     }
-    AndroidView(
-        modifier = modifier,
-        factory = { ctx ->
-            WebView(ctx).apply {
-                settings.javaScriptEnabled = true
-                settings.domStorageEnabled = true
-                webViewClient = object : WebViewClient() {
-                    override fun onPageFinished(view: WebView, url: String) {
-                        loaded = true
-                    }
-
-                    // test option "unverified server certificate": only for our server
-                    @SuppressLint("WebViewClientOnReceivedSslError")
-                    override fun onReceivedSslError(view: WebView, handler: android.webkit.SslErrorHandler, error: android.net.http.SslError) {
-                        if (TestTls.enabled && error.url.startsWith(base)) handler.proceed() else handler.cancel()
-                    }
-
-                    // Only our map page inside the app; anything else opens outside.
-                    override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                        val url = request.url.toString()
-                        if (url.startsWith(base)) return false
-                        runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
-                        return true
-                    }
-                }
-                loadUrl("$base/map-embed.html")
-                page = this
-            }
-        },
-    )
+    EmbeddedMap(c, "window.cdaShow($json)", modifier) { page = it }
 }

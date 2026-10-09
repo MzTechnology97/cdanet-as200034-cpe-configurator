@@ -62,6 +62,38 @@ export async function createMap(el, { center = [37.57, 14.27], zoom = 9 } = {}) 
 /** Popup content as DOM (never HTML strings: names come from external systems). */
 export const popup = (title, ...lines) => h('div', { class: 'map-popup' }, h('b', {}, title), ...lines.filter(Boolean).map((l) => h('div', { class: 'small' }, l)));
 
+const localTime = (s) => (s ? s.replace('T', ' ').replace(/^(\d{4})-(\d{2})-(\d{2})/, '$3/$2/$1') : '');
+
+/**
+ * Draws the Guasti Enel map data (/api/outages/map) on [target] (map or layer group): zones,
+ * POPs/APs (real point or approximate area) and outages; returns the layers to fit.
+ */
+export function drawOutages(target, d) {
+  const L = window.L;
+  const layers = [];
+  for (const z of d.zones ?? []) {
+    layers.push(L.circle([z.lat, z.lon], { radius: z.radiusKm * 1000, color: z.personal ? COLORS.personal : COLORS.zone, weight: 1, dashArray: '4 4', fillOpacity: 0.04 }).bindPopup(popup(`Zona ${z.name}`, `raggio ${z.radiusKm} km`)).addTo(target));
+  }
+  for (const i of d.infra ?? []) {
+    const color = i.impacted ? COLORS.impacted : COLORS[i.type];
+    const title = `${i.type === 'pop' ? 'POP' : 'AP'} ${i.name}`;
+    const info = [i.stations != null ? `${i.stations} CPE` : null, i.impacted ? 'potenzialmente impattato da un guasto' : null];
+    layers.push(
+      i.approx
+        ? L.circle([i.approx.lat, i.approx.lon], { radius: i.approx.radiusM, color, weight: 1, fillOpacity: 0.12 }).bindPopup(popup(title, ...info, 'posizione approssimativa')).addTo(target)
+        : L.circleMarker([i.lat, i.lon], { radius: i.type === 'pop' ? 8 : 5, color, weight: 2, fillOpacity: 0.85 }).bindPopup(popup(title, ...info)).addTo(target),
+    );
+  }
+  for (const o of d.outages ?? []) {
+    layers.push(
+      L.circleMarker([o.lat, o.lon], { radius: 7, color: o.impacted ? COLORS.impacted : COLORS[o.kind], fillColor: COLORS[o.kind], weight: o.impacted ? 3 : 1.5, fillOpacity: 0.9 })
+        .bindPopup(popup(o.label, `${o.place} (${o.province})`, `${o.customers} clienti Enel`, o.expectedRestore ? `ripristino previsto ${localTime(o.expectedRestore)}` : null, o.impacted ? 'POP/AP potenzialmente impattati' : null))
+        .addTo(target),
+    );
+  }
+  return layers;
+}
+
 /** Fits the map to the given [lat, lon] points (and circles), with a sensible max zoom. */
 export function fit(map, layers) {
   const L = window.L;
