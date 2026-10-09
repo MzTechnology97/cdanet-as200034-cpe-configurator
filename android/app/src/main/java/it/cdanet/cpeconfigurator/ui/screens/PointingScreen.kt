@@ -28,6 +28,7 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -167,7 +168,12 @@ fun PointingScreen(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (
 @Composable
 private fun PointingMap(c: AppContainer, d: PointingDto, modifier: Modifier) {
     val context = LocalContext.current
-    val base = c.api.base().trimEnd('/')
+    // server address (read from the settings store): the page loads once it is known
+    val baseUrl by produceState<String?>(null) { value = c.api.base().trimEnd('/') }
+    val base = baseUrl ?: run {
+        Text("Caricamento mappa…", Modifier.padding(14.dp))
+        return
+    }
     var page by remember { mutableStateOf<WebView?>(null) }
     var loaded by remember { mutableStateOf(false) }
     val json = remember(d) { AppJson.encodeToString(PointingDto.serializer(), d) }
