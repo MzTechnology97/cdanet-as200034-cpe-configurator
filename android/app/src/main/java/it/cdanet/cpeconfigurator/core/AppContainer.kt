@@ -32,6 +32,10 @@ class AppContainer(context: Context) {
     val field = FieldController(api, network, scope)
     val acceptanceQueue = it.cdanet.cpeconfigurator.field.AcceptanceQueue(appContext, api, session, resultQueue, scope)
 
+    /** Optional features enabled by the admin (from /api/meta at login). Empty = all on (offline). */
+    val modules = kotlinx.coroutines.flow.MutableStateFlow<Map<String, Boolean>>(emptyMap())
+    fun moduleOn(key: String): Boolean = modules.value[key] != false
+
     /** AP selected in Copertura for the compass. */
     val compassTarget = kotlinx.coroutines.flow.MutableStateFlow<it.cdanet.cpeconfigurator.field.CompassTarget?>(null)
 

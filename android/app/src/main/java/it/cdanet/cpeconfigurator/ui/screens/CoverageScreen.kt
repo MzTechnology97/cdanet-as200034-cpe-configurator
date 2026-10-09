@@ -153,7 +153,7 @@ fun NearbyAps(c: AppContainer, location: CpeLocation, onPick: ((CoverageAp) -> U
 }
 
 @Composable
-fun CoverageScreen(c: AppContainer, onCompass: (CompassTarget) -> Unit = {}) {
+fun CoverageScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? = null) {
     var location by remember { mutableStateOf<CpeLocation?>(null) }
     var label by remember { mutableStateOf("") }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

@@ -43,6 +43,7 @@ const MESSAGES = {
   totp_setup_missing: 'Ricomincia l’attivazione',
   totp_not_enabled: 'Verifica in due passaggi non attiva',
   enable_totp_first: 'Attiva prima la verifica in due passaggi sul tuo account',
+  module_disabled: 'Funzionalità disattivata dall’amministratore',
   connector_incomplete: 'Servono indirizzo UISP e token',
   uisp_not_configured: 'UISP non configurato (Connettori)',
   uisp_tls_error: 'Certificato TLS di UISP non valido',

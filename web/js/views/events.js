@@ -17,6 +17,8 @@ const LABELS = {
   'uisp.backup': 'Backup UISP richiesto',
   'account.password': 'Password personale cambiata',
   'network.export': 'Export CSV salute rete',
+  'modules.update': 'Funzionalità modificate',
+  'cpe_health.export': 'Export CSV salute CPE',
   'jobs.export': 'Export CSV dello storico',
   'connector.telegram.update': 'Notifiche Telegram modificate',
   'connector.telegram.reset': 'Notifiche Telegram rimosse',

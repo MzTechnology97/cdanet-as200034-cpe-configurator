@@ -46,6 +46,7 @@ private val ERRORS = mapOf(
     "address_too_short" to "Indirizzo troppo corto",
     "pppoe_password_required" to "Password PPPoE necessaria: non è stato possibile recuperarla dal backup UISP della CPE sostituita",
     "replace_same_mac" to "Il MAC è quello della CPE sostituita: inserisci quello della CPE nuova",
+    "module_disabled" to "Funzionalità disattivata dall'amministratore",
     "job_not_completed" to "Esito del provisioning non ancora registrato sul server",
     "too_many_photos" to "Troppe foto per questo job (massimo 8)",
     "photo_not_jpeg" to "La foto deve essere in formato JPEG",
@@ -159,6 +160,8 @@ class ApiClient(
             ProvisionPackage.serializer(),
             request("POST", "/api/provisioning/jobs/$oldJobId/replace", AppJson.encodeToJsonElement(ReplaceRequest.serializer(), req), client = true),
         )
+
+    suspend fun cpeHealth(): CpeHealthDto = AppJson.decodeFromString(CpeHealthDto.serializer(), request("GET", "/api/cpe-health"))
 
     suspend fun signalHistory(jobId: String, range: String): SignalHistoryDto =
         AppJson.decodeFromString(SignalHistoryDto.serializer(), request("GET", "/api/provisioning/jobs/$jobId/uisp/statistics?range=$range"))

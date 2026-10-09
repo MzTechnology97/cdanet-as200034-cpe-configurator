@@ -230,6 +230,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     managementPorts: MANAGEMENT_PORTS,
     jobTtlMinutes: ctx.cfg.jobTtlMinutes,
     uisp: !!ctx.uisp,
+    modules: ctx.modules.state(),
     coverageMaxKm: ctx.uispSettings.coverageMaxKm,
   }));
 

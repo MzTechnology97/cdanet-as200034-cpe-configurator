@@ -7,6 +7,7 @@ import type { Templates } from './services/templates.ts';
 import type { Geocoder } from './services/geocode.ts';
 import type { Uisp } from './services/uisp.ts';
 import type { Connectors } from './services/connectors.ts';
+import type { Modules } from './services/modules.ts';
 import type { Notifier } from './services/notify.ts';
 import type { Telegram } from './services/telegram.ts';
 
@@ -23,6 +24,7 @@ export interface AppContext {
   connectors: Connectors;
   geocoder: Geocoder;
   telegram: Telegram;
+  modules: Modules;
   notify: Notifier;
   version: string;
 }

@@ -9,6 +9,7 @@ import { TELEGRAM_EVENTS } from '../services/telegram.ts';
 /** Admin "Connettori": configure and test external integrations from the console. */
 export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
   const admin = { preHandler: ctx.auth.requireAdmin };
+  const tg = { preHandler: [ctx.auth.requireAdmin, ctx.modules.require('telegram')] };
   const url = z
     .string()
     .trim()
@@ -42,7 +43,7 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
       fallbackUrl: ctx.cfg.geocoder.fallbackUrl ?? '',
       contact: ctx.cfg.geocoder.contact ?? '',
     },
-    telegram: { ...ctx.telegram.view(), publicUrl: ctx.cfg.publicUrl ?? '' },
+    telegram: ctx.modules.enabled('telegram') ? { ...ctx.telegram.view(), publicUrl: ctx.cfg.publicUrl ?? '' } : null,
   }));
 
   app.put('/api/admin/connectors/uisp', admin, async (req) => {
@@ -64,7 +65,7 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
   const tgToken = z.string().trim().regex(/^\d{5,15}:[\w-]{30,60}$/, 'Token del bot non valido').optional();
   const chatId = z.string().trim().regex(/^(-?\d{3,20}|@[A-Za-z]\w{4,31})$/, 'Chat ID non valido');
 
-  app.put('/api/admin/connectors/telegram', admin, async (req) => {
+  app.put('/api/admin/connectors/telegram', tg, async (req) => {
     const b = z
       .object({
         enabled: z.boolean(),
@@ -80,7 +81,7 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
     return ctx.telegram.view();
   });
 
-  app.delete('/api/admin/connectors/telegram', admin, async (req) => {
+  app.delete('/api/admin/connectors/telegram', tg, async (req) => {
     ctx.telegram.reset();
     recordEvent(ctx.db, req.user!.id, 'connector.telegram.reset', 'Telegram', 'configurazione rimossa');
     return ctx.telegram.view();
@@ -92,18 +93,18 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
     return token;
   };
 
-  app.post('/api/admin/connectors/telegram/test', admin, async (req) => {
+  app.post('/api/admin/connectors/telegram/test', tg, async (req) => {
     const b = z.object({ token: tgToken.or(z.literal('')), chatId }).strict().parse(req.body);
     return ctx.telegram.test(tokenOf(b.token || undefined), b.chatId);
   });
 
   /** Groups/chats that wrote to the bot recently: to find the chat id without external tools. */
-  app.post('/api/admin/connectors/telegram/chats', admin, async (req) => {
+  app.post('/api/admin/connectors/telegram/chats', tg, async (req) => {
     const b = z.object({ token: tgToken.or(z.literal('')) }).strict().parse(req.body ?? {});
     return ctx.telegram.chats(tokenOf(b.token || undefined));
   });
 
-  app.get('/api/admin/connectors/telegram/summary', admin, async () => ({ text: ctx.notify.summaryText() }));
+  app.get('/api/admin/connectors/telegram/summary', tg, async () => ({ text: ctx.notify.summaryText() }));
 
   /** OpenStreetMap / Nominatim health (local container still importing shows here). */
   app.post('/api/admin/connectors/geocoder/test', admin, async () => ctx.geocoder.status());

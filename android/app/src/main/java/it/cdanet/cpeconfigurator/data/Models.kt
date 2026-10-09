@@ -82,7 +82,46 @@ data class MetaDto(
     val jobTtlMinutes: Int,
     val uisp: Boolean = false,
     val coverageMaxKm: Int = 15,
+    /** Optional features enabled by the admin ("Funzionalità"). */
+    val modules: Map<String, Boolean> = emptyMap(),
 )
+
+@Serializable
+data class CpeNowDto(
+    val status: String = "",
+    val signal: Double? = null,
+    val ethMbps: Int? = null,
+    val ethHalfDuplex: Boolean = false,
+    val firmware: String = "",
+    val apName: String? = null,
+    val lastSeen: String? = null,
+)
+
+@Serializable
+data class CpeHealthItemDto(
+    val jobId: String,
+    val createdAt: String,
+    val deviceName: String = "",
+    val model: String = "",
+    val mac: String,
+    val ssid: String = "",
+    val acceptanceSignal: Double? = null,
+    val now: CpeNowDto? = null,
+    val signalDelta: Int? = null,
+    val issues: List<String> = emptyList(),
+)
+
+@Serializable
+data class CpeHealthTotalsDto(
+    val cpes: Int = 0,
+    val ok: Int = 0,
+    val offline: Int = 0,
+    @kotlinx.serialization.SerialName("signal_drop") val signalDrop: Int = 0,
+    val ethernet: Int = 0,
+)
+
+@Serializable
+data class CpeHealthDto(val totals: CpeHealthTotalsDto = CpeHealthTotalsDto(), val cpes: List<CpeHealthItemDto> = emptyList())
 
 @Serializable
 data class ProvisionRequest(

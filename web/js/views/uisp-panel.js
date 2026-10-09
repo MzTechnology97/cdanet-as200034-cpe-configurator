@@ -1,4 +1,5 @@
 import { api, download } from '../api.js';
+import { isOn } from '../modules.js';
 import { badge, busy, fmtDate, h, mount, stat, table, toast } from '../dom.js';
 
 const ERRORS = {
@@ -84,7 +85,7 @@ export function uispPanel(job, isAdmin) {
       actions.append(mk);
       const cmp = h('button', {}, 'Confronta con il template');
       cmp.onclick = () => busy(cmp, showDrift);
-      actions.append(cmp);
+      if (isOn('config_drift')) actions.append(cmp);
       loadBackups();
     }
 
@@ -159,7 +160,7 @@ export function uispPanel(job, isAdmin) {
       ),
       pending ? null : s.authorizedAt ? h('p', { class: 'small muted' }, `Accettata il ${fmtDate(s.authorizedAt)}`) : null,
       actions,
-      pending ? null : signalHistory(job),
+      pending || !isOn('signal_history') ? null : signalHistory(job),
       drift,
       backups,
     );

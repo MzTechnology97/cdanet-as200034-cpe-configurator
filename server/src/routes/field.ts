@@ -25,7 +25,7 @@ export const FIELD_THRESHOLDS = {
 } as const;
 
 export function fieldRoutes(app: FastifyInstance, ctx: AppContext) {
-  const user = { preHandler: ctx.auth.requireUser };
+  const user = { preHandler: [ctx.auth.requireUser, ctx.modules.require('field_alignment', 'field_diagnosis', 'acceptance')] };
 
   app.post('/api/field/access', user, async (req, reply) => {
     const client = parseClientHeader(req.headers['x-cda-client'] as string | undefined);

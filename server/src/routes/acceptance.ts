@@ -72,7 +72,7 @@ interface JobRow {
 }
 
 export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
-  const user = { preHandler: ctx.auth.requireUser };
+  const user = { preHandler: [ctx.auth.requireUser, ctx.modules.require('acceptance')] };
   const { db } = ctx;
   const root = ctx.cfg.photosDir;
 

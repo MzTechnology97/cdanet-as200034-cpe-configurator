@@ -19,6 +19,7 @@ import { toolRoutes } from './routes/tools.ts';
 import { createProvisioning } from './services/provisioning.ts';
 import { createTemplates } from './services/templates.ts';
 import { createGeocoder } from './services/geocode.ts';
+import { createModules } from './services/modules.ts';
 import { createNotifier, type Notifier } from './services/notify.ts';
 import { createTelegram } from './services/telegram.ts';
 import type { Uisp } from './services/uisp.ts';
@@ -63,6 +64,7 @@ export async function buildApp(
   const templates = createTemplates(db, sealer);
   const connectors = createConnectors(db, sealer, cfg, { fetchImpl: opts.fetchImpl });
   const uispCfg = connectors.uispSettings();
+  const modules = createModules(db);
   const telegram = createTelegram(db, sealer, { fetchImpl: opts.fetchImpl, ...(opts.telegramIntervalMs !== undefined ? { minIntervalMs: opts.telegramIntervalMs } : {}) });
   const ctx: AppContext = {
     cfg,
@@ -76,10 +78,11 @@ export async function buildApp(
     connectors,
     geocoder: createGeocoder({ ...cfg.geocoder, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
     telegram,
+    modules,
     notify: undefined as unknown as Notifier,
     version,
   };
-  ctx.notify = createNotifier(db, cfg, telegram, () => ctx.uisp, version);
+  ctx.notify = createNotifier(db, cfg, telegram, () => ctx.uisp, version, () => modules.enabled('telegram'));
 
   const app = Fastify({
     logger:

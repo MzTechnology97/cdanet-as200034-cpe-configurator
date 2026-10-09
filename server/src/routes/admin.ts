@@ -11,6 +11,7 @@ import { PLACEHOLDERS, inspectTemplate } from '../domain/systemcfg.ts';
 import { validateBoardMatch } from '../services/templates.ts';
 import { loadLatestRelease } from '../services/releases.ts';
 import { escapeHtml } from '../services/telegram.ts';
+import { isModuleKey, type ModuleKey } from '../services/modules.ts';
 
 const username = z.string().trim().min(3).max(80).regex(/^[A-Za-z0-9._-]+$/);
 const password = z.string().min(12).max(200);
@@ -19,6 +20,18 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
   const { db, sealer } = ctx;
   const admin = { preHandler: ctx.auth.requireAdmin };
   const actor = (req: { user?: { id: number } }) => req.user?.id ?? null;
+
+  // ---- Funzionalità (modules) -------------------------------------------------------
+  app.get('/api/admin/modules', admin, async () => ctx.modules.list());
+
+  app.put('/api/admin/modules', admin, async (req) => {
+    const body = z.record(z.string(), z.boolean()).parse(req.body);
+    const changes = Object.fromEntries(Object.entries(body).filter(([k]) => isModuleKey(k))) as Partial<Record<ModuleKey, boolean>>;
+    if (!Object.keys(changes).length) throw new HttpError(400, 'invalid_request');
+    ctx.modules.update(changes, req.user!.id);
+    recordEvent(db, actor(req), 'modules.update', Object.keys(changes).join(', '), Object.entries(changes).map(([k, v]) => `${k}=${v ? 'on' : 'off'}`).join(' · '));
+    return ctx.modules.list();
+  });
 
   // ---- Security policy ---------------------------------------------------------------
   app.get('/api/admin/security', admin, async () => ({ totpRequiredForAdmins: ctx.auth.totpRequiredForAdmins() }));

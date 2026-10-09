@@ -8,7 +8,9 @@ import * as tools from '../net/tools.ts';
 const host = z.object({ host: z.string().trim().min(1).max(253) });
 
 export function toolRoutes(app: FastifyInstance, ctx: AppContext) {
-  const user = { preHandler: ctx.auth.requireUser };
+  const user = { preHandler: [ctx.auth.requireUser, ctx.modules.require('network_tools')] };
+  const speed = { preHandler: [ctx.auth.requireUser, ctx.modules.require('network_tools', 'acceptance')] };
+  const ros = { preHandler: [ctx.auth.requireUser, ctx.modules.require('routeros')] };
 
   app.get('/api/tools/interfaces', user, () => tools.interfaces());
   app.get('/api/tools/neighbors', user, () => tools.neighbors());
@@ -31,8 +33,8 @@ export function toolRoutes(app: FastifyInstance, ctx: AppContext) {
   app.post('/api/tools/mac-vendor', user, (req) => tools.macVendor(z.object({ mac: z.string().trim().max(32) }).parse(req.body).mac));
 
   // Throughput test between the client and the CDA Net server.
-  app.get('/api/tools/speed/ping', user, async () => ({ ok: true, ts: Date.now() }));
-  app.get('/api/tools/speed/download', user, async (req, reply) => {
+  app.get('/api/tools/speed/ping', speed, async () => ({ ok: true, ts: Date.now() }));
+  app.get('/api/tools/speed/download', speed, async (req, reply) => {
     const bytes = z.coerce.number().int().min(256 * 1024).max(50 * 1024 * 1024).default(8 * 1024 * 1024).parse((req.query as { bytes?: string }).bytes);
     const chunk = Buffer.alloc(64 * 1024, 0x5a);
     const { Readable } = await import('node:stream');
@@ -48,17 +50,17 @@ export function toolRoutes(app: FastifyInstance, ctx: AppContext) {
     reply.header('Cache-Control', 'no-store').header('Content-Type', 'application/octet-stream').header('Content-Length', String(bytes));
     return reply.send(stream);
   });
-  app.post('/api/tools/speed/upload', { ...user, bodyLimit: 50 * 1024 * 1024 }, async (req) => ({
+  app.post('/api/tools/speed/upload', { ...speed, bodyLimit: 50 * 1024 * 1024 }, async (req) => ({
     ok: true,
     bytes: (req.body as { bytes?: number } | undefined)?.bytes ?? 0,
   }));
 
   // RouterOS (read-only) from the server.
-  app.get('/api/routeros/catalog', user, async () => ({
+  app.get('/api/routeros/catalog', ros, async () => ({
     sections: ROUTEROS_SECTIONS,
     readonly: { deny: READONLY_DENY.source, allow: READONLY_ALLOW.source },
   }));
-  app.post('/api/routeros/action', user, async (req) => {
+  app.post('/api/routeros/action', ros, async (req) => {
     const b = z
       .object({
         host: z.string().trim().min(1).max(253),

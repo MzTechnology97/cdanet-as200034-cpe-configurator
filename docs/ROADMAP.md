@@ -25,13 +25,15 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 
 | # | Voce | Perché | Stato |
 |---|---|---|---|
-| 1 | **Salute rete**: CPE offline, segnale debole, porta LAN lenta/half duplex, firmware, da accettare; riepilogo per AP; CSV — vedi [NOC.md](NOC.md) | manutenzione proattiva prima che il cliente chiami | ✅ v1.10.0 |
+| 1 | **Salute CPE installate** (modulo, spento di default): solo CPE installate con l'app, ogni installatore le proprie, stato attuale vs collaudo — vedi [NOC.md](NOC.md) | manutenzione proattiva senza esporre il resto della rete | ✅ v1.11.0 (rifatta) |
 | 2 | **Statistiche** per mese, installatore e modello | qualità del lavoro e carico | ✅ v1.10.0 |
 | 3 | **Collaudo offline**: misure e foto in coda nell'app, inviate quando torna la rete | sul tetto spesso non c'è campo | ✅ v1.10.1 |
+| 5 | **Funzionalità a moduli**: ogni funzione facoltativa si accende/spegne, nascosta in web e app e bloccata sul server — vedi [MODULI.md](MODULI.md) | adattare lo strumento all'organizzazione | ✅ v1.11.0 |
 | 4 | Scansione degli AP visibili dalla CPE | scegliere l'AP migliore | ⏳ (serve una CPE reale per verificare il comando airOS) |
 
 ## Già rilasciato
 
+- v1.10.x: statistiche, collaudo offline.
 - v1.9.0: verifica in due passaggi (TOTP) su web e app.
 - v1.8.0: export CSV dello storico.
 - v1.7.0: notifiche Telegram per il NOC.
