@@ -12,16 +12,15 @@ export const MAP_COLORS = COLORS;
 let vendor = null;
 
 /**
- * Reads of the local basemap file. The PMTiles reader swallows its own errors and still draws
- * (empty) tiles, so only the reads tell whether the map really works: header and directories
- * are the first 2-3, the tiles come after.
+ * Reads of the local basemap (single tiles from the server). The vector-tile reader swallows its
+ * own errors and still draws (empty) tiles, so only the reads tell whether the map really works.
  */
 const reads = { ok: 0, fail: 0, error: '', other: new Set() };
 if (!window.__cdaFetch) {
   window.__cdaFetch = window.fetch.bind(window);
   window.fetch = async (input, init) => {
     const url = String(input?.url ?? input);
-    const isMap = url.includes('/map/basemap');
+    const isMap = url.includes('/map/tiles/') || url.includes('/map/basemap');
     try {
       const r = await window.__cdaFetch(input, init);
       if (isMap) r.ok ? reads.ok++ : (reads.fail++, (reads.error = `HTTP ${r.status}`));
@@ -79,13 +78,13 @@ export async function createMap(el, { center = [37.57, 14.27], zoom = 9, onStatu
   const publicTiles = () => L.tileLayer(config.fallback.url, { maxZoom: 19, attribution: config.fallback.attribution, referrerPolicy: 'strict-origin-when-cross-origin' }).addTo(map);
   if (config.basemap && window.protomapsL) {
     const dark = matchMedia('(prefers-color-scheme: dark)').matches;
-    const pm = window.protomapsL.leafletLayer({ url: config.basemap.url, flavor: dark ? 'dark' : 'light', lang: 'it', maxDataZoom: config.basemap.maxZoom }).addTo(map);
+    const pm = window.protomapsL.leafletLayer({ url: config.basemap.tiles ?? config.basemap.url, flavor: dark ? 'dark' : 'light', lang: 'it', maxDataZoom: config.basemap.maxZoom }).addTo(map);
     const start = reads.ok;
     setTimeout(() => {
       if (!el.isConnected) return;
       const size = map.getSize();
-      // no tile data after header and directories: unreadable here, or outside the downloaded area
-      const working = reads.ok - start > 3;
+      // no tile read: unreadable here, or outside the downloaded area
+      const working = reads.ok - start > (config.basemap.tiles ? 0 : 3);
       const other = reads.other.size ? `, altre richieste fallite: ${[...reads.other].join(' ')}` : '';
       onStatus?.(working ? 'basemap_ok' : 'basemap_fallback', `letture ${reads.ok - start} ok, ${reads.fail} fallite${reads.error ? ` (${reads.error})` : ''}, mappa ${size.x}×${size.y}, zoom ${map.getZoom()}${other}`);
       if (!working) {
