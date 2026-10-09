@@ -47,3 +47,7 @@ Finché la mappa non è installata, la console usa le tile pubbliche di OpenStre
 - La **direzione di puntamento** nella copertura resta esatta, perché serve per allineare la CPE.
 - Il **numero di clienti (CPE)** di POP e AP è nascosto agli installatori, salvo che l'amministratore lo abiliti (Account → "POP/AP assegnati agli installatori").
 - Gli installatori vedono solo i POP/AP assegnati.
+
+## Tile singole (v1.32.1)
+
+Il server legge il file PMTiles e serve ogni tile a sé: `/map/tiles/{z}/{x}/{y}.mvt`, con cache del browser di un giorno e URL che cambia con la mappa. Console e app fanno richieste normali invece di letture a intervalli di byte del file: alcune WebView Android (es. Android 16, Chrome 153) le rifiutavano e la mappa restava bianca. `/map/basemap.pmtiles` resta disponibile.

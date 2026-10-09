@@ -63,6 +63,7 @@ Funzioni scritte e testate senza l'apparato reale: vanno provate su una CPE di l
 
 ## Già rilasciato
 
+- v1.32.1: mappa locale servita a tile singole dal server (niente letture a intervalli: le WebView Android le rifiutavano).
 - v1.32.0: regione OpenStreetMap dal portale, SSID dei rilanci (…-R<n>).
 - v1.31.1: collegamenti PtP esclusi da copertura, Trova l'AP, Stato rete e Salute CPE (SSID CDA-NET-N…-D…).
 - v1.31.0: aggiornamento obbligatorio e automatico dell'app.

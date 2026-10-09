@@ -1,6 +1,7 @@
 import { createReadStream, openSync, readSync, closeSync, statSync } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { PmTilesReader } from '../domain/pmtiles.ts';
 import type { AppContext } from '../context.ts';
 
 /**
@@ -11,6 +12,8 @@ import type { AppContext } from '../context.ts';
 
 export interface BasemapInfo {
   url: string;
+  /** Same map as single tiles ({z}/{x}/{y}): ordinary requests instead of byte ranges. */
+  tiles: string;
   bounds: [number, number, number, number];
   minZoom: number;
   maxZoom: number;
@@ -19,7 +22,7 @@ export interface BasemapInfo {
 }
 
 /** PMTiles v3 header (127 bytes): zooms and bounds; null when missing or not a PMTiles v3 archive. */
-export function readPmtilesHeader(file: string): Omit<BasemapInfo, 'url' | 'size' | 'updatedAt'> | null {
+export function readPmtilesHeader(file: string): Omit<BasemapInfo, 'url' | 'tiles' | 'size' | 'updatedAt'> | null {
   let fd: number | null = null;
   try {
     fd = openSync(file, 'r');
@@ -48,7 +51,8 @@ export function mapRoutes(app: FastifyInstance, ctx: AppContext) {
     }
     if (cached?.mtime !== st.mtimeMs) {
       const h = readPmtilesHeader(file);
-      cached = { mtime: st.mtimeMs, info: h ? { ...h, url: `/map/basemap.pmtiles?v=${Math.round(st.mtimeMs)}`, size: st.size, updatedAt: st.mtime.toISOString() } : null };
+      const v = Math.round(st.mtimeMs);
+      cached = { mtime: st.mtimeMs, info: h ? { ...h, url: `/map/basemap.pmtiles?v=${v}`, tiles: `/map/tiles/{z}/{x}/{y}.mvt?v=${v}`, size: st.size, updatedAt: st.mtime.toISOString() } : null };
     }
     return cached.info;
   };
@@ -74,6 +78,33 @@ export function mapRoutes(app: FastifyInstance, ctx: AppContext) {
       .parse(req.body);
     req.log.warn({ map: b }, 'embedded map');
     return reply.code(204).send();
+  });
+
+  /**
+   * Single vector tiles read on the server from the basemap: what the console and the app use.
+   * Absent tile (sea, outside the downloaded area) = 204. Cached by the browser: the URL changes
+   * with the map file.
+   */
+  let reader: { mtime: number; r: PmTilesReader } | null = null;
+  app.get('/map/tiles/:z/:x/:y', async (req, reply) => {
+    const p = req.params as { z: string; x: string; y: string };
+    const m = /^(\d+)$/.exec(p.z) && /^(\d+)$/.exec(p.x) && /^(\d+)(\.mvt)?$/.exec(p.y);
+    if (!m) return reply.code(400).send({ error: 'bad_tile' });
+    const [z, x, y] = [Number(p.z), Number(p.x), Number.parseInt(p.y, 10)];
+    if (z > 22 || x >= 2 ** z || y >= 2 ** z) return reply.code(400).send({ error: 'bad_tile' });
+    const i = info();
+    if (!i) return reply.code(404).send({ error: 'basemap_missing' });
+    if (reader?.mtime !== Date.parse(i.updatedAt)) {
+      await reader?.r.close();
+      reader = { mtime: Date.parse(i.updatedAt), r: new PmTilesReader(file) };
+    }
+    const h = await reader.r.getHeader();
+    const t = await reader.r.tile(z, x, y);
+    reply.header('Cache-Control', 'public, max-age=86400');
+    if (!t) return reply.code(204).send();
+    reply.header('Content-Type', 'application/vnd.mapbox-vector-tile');
+    if (h.tileCompression === 2) reply.header('Content-Encoding', 'gzip');
+    return reply.send(t);
   });
 
   /** Range requests only (PMTiles readers fetch the parts they need). Public map data, no customer data. */
