@@ -23,6 +23,12 @@ const FAR_AP = {
   attributes: { ssid: 'CDA-NET-N99-D01' },
   location: { latitude: 45.46, longitude: 9.19 },
 };
+/** PtP backhaul end next to Nodo 2: never a coverage target. */
+const PTP = {
+  identification: { id: 'ptp-1', name: 'PtP Monte-Valle', role: 'ap', site: { id: 'x', name: 'Lontano' }, authorized: true },
+  overview: { status: 'active', stationsCount: 1, wirelessMode: 'ap-ptp' },
+  location: { latitude: 37.6005, longitude: 14.1005 },
+};
 export const STATION = {
   identification: { id: 'cpe-1', name: 'ROSSI MARIO', mac: 'aa-bb-cc-dd-ee-ff', role: 'station', authorized: false, firmwareVersion: '8.7.4' },
   overview: { status: 'active', signal: -58, wirelessMode: 'sta-ptmp', mainInterfaceSpeed: { interfaceId: 'eth0', availableSpeed: '10-half' }, downlinkCapacity: 250000000 },
@@ -31,7 +37,7 @@ export const STATION = {
 
 export function fakeUisp(opts: { authorizeMethod?: 'POST' | 'PUT'; backupCfg?: string } = {}) {
   const calls: Array<{ method: string; path: string; body: unknown; token: string | null }> = [];
-  const devices = [AP_N2, AP_N7, FAR_AP, STATION].map((d) => structuredClone(d));
+  const devices = [AP_N2, AP_N7, FAR_AP, PTP, STATION].map((d) => structuredClone(d));
   const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     const method = init?.method ?? 'GET';
