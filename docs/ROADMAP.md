@@ -52,14 +52,16 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 
 ## Da verificare sul campo
 
-Funzioni scritte e testate senza l'apparato reale: vanno provate su una CPE di laboratorio (o sul telefono) prima dell'uso in produzione.
+Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). Funzioni scritte e testate senza l'apparato reale: vanno provate su una CPE di laboratorio (o sul telefono) prima dell'uso in produzione.
 
 | Voce | Cosa provare |
 |---|---|
 | Scansione AP dalla CPE (v1.25) | che `survey.json.cgi` risponda su airOS 8.7.4 e che l'elenco corrisponda a quello della pagina web della CPE |
 | Cambio AP dall'installazione guidata (v1.28) | su una CPE di laboratorio: SSID e chiave WPA2 riscritti, "Lock to AP" sbloccato, riavvio e aggancio al nuovo AP |
 | Modulazione nella verifica finale (v1.28) | che `status.cgi` riporti `rx_idx`/`tx_idx`: se mancano la riga non compare |
-| Mappe nell'app (v1.28) | Guasti Enel e Trova l'AP sul telefono con il server a certificato autofirmato |
+| Accesso rapido con impronta o volto (v1.30) | attivazione dopo il login, accesso con impronta e con volto, revoca da Il mio account |
+| Aggiornamento obbligatorio (v1.31) | un'app più vecchia mostra solo la schermata di aggiornamento e si aggiorna da sola |
+| Tema scuro (v1.32.1) | con il telefono in modalità scura: nessun lampo bianco all'avvio, mappe in versione scura |
 
 ## Già rilasciato
 
