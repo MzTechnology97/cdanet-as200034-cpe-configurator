@@ -13,12 +13,23 @@ export function toolRoutes(app: FastifyInstance, ctx: AppContext) {
   const ros = { preHandler: [ctx.auth.requireUser, ctx.modules.require('routeros')] };
 
   app.get('/api/tools/interfaces', user, () => tools.interfaces());
-  app.get('/api/tools/neighbors', user, () => tools.neighbors());
+  /** Adds the IEEE vendor to every MAC of a result. */
+  const withVendors = async <T extends { mac?: string }>(rows: T[]) => {
+    const v = await ctx.oui.lookup(rows.map((r) => r.mac).filter((m): m is string => !!m)).catch(() => ({}) as Record<string, string | null>);
+    return rows.map((r) => ({ ...r, vendor: r.mac ? (v[r.mac] ?? null) : null }));
+  };
+  app.get('/api/tools/neighbors', user, async () => {
+    const r = await tools.neighbors();
+    return { ...r, neighbors: await withVendors(r.neighbors) };
+  });
   app.post('/api/tools/ping', user, (req) => tools.ping(host.parse(req.body).host));
   app.post('/api/tools/traceroute', user, (req) => tools.traceroute(host.parse(req.body).host));
   app.post('/api/tools/dns', user, (req) => tools.dnsLookup(host.parse(req.body).host));
   app.post('/api/tools/netbios', user, (req) => tools.netbios(host.parse(req.body).host));
-  app.post('/api/tools/discover', user, (req) => tools.discover(z.object({ cidr: z.string().max(40) }).parse(req.body).cidr));
+  app.post('/api/tools/discover', user, async (req) => {
+    const r = await tools.discover(z.object({ cidr: z.string().max(40) }).parse(req.body).cidr);
+    return { ...r, hosts: await withVendors(r.hosts) };
+  });
   app.post('/api/tools/snmp', user, (req) => {
     const b = host.extend({ community: z.string().min(1).max(64) }).parse(req.body);
     return tools.snmpSystem(b.host, b.community);

@@ -63,6 +63,7 @@ function render(kind, d) {
         { label: 'IP', key: 'ip' },
         { label: 'Hostname', render: (x) => x.hostname || '—' },
         { label: 'MAC', render: (x) => h('span', { class: 'mono' }, x.mac || '—') },
+        { label: 'Produttore', render: (x) => x.vendor || '—' },
         { label: 'Stato', render: (x) => x.state || 'online' },
       ],
       d.hosts ?? d.neighbors,

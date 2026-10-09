@@ -125,3 +125,33 @@ Misure, note e foto vengono **sempre** salvate prima nella memoria privata dell'
 - altrimenti restano sul telefono e vengono ritentate dopo il login e ogni 2 minuti, oppure a mano da Impostazioni → *Invia collaudi ora*. Prima viene sempre inviato l'esito del provisioning.
 
 La Home e le Impostazioni mostrano quanti collaudi e foto sono in attesa. Le foto inviate vengono cancellate dal telefono.
+
+## Strumenti di rete professionali (v1.13)
+
+Tutti questi strumenti richiedono la **Wi-Fi della rete da analizzare**. Se il telefono è sui dati mobili, la schermata lo dice, apre il popup Wi-Fi di Android e si sblocca da sola appena il telefono è collegato.
+
+### Scanner IP
+- Subnet fino a /22, proposta in automatico dalla Wi-Fi collegata.
+- **Rilevamento degli host**: sondaggio TCP su 16 porte comuni (anche una connessione rifiutata prova che l'host è acceso) e ping ICMP per gli host che non rispondono su TCP.
+- **Nomi**: DNS inverso chiesto al DNS della LAN (il router conosce i suoi client DHCP) e nomi NetBIOS dei PC Windows.
+- **MAC**: dalla discovery Ubiquiti, da NetBIOS e dalla tabella ARP dove Android la rende disponibile.
+- **Produttore** di ogni MAC dal registro ufficiale IEEE (MA-L/MA-M/MA-S), che il server scarica e aggiorna ogni 30 giorni. I MAC casuali dei telefoni vengono indicati come tali.
+- **Tipo di apparato** stimato da produttore, porte e nome: Ubiquiti (anche "CPE CDA Net"), MikroTik, telecamera/NVR, stampante, PC Windows, Apple, Chromecast, IoT, NAS, router/gateway.
+- Gateway e telefono evidenziati, filtro e ordinamento, porte aperte con il nome del servizio, export CSV.
+- Da ogni host si passa al **port scanner** o si apre l'interfaccia web.
+
+### Port scanner
+- Preset (top 30, apparati di rete, TVCC/NVR, Windows/server, database, stampanti, prime 1024) o elenco libero come `1-1024,8291,8728,20443` (fino a 10.000 porte).
+- Stato **aperta / chiusa (RST) / filtrata** (nessuna risposta: firewall o host spento), latenza, nome del servizio.
+- **Banner** dei servizi che si presentano (SSH, FTP, SMTP…), **status e header `Server`** HTTP, redirect, e **certificato TLS** (protocollo, CN, emittente, scadenza, autofirmato sì/no).
+- Timeout regolabile (300-600 ms in LAN, 800-1500 ms sui link radio), avanzamento in tempo reale, interruzione, export CSV.
+- Solo indirizzi privati o CGNAT.
+
+### Diagnostica di rete
+- **Ping continuo** con dimensione del pacchetto a scelta: inviati/ricevuti, perdita, minimo/medio/massimo, jitter e deviazione standard.
+- **MTU di percorso** (ricerca binaria con il bit DF): 1500 su Ethernet, 1492 dietro PPPoE; valori inferiori indicano tunnel o overhead da compensare con MSS clamping.
+- **DNS avanzato**: A, AAAA, MX, TXT, NS, CNAME, SOA, PTR, SRV, CAA verso qualsiasi server (quello della Wi-Fi, 1.1.1.1, il DNS CDA Net…), con TTL, codice di risposta e tempo.
+- **Verifica HTTP/HTTPS**: catena di redirect, codice, tempo, header `Server`, certificato validato come in un browser.
+- **Wake-on-LAN**: magic packet in broadcast (UDP 9 e 7).
+
+Il produttore dei MAC compare anche nella scansione e nella tabella ARP degli Strumenti di rete della console web.
