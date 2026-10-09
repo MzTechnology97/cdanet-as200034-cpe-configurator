@@ -115,7 +115,14 @@ data class OutageDto(
 data class OutageRunDto(val at: String? = null, val ok: Boolean = true, val error: String? = null)
 
 @Serializable
-data class OutagesDto(val active: List<OutageDto> = emptyList(), val lastRun: OutageRunDto? = null)
+data class OutageItemDto(val key: String = "", val name: String = "")
+
+/** What the user may see: admins everything, installers only the POPs/APs/zones assigned by the admin. */
+@Serializable
+data class OutageScopeDto(val all: Boolean = true, val assigned: List<OutageItemDto> = emptyList())
+
+@Serializable
+data class OutagesDto(val active: List<OutageDto> = emptyList(), val lastRun: OutageRunDto? = null, val generatedAt: String? = null, val scope: OutageScopeDto = OutageScopeDto())
 
 @Serializable
 data class CpeNowDto(

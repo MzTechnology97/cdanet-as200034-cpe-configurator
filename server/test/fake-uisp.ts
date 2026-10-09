@@ -2,7 +2,7 @@ import { createUisp } from '../src/services/uisp.ts';
 
 // UISP v2.1-shaped fixtures: two APs (one located via its site), one pending station.
 const SITES = [
-  { id: 'site-n2', identification: { name: 'Nodo 2 - Monte', type: 'site' }, description: { location: { latitude: 37.6, longitude: 14.1 } } },
+  { id: 'site-n2', identification: { name: 'Nodo 2 - Monte', type: 'site', status: 'active' }, description: { address: 'Contrada Monte, 94100 Enna EN', location: { latitude: 37.6, longitude: 14.1 } } },
   { id: 'site-n7', identification: { name: 'Nodo 7 - Valle', type: 'site' }, description: { location: { latitude: 37.51, longitude: 14.01 } } },
 ];
 const AP_N2 = {

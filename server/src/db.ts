@@ -204,6 +204,21 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX power_outages_active ON power_outages(ended_at);
   `,
+  // 11: POPs/APs imported from UISP to monitor, and their assignment to installers
+  `
+  CREATE TABLE outage_selection(
+    key TEXT PRIMARY KEY,
+    name TEXT NOT NULL,
+    added_at TEXT NOT NULL
+  );
+  CREATE TABLE outage_assignments(
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    key TEXT NOT NULL,
+    name TEXT NOT NULL,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY(user_id, key)
+  );
+  `,
 ];
 
 export function openDatabase(path: string): Db {

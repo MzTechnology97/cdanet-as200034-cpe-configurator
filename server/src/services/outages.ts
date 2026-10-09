@@ -41,9 +41,17 @@ export interface OutageConfig {
   includePlanned: boolean;
   /** POPs/APs closer than this to an outage are reported as potentially affected. */
   impactRadiusKm: number;
+  /** Monitor only the POPs/APs selected by the admin (imported from UISP) instead of all of them. */
+  selectionOnly: boolean;
 }
 
-const DEFAULT_CONFIG: OutageConfig = { apZones: true, apRadiusKm: 3, includePlanned: true, impactRadiusKm: 1 };
+const DEFAULT_CONFIG: OutageConfig = { apZones: true, apRadiusKm: 3, includePlanned: true, impactRadiusKm: 1, selectionOnly: false };
+
+/** A POP/AP/zone reference: "pop:<uisp id>", "ap:<uisp id>" or "z<zone id>" (same as zone ids). */
+export interface ItemRef {
+  key: string;
+  name: string;
+}
 
 /** A POP (UISP site) or AP very close to an outage: probably without mains power. */
 export interface Impact {
@@ -53,6 +61,21 @@ export interface Impact {
   distanceM: number;
   /** CPEs on the AP (or on all APs of the POP). */
   stations: number | null;
+  /** UISP site of the AP (the POP itself for a POP). */
+  popId?: string | null;
+}
+
+export const impactKey = (i: Pick<Impact, 'type' | 'id'>) => `${i.type}:${i.id}`;
+
+/**
+ * What an installer may see of an outage: only the assigned POPs/APs/zones (a POP covers its APs).
+ * Returns null when nothing assigned is involved.
+ */
+export function scopeOutage<T extends { impact: Impact[]; zones: Array<{ id: string }> }>(o: T, keys: Set<string>): T | null {
+  const mine = (i: Impact) => keys.has(impactKey(i)) || (i.popId ? keys.has(`pop:${i.popId}`) : false);
+  const impact = o.impact.filter(mine);
+  const zones = o.zones.filter((z) => keys.has(z.id));
+  return impact.length || zones.length ? { ...o, impact, zones } : null;
 }
 
 export interface Infra {
@@ -66,8 +89,8 @@ export function impactOf(o: LatLon, infra: Infra, radiusKm: number): Impact[] {
   const near = <T extends { lat: number; lon: number }>(xs: T[]) =>
     xs.map((x) => ({ x, d: Math.round(distanceM(o, { lat: x.lat, lon: x.lon })) })).filter((v) => v.d <= max);
   return [
-    ...near(infra.pops).map(({ x, d }) => ({ type: 'pop' as const, id: x.id, name: x.name, distanceM: d, stations: x.stations })),
-    ...near(infra.aps).map(({ x, d }) => ({ type: 'ap' as const, id: x.id, name: x.name, distanceM: d, stations: x.stations })),
+    ...near(infra.pops).map(({ x, d }) => ({ type: 'pop' as const, id: x.id, name: x.name, distanceM: d, stations: x.stations, popId: x.id })),
+    ...near(infra.aps).map(({ x, d }) => ({ type: 'ap' as const, id: x.id, name: x.name, distanceM: d, stations: x.stations, popId: x.siteId })),
   ].sort((a, b) => a.distanceM - b.distanceM);
 }
 
@@ -145,7 +168,54 @@ export function createOutages(
       source: 'manual' as const,
     }));
 
-  /** UISP POPs (sites with a position) and APs, with the CPE count of each. */
+  // ---- POPs/APs selected from UISP and assignments to installers --------------------------
+  const selection = (): ItemRef[] => db.prepare('SELECT key, name FROM outage_selection ORDER BY name').all() as unknown as ItemRef[];
+
+  function replaceAll(del: () => void, insert: () => void) {
+    db.exec('BEGIN');
+    try {
+      del();
+      insert();
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+  }
+
+  function setSelection(items: ItemRef[], selectionOnly: boolean, userId: number) {
+    const ins = db.prepare('INSERT OR REPLACE INTO outage_selection(key, name, added_at) VALUES(?,?,?)');
+    replaceAll(
+      () => db.prepare('DELETE FROM outage_selection').run(),
+      () => items.forEach((it) => ins.run(it.key, it.name, nowIso())),
+    );
+    return { config: setConfig({ selectionOnly }, userId), items: selection() };
+  }
+
+  /** null = everything (no selection in use). */
+  const monitored = (): Set<string> | null => (config().selectionOnly ? new Set(selection().map((i) => i.key)) : null);
+
+  const assignments = (userId: number): ItemRef[] =>
+    db.prepare('SELECT key, name FROM outage_assignments WHERE user_id = ? ORDER BY name').all(userId) as unknown as ItemRef[];
+
+  function allAssignments() {
+    const m = new Map<number, ItemRef[]>();
+    for (const r of db.prepare('SELECT user_id userId, key, name FROM outage_assignments ORDER BY name').all() as unknown as Array<ItemRef & { userId: number }>) {
+      m.set(r.userId, [...(m.get(r.userId) ?? []), { key: r.key, name: r.name }]);
+    }
+    return m;
+  }
+
+  function setAssignments(userId: number, items: ItemRef[]) {
+    const ins = db.prepare('INSERT OR REPLACE INTO outage_assignments(user_id, key, name, added_at) VALUES(?,?,?,?)');
+    replaceAll(
+      () => db.prepare('DELETE FROM outage_assignments WHERE user_id = ?').run(userId),
+      () => items.forEach((it) => ins.run(userId, it.key, it.name, nowIso())),
+    );
+    return assignments(userId);
+  }
+
+  /** UISP POPs (sites with a position) and APs with the CPE count of each (only the selected ones in selection mode). */
   async function infra(): Promise<Infra> {
     const u = opts.getUisp();
     if (!u) return { pops: [], aps: [] };
@@ -153,11 +223,14 @@ export function createOutages(
       const [aps, sites] = await Promise.all([u.apsWithLocation(), u.sites()]);
       const perSite = new Map<string, number>();
       for (const a of aps) if (a.siteId) perSite.set(a.siteId, (perSite.get(a.siteId) ?? 0) + (a.stations ?? 0));
+      const sel = monitored();
       return {
         pops: sites
-          .filter((s) => s.location && s.type !== 'endpoint')
+          .filter((s) => s.location && s.type !== 'endpoint' && (!sel || sel.has(`pop:${s.id}`)))
           .map((s) => ({ id: s.id, name: s.name, lat: s.location!.lat, lon: s.location!.lon, stations: perSite.get(s.id) ?? null })),
-        aps: aps.map((a) => ({ id: a.id, name: a.name || a.ssid || a.id, lat: a.location.lat, lon: a.location.lon, stations: a.stations, siteId: a.siteId })),
+        aps: aps
+          .filter((a) => !sel || sel.has(`ap:${a.id}`))
+          .map((a) => ({ id: a.id, name: a.name || a.ssid || a.id, lat: a.location.lat, lon: a.location.lon, stations: a.stations, siteId: a.siteId })),
       };
     } catch (err) {
       opts.log?.(`outages: UISP infrastructure unavailable (${(err as Error).message})`);
@@ -171,7 +244,16 @@ export function createOutages(
     const u = opts.getUisp();
     if (c.apZones && u) {
       try {
-        for (const ap of await u.apsWithLocation()) out.push({ id: `ap:${ap.id}`, name: ap.name || ap.ssid || ap.id, lat: ap.location.lat, lon: ap.location.lon, radiusKm: c.apRadiusKm, source: 'ap' });
+        // Positions straight from UISP: every AP (own position or its POP's) and every POP, or only the selected ones.
+        const sel = monitored();
+        for (const ap of await u.apsWithLocation()) {
+          if (!sel || sel.has(`ap:${ap.id}`)) out.push({ id: `ap:${ap.id}`, name: ap.name || ap.ssid || ap.id, lat: ap.location.lat, lon: ap.location.lon, radiusKm: c.apRadiusKm, source: 'ap' });
+        }
+        for (const s of await u.sites()) {
+          if (s.type !== 'endpoint' && s.location && (!sel || sel.has(`pop:${s.id}`))) {
+            out.push({ id: `pop:${s.id}`, name: `POP ${s.name}`, lat: s.location.lat, lon: s.location.lon, radiusKm: c.apRadiusKm, source: 'ap' });
+          }
+        }
       } catch (err) {
         opts.log?.(`outages: AP zones unavailable (${(err as Error).message})`);
       }
@@ -283,21 +365,31 @@ export function createOutages(
     return lastRun;
   }
 
-  function active() {
-    return (db.prepare('SELECT data, zones, first_seen FROM power_outages WHERE ended_at IS NULL').all() as Array<{ data: string; zones: string; first_seen: string }>)
+  /** Active outages; with [keys] only those involving the assigned POPs/APs/zones (installer view). */
+  function active(keys?: Set<string>) {
+    const all = (db.prepare('SELECT data, zones, first_seen FROM power_outages WHERE ended_at IS NULL').all() as Array<{ data: string; zones: string; first_seen: string }>)
       .map((r) => {
         const d = JSON.parse(r.data) as PowerOutage & { impact?: Impact[] };
         return { ...d, impact: d.impact ?? [], zones: JSON.parse(r.zones) as Array<{ id: string; name: string; source: string; distanceM: number }>, firstSeen: r.first_seen };
       })
       // impacted POPs/APs first, then faults, then by customers
       .sort((a, b) => (b.impact.length ? 1 : 0) - (a.impact.length ? 1 : 0) || (a.kind === 'lavoro' ? 1 : 0) - (b.kind === 'lavoro' ? 1 : 0) || b.customers - a.customers);
+    return keys ? all.map((o) => scopeOutage(o, keys)).filter((o) => o !== null) : all;
   }
 
-  function recent(hours = 48) {
+  function recent(hours = 48, keys?: Set<string>) {
     const since = new Date(Date.now() - hours * 3600_000).toISOString();
-    return (db.prepare('SELECT data, zones, first_seen, ended_at FROM power_outages WHERE ended_at IS NOT NULL AND ended_at >= ? ORDER BY ended_at DESC LIMIT 100').all(since) as Array<{ data: string; zones: string; first_seen: string; ended_at: string }>).map(
-      (r) => ({ ...(JSON.parse(r.data) as PowerOutage), zones: JSON.parse(r.zones), firstSeen: r.first_seen, endedAt: r.ended_at }),
-    );
+    const rows = db.prepare('SELECT data, zones, first_seen, ended_at FROM power_outages WHERE ended_at IS NOT NULL AND ended_at >= ? ORDER BY ended_at DESC LIMIT 100').all(since) as Array<{
+      data: string;
+      zones: string;
+      first_seen: string;
+      ended_at: string;
+    }>;
+    const all = rows.map((r) => {
+      const d = JSON.parse(r.data) as PowerOutage & { impact?: Impact[] };
+      return { ...d, impact: d.impact ?? [], zones: JSON.parse(r.zones) as Array<{ id: string; name: string }>, firstSeen: r.first_seen, endedAt: r.ended_at };
+    });
+    return keys ? all.map((o) => scopeOutage(o, keys)).filter((o) => o !== null) : all;
   }
 
   let timer: NodeJS.Timeout | null = null;
@@ -306,6 +398,12 @@ export function createOutages(
     setConfig,
     manualZones,
     zones,
+    infra,
+    selection,
+    setSelection,
+    assignments,
+    allAssignments,
+    setAssignments,
     refresh,
     active,
     recent,

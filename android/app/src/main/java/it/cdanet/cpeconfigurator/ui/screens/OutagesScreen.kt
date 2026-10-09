@@ -29,6 +29,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import it.cdanet.cpeconfigurator.core.AppContainer
 import it.cdanet.cpeconfigurator.data.CpeLocation
+import it.cdanet.cpeconfigurator.data.OutageItemDto
 import it.cdanet.cpeconfigurator.data.OutagesDto
 import it.cdanet.cpeconfigurator.outages.OutageAlerts
 import it.cdanet.cpeconfigurator.ui.BadRed
@@ -98,9 +99,19 @@ fun OutagesScreen(c: AppContainer) {
         BusyButton("Aggiorna", busy, Modifier.fillMaxWidth(), primary = false) { scope.launch { load() } }
         if (c.session.isAdmin) ZoneEditor(c) { scope.launch { load() } }
         val d = data ?: return@Column
-        Text(d.lastRun?.at?.let { "Ultimo controllo del server: ${it.replace('T', ' ').take(16)} · fonte e-distribuzione" } ?: "Il server non ha ancora controllato", style = MaterialTheme.typography.bodySmall)
-        if (d.active.isEmpty()) {
-            SectionCard { Text("Nessun guasto né lavoro nelle zone di interesse.") }
+        val at = d.lastRun?.at ?: d.generatedAt
+        Text(at?.let { "Ultimo controllo del server: ${it.replace('T', ' ').take(16)} · fonte e-distribuzione" } ?: "Il server non ha ancora controllato", style = MaterialTheme.typography.bodySmall)
+        if (!d.scope.all) {
+            SectionCard("Assegnati a te") {
+                if (d.scope.assigned.isEmpty()) {
+                    Text("Nessun POP, AP o zona assegnati: chiedi all'amministratore di assegnarteli.", color = WarnAmber)
+                } else {
+                    Text(d.scope.assigned.joinToString(" · ") { itemLabel(it) }, style = MaterialTheme.typography.bodySmall)
+                }
+            }
+        }
+        if (d.active.isEmpty() && (d.scope.all || d.scope.assigned.isNotEmpty())) {
+            SectionCard { Text(if (d.scope.all) "Nessun guasto né lavoro nelle zone di interesse." else "Nessun guasto né lavoro sui tuoi POP/AP.") }
         }
         d.active.forEach { o ->
             SectionCard {
@@ -120,6 +131,12 @@ fun OutagesScreen(c: AppContainer) {
             }
         }
     }
+}
+
+private fun itemLabel(i: OutageItemDto) = when {
+    i.key.startsWith("pop:") -> "POP ${i.name}"
+    i.key.startsWith("ap:") -> i.name
+    else -> "Zona ${i.name}"
 }
 
 /** Admin: new area of interest from the phone (GPS with automatic address, address search or typed coordinates). */

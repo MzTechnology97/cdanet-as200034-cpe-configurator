@@ -41,6 +41,10 @@ export interface UispSite {
   name: string;
   type: string;
   location: LatLon | null;
+  /** description.address as typed in UISP. */
+  address: string | null;
+  parentId: string | null;
+  status: string | null;
 }
 
 type Json = Record<string, unknown>;
@@ -106,6 +110,9 @@ export function normalizeSite(raw: unknown): UispSite {
     name: str(id.name) ?? str(s.name) ?? '',
     type: str(id.type) ?? '',
     location: latLon(desc.location) ?? latLon(s.location),
+    address: str(desc.address),
+    parentId: str(obj(id.parent).id),
+    status: str(id.status),
   };
 }
 
@@ -228,6 +235,53 @@ export function createUisp(opts: UispOptions) {
       return aps();
     },
 
+    /**
+     * POPs and APs exactly as UISP knows them (name, address, coordinates and where the
+     * position comes from): nothing is typed by hand in CDA Net.
+     */
+    async infrastructure() {
+      const [ds, ss] = await Promise.all([devices(), sites()]);
+      const pops = ss.filter((s) => s.type !== 'endpoint');
+      const allAps = ds.filter(isAp);
+      const siteById = new Map(ss.map((s) => [s.id, s]));
+      const ap = (d: UispDevice) => {
+        const site = d.siteId ? siteById.get(d.siteId) : undefined;
+        const loc = d.location ?? site?.location ?? null;
+        return {
+          id: d.id,
+          name: d.name,
+          ssid: d.ssid,
+          model: d.model,
+          status: d.status,
+          stations: d.stations,
+          lat: loc?.lat ?? null,
+          lon: loc?.lon ?? null,
+          locationFrom: d.location ? ('ap' as const) : loc ? ('pop' as const) : null,
+          siteId: d.siteId,
+          siteName: d.siteName,
+        };
+      };
+      const aps = allAps.map(ap);
+      return {
+        pops: pops.map((s) => {
+          const mine = aps.filter((a) => a.siteId === s.id);
+          return {
+            id: s.id,
+            name: s.name,
+            address: s.address,
+            status: s.status,
+            parentId: s.parentId,
+            parentName: s.parentId ? (siteById.get(s.parentId)?.name ?? null) : null,
+            lat: s.location?.lat ?? null,
+            lon: s.location?.lon ?? null,
+            aps: mine,
+            stations: mine.reduce((t, a) => t + (a.stations ?? 0), 0),
+          };
+        }),
+        apsWithoutPop: aps.filter((a) => !a.siteId || !siteById.has(a.siteId)),
+      };
+    },
+
     async nearestAps(from: LatLon, limit: number, maxKm: number) {
       return (await aps())
         .map((d) => {
@@ -276,7 +330,7 @@ export function createUisp(opts: UispOptions) {
         if (near) candidates.sort((a, b) => (a.location ? distanceM(near, a.location) : 1e12) - (b.location ? distanceM(near, b.location) : 1e12));
         ap = candidates[0];
       }
-      return ap?.siteId ? byId.get(ap.siteId) ?? { id: ap.siteId, name: ap.siteName ?? '', type: '', location: null } : null;
+      return ap?.siteId ? byId.get(ap.siteId) ?? { id: ap.siteId, name: ap.siteName ?? '', type: '', location: null, address: null, parentId: null, status: null } : null;
     },
 
     /** All devices (cached like the rest: UISP is not hammered by the NOC page). */
