@@ -151,6 +151,8 @@ Restano nel `.env` solo i segreti di base (`JWT_SECRET`, chiave master) e l'inst
 ## Reti Wi-Fi (chiavi WPA2) in blocco
 
 Nella console, in **Reti Wi-Fi**:
+- **Importa da UISP**: **Leggi gli SSID da UISP** elenca solo gli SSID degli AP dei clienti (`CDA-NET-N…-D…`, rilanci compresi, collegamenti PtP esclusi) che **non hanno ancora una chiave**, raggruppati per nodo, con il conteggio di quelli già importati. Sono tutti selezionati: con **Cerca**, **Tutti** e **Nessuno** si può limitare la scelta (es. solo `N12`). Si inserisce una volta la **chiave WPA2 comune** e **Importa N SSID** la salva sui selezionati. Con **Sostituisci la chiave anche sulle reti già importate** viene cambiata anche su quelle (utile quando cambia la chiave comune). Prima di salvare compare il riepilogo da confermare, e la chiave non finisce mai nel Registro attività.
+- **Esporta CSV con le chiavi** (sopra l'elenco): scarica le reti selezionate, o tutte se non ne è selezionata nessuna, con la chiave WPA2 **in chiaro** nel formato `nodo;distretto;ssid;wpa2`, che l'import CSV rilegge così com'è. Chiede di nuovo la password dell'amministratore. L'esportazione finisce nel Registro attività (senza chiavi) e viene segnalata sul canale Telegram di sicurezza. Il file va conservato come una password. Una chiave che inizia con `= + - @` o con un apostrofo viene scritta con un apostrofo davanti, così Excel non la tratta come una formula; l'import lo toglie.
 - **Importa da CSV**: carica un file con una riga per rete. Il modello si scarica dalla pagina (*Scarica CSV di esempio*):
 
   ```csv
