@@ -41,6 +41,7 @@ import { infraRoutes } from './routes/infra.ts';
 import { guideRoutes } from './routes/guide.ts';
 import { workOrderRoutes } from './routes/work-orders.ts';
 import { firmwareRoutes } from './routes/firmware.ts';
+import { privacyRoutes } from './routes/privacy.ts';
 import { createServerSettings } from './services/server-settings.ts';
 import { createDem } from './services/dem.ts';
 
@@ -208,6 +209,7 @@ export async function buildApp(
   guideRoutes(app, ctx);
   workOrderRoutes(app, ctx);
   firmwareRoutes(app, ctx);
+  privacyRoutes(app, ctx);
   adminRoutes(app, ctx);
   toolRoutes(app, ctx);
   uispRoutes(app, ctx);

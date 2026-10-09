@@ -365,6 +365,23 @@ const MIGRATIONS: string[] = [
   ALTER TABLE work_orders ADD COLUMN location_from TEXT NOT NULL DEFAULT '';
   ALTER TABLE work_orders ADD COLUMN position_check TEXT NOT NULL DEFAULT '';
   `,
+  // 21: acceptances of the privacy notice, each with its printable attestation (kept as accepted)
+  `
+  CREATE TABLE privacy_acceptances(
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    username TEXT NOT NULL,
+    version TEXT NOT NULL,
+    text_sha256 TEXT NOT NULL,
+    accepted_at TEXT NOT NULL,
+    ip TEXT NOT NULL DEFAULT '',
+    user_agent TEXT NOT NULL DEFAULT '',
+    app_version TEXT NOT NULL DEFAULT '',
+    device TEXT NOT NULL DEFAULT '',
+    document TEXT NOT NULL
+  );
+  CREATE INDEX privacy_acceptances_user ON privacy_acceptances(user_id, text_sha256);
+  `,
 ];
 
 export function openDatabase(path: string): Db {

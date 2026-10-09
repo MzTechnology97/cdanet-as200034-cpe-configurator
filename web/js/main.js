@@ -23,6 +23,7 @@ import { wirelessView } from './views/wireless.js';
 import { adminGuideView } from './views/guide.js';
 import { workOrdersView } from './views/work-orders.js';
 import { firmwareView } from './views/firmware.js';
+import { privacyView } from './views/privacy.js';
 import { setAdmin } from './terms.js';
 import { icon } from './icons.js';
 
@@ -47,6 +48,7 @@ const ROUTES = [
   { id: 'connectors', icon: 'link', label: 'Connettori', view: connectorsView, admin: true },
   { id: 'server', icon: 'dns', label: 'Impostazioni server', view: serverSettingsView, admin: true },
   { id: 'modules', icon: 'handyman', label: 'Funzionalità', view: (ctx) => modulesView({ ...ctx, onChange: () => renderChrome(session.get()?.user) }), admin: true },
+  { id: 'privacy', icon: 'lock', label: 'Informativa privacy', view: privacyView, admin: true },
   { id: 'events', icon: 'manage_search', label: 'Registro attività', view: eventsView, admin: true },
   { id: 'admin-guide', icon: 'menu_book', label: 'Guida amministratore', view: adminGuideView, admin: true },
   { group: 'Profilo' },

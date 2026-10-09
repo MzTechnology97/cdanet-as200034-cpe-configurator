@@ -41,6 +41,8 @@ const MESSAGES = {
   job_not_completed: 'Il provisioning non risulta completato',
   too_many_photos: 'Troppe foto per questo job',
   photo_not_jpeg: 'La foto deve essere in formato JPEG',
+  privacy_changed: 'L’informativa è cambiata: ricarica e rileggila',
+  privacy_not_configured: 'Informativa privacy non ancora completata dall’amministratore',
   firmware_invalid: 'Il file non è un firmware airOS (.bin ufficiale Ubiquiti)',
   firmware_exists: 'Questo firmware è già stato caricato',
   firmware_not_found: 'Firmware non trovato',
