@@ -22,6 +22,7 @@ export async function adminGuideView() {
   return h(
     'div',
     {},
+    lightbox(body),
     pageHead('Guida amministratore', 'Come preparare il sistema, gestire installatori e rete. Visibile solo agli amministratori.', h('a', { class: 'button-link', href: '/wiki/', target: '_blank', rel: 'noopener' }, 'Guida installatore')),
     body,
   );
@@ -41,4 +42,68 @@ async function loadImage(img) {
   } catch {
     img.alt = `${img.alt} (immagine non disponibile)`;
   }
+}
+
+/** Click on a screenshot: full screen, arrows for the others, real size to read the details, Esc/back to close. */
+function lightbox(body) {
+  const figures = () => [...body.querySelectorAll('figure')].filter((f) => f.querySelector('img'));
+  const img = h('img', { alt: '' });
+  const caption = h('p', { class: 'lb-caption' });
+  const stage = h('div', { class: 'lb-stage' }, img);
+  const zoom = h('button', { type: 'button', class: 'lb-zoom' }, 'Dimensione reale');
+  const box = h(
+    'div',
+    { class: 'lightbox', role: 'dialog', 'aria-modal': 'true', hidden: true },
+    stage,
+    caption,
+    h('button', { type: 'button', class: 'lb-close', 'aria-label': 'Chiudi', onclick: () => close(false) }, '×'),
+    h('button', { type: 'button', class: 'lb-prev', 'aria-label': 'Foto precedente', onclick: () => show(index - 1) }, '‹'),
+    h('button', { type: 'button', class: 'lb-next', 'aria-label': 'Foto successiva', onclick: () => show(index + 1) }, '›'),
+    zoom,
+  );
+  let index = -1;
+  const setZoom = (on) => {
+    box.classList.toggle('zoomed', on);
+    zoom.textContent = on ? 'Adatta allo schermo' : 'Dimensione reale';
+    stage.scrollTo(0, 0);
+  };
+  function show(i) {
+    const list = figures();
+    index = (i + list.length) % list.length;
+    const src = list[index].querySelector('img');
+    img.src = src.src;
+    img.alt = src.alt;
+    caption.textContent = list[index].querySelector('figcaption')?.textContent ?? '';
+    setZoom(false);
+  }
+  function close(fromHistory) {
+    if (box.hidden) return;
+    box.hidden = true;
+    document.body.classList.remove('lb-open');
+    document.removeEventListener('keydown', onKey);
+    window.removeEventListener('popstate', onPop);
+    if (!fromHistory && history.state?.lightbox) history.back();
+  }
+  const onPop = () => close(true);
+  const onKey = (e) => {
+    if (e.key === 'Escape') close(false);
+    else if (e.key === 'ArrowLeft') show(index - 1);
+    else if (e.key === 'ArrowRight') show(index + 1);
+  };
+  zoom.addEventListener('click', () => setZoom(!box.classList.contains('zoomed')));
+  stage.addEventListener('click', (e) => {
+    if (e.target === stage) close(false);
+  });
+  body.addEventListener('click', (e) => {
+    const target = e.target.closest?.('figure img');
+    if (!target?.src) return;
+    show(figures().findIndex((f) => f.contains(target)));
+    box.hidden = false;
+    document.body.classList.add('lb-open');
+    // same URL and hash: the console router is not involved, the back button just closes the photo
+    history.pushState({ lightbox: true }, '');
+    document.addEventListener('keydown', onKey);
+    window.addEventListener('popstate', onPop);
+  });
+  return box;
 }
