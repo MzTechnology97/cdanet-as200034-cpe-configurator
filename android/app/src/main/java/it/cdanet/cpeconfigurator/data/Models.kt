@@ -539,3 +539,21 @@ data class RosCatalogDto(val sections: List<RosSectionDto>)
 
 @Serializable
 data class ApiErrorDto(val error: String = "", val minVersion: String? = null, val missing: List<String>? = null, val extra: JsonElement? = null)
+
+/** Line of sight towards an AP over the terrain (chart points in metres). */
+@Serializable
+data class LosPointDto(val d: Int, val ground: Double, val los: Double, val fresnel60: Double)
+
+@Serializable
+data class LosWorstDto(val d: Int = 0, val clearanceM: Double = 0.0, val fresnel60M: Double = 0.0)
+
+@Serializable
+data class LosDto(
+    val distanceM: Int = 0,
+    val cpeHeightM: Double = 0.0,
+    val frequencyMhz: Int = 5600,
+    val verdict: String = "clear",
+    val worst: LosWorstDto? = null,
+    val raiseCpeM: Double = 0.0,
+    val chart: List<LosPointDto> = emptyList(),
+)

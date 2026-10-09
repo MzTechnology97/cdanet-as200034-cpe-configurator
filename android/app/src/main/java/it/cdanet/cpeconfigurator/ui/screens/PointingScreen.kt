@@ -64,6 +64,10 @@ fun PointingScreen(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (
     var busy by remember { mutableStateOf(false) }
     var height by remember { mutableStateOf("") }
     var tab by remember { mutableIntStateOf(1) }
+    var los by remember { mutableStateOf<it.cdanet.cpeconfigurator.data.PointingApDto?>(null) }
+    los?.let { a ->
+        data?.let { d -> LineOfSightDialog(c, d.from.lat, d.from.lon, a.id, a.name, height.replace(',', '.').toDoubleOrNull(), onClose = { los = null }) }
+    }
 
     suspend fun load() {
         busy = true
@@ -144,8 +148,9 @@ fun PointingScreen(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (
                         }
                     }
                     Row {
-                        TextButton(onClick = { onAim(target(a, d)) }) { Text("Mirino (fotocamera)") }
+                        TextButton(onClick = { onAim(target(a, d)) }) { Text("Mirino") }
                         TextButton(onClick = { onCompass(target(a, d)) }) { Text("Bussola") }
+                        TextButton(onClick = { los = a }) { Text("Visibilità") }
                     }
                 }
             }
