@@ -21,8 +21,18 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 | 4 | **Connettore notifiche Telegram**: provisioning fallito, CPE da accettare in UISP, UISP giù/su, eventi di sicurezza, riepilogo serale; configurazione e test da Connettori, vedi [NOTIFICHE.md](NOTIFICHE.md) | il NOC sa subito cosa è successo sul campo | ✅ v1.7.0 |
 | 5 | **Verifica in due passaggi (TOTP)** per gli account, obbligatoria per gli admin se attivata (web e app), vedi [SECURITY.md](../SECURITY.md) | la console è esposta su Internet | ✅ v1.9.0 |
 
+## v1.10+ — NOC e robustezza sul campo
+
+| # | Voce | Perché | Stato |
+|---|---|---|---|
+| 1 | **Salute rete**: CPE offline, segnale debole, porta LAN lenta/half duplex, firmware, da accettare; riepilogo per AP; CSV — vedi [NOC.md](NOC.md) | manutenzione proattiva prima che il cliente chiami | ✅ v1.10.0 |
+| 2 | **Statistiche** per mese, installatore e modello | qualità del lavoro e carico | ✅ v1.10.0 |
+| 3 | **Collaudo offline**: misure e foto in coda nell'app, inviate quando torna la rete | sul tetto spesso non c'è campo | ⏳ |
+| 4 | Scansione degli AP visibili dalla CPE | scegliere l'AP migliore | ⏳ (serve una CPE reale per verificare il comando airOS) |
+
 ## Già rilasciato
 
+- v1.9.0: verifica in due passaggi (TOTP) su web e app.
 - v1.8.0: export CSV dello storico.
 - v1.7.0: notifiche Telegram per il NOC.
 - v1.6.0: discovery Ubiquiti, produttori in scansione LAN, canale consigliato.

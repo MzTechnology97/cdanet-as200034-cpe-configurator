@@ -5,11 +5,13 @@ import { connectorsView } from './views/connectors.js';
 import { coverageView } from './views/coverage.js';
 import { dashboardView } from './views/dashboard.js';
 import { eventsView } from './views/events.js';
+import { healthView } from './views/health.js';
 import { jobsView } from './views/jobs.js';
 import { loginView } from './views/login.js';
 import { myTemplatesView } from './views/mytemplates.js';
 import { profilesView } from './views/profiles.js';
 import { routerosView } from './views/routeros.js';
+import { statsView } from './views/stats.js';
 import { toolsView } from './views/tools.js';
 import { usersView } from './views/users.js';
 import { wirelessView } from './views/wireless.js';
@@ -18,6 +20,8 @@ const ROUTES = [
   { group: 'Operatività' },
   { id: 'dashboard', label: 'Panoramica', view: dashboardView, admin: true },
   { id: 'jobs', label: 'Storico provisioning', view: jobsView },
+  { id: 'health', label: 'Salute rete', view: healthView, admin: true },
+  { id: 'stats', label: 'Statistiche', view: statsView, admin: true },
   { id: 'mytemplates', label: 'Template disponibili', view: myTemplatesView, installer: true },
   { id: 'coverage', label: 'Copertura', view: coverageView },
   { id: 'tools', label: 'Strumenti di rete', view: toolsView },

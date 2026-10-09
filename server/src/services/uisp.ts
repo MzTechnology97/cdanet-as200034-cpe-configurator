@@ -25,6 +25,10 @@ export interface UispDevice {
   /** Site of the associated AP as reported by UISP (attributes.apDevice.siteId). */
   apSiteId: string | null;
   signal: number | null;
+  /** Speed of the main (LAN) port in Mbit/s: 10 often means a damaged cable. */
+  ethMbps: number | null;
+  ethHalfDuplex: boolean;
+  dlCapacityMbps: number | null;
   stations: number | null;
   frequency: number | null;
   uptime: number | null;
@@ -49,6 +53,13 @@ function latLon(v: unknown): LatLon | null {
   const lat = num(o.latitude ?? o.lat);
   const lon = num(o.longitude ?? o.lon ?? o.lng);
   return lat !== null && lon !== null && isValidLatLon(lat, lon) ? { lat, lon } : null;
+}
+
+/** overview.mainInterfaceSpeed = { availableSpeed: "100-full" | "1000-full" | "10-half" | … }. */
+export function ethSpeed(v: unknown): { ethMbps: number | null; ethHalfDuplex: boolean } {
+  const s = str(obj(v).availableSpeed) ?? (typeof v === 'string' ? v : null);
+  const m = s ? /(\d+)\s*(?:mbps)?\s*-?\s*(full|half)?/i.exec(s) : null;
+  return { ethMbps: m ? Number(m[1]) : null, ethHalfDuplex: (m?.[2] ?? '').toLowerCase() === 'half' };
 }
 
 export function normalizeDevice(raw: unknown): UispDevice {
@@ -76,6 +87,8 @@ export function normalizeDevice(raw: unknown): UispDevice {
     apName: str(ap.name),
     apSiteId: str(ap.siteId),
     signal: num(ov.signal),
+    ...ethSpeed(ov.mainInterfaceSpeed),
+    dlCapacityMbps: num(ov.downlinkCapacity) !== null ? Math.round((num(ov.downlinkCapacity) as number) / 1e6) : null,
     stations: num(ov.stationsCount),
     frequency: num(ov.frequency),
     uptime: num(ov.uptime),
@@ -259,6 +272,11 @@ export function createUisp(opts: UispOptions) {
         ap = candidates[0];
       }
       return ap?.siteId ? byId.get(ap.siteId) ?? { id: ap.siteId, name: ap.siteName ?? '', type: '', location: null } : null;
+    },
+
+    /** All devices (cached like the rest: UISP is not hammered by the NOC page). */
+    async allDevices() {
+      return devices();
     },
 
     async sites() {

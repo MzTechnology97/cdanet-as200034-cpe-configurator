@@ -25,7 +25,7 @@ const FAR_AP = {
 };
 export const STATION = {
   identification: { id: 'cpe-1', name: 'ROSSI MARIO', mac: 'aa-bb-cc-dd-ee-ff', role: 'station', authorized: false, firmwareVersion: '8.7.4' },
-  overview: { status: 'active', signal: -58, wirelessMode: 'sta-ptmp' },
+  overview: { status: 'active', signal: -58, wirelessMode: 'sta-ptmp', mainInterfaceSpeed: { interfaceId: 'eth0', availableSpeed: '10-half' }, downlinkCapacity: 250000000 },
   attributes: { ssid: 'CDA-NET-N2-D01', apDevice: { id: 'ap-n2', name: 'AP N2 D01' } },
 };
 

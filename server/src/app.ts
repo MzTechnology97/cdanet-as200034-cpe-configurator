@@ -13,6 +13,7 @@ import { acceptanceRoutes } from './routes/acceptance.ts';
 import { fieldRoutes } from './routes/field.ts';
 import { provisioningRoutes } from './routes/provisioning.ts';
 import { replaceRoutes } from './routes/replace.ts';
+import { statsRoutes } from './routes/stats.ts';
 import { publicRoutes } from './routes/public.ts';
 import { toolRoutes } from './routes/tools.ts';
 import { createProvisioning } from './services/provisioning.ts';
@@ -133,6 +134,7 @@ export async function buildApp(
   fieldRoutes(app, ctx);
   acceptanceRoutes(app, ctx);
   replaceRoutes(app, ctx);
+  statsRoutes(app, ctx);
   adminRoutes(app, ctx);
   toolRoutes(app, ctx);
   uispRoutes(app, ctx);
