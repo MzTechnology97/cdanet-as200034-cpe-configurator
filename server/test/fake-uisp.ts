@@ -29,6 +29,12 @@ const PTP = {
   overview: { status: 'active', stationsCount: 1, wirelessMode: 'ap-ptp' },
   location: { latitude: 37.6005, longitude: 14.1005 },
 };
+/** Customer installed before the app (only in UISP), on AP N2. */
+const OLD_CPE = {
+  identification: { id: 'cpe-old', name: 'BIANCHI LUCA', mac: '22:33:44:55:66:77', role: 'station', authorized: true, firmwareVersion: '8.7.4' },
+  overview: { status: 'active', signal: -66, wirelessMode: 'sta-ptmp' },
+  attributes: { ssid: 'CDA-NET-N2-D01', apDevice: { id: 'ap-n2', name: 'AP N2 D01' } },
+};
 export const STATION = {
   identification: { id: 'cpe-1', name: 'ROSSI MARIO', mac: 'aa-bb-cc-dd-ee-ff', role: 'station', authorized: false, firmwareVersion: '8.7.4' },
   overview: { status: 'active', signal: -58, wirelessMode: 'sta-ptmp', mainInterfaceSpeed: { interfaceId: 'eth0', availableSpeed: '10-half' }, downlinkCapacity: 250000000 },
@@ -37,7 +43,7 @@ export const STATION = {
 
 export function fakeUisp(opts: { authorizeMethod?: 'POST' | 'PUT'; backupCfg?: string } = {}) {
   const calls: Array<{ method: string; path: string; body: unknown; token: string | null }> = [];
-  const devices = [AP_N2, AP_N7, FAR_AP, PTP, STATION].map((d) => structuredClone(d));
+  const devices = [AP_N2, AP_N7, FAR_AP, PTP, STATION, OLD_CPE].map((d) => structuredClone(d));
   const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     const method = init?.method ?? 'GET';

@@ -1,9 +1,10 @@
 import type { UispDevice } from '../services/uisp.ts';
 
 /**
- * Health of the CPEs installed with the app: current UISP state compared with the
- * acceptance test. Only CDA Net jobs are considered, never the rest of the UISP network,
- * and no sensitive data (PPPoE credentials, configuration) is involved.
+ * Health of the customer CPEs: current UISP state compared with the acceptance test (when the
+ * CPE was installed with the app). Admins see every customer CPE in UISP; installers the ones they
+ * installed with the app plus those assigned to them. No sensitive data (PPPoE credentials,
+ * configuration) is involved.
  */
 
 export type IssueKind = 'offline' | 'not_in_uisp' | 'pending' | 'weak_signal' | 'signal_drop' | 'ethernet' | 'low_capacity' | 'firmware';
@@ -19,8 +20,9 @@ export interface HealthThresholds {
 }
 
 export interface InstalledJob {
-  jobId: string;
-  createdAt: string;
+  /** null for CPEs found only in UISP (not installed with the app). */
+  jobId: string | null;
+  createdAt: string | null;
   deviceName: string;
   model: string;
   mac: string;
@@ -78,7 +80,7 @@ export function issuesOf(job: InstalledJob, now: CpeNow | null, t: HealthThresho
   return issues;
 }
 
-export function installedHealth(jobs: InstalledJob[], byMac: Map<string, UispDevice>, t: HealthThresholds) {
+export function installedHealth<J extends InstalledJob>(jobs: J[], byMac: Map<string, UispDevice>, t: HealthThresholds) {
   const cpes = jobs.map((j) => {
     const d = byMac.get(j.mac);
     const now = d ? nowOf(d) : null;
@@ -90,7 +92,7 @@ export function installedHealth(jobs: InstalledJob[], byMac: Map<string, UispDev
     };
   });
   const score = (c: (typeof cpes)[number]) => c.issues.reduce((s, i) => s + WEIGHT[i], 0);
-  cpes.sort((a, b) => score(b) - score(a) || (a.signalDelta ?? 0) - (b.signalDelta ?? 0) || b.createdAt.localeCompare(a.createdAt));
+  cpes.sort((a, b) => score(b) - score(a) || (a.signalDelta ?? 0) - (b.signalDelta ?? 0) || (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
   const count = (k: IssueKind) => cpes.filter((c) => c.issues.includes(k)).length;
   return {
     totals: {

@@ -19,7 +19,7 @@ Ogni modifica finisce nel Registro attività ("Funzionalità modificate").
 | Sostituzione CPE | app | attivo |
 | Storico segnale | web + app | attivo |
 | Confronto con il template | web | attivo |
-| **Salute CPE installate** | web + app | **spento** |
+| **Salute CPE** | web + app | **spento** — admin: tutte le CPE dei clienti in UISP e assegnazione agli installatori |
 | Statistiche | web | attivo |
 | Export CSV | web | attivo |
 | Strumenti di rete | web + app | attivo |
@@ -32,7 +32,7 @@ Ogni modifica finisce nel Registro attività ("Funzionalità modificate").
 
 In **Account → utente → Funzionalità per questo utente** ogni modulo ha tre valori:
 - **Predefinito**: segue l'impostazione generale (indicata tra parentesi);
-- **Attivo per questo utente**: anche se in generale è spento. Utile per provare un modulo con pochi installatori, per esempio *Salute CPE installate*;
+- **Attivo per questo utente**: anche se in generale è spento. Utile per provare un modulo con pochi installatori, per esempio *Salute CPE*;
 - **Disattivo per questo utente**: anche se in generale è acceso.
 
 Il server applica il risultato per utente: API, `/api/meta`, menu web e app. Nella pagina Funzionalità ogni modulo indica quante eccezioni ci sono ("attivo per 2, spento per 1"). Le **notifiche Telegram** sono un modulo del server e valgono per tutti. Le modifiche finiscono nel Registro attività ("Funzionalità di un utente modificate").

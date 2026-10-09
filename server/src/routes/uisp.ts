@@ -9,9 +9,9 @@ import { configDrift } from '../domain/drift.ts';
 import { installedHealth, type InstalledJob } from '../domain/health.ts';
 import { FIELD_THRESHOLDS } from './field.ts';
 import { isValidLatLon } from '../domain/geo.ts';
-import { TARGET_FIRMWARE } from '../domain/policy.ts';
+import { parseMac, TARGET_FIRMWARE } from '../domain/policy.ts';
 import type { ModuleKey } from '../services/modules.ts';
-import type { UispDevice } from '../services/uisp.ts';
+import { isAp, isPtp, type UispDevice } from '../services/uisp.ts';
 import { approxPoint, roughDistance } from '../domain/approx.ts';
 import { estimateSignal, type ApModel } from '../domain/coverage-model.ts';
 
@@ -145,7 +145,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     return { device: { id: device.id, name: device.name }, ...stats, outages };
   });
 
-  // ---- Salute CPE installate (module cpe_health) --------------------------------------------
+  // ---- Salute CPE (module cpe_health) -------------------------------------------------------
   /** CPEs installed with the app (latest successful job per MAC, not replaced). Installers: their own. */
   const installedJobs = (viewer: { id: number; role: string }, installer?: string): InstalledJob[] =>
     (
@@ -167,20 +167,91 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
         .all(...(viewer.role !== 'admin' ? [viewer.id] : installer ? [installer] : [])) as unknown as InstalledJob[]
     );
 
+  /** CPEs assigned to installers (MAC → user): customers installed before the app or by someone else. */
+  const assignmentsByMac = (userId?: number) =>
+    new Map(
+      (
+        db
+          .prepare(`SELECT a.mac, a.name, a.user_id userId, u.username FROM cpe_assignments a JOIN users u ON u.id = a.user_id ${userId ? 'WHERE a.user_id = ?' : ''}`)
+          .all(...(userId ? [userId] : [])) as Array<{ mac: string; name: string; userId: number; username: string }>
+      ).map((r) => [r.mac, r]),
+    );
+
+  /** A customer CPE seen only in UISP, as a health row (no acceptance test to compare with). */
+  const uispRow = (d: UispDevice, installer: string | null): InstalledJob => ({
+    jobId: null,
+    createdAt: null,
+    deviceName: d.name,
+    model: d.model,
+    mac: d.mac!,
+    ssid: d.ssid ?? '',
+    installer: installer ?? '',
+    acceptanceVerdict: null,
+    acceptanceSignal: null,
+    acceptanceDownload: null,
+  });
+
+  /** Customer CPEs in UISP: stations (not APs, not PtP backhaul ends) with a MAC. */
+  const isCustomerCpe = (d: UispDevice) => !!d.mac && !isAp(d) && !isPtp(d) && (d.role === 'station' || d.wirelessMode.startsWith('sta') || !!d.apId);
+
   const cpeHealth = async (req: FastifyRequest) => {
-    const q = z.object({ installer: z.string().trim().max(80).optional() }).parse(req.query);
-    const jobs = installedJobs(req.user!, q.installer);
+    const q = z
+      .object({ installer: z.string().trim().max(80).optional(), scope: z.enum(['all', 'app']).default('all') })
+      .parse(req.query);
+    const viewer = req.user!;
+    const admin = viewer.role === 'admin';
+    const jobs = installedJobs(viewer, q.installer);
+    const assigned = assignmentsByMac(admin ? undefined : viewer.id);
     const byMac = new Map<string, UispDevice>();
     let uispOk = true;
-    if (ctx.uisp && jobs.length) {
+    if (ctx.uisp) {
       try {
         for (const d of await ctx.uisp.allDevices()) if (d.mac) byMac.set(d.mac, d);
       } catch {
         uispOk = false;
       }
     }
+    const tag = (j: InstalledJob, source: 'app' | 'uisp') => {
+      const a = assigned.get(j.mac);
+      return { ...j, source, assignedTo: a ? { id: a.userId, username: a.username } : null };
+    };
+    const rows = jobs.map((j) => tag(j, 'app'));
+    const seen = new Set(jobs.map((j) => j.mac));
+    if (admin) {
+      const filterUser = q.installer ? (db.prepare('SELECT id FROM users WHERE username = ?').get(q.installer) as { id: number } | undefined)?.id : undefined;
+      if (q.scope === 'all') {
+        for (const d of byMac.values()) {
+          if (!isCustomerCpe(d) || seen.has(d.mac!)) continue;
+          const a = assigned.get(d.mac!);
+          if (q.installer && a?.userId !== filterUser) continue; // installer filter: only theirs
+          seen.add(d.mac!);
+          rows.push(tag(uispRow(d, a?.username ?? null), 'uisp'));
+        }
+      }
+    } else {
+      // installers: also the CPEs the admin assigned to them
+      for (const [mac, a] of assigned) {
+        if (seen.has(mac)) continue;
+        const d = byMac.get(mac);
+        seen.add(mac);
+        rows.push(tag(d ? uispRow(d, a.username) : { ...uispRow({ name: a.name, model: '', mac, ssid: null } as UispDevice, a.username) }, 'uisp'));
+      }
+    }
     const t = { ...FIELD_THRESHOLDS, targetFirmware: TARGET_FIRMWARE, signalDropDb: 6 };
-    return { generatedAt: nowIso(), uisp: !!ctx.uisp && uispOk, thresholds: t, ...installedHealth(jobs, byMac, t) };
+    const h = installedHealth(rows, byMac, t);
+    return {
+      generatedAt: nowIso(),
+      uisp: !!ctx.uisp && uispOk,
+      thresholds: t,
+      ...h,
+      totals: {
+        ...h.totals,
+        fromApp: h.cpes.filter((c) => c.source === 'app').length,
+        fromUisp: h.cpes.filter((c) => c.source === 'uisp').length,
+        assigned: h.cpes.filter((c) => c.assignedTo).length,
+      },
+      ...(admin ? { installers: db.prepare("SELECT id, username FROM users WHERE role = 'installer' AND active = 1 ORDER BY username").all() } : {}),
+    };
   };
   const healthUser = { preHandler: [ctx.auth.requireUser, ctx.modules.require('cpe_health')] };
 
@@ -189,17 +260,61 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     return cpeHealth(req);
   });
 
+  /** Admin: assign customer CPEs (by MAC) to an installer, or remove the assignment (userId null). */
+  app.put('/api/admin/cpe-assignments', { preHandler: [ctx.auth.requireAdmin, ctx.modules.require('cpe_health')] }, async (req) => {
+    const b = z
+      .object({ macs: z.array(z.string().trim().min(12).max(17)).min(1).max(5000), userId: z.number().int().positive().nullable() })
+      .strict()
+      .parse(req.body);
+    const macs = [...new Set(b.macs.map((m) => parseMac(m)).filter((m): m is string => !!m))];
+    if (!macs.length) throw new HttpError(400, 'invalid_mac');
+    let username = '';
+    if (b.userId !== null) {
+      const u = db.prepare('SELECT username, role FROM users WHERE id = ?').get(b.userId) as { username: string; role: string } | undefined;
+      if (!u) throw new HttpError(404, 'user_not_found');
+      if (u.role === 'admin') throw new HttpError(400, 'admin_sees_all');
+      username = u.username;
+    }
+    const names = new Map<string, string>();
+    if (ctx.uisp) {
+      try {
+        for (const d of await ctx.uisp.allDevices()) if (d.mac) names.set(d.mac, d.name);
+      } catch {
+        // names are only a snapshot for CPEs that later disappear from UISP
+      }
+    }
+    db.exec('BEGIN');
+    try {
+      if (b.userId === null) {
+        const del = db.prepare('DELETE FROM cpe_assignments WHERE mac = ?');
+        for (const m of macs) del.run(m);
+      } else {
+        const up = db.prepare(
+          `INSERT INTO cpe_assignments(mac, user_id, name, assigned_at, assigned_by) VALUES(?,?,?,?,?)
+           ON CONFLICT(mac) DO UPDATE SET user_id = excluded.user_id, name = excluded.name, assigned_at = excluded.assigned_at, assigned_by = excluded.assigned_by`,
+        );
+        for (const m of macs) up.run(m, b.userId, names.get(m) ?? '', nowIso(), req.user!.id);
+      }
+      db.exec('COMMIT');
+    } catch (err) {
+      db.exec('ROLLBACK');
+      throw err;
+    }
+    recordEvent(db, req.user!.id, 'cpe_health.assign', b.userId === null ? 'assegnazione rimossa' : username, `${macs.length} CPE`);
+    return { ok: true, count: macs.length };
+  });
+
   app.get('/api/cpe-health.csv', { preHandler: [ctx.auth.requireUser, ctx.modules.require('cpe_health'), ctx.modules.require('csv_export')] }, async (req, reply) => {
     if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
     const h = await cpeHealth(req);
     const label: Record<string, string> = { offline: 'offline', not_in_uisp: 'non trovata in UISP', pending: 'da accettare', weak_signal: 'segnale debole', signal_drop: 'segnale calato', ethernet: 'porta LAN', low_capacity: 'capacità bassa', firmware: 'firmware' };
     const rows = h.cpes.map((c) => [
-      c.createdAt.slice(0, 10), c.deviceName, c.model, c.mac, c.ssid, c.installer, c.now?.status ?? '', c.acceptanceSignal ?? '', c.now?.signal ?? '', c.signalDelta ?? '',
+      (c.createdAt ?? '').slice(0, 10), c.source === 'app' ? 'app' : 'UISP', c.deviceName, c.model, c.mac, c.ssid, c.installer, c.assignedTo?.username ?? '', c.now?.status ?? '', c.acceptanceSignal ?? '', c.now?.signal ?? '', c.signalDelta ?? '',
       c.now?.ethMbps ? `${c.now.ethMbps}${c.now.ethHalfDuplex ? ' half' : ''}` : '', c.now?.firmware ?? '', c.now?.apName ?? '', c.issues.map((i) => label[i] ?? i).join(', '),
     ]);
     recordEvent(db, req.user!.id, 'cpe_health.export', `${rows.length} CPE`, '');
     reply.header('Content-Type', 'text/csv; charset=utf-8').header('Content-Disposition', `attachment; filename="salute-cpe-${h.generatedAt.slice(0, 10)}.csv"`);
-    return '\uFEFF' + toCsv([['Installata il', 'Cliente', 'Modello', 'MAC', 'SSID', 'Installatore', 'Stato', 'Segnale al collaudo', 'Segnale ora', 'Differenza dB', 'Porta LAN', 'Firmware', 'AP', 'Problemi'], ...rows]);
+    return '﻿' + toCsv([['Installata il', 'Origine', 'Cliente', 'Modello', 'MAC', 'SSID', 'Installatore', 'Assegnata a', 'Stato', 'Segnale al collaudo', 'Segnale ora', 'Differenza dB', 'Porta LAN', 'Firmware', 'AP', 'Problemi'], ...rows]);
   });
 
   // ---- Admin actions ------------------------------------------------------------------------

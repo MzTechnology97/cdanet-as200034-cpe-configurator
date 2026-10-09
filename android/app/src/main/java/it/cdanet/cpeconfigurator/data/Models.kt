@@ -242,8 +242,11 @@ data class CpeNowDto(
 
 @Serializable
 data class CpeHealthItemDto(
-    val jobId: String,
-    val createdAt: String,
+    /** null for CPEs assigned by the admin that were not installed with the app. */
+    val jobId: String? = null,
+    val createdAt: String? = null,
+    /** "app" (installed with the app) or "uisp" (assigned by the admin). */
+    val source: String = "app",
     val deviceName: String = "",
     val model: String = "",
     val mac: String,

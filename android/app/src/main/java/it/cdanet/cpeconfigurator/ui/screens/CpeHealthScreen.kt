@@ -83,13 +83,18 @@ fun CpeHealthScreen(c: AppContainer) {
                     style = MaterialTheme.typography.bodySmall,
                 )
                 cpe.now?.let { n -> n.ethMbps?.let { Text("Porta LAN $it Mbit/s${if (n.ethHalfDuplex) " half duplex" else ""}", style = MaterialTheme.typography.bodySmall) } }
-                Text("Installata il ${cpe.createdAt.take(10)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                if (c.moduleOn("signal_history") && cpe.now != null) {
+                Text(
+                    cpe.createdAt?.let { "Installata il ${it.take(10)}" } ?: "Assegnata dall'amministratore",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                val jobId = cpe.jobId
+                if (c.moduleOn("signal_history") && cpe.now != null && jobId != null) {
                     Row {
-                        TextButton(onClick = { open = if (open == cpe.jobId) null else cpe.jobId }) { Text(if (open == cpe.jobId) "Nascondi storico" else "Storico segnale 7 giorni") }
+                        TextButton(onClick = { open = if (open == jobId) null else jobId }) { Text(if (open == jobId) "Nascondi storico" else "Storico segnale 7 giorni") }
                     }
-                    if (open == cpe.jobId) {
-                        SignalHistory(c, JobDto(id = cpe.jobId, createdAt = cpe.createdAt, status = "success", model = cpe.model, mac = cpe.mac, serial = "", ssid = cpe.ssid, pppoeUser = ""))
+                    if (open == jobId) {
+                        SignalHistory(c, JobDto(id = jobId, createdAt = cpe.createdAt ?: "", status = "success", model = cpe.model, mac = cpe.mac, serial = "", ssid = cpe.ssid, pppoeUser = ""))
                     }
                 }
             }
