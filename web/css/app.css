@@ -277,3 +277,20 @@ body.lb-open { overflow: hidden; }
 .notif-body { white-space: pre-line; margin: 4px 0; }
 .notif .btns { margin-top: 4px; align-items: center; }
 .badges { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }
+
+/* Softer, more structured surfaces for every page of the console */
+:root { --radius: 16px; }
+.card { padding: 20px 22px; }
+.card > h2:first-child { font-size: 1.05rem; padding-bottom: 12px; margin-bottom: 14px; border-bottom: 1px solid var(--line); }
+.stat { border-radius: 12px; padding: 14px 16px; }
+.stat small { text-transform: uppercase; letter-spacing: .04em; font-size: .7rem; }
+.stat strong { font-size: 1.3rem; }
+button, input, select, textarea { border-radius: 10px; }
+button { transition: border-color .15s, background-color .15s, transform .1s; }
+button:active:not(:disabled) { transform: translateY(1px); }
+button.primary:hover { background: color-mix(in srgb, var(--brand) 86%, black); }
+th { background: var(--surface-2); }
+th:first-child { border-top-left-radius: 10px; }
+th:last-child { border-top-right-radius: 10px; }
+tr:hover > td { background: color-mix(in srgb, var(--brand) 4%, transparent); }
+.notice { border-radius: 12px; }
