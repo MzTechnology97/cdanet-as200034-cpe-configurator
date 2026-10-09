@@ -85,10 +85,10 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     const q = z
       .object({ lat: z.coerce.number(), lon: z.coerce.number(), limit: z.coerce.number().int().min(1).max(50).default(5), km: z.coerce.number().min(1).max(200).optional() })
       .parse(req.query);
-    // admins: no limits (up to 50 APs, any distance up to 200 km); installers: 10 APs within the configured radius
+    // admins: no limits (up to 50 APs, the distance they ask up to 200 km); installers: 10 APs within the configured radius
     const isAdmin = req.user!.role === 'admin';
     const limit = isAdmin ? q.limit : Math.min(q.limit, 10);
-    const maxKm = isAdmin ? (q.km ?? Math.max(ctx.uispSettings.coverageMaxKm, 50)) : ctx.uispSettings.coverageMaxKm;
+    const maxKm = isAdmin ? (q.km ?? ctx.uispSettings.coverageMaxKm) : ctx.uispSettings.coverageMaxKm;
     if (!isValidLatLon(q.lat, q.lon)) throw new HttpError(400, 'invalid_position');
     // Installers check coverage only on the POPs/APs assigned to them by the admin.
     const keys = req.user!.role === 'admin' ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
