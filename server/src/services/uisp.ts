@@ -239,6 +239,19 @@ export function createUisp(opts: UispOptions) {
      * POPs and APs exactly as UISP knows them (name, address, coordinates and where the
      * position comes from): nothing is typed by hand in CDA Net.
      */
+    /** CPEs (stations) per AP id: how many and how many not active (Stato rete). */
+    async cpeCounts() {
+      const m = new Map<string, { total: number; offline: number }>();
+      for (const d of await devices()) {
+        if (!d.apId || isAp(d)) continue;
+        const c = m.get(d.apId) ?? { total: 0, offline: 0 };
+        c.total++;
+        if (d.status !== 'active') c.offline++;
+        m.set(d.apId, c);
+      }
+      return m;
+    },
+
     async infrastructure() {
       const [ds, ss] = await Promise.all([devices(), sites()]);
       const pops = ss.filter((s) => s.type !== 'endpoint');
@@ -254,6 +267,7 @@ export function createUisp(opts: UispOptions) {
           model: d.model,
           status: d.status,
           stations: d.stations,
+          lastSeen: d.lastSeen,
           lat: loc?.lat ?? null,
           lon: loc?.lon ?? null,
           locationFrom: d.location ? ('ap' as const) : loc ? ('pop' as const) : null,

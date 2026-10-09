@@ -25,6 +25,7 @@ Ogni modifica finisce nel Registro attività ("Funzionalità modificate").
 | Strumenti di rete | web + app | attivo |
 | MikroTik · RouterOS | web + app | attivo |
 | **Guasti Enel** | web + app | **spento** — vedi [GUASTI-ENEL.md](GUASTI-ENEL.md) |
+| **Stato rete** | web + app | **spento** — vedi [STATO-RETE.md](STATO-RETE.md) |
 | Notifiche Telegram | server | attivo (se configurate in Connettori) |
 
 ## Moduli per singolo utente

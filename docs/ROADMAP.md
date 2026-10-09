@@ -35,7 +35,7 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 | 9 | **Guasti Enel su POP/AP**: POP e AP con indirizzi e coordinate da UISP, selezione di quelli da monitorare, POP/AP potenzialmente impattati, assegnazione agli installatori (vedono solo i propri), zone da GPS/indirizzo/coordinate | sapere quale POP o AP rischia di restare senza corrente e avvisare solo il tecnico di zona | ✅ v1.15.0 |
 | 10 | **Installatori di zona**: zone personali dei guasti, Telegram personale con il bot dell'admin, POP/AP assegnati validi anche per la verifica copertura, nessun riferimento a UISP/fonti/moduli per gli installatori | ogni tecnico vede e riceve solo la sua zona | ✅ v1.16.0 |
 | 11 | **Mappe Protomaps** sul nostro server in Guasti Enel e Copertura; POP/AP come area approssimativa e numero clienti nascosto per gli installatori — vedi [MAPPE.md](MAPPE.md) | colpo d'occhio sul territorio senza esporre la rete | ✅ v1.17.0 (web) |
-| 12 | **Stato rete** (modulo, per account): stato degli apparati dei POP/AP assegnati, senza notifiche agli installatori | sapere se un AP/POP della propria zona è giù | ⏳ prossima |
+| 12 | **Stato rete** (modulo, per account): stato di POP/AP, CPE offline, guasti Enel vicini; installatori solo gli assegnati, senza notifiche — vedi [STATO-RETE.md](STATO-RETE.md) | sapere se un AP/POP della propria zona è giù | ✅ v1.18.0 |
 | 13 | Mappa nell'app Android; copertura reale degli AP dalle distanze delle CPE collegate | sul campo | ⏳ |
 | 4 | Scansione degli AP visibili dalla CPE | scegliere l'AP migliore | ⏳ (serve una CPE reale per verificare il comando airOS) |
 
