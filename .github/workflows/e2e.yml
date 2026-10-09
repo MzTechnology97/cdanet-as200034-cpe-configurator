@@ -120,9 +120,16 @@ jobs:
           H="Authorization: Bearer $TOKEN"
           for i in $(seq 1 30); do curl -fsS -H "$H" http://localhost/api/admin/infra | jq -e .agent >/dev/null && break; sleep 3; done
           curl -fsS -H "$H" http://localhost/api/admin/infra | tee /dev/stderr | jq -e '.agent and .values.MAP_REGION == "custom"' >/dev/null
-          curl -fsS -X PUT -H "$H" -H 'Content-Type: application/json' \
-            -d '{"values":{"UPDATE_WINDOW":"02-05","HTTPS_SITES":"https://localhost https://127.0.0.1","HTTPS_DEFAULT_SNI":"127.0.0.1"}}' \
-            http://localhost/api/admin/infra | jq -e .pending >/dev/null
+          # Caddy may be restarting after the previous step: retry; 409 = the request already went through
+          for i in $(seq 1 10); do
+            code=$(curl -s -o /tmp/put.json -w '%{http_code}' -X PUT -H "$H" -H 'Content-Type: application/json' \
+              -d '{"values":{"UPDATE_WINDOW":"02-05","HTTPS_SITES":"https://localhost https://127.0.0.1","HTTPS_DEFAULT_SNI":"127.0.0.1"}}' \
+              http://localhost/api/admin/infra || true)
+            echo "PUT infra: $code"
+            [ "$code" = 202 ] || [ "$code" = 409 ] && break
+            sleep 3
+          done
+          [ "$code" = 202 ] || [ "$code" = 409 ]
           for i in $(seq 1 40); do
             s=$(curl -fsS -H "$H" http://localhost/api/admin/infra)
             echo "$s" | jq -e '(.pending | not) and .status.result == "ok"' >/dev/null && break
