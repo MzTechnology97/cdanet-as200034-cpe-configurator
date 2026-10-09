@@ -172,6 +172,16 @@ const MIGRATIONS: string[] = [
   ALTER TABLE users ADD COLUMN totp_last_step INTEGER NOT NULL DEFAULT 0;
   ALTER TABLE users ADD COLUMN recovery_codes TEXT NOT NULL DEFAULT '[]';
   `,
+  // 9: per-user module overrides (on/off regardless of the global setting)
+  `
+  CREATE TABLE user_modules(
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    module TEXT NOT NULL,
+    enabled INTEGER NOT NULL,
+    updated_at TEXT NOT NULL,
+    PRIMARY KEY(user_id, module)
+  );
+  `,
 ];
 
 export function openDatabase(path: string): Db {

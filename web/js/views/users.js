@@ -1,4 +1,5 @@
 import { api } from '../api.js';
+import { loadModules } from '../modules.js';
 import { badge, busy, card, field, fmtDate, h, mount, pageHead, table, toast } from '../dom.js';
 
 export async function usersView({ user: me }) {
@@ -67,6 +68,8 @@ export async function usersView({ user: me }) {
             : h('p', { class: 'small muted' }, 'Usa i template visibili a tutti. Nessun template riservato.');
         })(),
         h('a', { class: 'button-link', href: `#/profiles?user=${u.id}` }, 'Crea template personale'),
+        h('h3', {}, 'Funzionalità per questo utente'),
+        userModules(u, me),
         h('h3', {}, 'Stato e ruolo'),
         u.id === me.id ? h('p', { class: 'muted' }, 'Non puoi disabilitare o declassare il tuo account.') : h('div', { class: 'btns' }, toggle, role),
       ),
@@ -119,4 +122,51 @@ export async function usersView({ user: me }) {
 
   await load();
   return h('div', {}, pageHead('Account', 'Installatori e amministratori. Disabilitazione e reset revocano subito le sessioni.'), securityCard, card(h('h2', {}, 'Nuovo account'), form), card(list), editor);
+}
+
+/** Per-user module overrides: default (global setting), on, off. */
+function userModules(u, me) {
+  const box = h('div', {}, h('p', { class: 'small muted' }, 'Caricamento…'));
+  const render = (list) =>
+    mount(
+      box,
+      h('p', { class: 'small muted' }, '“Predefinito” segue l’impostazione generale di Funzionalità. Le eccezioni valgono solo per questo utente (sull’app dal prossimo accesso).'),
+      h(
+        'div',
+        { class: 'modules' },
+        list.map((m) => {
+          const sel = h(
+            'select',
+            {},
+            h('option', { value: '' }, `Predefinito (${m.global ? 'attivo' : 'spento'})`),
+            h('option', { value: 'on' }, 'Attivo per questo utente'),
+            h('option', { value: 'off' }, 'Disattivo per questo utente'),
+          );
+          sel.value = m.override === null ? '' : m.override ? 'on' : 'off';
+          sel.onchange = async () => {
+            sel.disabled = true;
+            try {
+              const next = await api(`/api/admin/users/${u.id}/modules`, { method: 'PUT', body: { [m.key]: sel.value === '' ? null : sel.value === 'on' } });
+              toast(`${m.label}: ${sel.options[sel.selectedIndex].text.toLowerCase()}`);
+              if (u.id === me.id) await loadModules();
+              render(next);
+            } catch (e) {
+              toast(e.message, 'bad');
+            } finally {
+              sel.disabled = false;
+            }
+          };
+          return h(
+            'div',
+            { class: 'module-row' },
+            h('span', { class: 'grow' }, h('b', {}, m.label), ' ', badge(m.effective ? 'attivo' : 'spento', m.effective ? 'good' : ''), h('div', { class: 'small muted' }, m.area)),
+            sel,
+          );
+        }),
+      ),
+    );
+  api(`/api/admin/users/${u.id}/modules`)
+    .then(render)
+    .catch((e) => mount(box, h('p', { class: 'small muted' }, e.message)));
+  return box;
 }

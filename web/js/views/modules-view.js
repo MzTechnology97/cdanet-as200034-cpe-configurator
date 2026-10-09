@@ -26,7 +26,18 @@ export async function modulesView({ onChange } = {}) {
       'label',
       { class: 'module-row' },
       cb,
-      h('span', {}, h('b', {}, m.label), ' ', badge(m.area, ''), m.default ? null : h('span', { class: 'small muted' }, ' · spento di default'), h('div', { class: 'small muted' }, m.description)),
+      h(
+        'span',
+        {},
+        h('b', {}, m.label),
+        ' ',
+        badge(m.area, ''),
+        m.default ? null : h('span', { class: 'small muted' }, ' · spento di default'),
+        h('div', { class: 'small muted' }, m.description),
+        m.usersOn || m.usersOff
+          ? h('div', { class: 'small' }, `Eccezioni per utente: ${[m.usersOn ? `attivo per ${m.usersOn}` : '', m.usersOff ? `spento per ${m.usersOff}` : ''].filter(Boolean).join(', ')}`)
+          : null,
+      ),
     );
   });
   return h(
@@ -38,6 +49,7 @@ export async function modulesView({ onChange } = {}) {
       h('h2', {}, 'Sempre attivi'),
       h('p', { class: 'small muted' }, 'Provisioning, storico, profili airOS, reti Wi-Fi, account, connettori e registro attività fanno parte del nucleo e non si disattivano.'),
       h('p', { class: 'small muted' }, 'L’app Android aggiorna i moduli all’accesso: le modifiche valgono dal login successivo.'),
+      h('p', { class: 'small muted' }, 'Per attivare o disattivare un modulo solo per alcuni utenti: Account → scegli l’utente → “Funzionalità per questo utente”. Le notifiche Telegram valgono per tutti.'),
     ),
   );
 }

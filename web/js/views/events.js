@@ -17,6 +17,7 @@ const LABELS = {
   'uisp.backup': 'Backup UISP richiesto',
   'account.password': 'Password personale cambiata',
   'network.export': 'Export CSV salute rete',
+  'modules.user': 'Funzionalità di un utente modificate',
   'modules.update': 'Funzionalità modificate',
   'cpe_health.export': 'Export CSV salute CPE',
   'jobs.export': 'Export CSV dello storico',
