@@ -152,6 +152,12 @@ Tutti questi strumenti richiedono la **Wi-Fi della rete da analizzare**. Se il t
 - **Tipo di apparato** stimato da produttore, porte e nome: Ubiquiti (anche "CPE CDA Net"), MikroTik, telecamera/NVR, stampante, PC Windows, Apple, Chromecast, IoT, NAS, router/gateway.
 - Gateway e telefono evidenziati, filtro e ordinamento, porte aperte con il nome del servizio, export CSV.
 - Da ogni host si passa al **port scanner** o si apre l'interfaccia web.
+- **Mappa di rete** (strumento locale, nessun dato dal server): mappa logica della LAN scansionata, Internet → gateway → dispositivi raggruppati per tipo (rete, Ubiquiti, MikroTik, telecamere/NVR, PC, NAS, stampanti, telefoni, TV, IoT); si scorre in entrambe le direzioni e toccando un dispositivo si aprono i dettagli. È "logica": dal telefono non si vede a quale porta di quale switch è collegato un dispositivo.
+
+### Hikvision SADP (TVCC)
+- Ricerca di telecamere, NVR e DVR Hikvision con il protocollo SADP (UDP 37020): sonda inviata due volte in multicast e broadcast, risposte ascoltate anche sul gruppo multicast (molti apparati rispondono lì).
+- Per ogni dispositivo: modello, seriale, firmware, MAC, IP/maschera/gateway, DHCP o statico, porte HTTP e SDK, canali, Hik-Connect e **stato di attivazione**: quelli **non attivati** (password di amministrazione ancora da impostare) sono evidenziati in cima.
+- Azioni: interfaccia web, verifica porte (HTTP, HTTPS, RTSP, SDK), "Usa per RTSP" che compila l'anteprima dello stream.
 
 ### Port scanner
 - Preset (top 30, apparati di rete, TVCC/NVR, Windows/server, database, stampanti, prime 1024) o elenco libero come `1-1024,8291,8728,20443` (fino a 10.000 porte).

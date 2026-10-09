@@ -57,6 +57,7 @@ import it.cdanet.cpeconfigurator.ui.WarnAmber
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
+import androidx.compose.material3.FilterChip
 
 private fun csvCell(v: Any?): String = v?.toString().orEmpty().let { if (it.any { c -> c == ';' || c == '"' || c == '\n' }) "\"" + it.replace("\"", "\"\"") + "\"" else it }
 
@@ -93,6 +94,7 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
     var filter by remember { mutableStateOf("") }
     var sort by remember { mutableStateOf("IP") }
     var openHost by remember { mutableStateOf<String?>(null) }
+    var showMap by remember { mutableStateOf(false) }
 
     fun start() {
         error = null
@@ -148,6 +150,21 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
                             hosts.map { listOf(it.ip, it.hostname ?: it.netbios, it.mac, it.vendor, it.kind, it.ports.joinToString(" "), it.latencyMs, it.how) })
                     }) { Text("CSV") }
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FilterChip(selected = !showMap, onClick = { showMap = false }, label = { Text("Elenco") })
+                    FilterChip(selected = showMap, onClick = { showMap = true }, label = { Text("Mappa di rete") })
+                }
+            }
+            if (showMap) {
+                SectionCard("Mappa di rete") {
+                    Text("Mappa logica della LAN scansionata: dispositivi dietro al gateway raggruppati per tipo. Tocca un dispositivo per i dettagli.", style = MaterialTheme.typography.bodySmall)
+                    NetworkMapView(hosts.toList(), link?.gateway) { h ->
+                        filter = h.ip
+                        openHost = h.ip
+                        showMap = false
+                    }
+                }
+                return@Column
             }
             val shown = hosts.filter { h -> filter.isBlank() || listOf(h.ip, h.hostname, h.netbios, h.vendor, h.kind, h.mac).any { it?.contains(filter, true) == true } }
                 .let { l ->

@@ -30,6 +30,8 @@ import java.net.Socket
 import java.net.SocketTimeoutException
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import it.cdanet.cpeconfigurator.tools.pro.Sadp
+import it.cdanet.cpeconfigurator.tools.pro.SadpDevice
 
 /** Generic result rendered by the tools UI. */
 data class ToolItem(val title: String, val subtitle: String = "", val trailing: String = "")
@@ -320,6 +322,21 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
                 } catch (_: SocketTimeoutException) {
                     ToolResult(rows = listOf("Host" to ip, "NetBIOS" to "nessuna risposta su UDP 137"))
                 }
+            }
+        }
+        return withContext(Dispatchers.IO) { if (viaWifi) network.onWifi(block) else block() }
+    }
+
+    /** Hikvision SADP on the local segment (multicast + broadcast, answers in unicast and multicast). */
+    suspend fun sadp(viaWifi: Boolean): List<SadpDevice> {
+        val block: suspend () -> List<SadpDevice> = {
+            val lock = network.multicastLock()
+            lock.acquire()
+            try {
+                val local = network.wifiLink()?.addresses?.map { it.substringBefore('/') }?.firstOrNull { Ip.parse(it) != null }
+                Sadp.discover(local)
+            } finally {
+                lock.release()
             }
         }
         return withContext(Dispatchers.IO) { if (viaWifi) network.onWifi(block) else block() }

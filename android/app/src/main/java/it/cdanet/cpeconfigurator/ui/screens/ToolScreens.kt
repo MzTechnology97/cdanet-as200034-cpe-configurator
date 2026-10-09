@@ -37,6 +37,11 @@ import it.cdanet.cpeconfigurator.ui.KeyValue
 import it.cdanet.cpeconfigurator.ui.SectionCard
 import it.cdanet.cpeconfigurator.ui.ToolResultView
 import kotlinx.coroutines.launch
+import it.cdanet.cpeconfigurator.tools.pro.SadpDevice
+import it.cdanet.cpeconfigurator.ui.BadRed
+import it.cdanet.cpeconfigurator.ui.GoodGreen
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.material3.TextButton
 
 /** Holds busy/result/error for one screen and runs tool actions. */
 private class Runner {
@@ -207,13 +212,65 @@ fun CameraScreen(c: AppContainer) {
     var bitrate by remember { mutableStateOf("4") }
     var hours by remember { mutableStateOf("24") }
     var days by remember { mutableStateOf("30") }
+    var hik by remember { mutableStateOf<List<SadpDevice>?>(null) }
+    var hikBusy by remember { mutableStateOf(false) }
+    val scope = rememberCoroutineScope()
     // The RTSP player may need the process bound to Wi-Fi; release it when leaving.
     DisposableEffect(Unit) { onDispose { c.network.unbind() } }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SectionCard("Discovery") {
             WifiSwitch(viaWifi) { viaWifi = it }
             ToolButton(r, "ONVIF WS-Discovery", primary = true) { c.tools.cameraDiscovery(hikvision = false, viaWifi = viaWifi) }
-            ToolButton(r, "Hikvision SADP") { c.tools.cameraDiscovery(hikvision = true, viaWifi = viaWifi) }
+            BusyButton("Hikvision SADP (telecamere, NVR, DVR)", hikBusy, Modifier.fillMaxWidth(), enabled = !hikBusy, primary = false) {
+                scope.launch {
+                    hikBusy = true
+                    runCatching { c.tools.sadp(viaWifi) }.onSuccess { hik = it }.onFailure { r.error = it.message }
+                    hikBusy = false
+                }
+            }
+        }
+        hik?.let { list ->
+            SectionCard("Hikvision SADP: ${list.size} dispositivi") {
+                if (list.isEmpty()) Text("Nessuna risposta: verifica di essere sulla stessa rete dei dispositivi (stesso segmento, multicast non filtrato).", style = MaterialTheme.typography.bodySmall)
+                val inactive = list.count { it.activated == false }
+                if (inactive > 0) Text("$inactive da attivare: impostare la password di amministrazione (es. da interfaccia web o SADP) prima dell'uso.", color = BadRed, style = MaterialTheme.typography.bodySmall)
+                list.forEachIndexed { i, d ->
+                    if (i > 0) androidx.compose.material3.HorizontalDivider()
+                    Text("${d.description.ifBlank { d.model }} · ${d.ip}", fontWeight = FontWeight.SemiBold)
+                    Text(
+                        when (d.activated) { false -> "NON ATTIVATA"; true -> "attivata"; null -> "stato attivazione sconosciuto" } +
+                            (d.hikConnect?.let { if (it) " · Hik-Connect attivo" else "" } ?: ""),
+                        color = if (d.activated == false) BadRed else GoodGreen,
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Text(
+                        listOf(
+                            d.mac,
+                            d.serial,
+                            d.firmware,
+                            "mask ${d.subnetMask} · gw ${d.gateway} · ${when (d.dhcp) { true -> "DHCP"; false -> "IP statico"; null -> "" }}",
+                            listOfNotNull(d.httpPort?.let { "HTTP $it" }, d.sdkPort?.let { "SDK $it" }).joinToString(" · "),
+                            listOfNotNull(d.analogChannels?.takeIf { it > 0 }?.let { "$it canali analogici" }, d.digitalChannels?.takeIf { it > 0 }?.let { "$it canali IP" }).joinToString(" · "),
+                        ).filter { it.isNotBlank() }.joinToString("\n"),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    Row {
+                        TextButton(onClick = {
+                            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("http://${d.ip}${d.httpPort?.takeIf { it != 80 }?.let { ":$it" } ?: ""}/"))) }
+                        }) { Text("Interfaccia web") }
+                        TextButton(onClick = { host = d.ip; path = "/Streaming/Channels/101" }) { Text("Usa per RTSP") }
+                        TextButton(onClick = {
+                            scope.launch {
+                                r.busy = "porte"
+                                r.title = "Porte ${d.ip}"
+                                runCatching { c.tools.portProbe(d.ip, listOfNotNull(d.httpPort ?: 80, 443, 554, d.sdkPort ?: 8000).distinct(), viaWifi) }
+                                    .onSuccess { r.result = it }.onFailure { r.error = it.message }
+                                r.busy = null
+                            }
+                        }) { Text("Porte") }
+                    }
+                }
+            }
         }
         SectionCard("Telecamera / NVR") {
             Field("IP", host, { host = it.trim() })
