@@ -236,7 +236,7 @@ private fun installKoContext(c: AppContainer, mode: InstallMode, step: InstallSt
         jobId = st.job?.id ?: prov.pkg?.jobId ?: prov.doneJobId,
         mode = if (mode == InstallMode.New) "new" else "repoint",
         step = step.name.lowercase(),
-        mac = s?.macs?.firstOrNull() ?: st.job?.mac ?: c.provisioning.form.value.mac.ifBlank { null },
+        mac = s?.macs?.firstOrNull() ?: st.job?.mac ?: prov.pkg?.summary?.mac ?: c.provisioning.form.value.mac.ifBlank { null },
         ssid = s?.essid?.takeIf { s.associated } ?: st.expectedSsid,
         measures = KoMeasures(
             signal = s?.signal?.takeIf { s.associated },
@@ -694,7 +694,7 @@ private fun FinalStep(c: AppContainer, onAcceptance: () -> Unit) {
             when (v) { Verdict.Ok -> GoodGreen; Verdict.Warn -> WarnAmber; else -> BadRed },
         )
         nocApprovalReason(s.signal, c.field.thresholds.signalMin, checks.filter { it.verdict == Verdict.Bad }.map { it.title })?.let {
-            Banner("Approvazione NOC necessaria ($it). $NOC_APPROVAL_TEXT", WarnAmber)
+            Banner("Approvazione NOC necessaria: $it. $NOC_APPROVAL_TEXT", WarnAmber)
         }
         SectionCard("Radio") {
             LinkSummary(s, c)

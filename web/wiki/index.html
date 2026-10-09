@@ -45,7 +45,7 @@
 <main>
 <h1 id="inizio">Guida installatore</h1>
 <p class="lead">Una nuova installazione dall'inizio alla fine con l'app CDA Net CPE, più tutti gli strumenti che usi in campo e in ufficio.</p>
-<div class="note">Le schermate vengono dall'app vera (versione 1.32.4) e dalla console web, usate con l'account installatore di prova <b>tecnico.demo</b>. Clienti, AP, indirizzi e misure sono <b>dati dimostrativi</b>, non clienti o apparati reali. <b>Tocca una schermata per ingrandirla</b>: con le frecce passi alle altre, con <i>Dimensione reale</i> leggi i dettagli, con Indietro torni alla guida.</div>
+<div class="note">Le schermate vengono dall'app vera (versione 1.32.9, con la nuova grafica) e dalla console web, usate con l'account installatore di prova <b>tecnico.demo</b>. Clienti, AP, indirizzi e misure sono <b>dati dimostrativi</b>, non clienti o apparati reali. <b>Tocca una schermata per ingrandirla</b>: con le frecce passi alle altre, con <i>Dimensione reale</i> leggi i dettagli, con Indietro torni alla guida.</div>
 
 <h2 id="prima">1. Prima di partire</h2>
 <div class="card">
@@ -61,10 +61,10 @@
 
 <h2 id="accesso">2. Primo avvio e accesso</h2>
 <p>Al primo avvio Android chiede i permessi. Concedi <b>posizione</b> (serve per gli AP consigliati, la bussola e il mirino) e <b>dispositivi nelle vicinanze</b> (serve a leggere la Wi-Fi a cui sei collegato). La <b>fotocamera</b> viene chiesta la prima volta che apri il mirino o scatti le foto del collaudo.</p>
-<p>Nella schermata di accesso controlla che sotto <i>Server CDA Net</i> compaia <b>Online</b>, poi inserisci utente e password e tocca <b>Accedi</b>. L'indirizzo del server è già impostato: cambialo solo se te lo chiede l'amministratore.</p>
+<p>Nella schermata di accesso inserisci utente e password e tocca <b>Accedi</b>. L'indirizzo del server, nel riquadro <i>Server CDA Net</i>, è già impostato: cambialo con <b>Modifica URL</b> solo se te lo chiede l'amministratore. <b>Verifica collegamento</b> controlla che il server risponda.</p>
 <div class="shots">
   <figure><img src="img/app-permessi.jpg" alt="Richiesta del permesso di posizione" loading="lazy"><figcaption>Primo avvio: permesso di posizione.</figcaption></figure>
-  <figure><img src="img/app-login.jpg" alt="Schermata di accesso" loading="lazy"><figcaption>Accesso installatore. "Online" conferma che il server risponde.</figcaption></figure>
+  <figure><img src="img/app-login.jpg" alt="Schermata di accesso" loading="lazy"><figcaption>Accesso installatore, con il server CDA Net e Verifica collegamento.</figcaption></figure>
   <figure><img src="img/app-aggiornamento.jpg" alt="Aggiornamento obbligatorio" loading="lazy"><figcaption>Se esce una versione nuova l'app la scarica da sola: autorizza l'installazione e conferma.</figcaption></figure>
 </div>
 <h3>Accesso rapido con impronta o volto</h3>
@@ -74,16 +74,26 @@
 <p>Il tema chiaro o scuro segue quello del telefono.</p>
 
 <h2 id="home">3. La schermata principale</h2>
-<p>Dopo l'accesso trovi tutti gli strumenti come riquadri. In alto c'è quello che usi di più, <b>Installazione CPE</b>. L'ingranaggio in alto a destra apre le <a href="#impostazioni">Impostazioni</a>.</p>
+<p>In alto c'è il riquadro arancione con il tuo nome e i due interventi che fai più spesso: <b>Nuova installazione</b> e <b>Ripuntamento o cambio AP</b>. Se hai un intervento lasciato a metà, al loro posto compare <b>Riprendi l'intervento</b>.</p>
+<p>Sotto, gli strumenti sono divisi in gruppi, ognuno con la sua icona:</p>
+<ul>
+  <li><b>Il mio lavoro</b>: Storico, <a href="#notifiche">Notifiche</a>, Le mie CPE;</li>
+  <li><b>Rete e guasti</b>: Stato rete, Guasti Enel, Copertura;</li>
+  <li><b>In campo</b>: Trova l'AP, Puntamento antenna, Diagnosi CPE;</li>
+  <li><b>Strumenti di rete</b>: Wi-Fi Analyzer, scanner, diagnostica, TVCC, MikroTik, accesso remoto;</li>
+  <li><b>Aiuto</b>: questa guida.</li>
+</ul>
+<p>In alto a destra, in ogni schermata, la <b>campanella</b> apre le <a href="#notifiche">Notifiche</a> (il numero rosso indica quelle da leggere) e l'<b>ingranaggio</b> le <a href="#impostazioni">Impostazioni</a>.</p>
 <div class="shots">
-  <figure><img src="img/app-home.jpg" alt="Home dell'app" loading="lazy"><figcaption>Home: installazione, storico, le mie CPE, stato rete, guasti, strumenti di campo.</figcaption></figure>
-  <figure><img src="img/app-home2.jpg" alt="Home, strumenti di rete" loading="lazy"><figcaption>Più in basso: copertura e strumenti di rete.</figcaption></figure>
+  <figure><img src="img/app-home.jpg" alt="Home dell'app" loading="lazy"><figcaption>Home: nuova installazione o ripuntamento, poi Il mio lavoro e Rete e guasti.</figcaption></figure>
+  <figure><img src="img/app-home2.jpg" alt="Home, strumenti di campo e di rete" loading="lazy"><figcaption>Più in basso: In campo e Strumenti di rete.</figcaption></figure>
+  <figure><img src="img/app-home3.jpg" alt="Home, altri strumenti e guida" loading="lazy"><figcaption>In fondo: gli altri strumenti di rete e la Guida, con la versione dell'app.</figcaption></figure>
 </div>
 <p>Questa guida si apre anche dall'app, dal riquadro <b>Guida</b>.</p>
 <p>Se compare un avviso arancione in alto (per esempio <i>collaudi in attesa di invio</i>) non devi fare nulla: i dati partono da soli appena il telefono torna online.</p>
 
 <h2 id="installazione">4. Nuova installazione passo per passo</h2>
-<p>Simuliamo l'installazione di una LiteBeam 5AC per il cliente <b>CLIENTE DEMO8</b>, in <i>Via Demo 1</i>. Apri <b>Installazione CPE</b> e scegli <b>Nuova installazione</b>. In alto vedi sempre il passo in cui sei; con <b>Termina</b> chiudi l'intervento in qualsiasi momento.</p>
+<p>Simuliamo l'installazione di una LiteBeam 5AC per il cliente <b>CLIENTE DEMO11</b>, in <i>Via Demo 1</i>. Dalla Home tocca <b>Nuova installazione</b>. In alto vedi sempre il passo in cui sei, con la barra di avanzamento e le etichette dei passi (quelli fatti hanno la spunta verde). Da lì <b>Segnala KO</b> (vedi <a href="#ko">più sotto</a>) e <b>Termina</b>, che chiude l'intervento in qualsiasi momento e torna alla scelta qui sotto.</p>
 <div class="shots">
   <figure><img src="img/app-scelta.jpg" alt="Scelta dell'intervento" loading="lazy"><figcaption>Che intervento devi fare? Nuova installazione oppure ripuntamento di una CPE già montata.</figcaption></figure>
 </div>
@@ -103,13 +113,13 @@
   <li><b>MAC</b> e <b>Seriale</b>: scrivili dall'etichetta oppure tocca <b>Scansiona etichetta (barcode/QR)</b>. Sotto il campo vedi il MAC nel formato che verrà usato.</li>
   <li><b>Posizione CPE e AP consigliati</b>: tocca <b>Usa GPS del telefono</b> stando nel punto dove monterai l'antenna, oppure cerca l'indirizzo. L'app propone gli <b>AP consigliati da qui</b> con distanza, direzione, tilt e segnale stimato; il primo è già scelto, con <b>Usa</b> ne prendi un altro.</li>
   <li><b>Wireless Station</b>: nodo, distretto ed eventuale <b>Rilancio</b> si compilano dall'AP scelto; l'SSID risultante è del tipo <code>CDA-NET-N2-D01</code> (con rilancio <code>CDA-NET-N2-D01-R1</code>).</li>
-  <li><b>Router / PPPoE</b>: utente e password PPPoE del cliente. Dall'utente l'app ricava il nome del dispositivo (es. <i>CLIENTE DEMO8</i>). La password serve solo per questo provisioning e non viene salvata.</li>
+  <li><b>Router / PPPoE</b>: utente e password PPPoE del cliente. Dall'utente l'app ricava il nome del dispositivo (es. <i>CLIENTE DEMO11</i>). La password serve solo per questo provisioning e non viene salvata.</li>
   <li>Con <b>Verifica piano</b> vedi l'elenco di tutto quello che verrà scritto nella CPE. Poi tocca <b>Prepara provisioning</b>.</li>
 </ol>
 <div class="shots">
   <figure><img src="img/app-config.jpg" alt="Passo 1, modello, MAC e GPS" loading="lazy"><figcaption>Modello, template, MAC/seriale e posizione dal GPS.</figcaption></figure>
   <figure><img src="img/app-config2.jpg" alt="AP consigliati" loading="lazy"><figcaption>AP consigliati con segnale stimato; sotto, nodo, distretto, rilancio e SSID.</figcaption></figure>
-  <figure><img src="img/app-prepara.jpg" alt="PPPoE e preparazione" loading="lazy"><figcaption>Dati PPPoE, poi Verifica piano e Prepara provisioning.</figcaption></figure>
+  <figure><img src="img/app-prepara.jpg" alt="PPPoE e preparazione" loading="lazy"><figcaption>Dati PPPoE e Verifica piano: tutto quello che verrà scritto nella CPE.</figcaption></figure>
 </div>
 <div class="tip">La configurazione preparata resta valida per <b>30 minuti</b> e vive solo nella memoria dell'app. Se scade, rifai Prepara.</div>
 
@@ -147,7 +157,7 @@
 <p>Il numero grande è il <b>segnale ricevuto dalla CPE</b>, aggiornato di continuo, con il valore <b>atteso</b> calcolato dall'AP e il <b>picco</b> raggiunto. Il grafico mostra l'andamento: la linea verde tratteggiata è la soglia "buono", quella rossa il minimo accettabile. Con il <b>bip</b> attivo il tono sale quando il segnale migliora: ruota lentamente l'antenna in orizzontale, poi in verticale, e fermati sul picco.</p>
 <p>Sotto trovi la <b>direzione dell'AP</b> (azimut, tilt, distanza) e i pulsanti per <b>Mirino in realtà aumentata</b>, <b>Bussola verso l'AP</b>, <b>Mappa e lista degli AP</b> e il <b>Puntamento a schermo intero</b>. <b>Azzera picco e grafico</b> ricomincia la misura.</p>
 <div class="shots">
-  <figure><img src="img/app-puntamento.jpg" alt="Puntamento" loading="lazy"><figcaption>−60 dBm, atteso −60, picco −58: catene bilanciate, modulazione 256QAM.</figcaption></figure>
+  <figure><img src="img/app-puntamento.jpg" alt="Puntamento" loading="lazy"><figcaption>−61 dBm (ottimo), atteso −60, picco −59, catene bilanciate, con il grafico.</figcaption></figure>
   <figure><img src="img/app-puntamento2.jpg" alt="Direzione dell'AP" loading="lazy"><figcaption>Direzione dell'AP e strumenti di puntamento.</figcaption></figure>
   <figure><img src="img/app-mirino.jpg" alt="Mirino in realtà aumentata" loading="lazy"><figcaption>Mirino AR: porta il cerchio sull'obiettivo seguendo le indicazioni ("gira a sinistra", "alza"). Qui lo sfondo è la fotocamera di prova dell'emulatore; sul telefono vedi il paesaggio.</figcaption></figure>
 </div>
@@ -165,13 +175,16 @@
 </ol>
 <div class="shots">
   <figure><img src="img/app-finale.jpg" alt="Verifica finale" loading="lazy"><figcaption>Installazione nei parametri, con tutte le misure radio.</figcaption></figure>
-  <figure><img src="img/app-finale2.jpg" alt="Controlli e collaudo" loading="lazy"><figcaption>Controlli, poi Apri il collaudo, Condividi rapporto, Fine intervento.</figcaption></figure>
+  <figure><img src="img/app-finale2.jpg" alt="Controlli e collaudo" loading="lazy"><figcaption>Controlli con spunta verde; sotto, Apri il collaudo, Condividi rapporto, Fine intervento.</figcaption></figure>
   <figure><img src="img/app-collaudo.jpg" alt="Collaudo" loading="lazy"><figcaption>Misure mediate e test Internet dal lato cliente.</figcaption></figure>
   <figure><img src="img/app-esito.jpg" alt="Esito del collaudo" loading="lazy"><figcaption>Esito: superato, con il dettaglio dei controlli.</figcaption></figure>
 </div>
 <p>Con <b>Fine intervento</b> hai finito. Il verbale di collaudo si stampa dalla <a href="#console">console web</a>.</p>
 <h3 id="noc">Segnale pessimo: serve l'approvazione del NOC</h3>
 <p>Se il segnale è sotto il minimo (−75 dBm) o un controllo radio è rosso (segnale, CINR, capacità, catene, collegamento), l'app lo dice già nella verifica finale. Il collaudo si salva come sempre, ma l'installazione resta <i>in attesa dell'approvazione del NOC</i>. Il NOC la approva o la rifiuta con una nota: l'esito ti arriva nelle <a href="#notifiche">Notifiche</a> (e su Telegram, se collegato). Se è rifiutata, ripunta o cambia AP e rifai il collaudo.</p>
+<div class="shots">
+  <figure><img src="img/app-finale-noc.jpg" alt="Approvazione NOC necessaria" loading="lazy"><figcaption>Segnale −78 dBm: la verifica finale avvisa che serve l'approvazione del NOC.</figcaption></figure>
+</div>
 <h3 id="ko">Se non si riesce: Segnala KO</h3>
 <p>In ogni passo, in alto, c'è <b>Segnala KO</b> (anche nell'esito del collaudo). Scegli:</p>
 <ul>
@@ -179,6 +192,10 @@
   <li><b>KO definitivo</b>: l'installazione non si può fare (nessun AP visibile, ostacoli…). La motivazione è sempre obbligatoria.</li>
 </ul>
 <p>Scegli il motivo dalla lista e scrivi la motivazione. Fase, SSID, segnale e MAC li allega l'app da sola. Il NOC viene avvisato subito. <b>Non blocca nulla</b>: dopo l'invio puoi <b>Riprovare ora</b> (altro AP, nuovo puntamento) o <b>Chiudere l'intervento</b> e riprendere un altro giorno. Quando un tentativo successivo supera il collaudo, la segnalazione si chiude da sola. Anche una scrittura nella CPE fallita si può ritentare con lo stesso pacchetto.</p>
+<div class="shots">
+  <figure><img src="img/app-ko.jpg" alt="Segnala KO, tipo e motivo" loading="lazy"><figcaption>Segnala KO: Rimandata o KO definitivo, e il motivo.</figcaption></figure>
+  <figure><img src="img/app-ko2.jpg" alt="Segnala KO, motivazione e data" loading="lazy"><figcaption>Motivazione obbligatoria, quando riprovare e i dati allegati dall'app.</figcaption></figure>
+</div>
 
 <h2 id="ripuntamento">5. Ripuntamento, cambio AP, sostituzione</h2>
 <p><b>CPE già installata: ripuntamento o cambio AP</b> salta configurazione e scrittura: ti colleghi alla Wi-Fi della CPE o del router del cliente, l'app trova la CPE e riparti da <a href="#passo3">Verifica della CPE</a>. Se la CPE era stata installata con l'app, collaudo e foto finali si aggiungono a quell'installazione; altrimenti il collaudo si può condividere ma non salvare sul server.</p>
@@ -190,11 +207,14 @@
 <p>Tutti i tuoi provisioning, con esito (<i>Preparato</i>, <i>Completato</i>, <i>Fallito</i> con il motivo), collaudo, eventuali rimandi o KO e approvazione del NOC. Da qui apri <b>Storico segnale (7 giorni)</b>, <b>Collaudo / foto</b> e <b>Sostituisci CPE</b>.</p>
 <h3 id="notifiche">Notifiche</h3>
 <p>La campanella in alto (e la voce <b>Notifiche</b> nella schermata principale) mostra l'esito delle tue installazioni: approvazione o rifiuto del NOC con la sua nota, e l'attivazione della CPE in rete. Tocca una notifica per segnarla come letta. Per riceverle anche su Telegram collega il tuo Telegram (in Notifiche o in Impostazioni). Nella console web, in <b>Notifiche</b>, scegli quali ricevere anche lì.</p>
+<div class="shots">
+  <figure><img src="img/app-notifiche.jpg" alt="Notifiche" loading="lazy"><figcaption>Esiti del NOC: una installazione rifiutata con la nota, una accettata.</figcaption></figure>
+</div>
 <h3>Le mie CPE</h3>
 <p>Lo stato attuale delle CPE che hai installato, confrontato con il collaudo: <i>offline</i>, <i>segnale debole</i>, <i>segnale calato</i> (almeno 6 dB in meno rispetto al collaudo), porta LAN lenta. Puoi cercare per cliente, MAC, AP o SSID e filtrare. Tocca una CPE per i dettagli, lo storico di 7 giorni e il ripuntamento.</p>
 <div class="shots">
-  <figure><img src="img/app-storico.jpg" alt="Storico" loading="lazy"><figcaption>Storico dei provisioning, anche quelli falliti con il motivo.</figcaption></figure>
-  <figure><img src="img/app-mie-cpe.jpg" alt="Le mie CPE" loading="lazy"><figcaption>CLIENTE DEMO2: −69 dBm, 8 dB sotto il collaudo.</figcaption></figure>
+  <figure><img src="img/app-storico.jpg" alt="Storico" loading="lazy"><figcaption>Storico: esito, collaudo e decisione del NOC per ogni installazione.</figcaption></figure>
+  <figure><img src="img/app-mie-cpe.jpg" alt="Le mie CPE" loading="lazy"><figcaption>Con problemi: due CPE non trovate in rete, CLIENTE DEMO2 a −69 dBm (8 dB sotto il collaudo).</figcaption></figure>
   <figure><img src="img/app-storico-segnale.jpg" alt="Storico segnale" loading="lazy"><figcaption>Storico 7 giorni: segnale, capacità e interruzioni.</figcaption></figure>
 </div>
 
@@ -210,7 +230,7 @@
 <h3>Puntamento antenna e Diagnosi CPE</h3>
 <p><b>Puntamento antenna</b> è lo stesso strumento del passo 5, utilizzabile da solo. <b>Diagnosi CPE</b> serve per i guasti: collegato alla CPE (o al router del cliente) ti dice in rosso cosa non va (non agganciata, PPPoE non attivo, cavo LAN, firmware, riavvii frequenti) e con <b>Condividi rapporto</b> mandi il riepilogo al NOC.</p>
 <div class="shots">
-  <figure><img src="img/app-copertura.jpg" alt="Copertura" loading="lazy"><figcaption>Copertura: AP più vicini a Via Demo 1.</figcaption></figure>
+  <figure><img src="img/app-copertura.jpg" alt="Copertura" loading="lazy"><figcaption>Copertura dal GPS: mappa e AP più vicini con direzione e segnale stimato.</figcaption></figure>
   <figure><img src="img/app-diagnosi.jpg" alt="Diagnosi senza problemi" loading="lazy"><figcaption>Diagnosi: nessun problema.</figcaption></figure>
   <figure><img src="img/app-diagnosi-guasto.jpg" alt="Diagnosi con guasto" loading="lazy"><figcaption>Diagnosi: CPE non agganciata e PPPoE giù, con cosa controllare.</figcaption></figure>
 </div>
@@ -222,8 +242,8 @@
 <p>Le interruzioni della rete elettrica nelle tue zone: mappa e lista compatta (guasti in media tensione in rosso, bassa tensione in arancio, lavori programmati in grigio). Tocca una riga per i dettagli: ripristino previsto, POP/AP potenzialmente impattati, <b>Sulla mappa</b> (centra la mappa sul guasto) e <b>Navigatore</b>.</p>
 <p>In alto attivi le <b>notifiche sul telefono</b> (anche ad app chiusa) e, se l'amministratore ha attivato il bot, le <b>notifiche Telegram</b> personali con <b>Collega Telegram</b>. In <b>Le mie zone di interesse</b> aggiungi fino a 20 zone (dal GPS o da indirizzo, con raggio in km).</p>
 <div class="shots">
-  <figure><img src="img/app-stato-rete.jpg" alt="Stato rete" loading="lazy"><figcaption>Stato rete: POP Demo Monte con due AP vicini a un guasto Enel.</figcaption></figure>
-  <figure><img src="img/app-guasti.jpg" alt="Guasti Enel" loading="lazy"><figcaption>Guasti Enel: mappa e lista compatta.</figcaption></figure>
+  <figure><img src="img/app-stato-rete.jpg" alt="Stato rete" loading="lazy"><figcaption>Stato rete: POP Demo Monte aperto, con i due AP vicini a un guasto Enel.</figcaption></figure>
+  <figure><img src="img/app-guasti.jpg" alt="Guasti Enel" loading="lazy"><figcaption>Guasti Enel: legenda della mappa, POP/AP assegnati e lista compatta.</figcaption></figure>
   <figure><img src="img/app-guasti-dettaglio.jpg" alt="Dettaglio guasto" loading="lazy"><figcaption>Dettaglio: POP e AP potenzialmente impattati, Sulla mappa, Navigatore.</figcaption></figure>
   <figure><img src="img/app-guasti-zona.jpg" alt="Zone di interesse" loading="lazy"><figcaption>Nuova zona di interesse dal GPS.</figcaption></figure>
 </div>
@@ -247,8 +267,8 @@
 <h2 id="impostazioni">10. Impostazioni</h2>
 <p>Dall'ingranaggio: il tuo account e la scadenza della sessione, <b>Esci</b>, <b>Cambia password</b> (almeno 12 caratteri), <b>Accesso rapido</b> con impronta o volto, <b>Notifiche su Telegram</b>, <b>Esci da tutti i dispositivi</b> (telefono perso) e l'indirizzo del server.</p>
 <div class="shots">
-  <figure><img src="img/app-impostazioni.jpg" alt="Impostazioni, account" loading="lazy"><figcaption>Account e cambio password.</figcaption></figure>
-  <figure><img src="img/app-impostazioni2.jpg" alt="Impostazioni, accesso rapido e sessioni" loading="lazy"><figcaption>Accesso rapido, Telegram, sessioni, server.</figcaption></figure>
+  <figure><img src="img/app-impostazioni.jpg" alt="Impostazioni, account" loading="lazy"><figcaption>Account, cambio password e accesso rapido.</figcaption></figure>
+  <figure><img src="img/app-impostazioni2.jpg" alt="Impostazioni, accesso rapido e sessioni" loading="lazy"><figcaption>Sessioni, server, esiti in coda e versione dell'app.</figcaption></figure>
 </div>
 
 <h2 id="console">11. La console web</h2>
@@ -280,7 +300,7 @@
 <table>
   <tr><th>Problema</th><th>Cosa fare</th></tr>
   <tr><td>Al login: "Aggiornamento obbligatorio"</td><td>Lascia scaricare l'aggiornamento e installalo: senza, l'app non permette di accedere.</td></tr>
-  <tr><td>Server non "Online"</td><td>Controlla la connessione dati o Wi-Fi; se sei sulla Wi-Fi della CPE il server non è raggiungibile, è normale.</td></tr>
+  <tr><td>Server non raggiungibile (Verifica collegamento)</td><td>Controlla la connessione dati o Wi-Fi; se sei sulla Wi-Fi della CPE il server non è raggiungibile, è normale.</td></tr>
   <tr><td>"Nessun template airOS per …"</td><td>Quel modello non è ancora configurato: avvisa l'amministratore.</td></tr>
   <tr><td>Pacchetto scaduto</td><td>Sono passati più di 30 minuti: torna online e rifai Prepara provisioning.</td></tr>
   <tr><td>"Nessuna CPE airOS trovata"</td><td>Controlla di essere sulla Wi-Fi della CPE (o del router del cliente) e di essere rimasto connesso anche senza Internet; prova IP manuale.</td></tr>

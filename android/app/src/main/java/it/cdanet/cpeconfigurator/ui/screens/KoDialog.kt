@@ -2,6 +2,8 @@ package it.cdanet.cpeconfigurator.ui.screens
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
@@ -61,6 +63,7 @@ data class KoContext(
  * (reason always required). The installation is not blocked: after sending, the technician
  * chooses to retry now or to end the visit.
  */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun KoDialog(c: AppContainer, ctx: KoContext, onDismiss: () -> Unit, onRetry: () -> Unit, onClose: () -> Unit) {
     val scope = rememberCoroutineScope()
@@ -115,7 +118,7 @@ fun KoDialog(c: AppContainer, ctx: KoContext, onDismiss: () -> Unit, onRetry: ()
                 )
                 if (kind == "postponed") {
                     Text("Da riprovare", fontWeight = FontWeight.SemiBold)
-                    Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                         listOf(null to "Da definire", 1 to "Domani", 2 to "Fra 2 giorni", 7 to "Fra una settimana").forEach { (d, label) ->
                             FilterChip(selected = retryDays == d, onClick = { retryDays = d }, label = { Text(label, style = MaterialTheme.typography.labelSmall) })
                         }
