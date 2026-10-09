@@ -1,5 +1,17 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.data.MyZonesDto
+import it.cdanet.cpeconfigurator.ui.NoticeKind
+import it.cdanet.cpeconfigurator.ui.StatusChip
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.buildJsonObject
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.Slider
+import androidx.compose.material3.AlertDialog
+import androidx.compose.foundation.horizontalScroll
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.layout.Spacer
 import it.cdanet.cpeconfigurator.R
 import it.cdanet.cpeconfigurator.ui.EmptyState
 import it.cdanet.cpeconfigurator.ui.ListHeader
@@ -32,6 +44,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -162,13 +175,17 @@ fun OutagesScreen(c: AppContainer) {
                 })
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Anche i lavori programmati", modifier = Modifier.weight(1f))
+                Text(if (admin) "Anche i lavori programmati" else "Anche i lavori sui POP/AP assegnati", modifier = Modifier.weight(1f))
                 Switch(checked = planned, onCheckedChange = { p ->
                     planned = p
                     if (alerts) scope.launch { turnOn() }
                 })
             }
-            Text("Controllo ogni 15 minuti anche ad app chiusa, con un accesso in sola lettura ai guasti (revocato se cambi password o esci da tutti i dispositivi).", style = MaterialTheme.typography.bodySmall)
+            Text(
+                "Controllo ogni 15 minuti anche ad app chiusa, con un accesso in sola lettura ai guasti (revocato se cambi password o esci da tutti i dispositivi)." +
+                    if (admin) "" else " Per le tue aree di interesse valgono le regole di ciascuna.",
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
         PersonalTelegramCard(c)
         if (!admin) MyZones(c) { scope.launch { load() } }
@@ -221,6 +238,7 @@ private fun itemLabel(i: OutageItemDto) = when {
 /** Personal Telegram: the bot set by the admin writes to the user's own chat (link via Start, or the chat id). */
 @Composable
 fun PersonalTelegramCard(c: AppContainer) {
+    val sessionRole = c.session.state.collectAsState().value?.user?.role
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var t by remember { mutableStateOf<OutageTelegramDto?>(null) }
@@ -257,7 +275,7 @@ fun PersonalTelegramCard(c: AppContainer) {
             s.linked -> {
                 Text("Telegram collegato (chat ${s.chatHint}): ricevi qui $what.", style = MaterialTheme.typography.bodySmall)
                 if (s.outages) Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Anche i lavori programmati", modifier = Modifier.weight(1f))
+                    Text(if (sessionRole == "admin") "Anche i lavori programmati" else "Anche i lavori sui POP/AP assegnati", modifier = Modifier.weight(1f))
                     Switch(checked = s.planned, onCheckedChange = { p -> act { c.api.outageTelegramSet(null, p) } })
                 }
                 BusyButton("Scollega Telegram", busy, Modifier.fillMaxWidth(), primary = false) { act { c.api.outageTelegramUnlink() } }
@@ -295,47 +313,137 @@ fun PersonalTelegramCard(c: AppContainer) {
 @Composable
 private fun MyZones(c: AppContainer, onChanged: () -> Unit) {
     val scope = rememberCoroutineScope()
-    var zones by remember { mutableStateOf<List<OutageZoneItemDto>>(emptyList()) }
+    var data by remember { mutableStateOf<MyZonesDto?>(null) }
     var msg by remember { mutableStateOf<String?>(null) }
+    var adding by remember { mutableStateOf(false) }
     suspend fun reload() {
-        runCatching { c.api.myOutageZones() }.onSuccess { zones = it }.onFailure { msg = it.message }
+        runCatching { c.api.myOutageZones() }.onSuccess { data = it; msg = null }.onFailure { msg = it.message }
+    }
+    fun change(z: OutageZoneItemDto, patch: JsonObject) {
+        scope.launch {
+            runCatching { c.api.updateMyOutageZone(z.id, patch) }.onFailure { msg = it.message }
+            reload()
+            onChanged()
+        }
     }
     LaunchedEffect(Unit) { reload() }
-    SectionCard("Le mie zone di interesse", icon = it.cdanet.cpeconfigurator.R.drawable.ic_my_location) {
-        msg?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
-        if (zones.isEmpty()) Text("Nessuna zona: aggiungine una qui sotto (massimo 20).", style = MaterialTheme.typography.bodySmall)
+    val zones = data?.zones.orEmpty()
+    val max = data?.max ?: 20
+    SectionCard("Le mie aree di interesse", icon = R.drawable.ic_my_location) {
+        Text(
+            "Luoghi da seguire anche fuori dai POP/AP che ti sono assegnati: casa, una frazione, il paese di un cliente. Per ognuno scegli quali avvisi ricevere; in pausa non ti avvisa ma i guasti restano in elenco.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        msg?.let { ErrorBanner(it) { msg = null } }
+        if (data != null && zones.isEmpty()) {
+            EmptyState(R.drawable.ic_my_location, "Nessuna area", "Aggiungine una dal GPS o da un indirizzo.")
+        }
         zones.forEach { z ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${z.name} · ${z.radiusKm} km", modifier = Modifier.weight(1f))
-                TextButton(onClick = {
+            AreaCard(
+                z,
+                onPatch = { change(z, it) },
+                onDelete = {
                     scope.launch {
                         runCatching { c.api.deleteMyOutageZone(z.id) }.onFailure { msg = it.message }
                         reload()
                         onChanged()
                     }
-                }) { Text("Elimina") }
-            }
+                },
+            )
+        }
+        if (!adding) {
+            BusyButton("Aggiungi un'area (${zones.size}/$max)", false, Modifier.fillMaxWidth(), enabled = zones.size < max, primary = false, tonal = true) { adding = true }
         }
     }
-    ZoneEditor(c, personal = true) {
-        scope.launch { reload() }
-        onChanged()
+    if (adding) {
+        ZoneEditor(c, personal = true, onClose = { adding = false }) {
+            adding = false
+            scope.launch { reload() }
+            onChanged()
+        }
     }
 }
 
+private fun flag(key: String, value: Boolean) = buildJsonObject { put(key, JsonPrimitive(value)) }
+
+/** One personal area: on/paused, which outages notify, outages now, radius and delete. */
+@Composable
+private fun AreaCard(z: OutageZoneItemDto, onPatch: (JsonObject) -> Unit, onDelete: () -> Unit) {
+    var expanded by remember(z.id) { mutableStateOf(false) }
+    var radius by remember(z.id, z.radiusKm) { mutableStateOf(z.radiusKm.toFloat()) }
+    var confirmDelete by remember { mutableStateOf(false) }
+    Column(
+        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).background(MaterialTheme.colorScheme.surfaceContainer)
+            .padding(start = 14.dp, end = 8.dp, top = 10.dp, bottom = 6.dp),
+    ) {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(z.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("Raggio ${km(z.radiusKm.toFloat())}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            StatusChip(
+                when (z.activeCount) {
+                    0 -> "nessun guasto"
+                    1 -> "1 interruzione"
+                    else -> "${z.activeCount} interruzioni"
+                },
+                if (z.activeCount > 0) NoticeKind.Warn else NoticeKind.Good,
+            )
+            Switch(checked = !z.paused, onCheckedChange = { on -> onPatch(flag("paused", !on)) }, modifier = Modifier.padding(start = 8.dp))
+        }
+        if (z.paused) Text("In pausa: nessun avviso da quest'area.", style = MaterialTheme.typography.bodySmall, color = WarnAmber)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            listOf(Triple("notifyMt", "Guasti MT", z.notifyMt), Triple("notifyBt", "Guasti BT", z.notifyBt), Triple("notifyPlanned", "Lavori", z.notifyPlanned)).forEach { (key, label, on) ->
+                FilterChip(selected = on, enabled = !z.paused, onClick = { onPatch(flag(key, !on)) }, label = { Text(label) })
+            }
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = { expanded = !expanded }) { Text(if (expanded) "Chiudi" else "Raggio") }
+            Spacer(Modifier.weight(1f))
+            TextButton(onClick = { confirmDelete = true }) { Text("Elimina", color = BadRed) }
+        }
+        if (expanded) {
+            Text("Raggio: ${km(radius)}", style = MaterialTheme.typography.bodySmall)
+            Slider(
+                value = radius,
+                onValueChange = { radius = (Math.round(it * 2) / 2f).coerceIn(0.5f, 30f) },
+                valueRange = 0.5f..30f,
+                onValueChangeFinished = { onPatch(buildJsonObject { put("radiusKm", JsonPrimitive(radius.toDouble())) }) },
+                modifier = Modifier.padding(end = 8.dp),
+            )
+        }
+    }
+    if (confirmDelete) {
+        AlertDialog(
+            onDismissRequest = { confirmDelete = false },
+            title = { Text("Eliminare l'area?") },
+            text = { Text("${z.name}: non riceverai più avvisi per questa zona.") },
+            confirmButton = { TextButton(onClick = { confirmDelete = false; onDelete() }) { Text("Elimina", color = BadRed) } },
+            dismissButton = { TextButton(onClick = { confirmDelete = false }) { Text("Annulla") } },
+        )
+    }
+}
+
+private fun km(v: Float) = "%.1f km".format(java.util.Locale.ITALY, v)
+
 /** New area of interest from the phone (GPS with automatic address, address search or typed coordinates). */
 @Composable
-private fun ZoneEditor(c: AppContainer, personal: Boolean, onAdded: () -> Unit) {
+private fun ZoneEditor(c: AppContainer, personal: Boolean, onClose: (() -> Unit)? = null, onAdded: () -> Unit) {
     val scope = rememberCoroutineScope()
     var open by remember { mutableStateOf(false) }
     var name by remember { mutableStateOf("") }
-    var radius by remember { mutableStateOf("2") }
+    var radius by remember { mutableStateOf(2f) }
+    var notifyMt by remember { mutableStateOf(true) }
+    var notifyBt by remember { mutableStateOf(true) }
+    var notifyPlanned by remember { mutableStateOf(false) }
     var lat by remember { mutableStateOf("") }
     var lon by remember { mutableStateOf("") }
     var label by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf<String?>(null) }
-    SectionCard(if (personal) "Nuova zona" else "Zone condivise (admin)") {
+    SectionCard(if (personal) "Nuova area di interesse" else "Zone condivise (admin)", icon = R.drawable.ic_add_circle) {
+        if (onClose != null) open = true
         if (!open) {
             TextButton(onClick = { open = true }) { Text("Aggiungi una zona da qui") }
             return@SectionCard
@@ -357,18 +465,27 @@ private fun ZoneEditor(c: AppContainer, personal: Boolean, onAdded: () -> Unit) 
             Field("Latitudine", lat, { lat = it.replace(',', '.').trim() }, Modifier.weight(1f), keyboardType = KeyboardType.Decimal)
             Field("Longitudine", lon, { lon = it.replace(',', '.').trim() }, Modifier.weight(1f), keyboardType = KeyboardType.Decimal)
         }
-        Field("Nome della zona", name, { name = it })
-        Field("Raggio (km)", radius, { radius = it.replace(',', '.') }, keyboardType = KeyboardType.Decimal)
+        Field(if (personal) "Nome dell'area" else "Nome della zona", name, { name = it })
+        Text("Raggio: ${km(radius)}", style = MaterialTheme.typography.bodyMedium)
+        Slider(value = radius, onValueChange = { radius = (Math.round(it * 2) / 2f).coerceIn(0.5f, 30f) }, valueRange = 0.5f..30f)
+        if (personal) {
+            Text("Avvisami di", style = MaterialTheme.typography.labelLarge)
+            Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                FilterChip(selected = notifyMt, onClick = { notifyMt = !notifyMt }, label = { Text("Guasti MT") })
+                FilterChip(selected = notifyBt, onClick = { notifyBt = !notifyBt }, label = { Text("Guasti BT") })
+                FilterChip(selected = notifyPlanned, onClick = { notifyPlanned = !notifyPlanned }, label = { Text("Lavori programmati") })
+            }
+        }
         BusyButton("Salva zona", busy, Modifier.fillMaxWidth(), enabled = name.trim().length >= 2 && lat.toDoubleOrNull() != null && lon.toDoubleOrNull() != null) {
             scope.launch {
                 busy = true
                 msg = runCatching {
-                    val r = radius.toDoubleOrNull() ?: 2.0
-                    if (personal) c.api.createMyOutageZone(name.trim(), lat.toDouble(), lon.toDouble(), r)
+                    val r = radius.toDouble()
+                    if (personal) c.api.createMyOutageZone(name.trim(), lat.toDouble(), lon.toDouble(), r, notifyMt, notifyBt, notifyPlanned)
                     else c.api.createOutageZone(name.trim(), lat.toDouble(), lon.toDouble(), r)
                     name = ""; lat = ""; lon = ""; label = ""
                     onAdded()
-                    "Zona salvata: entra nel prossimo controllo (entro 10 minuti)."
+                    if (personal) "Area salvata: entra nel prossimo controllo (entro 10 minuti)." else "Zona salvata: entra nel prossimo controllo (entro 10 minuti)."
                 }.getOrElse { it.message }
                 busy = false
             }

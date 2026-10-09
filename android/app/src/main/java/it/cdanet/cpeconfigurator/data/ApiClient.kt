@@ -232,11 +232,19 @@ class ApiClient(
     suspend fun reverseGeocode(lat: Double, lon: Double): ReverseGeocodeDto =
         AppJson.decodeFromString(ReverseGeocodeDto.serializer(), request("GET", "/api/geocode/reverse?lat=$lat&lon=$lon"))
 
-    suspend fun myOutageZones(): List<OutageZoneItemDto> = AppJson.decodeFromString(MyZonesDto.serializer(), request("GET", "/api/outages/zones")).zones
+    suspend fun myOutageZones(): MyZonesDto = AppJson.decodeFromString(MyZonesDto.serializer(), request("GET", "/api/outages/zones"))
 
     /** Personal area of interest of the user. */
-    suspend fun createMyOutageZone(name: String, lat: Double, lon: Double, radiusKm: Double) {
-        request("POST", "/api/outages/zones", buildJsonObject { put("name", name); put("lat", lat); put("lon", lon); put("radiusKm", radiusKm) })
+    suspend fun createMyOutageZone(name: String, lat: Double, lon: Double, radiusKm: Double, notifyMt: Boolean = true, notifyBt: Boolean = true, notifyPlanned: Boolean = false) {
+        request("POST", "/api/outages/zones", buildJsonObject {
+            put("name", name); put("lat", lat); put("lon", lon); put("radiusKm", radiusKm)
+            put("notifyMt", notifyMt); put("notifyBt", notifyBt); put("notifyPlanned", notifyPlanned)
+        })
+    }
+
+    /** Changes the rules (paused, notifyMt, notifyBt, notifyPlanned) or the radius/name of a personal area. */
+    suspend fun updateMyOutageZone(id: String, patch: kotlinx.serialization.json.JsonObject) {
+        request("PUT", "/api/outages/zones/${id.removePrefix("z")}", patch)
     }
 
     suspend fun deleteMyOutageZone(id: String) {

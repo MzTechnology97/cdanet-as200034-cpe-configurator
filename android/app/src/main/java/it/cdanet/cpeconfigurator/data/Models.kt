@@ -122,10 +122,23 @@ data class OutageItemDto(val key: String = "", val name: String = "")
 data class OutageScopeDto(val all: Boolean = true, val assigned: List<OutageItemDto> = emptyList())
 
 @Serializable
-data class OutageZoneItemDto(val id: String = "", val name: String = "", val lat: Double = 0.0, val lon: Double = 0.0, val radiusKm: Double = 0.0)
+data class OutageZoneItemDto(
+    val id: String = "",
+    val name: String = "",
+    val lat: Double = 0.0,
+    val lon: Double = 0.0,
+    val radiusKm: Double = 0.0,
+    /** Rules of a personal area: paused (no notifications) and which outages notify. */
+    val paused: Boolean = false,
+    val notifyMt: Boolean = true,
+    val notifyBt: Boolean = true,
+    val notifyPlanned: Boolean = false,
+    /** Outages in the area right now. */
+    val activeCount: Int = 0,
+)
 
 @Serializable
-data class MyZonesDto(val zones: List<OutageZoneItemDto> = emptyList())
+data class MyZonesDto(val zones: List<OutageZoneItemDto> = emptyList(), val max: Int = 20)
 
 /** Personal Telegram notifications (bot configured by the admin). */
 @Serializable

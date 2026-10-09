@@ -6,7 +6,7 @@ import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { approxPoint, roughDistance } from '../domain/approx.ts';
 import { isValidLatLon } from '../domain/geo.ts';
-import { KIND_LABEL, OUTAGE_SOURCE } from '../services/outages.ts';
+import { KIND_LABEL, OUTAGE_SOURCE, scopeOutage } from '../services/outages.ts';
 
 /** "Guasti Enel": outages in the areas of interest (module power_outages). */
 export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
@@ -44,20 +44,55 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   // ---- Personal areas of interest (every user with the module) -------------------------------
-  const zoneBody = z.object({ name: z.string().trim().min(2).max(80), lat: z.number(), lon: z.number(), radiusKm: z.number().min(0.2).max(50) }).strict();
+  // Each zone notifies on its own rules: paused, and which outages (MT, BT, planned works). They do
+  // not depend on the POPs/APs assigned by the admin: any user can follow any place.
+  const zoneRules = {
+    paused: z.boolean().optional(),
+    notifyMt: z.boolean().optional(),
+    notifyBt: z.boolean().optional(),
+    notifyPlanned: z.boolean().optional(),
+  };
+  const zoneBody = z.object({ name: z.string().trim().min(2).max(80), lat: z.number(), lon: z.number(), radiusKm: z.number().min(0.2).max(50), ...zoneRules }).strict();
+  const zonePatch = zoneBody.partial().strict();
   const MAX_PERSONAL_ZONES = 20;
 
-  app.get('/api/outages/zones', user, async (req) => ({ zones: ctx.outages.manualZones(req.user!.id) }));
+  /** The user's zones with how many outages are in each right now. */
+  const myZones = (userId: number) => {
+    const active = ctx.outages.active();
+    return ctx.outages.manualZones(userId).map((zn) => ({ ...zn, activeCount: active.filter((o) => o.zones.some((w) => w.id === zn.id)).length }));
+  };
+
+  app.get('/api/outages/zones', user, async (req) => ({ zones: myZones(req.user!.id), max: MAX_PERSONAL_ZONES }));
 
   app.post('/api/outages/zones', user, async (req, reply) => {
     const b = zoneBody.parse(req.body);
     if (!isValidLatLon(b.lat, b.lon)) throw new HttpError(400, 'invalid_position');
     if (ctx.outages.manualZones(req.user!.id).length >= MAX_PERSONAL_ZONES) throw new HttpError(400, 'too_many_zones');
     const r = db
-      .prepare('INSERT INTO outage_zones(name, lat, lon, radius_km, created_at, created_by, owner_id) VALUES(?,?,?,?,?,?,?)')
-      .run(b.name, b.lat, b.lon, b.radiusKm, nowIso(), req.user!.id, req.user!.id);
+      .prepare('INSERT INTO outage_zones(name, lat, lon, radius_km, created_at, created_by, owner_id, paused, notify_mt, notify_bt, notify_planned) VALUES(?,?,?,?,?,?,?,?,?,?,?)')
+      .run(b.name, b.lat, b.lon, b.radiusKm, nowIso(), req.user!.id, req.user!.id, b.paused ? 1 : 0, b.notifyMt === false ? 0 : 1, b.notifyBt === false ? 0 : 1, b.notifyPlanned ? 1 : 0);
     recordEvent(db, req.user!.id, 'outages.my_zone_add', b.name, `${b.radiusKm} km`);
     return reply.code(201).send({ id: Number(r.lastInsertRowid) });
+  });
+
+  app.put('/api/outages/zones/:id', user, async (req) => {
+    const id = z.coerce.number().int().positive().parse((req.params as { id: string }).id);
+    const b = zonePatch.parse(req.body);
+    const z0 = db.prepare('SELECT name, lat, lon FROM outage_zones WHERE id = ? AND owner_id = ?').get(id, req.user!.id) as { name: string; lat: number; lon: number } | undefined;
+    if (!z0) throw new HttpError(404, 'zone_not_found');
+    if (!isValidLatLon(b.lat ?? z0.lat, b.lon ?? z0.lon)) throw new HttpError(400, 'invalid_position');
+    const cols: Array<[string, unknown]> = [];
+    if (b.name !== undefined) cols.push(['name', b.name]);
+    if (b.lat !== undefined) cols.push(['lat', b.lat]);
+    if (b.lon !== undefined) cols.push(['lon', b.lon]);
+    if (b.radiusKm !== undefined) cols.push(['radius_km', b.radiusKm]);
+    if (b.paused !== undefined) cols.push(['paused', b.paused ? 1 : 0]);
+    if (b.notifyMt !== undefined) cols.push(['notify_mt', b.notifyMt ? 1 : 0]);
+    if (b.notifyBt !== undefined) cols.push(['notify_bt', b.notifyBt ? 1 : 0]);
+    if (b.notifyPlanned !== undefined) cols.push(['notify_planned', b.notifyPlanned ? 1 : 0]);
+    if (cols.length) db.prepare(`UPDATE outage_zones SET ${cols.map(([c]) => `${c} = ?`).join(', ')} WHERE id = ?`).run(...(cols.map(([, v]) => v) as Array<string | number>), id);
+    recordEvent(db, req.user!.id, 'outages.my_zone_edit', b.name ?? z0.name, cols.map(([c]) => c).join(', '));
+    return { zone: myZones(req.user!.id).find((x) => x.id === `z${id}`) };
   });
 
   app.delete('/api/outages/zones/:id', user, async (req) => {
@@ -180,9 +215,16 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
   app.get('/api/outages/feed', async (req) => {
     const u = await ctx.auth.verifyFeedToken(req);
     if (!ctx.modules.stateFor(u.id).power_outages) throw new HttpError(404, 'module_disabled');
+    // planned works of the assigned POPs/APs: the phone's own switch (apps before 1.32.10 filter it themselves)
+    const { planned } = z.object({ planned: z.enum(['0', '1']).default('1') }).parse(req.query);
+    const notify = ctx.outages.active(keysFor(u)).filter((o) => {
+      const keys = ctx.outages.notifyKeysFor(u.id, u.role, o.kind, planned === '1');
+      if (!keys) return o.kind !== 'lavoro' || planned === '1';
+      return scopeOutage(o, keys) !== null;
+    });
     return {
       generatedAt: ctx.outages.status()?.at ?? null,
-      active: shown(u, ctx.outages.active(keysFor(u))).map((o) => ({
+      active: shown(u, notify).map((o) => ({
         id: o.id,
         kind: o.kind,
         label: KIND_LABEL[o.kind],

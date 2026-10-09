@@ -35,6 +35,20 @@ export interface Zone {
   source: 'manual' | 'ap';
   /** Personal zone of an installer (null/undefined = shared zone of the admins, or a UISP POP/AP). */
   ownerId?: number | null;
+  /** Notification rules of a manual zone: paused, and which kinds of outage it notifies. */
+  paused?: boolean;
+  notifyMt?: boolean;
+  notifyBt?: boolean;
+  notifyPlanned?: boolean;
+}
+
+/** Whether a zone's rules let an outage of this kind notify (paused zones never notify). */
+export function zoneNotifies(z: Pick<Zone, 'paused' | 'notifyMt' | 'notifyBt' | 'notifyPlanned'>, kind: PowerOutage['kind']): boolean {
+  if (z.paused) return false;
+  if (kind === 'guasto_mt') return z.notifyMt !== false;
+  if (kind === 'guasto_bt') return z.notifyBt !== false;
+  if (kind === 'lavoro') return !!z.notifyPlanned;
+  return z.notifyMt !== false || z.notifyBt !== false;
 }
 
 export interface OutageConfig {
@@ -228,10 +242,20 @@ export function createOutages(
   /** Manual zones: 'shared' = the admins' ones, a user id = that installer's personal ones, 'all' = every zone. */
   const manualZones = (owner: 'shared' | 'all' | number = 'shared'): Zone[] => {
     const where = owner === 'all' ? '' : owner === 'shared' ? 'WHERE owner_id IS NULL' : 'WHERE owner_id = ?';
-    const rows = db.prepare(`SELECT id, name, lat, lon, radius_km radiusKm, owner_id ownerId FROM outage_zones ${where} ORDER BY name`).all(...(typeof owner === 'number' ? [owner] : [])) as Array<
-      Omit<Zone, 'id' | 'source'> & { id: number }
+    const rows = db
+      .prepare(`SELECT id, name, lat, lon, radius_km radiusKm, owner_id ownerId, paused, notify_mt notifyMt, notify_bt notifyBt, notify_planned notifyPlanned FROM outage_zones ${where} ORDER BY name`)
+      .all(...(typeof owner === 'number' ? [owner] : [])) as Array<
+      Omit<Zone, 'id' | 'source' | 'paused' | 'notifyMt' | 'notifyBt' | 'notifyPlanned'> & { id: number; paused: number; notifyMt: number; notifyBt: number; notifyPlanned: number }
     >;
-    return rows.map((z) => ({ ...z, id: `z${z.id}`, source: 'manual' as const }));
+    return rows.map((z) => ({
+      ...z,
+      id: `z${z.id}`,
+      source: 'manual' as const,
+      paused: !!z.paused,
+      notifyMt: !!z.notifyMt,
+      notifyBt: !!z.notifyBt,
+      notifyPlanned: !!z.notifyPlanned,
+    }));
   };
 
   // ---- POPs/APs selected from UISP and assignments to installers --------------------------
@@ -288,6 +312,18 @@ export function createOutages(
   const keysFor = (userId: number, role: string): Set<string> | undefined =>
     role === 'admin' ? undefined : new Set([...assignments(userId).map((i) => i.key), ...manualZones(userId).map((z) => z.id)]);
 
+  /**
+   * What a user is notified about for one kind of outage: the assigned POPs/APs (planned works only
+   * if the user wants them) and the personal zones whose rules accept that kind. Admins: everything.
+   */
+  const notifyKeysFor = (userId: number, role: string, kind: PowerOutage['kind'], plannedForAssigned: boolean): Set<string> | undefined => {
+    if (role === 'admin') return undefined;
+    const keys = new Set<string>();
+    if (kind !== 'lavoro' || plannedForAssigned) for (const i of assignments(userId)) keys.add(i.key);
+    for (const z of manualZones(userId)) if (zoneNotifies(z, kind)) keys.add(z.id);
+    return keys;
+  };
+
   type Stored = PowerOutage & { impact: Impact[]; zones: Array<{ id: string; name: string; source?: string; distanceM?: number; ownerId?: number | null }> };
 
   /** Personal Telegram messages: each linked user gets what they may see, nothing else. */
@@ -301,8 +337,8 @@ export function createOutages(
     }>;
     for (const u of users) {
       if (opts.userOn && !opts.userOn(u.id)) continue;
-      if (rec.kind === 'lavoro' && !u.planned) continue;
-      const keys = keysFor(u.id, u.role);
+      if (u.role === 'admin' && rec.kind === 'lavoro' && !u.planned) continue;
+      const keys = notifyKeysFor(u.id, u.role, rec.kind, !!u.planned);
       const v = keys ? scopeOutage(rec, keys) : rec;
       if (!v) continue;
       const hide = keys && !config().installerClients;
@@ -504,6 +540,7 @@ export function createOutages(
     setConfig,
     manualZones,
     keysFor,
+    notifyKeysFor,
     zones,
     infra,
     selection,

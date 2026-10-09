@@ -86,9 +86,11 @@ object OutageAlerts {
         }
     }
 
-    /** New outages since the last check (pure, unit-tested). */
-    fun newOnes(feed: List<FeedOutage>, known: Set<String>, includePlanned: Boolean): List<FeedOutage> =
-        feed.filter { (includePlanned || it.kind != "lavoro") && it.id.toString() !in known }
+    /**
+     * New outages since the last check (pure, unit-tested). The server already applies the rules:
+     * each area's own (MT, BT, planned works, paused) and this phone's planned-works choice.
+     */
+    fun newOnes(feed: List<FeedOutage>, known: Set<String>): List<FeedOutage> = feed.filter { it.id.toString() !in known }
 
     internal suspend fun check(c: Context): Boolean = withContext(Dispatchers.IO) {
         val p = prefs(c)
@@ -97,7 +99,7 @@ object OutageAlerts {
         // the worker can run without the app open: read the test TLS option here too
         TestTls.enabled = Settings(c).insecureTlsNow()
         val http = TestTls.apply(OkHttpClient.Builder()).connectTimeout(10, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS).build()
-        http.newCall(Request.Builder().url("$backend/api/outages/feed").header("Authorization", "Bearer $token").build()).execute().use { r ->
+        http.newCall(Request.Builder().url("$backend/api/outages/feed?planned=${if (includePlanned(c)) 1 else 0}").header("Authorization", "Bearer $token").build()).execute().use { r ->
             if (r.code == 401 || r.code == 404) {
                 // token revoked (password change, logout everywhere) or module disabled
                 notify(c, 1, "Notifiche guasti sospese", "Riaprile dall'app: Guasti Enel → notifiche sul telefono.")
@@ -107,7 +109,7 @@ object OutageAlerts {
             if (!r.isSuccessful) return@withContext false
             val feed = json.decodeFromString(OutageFeed.serializer(), r.body?.string().orEmpty())
             val known = p.getStringSet("known", emptySet()).orEmpty()
-            val fresh = newOnes(feed.active, known, includePlanned(c))
+            val fresh = newOnes(feed.active, known)
             fresh.take(5).forEach { o ->
                 notify(
                     c,
