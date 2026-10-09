@@ -124,7 +124,7 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
                 role = if (admin) "Amministratore" else "Installatore",
                 offline = offline,
                 resume = install.mode != null || (prov.pkg != null && prov.phase != Phase.Done),
-                onNew = { c.provisioning.reset(); c.install.start(InstallMode.New); onOpen(Dest(Screen.Provision)) },
+                onNew = { c.activeWorkOrder.value = null; c.provisioning.reset(); c.install.start(InstallMode.New); onOpen(Dest(Screen.Provision)) },
                 onRepoint = { c.install.start(InstallMode.Repoint); onOpen(Dest(Screen.Provision)) },
                 onResume = { onOpen(Dest(Screen.Provision)) },
                 onLogin = onLogin,
@@ -422,6 +422,8 @@ private fun WorkOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
                     if (o.statusNote.isNotBlank()) Text("Nota: ${o.statusNote}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         Button(onClick = {
+                            // the acceptance test will check the GPS against this order's position
+                            c.activeWorkOrder.value = o
                             when (o.kind) {
                                 "new" -> {
                                     c.provisioning.startWorkOrder(o)

@@ -42,6 +42,9 @@ class AppContainer(context: Context) {
 
     /** "Sblocco a ogni apertura": the app came back after a while, fingerprint/face needed. */
     val locked = kotlinx.coroutines.flow.MutableStateFlow(false)
+
+    /** Work order started from Oggi: the acceptance test checks the GPS against its position. */
+    val activeWorkOrder = kotlinx.coroutines.flow.MutableStateFlow<it.cdanet.cpeconfigurator.data.WorkOrderDto?>(null)
     @Volatile var backgroundSince = 0L
     val acceptanceQueue = it.cdanet.cpeconfigurator.field.AcceptanceQueue(appContext, api, session, resultQueue, scope)
 

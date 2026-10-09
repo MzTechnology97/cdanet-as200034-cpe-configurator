@@ -102,6 +102,8 @@ suspend fun autoLogin(c: AppContainer): String? {
 
 /** "Esci": the phone forgets the key (and removes it on the server when reachable). */
 suspend fun logoutPhone(c: AppContainer) {
+    it.cdanet.cpeconfigurator.alerts.PhoneAlerts.disable(c.appContext)
+    c.activeWorkOrder.value = null
     if (c.session.token != null) dropOldKey(c)
     c.quickLogin.clear()
     c.session.clear()
