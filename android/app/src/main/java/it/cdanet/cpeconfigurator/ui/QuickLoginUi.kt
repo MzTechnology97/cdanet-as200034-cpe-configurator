@@ -70,7 +70,8 @@ fun QuickLoginOffer(c: AppContainer) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var error by remember { mutableStateOf<String?>(null) }
-    val user = c.session.state.value?.user
+    val session by c.session.state.collectAsState()
+    val user = session?.user
     val saved = c.quickLogin.saved()
     val pointless = user == null || c.quickLogin.capability() == null || (saved != null && saved.username == user.username) || c.quickLogin.declined(user.username)
     LaunchedEffect(offer, pointless) { if (offer && pointless) c.offerQuickLogin.value = false }
