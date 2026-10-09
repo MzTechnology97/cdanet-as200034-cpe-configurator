@@ -145,6 +145,8 @@ export interface Config {
   coverageMaxKm: number;
   publicUrl: string | undefined;
   geocoder: { url: string; fallbackUrl: string | undefined; contact: string | undefined };
+  /** Variables actually set in the environment (.env), to tell them from defaults. */
+  envProvided: string[];
 }
 
 export function loadMasterKey(path: string): Buffer {
@@ -221,5 +223,6 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     coverageMaxKm: e.COVERAGE_MAX_KM,
     publicUrl: e.PUBLIC_URL ? e.PUBLIC_URL.replace(/\/+$/, '') : undefined,
     geocoder: { url: e.GEOCODER_URL, fallbackUrl: e.GEOCODER_FALLBACK_URL || undefined, contact: e.GEOCODER_CONTACT },
+    envProvided: Object.keys(envSchema.shape).filter((k) => source[k] !== undefined && source[k] !== ''),
   };
 }

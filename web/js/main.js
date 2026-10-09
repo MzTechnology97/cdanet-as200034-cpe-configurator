@@ -10,6 +10,7 @@ import { healthView } from './views/health.js';
 import { jobsView } from './views/jobs.js';
 import { modulesView } from './views/modules-view.js';
 import { outagesView } from './views/outages.js';
+import { serverSettingsView } from './views/server-settings.js';
 import { networkView } from './views/network.js';
 import { loginView } from './views/login.js';
 import { myTemplatesView } from './views/mytemplates.js';
@@ -38,6 +39,7 @@ const ROUTES = [
   { id: 'wireless', label: 'Reti Wi-Fi (WPA2)', view: wirelessView, admin: true },
   { id: 'profiles', label: 'Profili airOS', view: profilesView, admin: true },
   { id: 'connectors', label: 'Connettori', view: connectorsView, admin: true },
+  { id: 'server', label: 'Impostazioni server', view: serverSettingsView, admin: true },
   { id: 'modules', label: 'Funzionalità', view: (ctx) => modulesView({ ...ctx, onChange: () => renderChrome(session.get()?.user) }), admin: true },
   { id: 'events', label: 'Registro attività', view: eventsView, admin: true },
   { group: 'Profilo' },
