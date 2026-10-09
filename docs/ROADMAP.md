@@ -65,6 +65,7 @@ Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). 
 
 ## Già rilasciato
 
+- v1.32.4: lettore della mappa locale: un solo file aperto anche con molte richieste contemporanee.
 - v1.32.3: Discovery LAN nell'app con lista compatta, tipo di dispositivo e azioni (web, copia IP, porte).
 - v1.32.2: Guasti Enel nell'app con righe compatte e "Sulla mappa" sulla mappa della pagina.
 - v1.32.1: mappa locale servita a tile singole dal server (niente letture a intervalli: le WebView Android le rifiutavano).

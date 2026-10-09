@@ -124,7 +124,12 @@ export function findEntry(entries: DirEntry[], tileId: number): DirEntry | null 
 
 export class PmTilesReader {
   private header: PmHeader | null = null;
-  private fh: FileHandle | null = null;
+  /**
+   * One file handle for every read. The promise is kept, not the handle: concurrent first requests
+   * (a map asks for many tiles at once) would otherwise open the file several times, and the
+   * handles left behind are closed by the garbage collector, which ends the process on Node 26.
+   */
+  private fh: Promise<FileHandle> | null = null;
   private dirs = new Map<string, DirEntry[]>();
   private readonly file: string;
 
@@ -133,9 +138,13 @@ export class PmTilesReader {
   }
 
   private async read(offset: number, length: number): Promise<Buffer> {
-    this.fh ??= await open(this.file, 'r');
+    this.fh ??= open(this.file, 'r');
+    const fh = await this.fh.catch((e: unknown) => {
+      this.fh = null; // missing file now: a later request may succeed
+      throw e;
+    });
     const b = Buffer.alloc(length);
-    const { bytesRead } = await this.fh.read(b, 0, length, offset);
+    const { bytesRead } = await fh.read(b, 0, length, offset);
     return b.subarray(0, bytesRead);
   }
 
@@ -171,7 +180,8 @@ export class PmTilesReader {
   }
 
   async close(): Promise<void> {
-    await this.fh?.close();
+    const fh = this.fh;
     this.fh = null;
+    await (await fh?.catch(() => null))?.close();
   }
 }
