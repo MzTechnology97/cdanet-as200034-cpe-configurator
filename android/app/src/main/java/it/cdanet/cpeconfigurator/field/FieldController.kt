@@ -42,6 +42,10 @@ data class FieldState(
     val peak: Int? = null,
     val updatedAt: Long? = null,
     val error: String? = null,
+    /** The CPE rejected every credential tried: the technician can type the right ones. */
+    val authFailed: Boolean = false,
+    /** Which credentials opened the CPE ("CDA Net", "di fabbrica", "inserite a mano"). */
+    val credentialsUsed: String? = null,
 )
 
 /**
@@ -54,6 +58,13 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
     val state: StateFlow<FieldState> = _state.asStateFlow()
 
     @Volatile private var access: FieldAccess? = null
+    /** Typed by the technician for a CPE with non-standard credentials: memory only, never saved or sent. */
+    @Volatile private var manual: CredentialsDto? = null
+
+    fun useManualCredentials(username: String, password: String) {
+        manual = CredentialsDto(username.trim(), password).takeIf { it.username.isNotBlank() && it.password.isNotEmpty() }
+        client = null
+    }
     private var client: AirosClient? = null
     private var job: Job? = null
     var onSample: ((AirosStatus) -> Unit)? = null
@@ -106,6 +117,11 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
                 } catch (e: Exception) {
                     if (e is AirosAuthException) client = null
                     _state.update { it.copy(connecting = false, error = e.message ?: e.toString()) }
+                    // every credential rejected: stop instead of hammering the CPE with logins
+                    if (_state.value.authFailed) {
+                        _state.update { it.copy(running = false) }
+                        return@launch
+                    }
                     delay(1_500)
                 }
                 delay(period)
@@ -121,12 +137,31 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
 
     fun resetPeak() = _state.update { it.copy(peak = null, history = emptyList()) }
 
+    /** APs heard by the CPE (site survey), on the current or a new airOS session. */
+    suspend fun siteSurvey(): List<SurveyAp> = withContext(Dispatchers.IO) {
+        val c = client ?: connect(null).also { client = it }
+        try {
+            c.survey()
+        } catch (e: AirosAuthException) {
+            client = null
+            connect(null).also { client = it }.survey()
+        }
+    }
+
     /** Gateway of the current Wi-Fi first (CPE in router mode or its management Wi-Fi), then the configured IPs. */
     private suspend fun connect(manualHost: String?): AirosClient = withContext(Dispatchers.IO) {
-        val a = access ?: throw IllegalStateException("Credenziali CPE non disponibili: apri lo strumento una volta con Internet attivo (dopo l'accesso)")
+        val a = access
+        val m = manual
+        if (a == null && m == null) throw IllegalStateException("Credenziali CPE non disponibili: apri lo strumento una volta con Internet attivo (dopo l'accesso) oppure inseriscile a mano")
         val wifi = network.wifiNetwork() ?: throw IllegalStateException("Collegati alla Wi-Fi della CPE o del router del cliente")
         val link = network.wifiLink()
-        val hosts = (listOfNotNull(manualHost) + listOfNotNull(link?.gateway) + a.hosts).distinct().filter { Ip.isPrivate(it) }
+        val hosts = (listOfNotNull(manualHost) + listOfNotNull(link?.gateway) + (a?.hosts ?: listOf("192.168.1.20"))).distinct().filter { Ip.isPrivate(it) }
+        // typed by hand first, then the CDA Net standard ones, then factory airOS (ubnt/ubnt)
+        val creds = listOfNotNull(
+            m?.let { it to "inserite a mano" },
+            a?.credentials?.let { it to "CDA Net" },
+            CredentialsDto("ubnt", "ubnt") to "di fabbrica",
+        ).distinctBy { it.first }
         _state.update { it.copy(connecting = true) }
         var authError: Exception? = null
         for (host in hosts) {
@@ -134,16 +169,29 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
                 val port = url.substringAfterLast(':').toIntOrNull() ?: if (url.startsWith("https")) 443 else 80
                 val open = runCatching { wifi.socketFactory.createSocket().use { s: Socket -> s.connect(InetSocketAddress(host, port), 700) } }.isSuccess
                 if (!open) continue
-                try {
-                    return@withContext AirosClient(url, wifi.socketFactory).apply { login(a.credentials.username, a.credentials.password) }
-                } catch (e: AirosAuthException) {
-                    authError = e
-                    break // same host, other port: same credentials
-                } catch (_: Exception) {
-                    continue
+                var rejected = false
+                for ((cr, label) in creds) {
+                    try {
+                        val cl = AirosClient(url, wifi.socketFactory).apply { login(cr.username, cr.password) }
+                        _state.update { it.copy(authFailed = false, credentialsUsed = label) }
+                        return@withContext cl
+                    } catch (e: AirosAuthException) {
+                        authError = e
+                        rejected = true
+                    } catch (_: Exception) {
+                        break // not an airOS web UI on this port
+                    }
                 }
+                if (rejected) break // same host, other port: same answers
             }
         }
-        throw authError ?: IllegalStateException("Nessuna CPE airOS trovata su ${hosts.joinToString()}: verifica la Wi-Fi a cui sei collegato")
+        if (authError != null) {
+            _state.update { it.copy(authFailed = true) }
+            throw AirosAuthException(
+                if (m != null) "La CPE rifiuta anche le credenziali inserite: controllale e riprova"
+                else "La CPE rifiuta le credenziali CDA Net e quelle di fabbrica (ubnt/ubnt): inserisci quelle della CPE",
+            )
+        }
+        throw IllegalStateException("Nessuna CPE airOS trovata su ${hosts.joinToString()}: verifica la Wi-Fi a cui sei collegato")
     }
 }

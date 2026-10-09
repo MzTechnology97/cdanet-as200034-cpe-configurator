@@ -101,6 +101,24 @@ class AirosClient(
 
     fun status(): AirosStatus = AirosStatus.parse(statusJson())
 
+    /**
+     * Site survey: the APs the CPE's radio hears. The scan can interrupt the CPE's link for a few
+     * seconds. Endpoints differ between builds: the known ones are tried in order.
+     */
+    fun survey(): List<SurveyAp> {
+        var lastCode = 0
+        for (path in listOf("/survey.json.cgi?iface=ath0", "/survey.json.cgi", "/api/survey")) {
+            val (code, text) = call(path)
+            if (code == 401 || code == 403) throw AirosAuthException("Sessione airOS scaduta")
+            lastCode = code
+            if (code in 200..299) {
+                val aps = SiteSurvey.parse(text)
+                if (aps.isNotEmpty() || text.trim().startsWith("[")) return aps
+            }
+        }
+        throw IOException("Site survey non disponibile su questo firmware (HTTP $lastCode)")
+    }
+
     companion object {
         /** Web UI endpoints tried on a host: standard HTTPS, then the CDA Net management port. */
         fun candidates(host: String): List<String> = listOf("https://$host", "https://$host:20443", "http://$host", "http://$host:20080")
