@@ -1,5 +1,6 @@
 import { api, session } from '../api.js';
 import { badge, busy, card, field, fmtDate, h, mount, pageHead, stat, toast } from '../dom.js';
+import { myTelegramCard } from './my-telegram.js';
 
 /** Own account: password change and "log out everywhere" (admins and installers). */
 export async function accountView() {
@@ -53,6 +54,7 @@ export async function accountView() {
     card(h('div', { class: 'grid' }, stat('Utente', a.username), stat('Ruolo', a.role === 'admin' ? 'Amministratore' : 'Installatore'), stat('Ultimo accesso', fmtDate(a.lastLoginAt)), stat('Creato il', fmtDate(a.createdAt)))),
     card(h('h2', {}, 'Password'), form),
     totpCard(a),
+    myTelegramCard(),
     card(
       h('h2', {}, 'Sessioni'),
       h('p', { class: 'small muted' }, 'Telefono perso o accesso da un PC condiviso? Chiudi tutte le sessioni: servirà un nuovo accesso ovunque.'),

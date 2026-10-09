@@ -16,6 +16,8 @@ interface Stored {
   chatId: string;
   events: TelegramEvent[];
   summaryHour: number;
+  /** Every user may link their own chat to the bot (personal notifications). Default on. */
+  personal?: boolean;
 }
 
 export interface TelegramView {
@@ -26,6 +28,9 @@ export interface TelegramView {
   chatId: string;
   events: TelegramEvent[];
   summaryHour: number;
+  personal: boolean;
+  /** Users that linked their own chat. */
+  personalLinked: number;
   updatedAt: string | null;
   updatedBy: string | null;
 }
@@ -91,16 +96,22 @@ export function createTelegram(db: Db, sealer: Sealer, opts: { fetchImpl?: typeo
         chatId: s?.chatId ?? '',
         events: s?.events ?? [...TELEGRAM_EVENTS],
         summaryHour: s?.summaryHour ?? 19,
+        personal: s?.personal ?? true,
+        personalLinked: (db.prepare("SELECT count(*) n FROM users WHERE active = 1 AND telegram_chat_id <> ''").get() as { n: number }).n,
         updatedAt: c?.updatedAt ?? null,
         updatedBy: c?.updatedBy ?? null,
       };
     },
 
-    save(input: { enabled: boolean; token?: string | undefined; chatId: string; events: TelegramEvent[]; summaryHour: number }, userId: number) {
+    /**
+     * The NOC group needs token and chat id; the bot token alone is enough for the users'
+     * personal notifications (no group required).
+     */
+    save(input: { enabled: boolean; token?: string | undefined; chatId: string; events: TelegramEvent[]; summaryHour: number; personal?: boolean | undefined }, userId: number) {
       const prev = read()?.stored;
       const tokenSealed = input.token ? sealer.seal(input.token) : (prev?.tokenSealed ?? '');
       if (input.enabled && (!tokenSealed || !input.chatId)) throw new HttpError(400, 'connector_incomplete');
-      const stored: Stored = { enabled: input.enabled, tokenSealed, chatId: input.chatId, events: [...new Set(input.events)], summaryHour: input.summaryHour };
+      const stored: Stored = { enabled: input.enabled, tokenSealed, chatId: input.chatId, events: [...new Set(input.events)], summaryHour: input.summaryHour, personal: input.personal ?? prev?.personal ?? true };
       db.prepare(
         `INSERT INTO settings(key, value, updated_at, updated_by) VALUES(?, ?, ?, ?)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
@@ -136,7 +147,15 @@ export function createTelegram(db: Db, sealer: Sealer, opts: { fetchImpl?: typeo
 
     /** The bot set by the admin can also write to single users (personal notifications). */
     personalAvailable(): boolean {
-      return !!read()?.stored.tokenSealed;
+      const s = read()?.stored;
+      return !!s?.tokenSealed && (s.personal ?? true);
+    },
+
+    /** Why personal notifications are not available: no bot yet, or switched off by the admin. */
+    personalBlocker(): 'no_bot' | 'personal_off' | null {
+      const s = read()?.stored;
+      if (!s?.tokenSealed) return 'no_bot';
+      return (s.personal ?? true) ? null : 'personal_off';
     },
 
     /** Username of the configured bot (cached per token). */

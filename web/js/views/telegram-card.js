@@ -10,10 +10,12 @@ const EVENTS = [
   ['daily_summary', 'Riepilogo serale', 'installazioni riuscite/fallite, collaudi, CPE ancora da accettare'],
 ];
 
-/** Connettori → Telegram: bot token, chat, events, test. */
+/** Connettori → Telegram: one bot for the NOC group and for every user's personal notifications. */
 export function telegramCard(t, reload) {
   const enabled = h('input', { type: 'checkbox' });
-  enabled.checked = t.configured ? t.enabled : true;
+  enabled.checked = t.configured ? t.enabled : !!t.chatId;
+  const personal = h('input', { type: 'checkbox' });
+  personal.checked = t.personal !== false;
   const token = h('input', { type: 'password', autocomplete: 'off', placeholder: t.tokenSet ? `Impostato (${t.tokenHint}) — lascia vuoto per non cambiarlo` : '123456789:AA…' });
   const chat = h('input', { value: t.chatId, placeholder: '-1001234567890', inputmode: 'numeric' });
   const hour = h('input', { type: 'number', min: 0, max: 23, value: t.summaryHour });
@@ -56,7 +58,7 @@ export function telegramCard(t, reload) {
     busy(saveBtn, async () => {
       await api('/api/admin/connectors/telegram', {
         method: 'PUT',
-        body: { enabled: enabled.checked, token: token.value.trim(), chatId: chat.value.trim(), events: events(), summaryHour: Number(hour.value) || 19 },
+        body: { enabled: enabled.checked, token: token.value.trim(), chatId: chat.value.trim(), events: events(), summaryHour: Number(hour.value) || 19, personal: personal.checked },
       });
       toast('Notifiche Telegram salvate');
       await reload();
@@ -75,8 +77,14 @@ export function telegramCard(t, reload) {
     h(
       'div',
       { class: 'page-head' },
-      h('div', {}, h('h2', {}, 'Telegram (notifiche NOC)'), h('p', { class: 'small muted' }, 'Solo ciò che richiede un’azione. Nei messaggi: modello, MAC, SSID e installatore; mai nome, indirizzo o posizione del cliente.')),
-      h('div', {}, badge(t.configured && t.enabled ? 'attivo' : 'non attivo', t.configured && t.enabled ? 'good' : '')),
+      h('div', {}, h('h2', {}, 'Telegram'), h('p', { class: 'small muted' }, 'Un solo bot: messaggi al gruppo del NOC e notifiche personali di ogni utente. Nei messaggi mai nome, indirizzo o posizione del cliente.')),
+      h(
+        'div',
+        {},
+        badge(t.tokenSet && t.personal !== false ? 'personali attive' : 'personali non attive', t.tokenSet && t.personal !== false ? 'good' : ''),
+        ' ',
+        badge(t.configured && t.enabled ? 'NOC attivo' : 'NOC non attivo', t.configured && t.enabled ? 'good' : ''),
+      ),
     ),
     t.updatedAt ? h('p', { class: 'small muted' }, `Ultima modifica ${fmtDate(t.updatedAt)}${t.updatedBy ? ` · ${t.updatedBy}` : ''}`) : null,
     h(
@@ -87,19 +95,25 @@ export function telegramCard(t, reload) {
         'ol',
         { class: 'small' },
         h('li', {}, 'Su Telegram apri @BotFather, comando /newbot: ottieni il token del bot.'),
-        h('li', {}, 'Aggiungi il bot al gruppo del NOC e scrivi un messaggio qualsiasi nel gruppo.'),
+        h('li', {}, 'Incolla il token qui e salva: basta questo per le notifiche personali (ogni utente collega il proprio Telegram da Il mio account o dall’app).'),
+        h('li', {}, 'Facoltativo, per il NOC: aggiungi il bot al gruppo e scrivi un messaggio qualsiasi nel gruppo.'),
         h('li', {}, 'Incolla il token qui, premi "Trova chat ID" e scegli il gruppo.'),
         h('li', {}, 'Premi "Invia messaggio di prova", scegli gli eventi e salva.'),
       ),
     ),
-    h('label', { class: 'check' }, enabled, 'Notifiche attive'),
-    h('div', { class: 'row' }, field('Token del bot', token), field('Chat ID del gruppo', chat)),
-    h('h3', {}, 'Eventi'),
+    h('div', { class: 'row' }, field('Token del bot', token)),
+    h('h3', {}, 'Notifiche personali degli utenti'),
+    h('label', { class: 'check' }, personal, 'Ogni utente (amministratori e installatori) può collegare il proprio Telegram'),
+    h('p', { class: 'small muted' }, `Ricevono i guasti Enel delle proprie zone e dei POP/AP assegnati. Collegati ora: ${t.personalLinked ?? 0}.`),
+    h('h3', {}, 'Gruppo del NOC (facoltativo)'),
+    h('label', { class: 'check' }, enabled, 'Messaggi al gruppo del NOC attivi'),
+    h('div', { class: 'row' }, field('Chat ID del gruppo', chat)),
+    h('h4', {}, 'Eventi del gruppo'),
     ...boxes,
     h('div', { class: 'row' }, field('Ora del riepilogo serale (0-23, ora italiana)', hour)),
     t.publicUrl
       ? h('p', { class: 'small muted' }, `I messaggi includono il link alla console: ${t.publicUrl}`)
-      : h('p', { class: 'small muted' }, 'Per avere nei messaggi il link allo storico imposta PUBLIC_URL nel .env (es. https://cpe.cda-net.it).'),
+      : h('p', { class: 'small muted' }, 'Per avere nei messaggi il link allo storico imposta l’indirizzo pubblico della console in ', h('a', { href: '#/server' }, 'Impostazioni server'), ' (es. https://cpe.cda-net.it).'),
     h('div', { class: 'btns' }, findBtn, testBtn, previewBtn, saveBtn, t.configured || t.tokenSet ? resetBtn : null),
     out,
   );

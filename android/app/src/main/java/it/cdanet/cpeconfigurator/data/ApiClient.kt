@@ -218,19 +218,26 @@ class ApiClient(
 
     suspend fun networkStatus(): NetworkStatusDto = AppJson.decodeFromString(NetworkStatusDto.serializer(), request("GET", "/api/network/status"))
 
-    suspend fun outageTelegram(): OutageTelegramDto = AppJson.decodeFromString(OutageTelegramDto.serializer(), request("GET", "/api/outages/telegram"))
+    /** Personal Telegram of the account (every user); servers before v1.29 only had the Guasti Enel path. */
+    private suspend fun telegram(method: String, sub: String, body: JsonElement? = null): String = try {
+        request(method, "/api/account/telegram$sub", body)
+    } catch (e: ApiException) {
+        if (e.status == 404) request(method, "/api/outages/telegram$sub", body) else throw e
+    }
 
-    suspend fun outageTelegramLink(): TelegramLinkDto = AppJson.decodeFromString(TelegramLinkDto.serializer(), request("POST", "/api/outages/telegram/link"))
+    suspend fun outageTelegram(): OutageTelegramDto = AppJson.decodeFromString(OutageTelegramDto.serializer(), telegram("GET", ""))
 
-    suspend fun outageTelegramVerify(): OutageTelegramDto = AppJson.decodeFromString(OutageTelegramDto.serializer(), request("POST", "/api/outages/telegram/verify"))
+    suspend fun outageTelegramLink(): TelegramLinkDto = AppJson.decodeFromString(TelegramLinkDto.serializer(), telegram("POST", "/link"))
+
+    suspend fun outageTelegramVerify(): OutageTelegramDto = AppJson.decodeFromString(OutageTelegramDto.serializer(), telegram("POST", "/verify"))
 
     suspend fun outageTelegramSet(chatId: String?, planned: Boolean?): OutageTelegramDto =
         AppJson.decodeFromString(
             OutageTelegramDto.serializer(),
-            request("PUT", "/api/outages/telegram", buildJsonObject { chatId?.let { put("chatId", it) }; planned?.let { put("planned", it) } }),
+            telegram("PUT", "", buildJsonObject { chatId?.let { put("chatId", it) }; planned?.let { put("planned", it) } }),
         )
 
-    suspend fun outageTelegramUnlink(): OutageTelegramDto = AppJson.decodeFromString(OutageTelegramDto.serializer(), request("DELETE", "/api/outages/telegram"))
+    suspend fun outageTelegramUnlink(): OutageTelegramDto = AppJson.decodeFromString(OutageTelegramDto.serializer(), telegram("DELETE", ""))
 
     /** Admin: new area of interest for power outages. */
     suspend fun createOutageZone(name: String, lat: Double, lon: Double, radiusKm: Double) {

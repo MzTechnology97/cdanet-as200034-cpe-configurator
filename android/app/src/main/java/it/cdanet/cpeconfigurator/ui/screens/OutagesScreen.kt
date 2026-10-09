@@ -102,7 +102,7 @@ fun OutagesScreen(c: AppContainer) {
             }
             Text("Controllo ogni 15 minuti anche ad app chiusa, con un accesso in sola lettura ai guasti (revocato se cambi password o esci da tutti i dispositivi).", style = MaterialTheme.typography.bodySmall)
         }
-        TelegramCard(c)
+        PersonalTelegramCard(c)
         BusyButton("Aggiorna", busy, Modifier.fillMaxWidth(), primary = false) { scope.launch { load() } }
         if (!admin) MyZones(c) { scope.launch { load() } }
         if (admin) ZoneEditor(c, personal = false) { scope.launch { load() } }
@@ -165,7 +165,7 @@ private fun itemLabel(i: OutageItemDto) = when {
 
 /** Personal Telegram: the bot set by the admin writes to the user's own chat (link via Start, or the chat id). */
 @Composable
-private fun TelegramCard(c: AppContainer) {
+fun PersonalTelegramCard(c: AppContainer) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var t by remember { mutableStateOf<OutageTelegramDto?>(null) }
@@ -183,20 +183,32 @@ private fun TelegramCard(c: AppContainer) {
         }
     }
     val s = t ?: return
+    val what = if (s.outages) "i guasti Enel nelle tue zone e sui POP/AP assegnati" else "le notifiche che ti riguardano"
     SectionCard("Notifiche su Telegram") {
         msg?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         when {
-            !s.available -> Text("Le notifiche Telegram personali non sono attive: chiedi all'amministratore.", style = MaterialTheme.typography.bodySmall)
+            !s.available -> Text(
+                when (s.reason) {
+                    "no_bot" -> if (s.canConfigure) "Manca il bot Telegram: dalla console web apri Connettori → Telegram e incolla il token del bot (creato con @BotFather). Basta il token, il gruppo del NOC è facoltativo."
+                    else "Le notifiche Telegram personali non sono ancora attive: chiedi all'amministratore di configurare il bot."
+                    "personal_off" -> if (s.canConfigure) "Le notifiche personali sono disattivate: riattivale dalla console web in Connettori → Telegram."
+                    else "L'amministratore ha disattivato le notifiche Telegram personali."
+                    "module_off" -> if (s.canConfigure) "Il modulo Notifiche Telegram è spento: accendilo dalla console web in Funzionalità."
+                    else "Le notifiche Telegram non sono attive su questo server."
+                    else -> "Le notifiche Telegram personali non sono attive."
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
             s.linked -> {
-                Text("Telegram collegato (chat ${s.chatHint}): ricevi i guasti nelle tue zone e sui POP/AP assegnati.", style = MaterialTheme.typography.bodySmall)
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Telegram collegato (chat ${s.chatHint}): ricevi qui $what.", style = MaterialTheme.typography.bodySmall)
+                if (s.outages) Row(verticalAlignment = Alignment.CenterVertically) {
                     Text("Anche i lavori programmati", modifier = Modifier.weight(1f))
                     Switch(checked = s.planned, onCheckedChange = { p -> act { c.api.outageTelegramSet(null, p) } })
                 }
                 BusyButton("Scollega Telegram", busy, Modifier.fillMaxWidth(), primary = false) { act { c.api.outageTelegramUnlink() } }
             }
             else -> {
-                Text("Ricevi su Telegram i guasti nelle tue zone e sui POP/AP che ti sono assegnati.", style = MaterialTheme.typography.bodySmall)
+                Text("Ricevi su Telegram $what, con il bot del server.", style = MaterialTheme.typography.bodySmall)
                 val l = link
                 if (l == null) {
                     BusyButton("Collega Telegram", busy, Modifier.fillMaxWidth()) {

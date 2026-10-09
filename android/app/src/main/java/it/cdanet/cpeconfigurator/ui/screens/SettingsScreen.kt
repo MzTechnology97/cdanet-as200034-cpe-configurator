@@ -140,6 +140,7 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
 
         if (session != null) {
             PasswordCard(c, onDone = { msg = it }, onError = { error = it })
+            PersonalTelegramCard(c)
             SectionCard("Sessioni") {
                 Text("Telefono perso o accesso da un dispositivo condiviso? Chiudi tutte le sessioni dell'account, anche questa.", style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(onClick = {

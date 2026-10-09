@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { badge, busy, card, field, fmtDate, h, mount, pageHead, stat, table, toast } from '../dom.js';
 import { createMap, drawOutages, fit, legend, MAP_COLORS as C } from '../map.js';
 import { itemLabel, itemNames, picker } from './infra-picker.js';
+import { myTelegramCard } from './my-telegram.js';
 
 const KIND = { guasto_mt: ['Guasto MT', 'bad'], guasto_bt: ['Guasto BT', 'warn'], lavoro: ['Lavoro programmato', ''], altro: ['Interruzione', 'warn'] };
 const local = (s) => (s ? s.replace('T', ' ').replace(/^(\d{4})-(\d{2})-(\d{2})/, '$3/$2/$1') : '—');
@@ -127,78 +128,6 @@ function outagesMap(admin) {
     const layers = drawOutages(map, d);
     fit(map, layers);
   })().catch((e) => (note.textContent = e.message));
-  return box;
-}
-
-/** Personal Telegram: the bot set by the admin writes to the user's own chat. */
-function telegramCard() {
-  const box = h('div', {});
-  async function load() {
-    const t = await api('/api/outages/telegram');
-    const app = h('p', { class: 'small muted' }, 'Sul telefono: app CDA Net → Guasti Enel → "Avvisami dei guasti" (notifiche anche ad app chiusa).');
-    if (!t.available) {
-      mount(box, card(h('h2', {}, 'Notifiche'), h('p', { class: 'small muted' }, 'Le notifiche Telegram personali non sono attive: chiedi all’amministratore.'), app));
-      return;
-    }
-    if (t.linked) {
-      const planned = h('input', { type: 'checkbox' });
-      planned.checked = t.planned;
-      planned.onchange = () => api('/api/outages/telegram', { method: 'PUT', body: { planned: planned.checked } }).then(() => toast('Preferenza salvata'), (e) => toast(e.message, 'bad'));
-      const off = h('button', { type: 'button', class: 'danger' }, 'Scollega Telegram');
-      off.onclick = () =>
-        busy(off, async () => {
-          await api('/api/outages/telegram', { method: 'DELETE' });
-          await load();
-        });
-      mount(box, card(h('h2', {}, 'Notifiche'), h('div', { class: 'notice good' }, `Telegram collegato (chat ${t.chatHint}): ricevi i guasti nelle tue zone e sui POP/AP assegnati.`), h('label', { class: 'check' }, planned, 'Anche i lavori programmati'), h('div', { class: 'btns' }, off), app));
-      return;
-    }
-    const linkBtn = h('button', { type: 'button', class: 'primary' }, 'Collega Telegram');
-    const steps = h('div', {});
-    linkBtn.onclick = () =>
-      busy(linkBtn, async () => {
-        const l = await api('/api/outages/telegram/link', { method: 'POST', body: {} });
-        const verify = h('button', { type: 'button', class: 'primary' }, 'Verifica');
-        verify.onclick = () =>
-          busy(verify, async () => {
-            try {
-              await api('/api/outages/telegram/verify', { method: 'POST', body: {} });
-            } catch (e) {
-              if (e.body?.error === 'start_not_found') throw new Error('Non trovo ancora il tuo messaggio: apri il bot, premi Avvia e riprova');
-              throw e;
-            }
-            toast('Telegram collegato');
-            await load();
-          });
-        mount(
-          steps,
-          h('ol', { class: 'small' }, h('li', {}, 'Apri ', h('a', { href: l.url, target: '_blank', rel: 'noopener' }, `@${l.bot}`), ' su Telegram e premi ', h('b', {}, 'Avvia'), '.'), h('li', {}, `Torna qui e premi Verifica (entro ${l.expiresInMin} minuti).`)),
-          h('div', { class: 'btns' }, verify),
-        );
-      });
-    const chatId = h('input', { placeholder: 'es. 123456789', inputmode: 'numeric' });
-    const saveId = h('button', { type: 'button' }, 'Usa questo ID');
-    saveId.onclick = () =>
-      busy(saveId, async () => {
-        await api('/api/outages/telegram', { method: 'PUT', body: { chatId: chatId.value.trim() } });
-        toast('Telegram collegato: ti è arrivato un messaggio di prova');
-        await load();
-      });
-    mount(
-      box,
-      card(
-        h('h2', {}, 'Notifiche'),
-        h('p', { class: 'small muted' }, 'Ricevi su Telegram i guasti nelle tue zone e sui POP/AP che ti sono assegnati.'),
-        h('div', { class: 'btns' }, linkBtn),
-        steps,
-        h('div', { class: 'row' }, field('Oppure il tuo ID Telegram', chatId)),
-        h('p', { class: 'small muted' }, 'Prima di usare l’ID scrivi almeno un messaggio al bot, altrimenti Telegram non gli permette di scriverti.'),
-        h('div', { class: 'btns' }, saveId),
-        app,
-      ),
-    );
-  }
-  load().catch((e) => mount(box, card(h('h2', {}, 'Notifiche'), h('div', { class: 'notice bad' }, e.message))));
   return box;
 }
 
@@ -424,7 +353,7 @@ export async function outagesView({ user }) {
     {},
     pageHead('Guasti Enel', admin ? 'Guasti e lavori della rete elettrica (e-distribuzione) nelle zone di interesse e attorno agli AP.' : 'Guasti e lavori della rete elettrica nelle tue zone.'),
     out,
-    telegramCard(),
+    myTelegramCard({ title: 'Notifiche', appHint: true }),
     admin ? null : myBox,
     infraBox,
     adminBox,

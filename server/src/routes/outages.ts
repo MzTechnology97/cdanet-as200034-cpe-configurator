@@ -71,10 +71,17 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
 
   // ---- Personal Telegram (bot configured by the admin, each user links their own chat) ------
   const links = new Map<string, { userId: number; expires: number }>();
-  const telegramState = (userId: number) => {
-    const r = db.prepare('SELECT telegram_chat_id chat, telegram_planned planned FROM users WHERE id = ?').get(userId) as { chat: string; planned: number };
+  const telegramState = (u: { id: number; role: string }) => {
+    const r = db.prepare('SELECT telegram_chat_id chat, telegram_planned planned FROM users WHERE id = ?').get(u.id) as { chat: string; planned: number };
+    const reason = !ctx.modules.enabled('telegram') ? 'module_off' : ctx.telegram.personalBlocker();
     return {
-      available: ctx.modules.enabled('telegram') && ctx.telegram.personalAvailable(),
+      available: reason === null,
+      /** Why not: no bot configured yet, personal notifications off, Telegram module off. */
+      reason,
+      /** Admins configure it themselves (Connettori → Telegram). */
+      canConfigure: u.role === 'admin',
+      /** What is sent today: the outages of the user's zones and assigned POPs/APs. */
+      outages: ctx.modules.stateFor(u.id).power_outages,
       linked: !!r.chat,
       chatHint: r.chat ? `…${r.chat.slice(-4)}` : '',
       planned: !!r.planned,
@@ -84,53 +91,57 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!ctx.modules.enabled('telegram') || !ctx.telegram.personalAvailable()) throw new HttpError(503, 'telegram_not_configured');
   };
   const linkChat = async (userId: number, chatId: string) => {
-    await ctx.telegram.sendTo(chatId, '✅ <b>CDA Net</b>: riceverai qui le notifiche dei guasti Enel nelle tue zone.', true);
+    await ctx.telegram.sendTo(chatId, '✅ <b>CDA Net</b>: Telegram collegato, riceverai qui le notifiche che ti riguardano.', true);
     db.prepare('UPDATE users SET telegram_chat_id = ? WHERE id = ?').run(chatId, userId);
   };
 
-  app.get('/api/outages/telegram', user, async (req) => telegramState(req.user!.id));
+  // Personal Telegram belongs to the account (every user); the old Guasti Enel paths stay for older apps.
+  const account = { preHandler: ctx.auth.requireUser };
+  for (const [base, pre] of [['/api/account/telegram', account], ['/api/outages/telegram', user]] as const) {
+    app.get(base, pre, async (req) => telegramState(req.user!));
 
-  /** Link code: the user opens the bot and presses Start, then "Verifica". */
-  app.post('/api/outages/telegram/link', user, async (req) => {
-    requireTelegram();
-    const bot = await ctx.telegram.botName();
-    for (const [k, v] of links) if (v.expires < Date.now() || v.userId === req.user!.id) links.delete(k);
-    const code = randomBytes(6).toString('hex');
-    links.set(code, { userId: req.user!.id, expires: Date.now() + 15 * 60_000 });
-    return { bot, code, url: `https://t.me/${bot}?start=${code}`, expiresInMin: 15 };
-  });
-
-  app.post('/api/outages/telegram/verify', user, async (req) => {
-    requireTelegram();
-    const code = [...links].find(([, v]) => v.userId === req.user!.id && v.expires > Date.now())?.[0];
-    if (!code) throw new HttpError(400, 'link_expired');
-    const chat = await ctx.telegram.findStart(code);
-    if (!chat) throw new HttpError(409, 'start_not_found');
-    await linkChat(req.user!.id, chat.id);
-    links.delete(code);
-    recordEvent(db, req.user!.id, 'outages.telegram_link', req.user!.username, 'Telegram personale collegato');
-    return telegramState(req.user!.id);
-  });
-
-  app.put('/api/outages/telegram', user, async (req) => {
-    const b = z
-      .object({ chatId: z.string().trim().regex(/^-?\d{3,20}$/).optional(), planned: z.boolean().optional() })
-      .strict()
-      .parse(req.body);
-    if (b.chatId) {
+    /** Link code: the user opens the bot and presses Start, then "Verifica". */
+    app.post(`${base}/link`, pre, async (req) => {
       requireTelegram();
-      await linkChat(req.user!.id, b.chatId);
-      recordEvent(db, req.user!.id, 'outages.telegram_link', req.user!.username, 'Telegram personale collegato (ID)');
-    }
-    if (b.planned !== undefined) db.prepare('UPDATE users SET telegram_planned = ? WHERE id = ?').run(b.planned ? 1 : 0, req.user!.id);
-    return telegramState(req.user!.id);
-  });
+      const bot = await ctx.telegram.botName();
+      for (const [k, v] of links) if (v.expires < Date.now() || v.userId === req.user!.id) links.delete(k);
+      const code = randomBytes(6).toString('hex');
+      links.set(code, { userId: req.user!.id, expires: Date.now() + 15 * 60_000 });
+      return { bot, code, url: `https://t.me/${bot}?start=${code}`, expiresInMin: 15 };
+    });
 
-  app.delete('/api/outages/telegram', user, async (req) => {
-    db.prepare("UPDATE users SET telegram_chat_id = '' WHERE id = ?").run(req.user!.id);
-    recordEvent(db, req.user!.id, 'outages.telegram_unlink', req.user!.username, '');
-    return telegramState(req.user!.id);
-  });
+    app.post(`${base}/verify`, pre, async (req) => {
+      requireTelegram();
+      const code = [...links].find(([, v]) => v.userId === req.user!.id && v.expires > Date.now())?.[0];
+      if (!code) throw new HttpError(400, 'link_expired');
+      const chat = await ctx.telegram.findStart(code);
+      if (!chat) throw new HttpError(409, 'start_not_found');
+      await linkChat(req.user!.id, chat.id);
+      links.delete(code);
+      recordEvent(db, req.user!.id, 'outages.telegram_link', req.user!.username, 'Telegram personale collegato');
+      return telegramState(req.user!);
+    });
+
+    app.put(base, pre, async (req) => {
+      const b = z
+        .object({ chatId: z.string().trim().regex(/^-?\d{3,20}$/).optional(), planned: z.boolean().optional() })
+        .strict()
+        .parse(req.body);
+      if (b.chatId) {
+        requireTelegram();
+        await linkChat(req.user!.id, b.chatId);
+        recordEvent(db, req.user!.id, 'outages.telegram_link', req.user!.username, 'Telegram personale collegato (ID)');
+      }
+      if (b.planned !== undefined) db.prepare('UPDATE users SET telegram_planned = ? WHERE id = ?').run(b.planned ? 1 : 0, req.user!.id);
+      return telegramState(req.user!);
+    });
+
+    app.delete(base, pre, async (req) => {
+      db.prepare("UPDATE users SET telegram_chat_id = '' WHERE id = ?").run(req.user!.id);
+      recordEvent(db, req.user!.id, 'outages.telegram_unlink', req.user!.username, '');
+      return telegramState(req.user!);
+    });
+  }
 
   /**
    * Map data. Admins: outages, every zone and the monitored POPs/APs with their real position.
