@@ -65,7 +65,13 @@ pre { background: var(--surface-2); border: 1px solid var(--line); border-radius
 .layout:has(.sidebar[hidden]) { grid-template-columns: minmax(0, 1fr); }
 .sidebar { position: sticky; top: var(--topbar-h); align-self: start; height: calc(100dvh - var(--topbar-h)); overflow-y: auto; background: var(--surface); border-right: 1px solid var(--line); padding: 14px 10px; display: flex; flex-direction: column; gap: 2px; }
 .sidebar .group { margin: 14px 10px 4px; font-size: .72rem; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
-.sidebar a { display: block; padding: 10px 12px; border-radius: 8px; color: var(--ink); text-decoration: none; }
+.sidebar a { display: flex; align-items: center; gap: 12px; padding: 9px 12px; border-radius: 10px; color: var(--ink); text-decoration: none; }
+.sidebar a > span:not(.bell-count) { flex: 1; min-width: 0; }
+.sidebar a .icon { width: 20px; height: 20px; flex: none; fill: var(--muted); }
+.sidebar a.active .icon { fill: var(--brand); }
+.icon { width: 20px; height: 20px; fill: currentColor; vertical-align: middle; }
+h1 .head-icon { display: inline-grid; place-items: center; width: 38px; height: 38px; border-radius: 12px; margin-right: 12px; vertical-align: middle; background: color-mix(in srgb, var(--brand) 14%, transparent); }
+h1 .head-icon .icon { width: 22px; height: 22px; fill: var(--brand); }
 .sidebar a:hover { background: var(--surface-2); }
 .sidebar a.active { background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand-ink); font-weight: 600; }
 .shade { position: fixed; inset: var(--topbar-h) 0 0 0; z-index: 19; background: rgb(0 0 0 / 45%); }
@@ -200,6 +206,19 @@ button.link { background: none; border: none; color: var(--brand); padding: 4px 
 
 /* Maps (Leaflet + Protomaps) */
 .map { height: 420px; border-radius: 10px; border: 1px solid var(--line); margin: 8px 0; z-index: 0; }
+.map.map-tall { height: min(620px, 70vh); }
+.row > .grow { flex: 1 1 320px; }
+.tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.tile { display: flex; align-items: center; gap: 14px; padding: 14px 16px; border: 1px solid var(--line); border-radius: 14px; background: var(--surface-2); color: var(--ink); text-decoration: none; transition: border-color .15s, transform .15s; }
+.tile:hover { border-color: var(--brand); transform: translateY(-1px); }
+.tile-icon { display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; flex: none; background: color-mix(in srgb, var(--brand) 14%, transparent); }
+.tile-icon .icon { width: 24px; height: 24px; fill: var(--brand); }
+.tile.good .tile-icon { background: var(--good-bg); } .tile.good .tile-icon .icon { fill: var(--good); }
+.tile.warn .tile-icon { background: var(--warn-bg); } .tile.warn .tile-icon .icon { fill: var(--warn); }
+.tile.bad .tile-icon { background: var(--bad-bg); } .tile.bad .tile-icon .icon { fill: var(--bad); }
+.tile-text { display: flex; flex-direction: column; min-width: 0; }
+.tile-text b { font-size: 1.5rem; line-height: 1.1; }
+.tile-text span { font-size: .85rem; color: var(--muted); }
 .map-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0 8px; }
 .map-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
 .leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--surface); color: var(--ink); }

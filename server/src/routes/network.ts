@@ -27,6 +27,10 @@ export function networkRoutes(app: FastifyInstance, ctx: AppContext) {
     const u = req.user!;
     const keys = u.role === 'admin' ? null : new Set(ctx.outages.assignments(u.id).map((i) => i.key));
     const [inf, counts] = await Promise.all([ctx.uisp.infrastructure(), ctx.uisp.cpeCounts()]);
+    // admins: real positions and the sector already served, for the map of the whole network
+    const sectors = keys
+      ? new Map()
+      : await ctx.uisp.apModels([...inf.pops.flatMap((p) => p.aps), ...inf.apsWithoutPop].map((a) => a.id)).catch(() => new Map());
     const showClients = !keys || ctx.outages.config().installerClients;
     // Enel outages near a POP/AP (when the user also has Guasti Enel).
     const power = new Set<string>();
@@ -48,6 +52,19 @@ export function networkRoutes(app: FastifyInstance, ctx: AppContext) {
         // without the numbers, installers still learn that customers are affected
         cpeOffline: c ? (c.offline === 0 ? 'none' : state === 'degraded' ? 'many' : 'some') : null,
         powerOutage: power.has(`ap:${a.id}`),
+        // installers never get coordinates (POP/AP only as approximate areas elsewhere)
+        ...(keys
+          ? {}
+          : {
+              lat: a.lat,
+              lon: a.lon,
+              locationFrom: a.locationFrom,
+              stations: a.stations,
+              served: (() => {
+                const m = sectors.get(a.id);
+                return m?.sector ? { center: m.sector.center, width: m.sector.width, servedM: m.servedM } : null;
+              })(),
+            }),
       };
     };
     const mine = (popId: string, apId: string) => !keys || keys.has(`pop:${popId}`) || keys.has(`ap:${apId}`);
@@ -63,6 +80,7 @@ export function networkRoutes(app: FastifyInstance, ctx: AppContext) {
           name: p.name,
           state: (aps.length && down === aps.length ? 'down' : down || aps.some((a) => a.state === 'degraded') ? 'degraded' : 'ok') as ApState,
           powerOutage: power.has(`pop:${p.id}`) || aps.some((a) => a.powerOutage),
+          ...(keys ? {} : { lat: p.lat, lon: p.lon }),
           aps,
         };
       })

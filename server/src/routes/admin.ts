@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { todayRome } from './work-orders.ts';
 import { HttpError, createLoginLimiter } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { hashPassword, sha256Hex, verifyPassword } from '../crypto.ts';
@@ -412,6 +413,19 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
         minAndroidVersion: c.minAndroidVersion,
         auditRetentionDays: c.auditRetentionDays,
       },
+      // what needs the office today (the dashboard's first row)
+      today: (() => {
+        const day = todayRome();
+        return {
+          day,
+          workOrders: count("SELECT count(*) n FROM work_orders WHERE day = ? AND status <> 'cancelled'", day),
+          workOrdersDone: count("SELECT count(*) n FROM work_orders WHERE day = ? AND status = 'done'", day),
+          workOrdersLate: count("SELECT count(*) n FROM work_orders WHERE day < ? AND status IN ('open','postponed')", day),
+          nocPending: count("SELECT count(*) n FROM job_acceptance WHERE review = 'pending'"),
+          koOpen: count('SELECT count(*) n FROM install_ko WHERE resolved_at IS NULL'),
+          jobs24h: count('SELECT count(*) n FROM provisioning_jobs WHERE created_at > ?', new Date(Date.now() - 86400_000).toISOString()),
+        };
+      })(),
       counts: {
         users: count('SELECT count(*) n FROM users WHERE active = 1'),
         wirelessNetworks: count('SELECT count(*) n FROM wireless_secrets'),

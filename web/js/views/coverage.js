@@ -103,11 +103,15 @@ export async function coverageView({ user } = {}) {
   const lat = h('input', { inputmode: 'decimal', placeholder: '37.5671' });
   const lon = h('input', { inputmode: 'decimal', placeholder: '14.2790' });
   const results = h('div', {});
+  const admin = user?.role === 'admin';
+  // admins: how many APs and how far (installers: the server's limits)
+  const howMany = h('select', {}, ...[5, 10, 20, 50].map((n) => h('option', { value: n }, `${n} AP`)));
+  const howFar = h('select', {}, ...[10, 25, 50, 100, 200].map((n) => h('option', { value: n, selected: n === 50 }, `entro ${n} km`)));
 
   async function check(la, lo, label) {
     mount(out, h('p', { class: 'muted' }, 'Ricerca degli AP vicini…'));
     try {
-      const r = await api(`/api/coverage?lat=${la}&lon=${lo}&limit=5`);
+      const r = await api(`/api/coverage?lat=${la}&lon=${lo}&limit=${admin ? howMany.value : 5}${admin ? `&km=${howFar.value}` : ''}`);
       mount(
         out,
         card(
@@ -205,7 +209,13 @@ export async function coverageView({ user } = {}) {
   return h(
     'div',
     {},
-    pageHead('Copertura', 'Gli AP più vicini a un indirizzo o a una posizione, con distanza e direzione di puntamento. Vengono mostrati solo gli AP entro il raggio configurato.'),
+    pageHead(
+      'Copertura',
+      admin
+        ? 'Gli AP più vicini a un indirizzo o a una posizione, con distanza, direzione di puntamento e segnale stimato. La mappa di tutta la rete è in Stato rete.'
+        : 'Gli AP più vicini a un indirizzo o a una posizione, con distanza e direzione di puntamento. Vengono mostrati solo gli AP entro il raggio configurato.',
+    ),
+    admin ? card(h('h2', {}, 'Ricerca'), h('div', { class: 'row' }, field('Quanti AP', howMany), field('Distanza massima', howFar))) : null,
     card(h('h2', {}, 'Da indirizzo'), addrForm, results),
     card(h('h2', {}, 'Da coordinate o GPS'), coordForm, h('div', { class: 'btns' }, gps)),
     out,
