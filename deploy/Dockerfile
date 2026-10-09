@@ -20,6 +20,10 @@ COPY --from=deps /app/server/node_modules ./node_modules
 COPY server/package.json ./
 COPY server/src ./src
 COPY web /app/web
+# Deploy files of this version: the updater applies them after an update (no installer re-run).
+COPY deploy/docker-compose.yml deploy/Caddyfile /app/deploy/
+COPY deploy/updater/update.sh /app/deploy/updater/
+COPY deploy/maps/fetch-basemap.sh /app/deploy/maps/
 COPY deploy/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod 0755 /usr/local/bin/docker-entrypoint.sh
 ENV NODE_ENV=production \

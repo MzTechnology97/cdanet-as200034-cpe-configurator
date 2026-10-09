@@ -115,6 +115,28 @@ jobs:
           TOKEN=$(curl -fsS -H 'Content-Type: application/json' -d "{\"username\":\"admin\",\"password\":\"$ADMIN_PW\"}" http://localhost/api/auth/login | jq -r .token)
           curl -fsS -H "Authorization: Bearer $TOKEN" http://localhost/api/map/config | tee /dev/stderr | jq -e '.basemap.maxZoom == 15 and (.basemap.bounds[0] | floor) == 7' >/dev/null
 
+      - name: Infrastructure settings from the console (updater agent, no SSH)
+        run: |
+          H="Authorization: Bearer $TOKEN"
+          for i in $(seq 1 30); do curl -fsS -H "$H" http://localhost/api/admin/infra | jq -e .agent >/dev/null && break; sleep 3; done
+          curl -fsS -H "$H" http://localhost/api/admin/infra | tee /dev/stderr | jq -e '.agent and .values.MAP_REGION == "custom"' >/dev/null
+          curl -fsS -X PUT -H "$H" -H 'Content-Type: application/json' \
+            -d '{"values":{"UPDATE_WINDOW":"02-05","HTTPS_SITES":"https://localhost https://127.0.0.1","HTTPS_DEFAULT_SNI":"127.0.0.1"}}' \
+            http://localhost/api/admin/infra | jq -e .pending >/dev/null
+          for i in $(seq 1 40); do
+            s=$(curl -fsS -H "$H" http://localhost/api/admin/infra)
+            echo "$s" | jq -e '(.pending | not) and .status.result == "ok"' >/dev/null && break
+            sleep 3
+          done
+          echo "$s" | jq .
+          echo "$s" | jq -e '(.pending | not) and .status.result == "ok" and .values.UPDATE_WINDOW == "02-05"' >/dev/null
+          grep -qx 'UPDATE_WINDOW=02-05' /opt/cdanet-cpe/.env || sudo grep -qx 'UPDATE_WINDOW=02-05' /opt/cdanet-cpe/.env
+          # Caddy recreated with the new address list: self-signed HTTPS on 127.0.0.1
+          for i in $(seq 1 20); do curl -kfsS https://127.0.0.1/api/health && break; sleep 3; done
+          curl -kfsS https://127.0.0.1/api/health | grep -q '"ok":true'
+          # invalid values are refused by the app and never reach the agent
+          test "$(curl -s -o /dev/null -w '%{http_code}' -X PUT -H "$H" -H 'Content-Type: application/json' -d '{"values":{"APP_LISTEN":":80\nJWT_SECRET=x"}}' http://localhost/api/admin/infra)" = 400
+
       - name: Diagnostics
         if: always()
         run: |

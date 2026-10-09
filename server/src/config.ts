@@ -26,6 +26,8 @@ const envSchema = z.object({
   PHOTOS_DIR: z.string().optional(),
   // Protomaps basemap (default: maps/basemap.pmtiles next to the database).
   MAP_FILE: z.string().optional(),
+  // Requests to the updater agent (infrastructure settings), shared through the data volume.
+  INFRA_DIR: z.string().optional(),
   // Terrain elevation tiles (SRTM/Skadi layout) for the pointing tilt; empty = off.
   DEM_URL: z.string().default('https://elevation-tiles-prod.s3.amazonaws.com/skadi'),
   STATIC_DIR: z.string().default('../web'),
@@ -101,6 +103,8 @@ export interface Config {
   ouiDir: string;
   /** Protomaps basemap (PMTiles) served to the console maps. */
   mapFile: string;
+  /** Exchange directory with the updater agent: current.env, request.env, status.env. */
+  infraDir: string;
   /** Terrain tiles: source and local cache. */
   dem: { url: string; dir: string };
   staticDir: string;
@@ -177,6 +181,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     ouiDir: e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-oui-${process.pid}`) : join(dirname(e.DB_PATH), 'oui'),
     dem: { url: e.DEM_URL, dir: e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-dem-${process.pid}`) : join(dirname(e.DB_PATH), 'dem') },
     mapFile: e.MAP_FILE || (e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-map-${process.pid}.pmtiles`) : join(dirname(e.DB_PATH), 'maps', 'basemap.pmtiles')),
+    infraDir: e.INFRA_DIR || (e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-infra-${process.pid}`) : join(dirname(e.DB_PATH), 'infra')),
     photosDir: e.PHOTOS_DIR || (e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-photos-${process.pid}`) : join(dirname(e.DB_PATH), 'photos')),
     staticDir: resolve(e.STATIC_DIR),
     masterKey: masterKey ?? loadMasterKey(e.SECRETS_KEY_FILE),
