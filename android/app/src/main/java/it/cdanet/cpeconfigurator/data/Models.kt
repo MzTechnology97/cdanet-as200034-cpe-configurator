@@ -255,7 +255,13 @@ data class CpeHealthItemDto(
     val now: CpeNowDto? = null,
     val signalDelta: Int? = null,
     val issues: List<String> = emptyList(),
+    /** Who installed it (admin view) and the installer it is assigned to, if any. */
+    val installer: String = "",
+    val assignedTo: AssignedUserDto? = null,
 )
+
+@Serializable
+data class AssignedUserDto(val id: Int = 0, val username: String = "")
 
 @Serializable
 data class CpeHealthTotalsDto(

@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import it.cdanet.cpeconfigurator.core.AppContainer
+import it.cdanet.cpeconfigurator.install.InstallMode
 import it.cdanet.cpeconfigurator.ui.screens.AcceptanceScreen
 import it.cdanet.cpeconfigurator.ui.WifiRequired
 import it.cdanet.cpeconfigurator.ui.screens.AlignmentScreen
@@ -195,7 +196,10 @@ fun AppRoot(c: AppContainer) {
                         onCompass = { t -> c.compassTarget.value = t; go(Screen.Compass) },
                     )
                     Screen.ArAim -> ArAimScreen(c, liveSignal = arWithSignal)
-                    Screen.CpeHealth -> CpeHealthScreen(c)
+                    Screen.CpeHealth -> CpeHealthScreen(
+                        c,
+                        onRepoint = if (c.moduleOn("field_alignment")) ({ c.install.start(InstallMode.Repoint); go(Screen.Provision) }) else null,
+                    )
                     Screen.IpScanner -> WifiRequired(c, "alla Wi-Fi della rete locale da analizzare", "Lo scanner esamina la subnet della Wi-Fi collegata.") { IpScannerScreen(c, onPortScan = { c.portScanTarget.value = it; go(Screen.PortScanner) }) }
                     Screen.PortScanner -> WifiRequired(c, "alla Wi-Fi della rete locale da analizzare", "Le porte di host privati si verificano dalla stessa rete locale.") { PortScannerScreen(c) }
                     Screen.NetDiag -> NetDiagScreen(c)
