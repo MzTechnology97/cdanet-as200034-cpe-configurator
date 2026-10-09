@@ -88,7 +88,9 @@ export function koRoutes(app: FastifyInstance, ctx: AppContext) {
 
   /** Reports, newest first: admins see all of them, installers their own. */
   app.get('/api/installs/ko', user, async (req, reply) => {
-    const q = z.object({ open: z.enum(['1', '0']).optional(), limit: z.coerce.number().int().min(1).max(1000).default(200) }).parse(req.query);
+    const q = z
+      .object({ open: z.enum(['1', '0']).optional(), jobId: z.string().uuid().optional(), limit: z.coerce.number().int().min(1).max(1000).default(200) })
+      .parse(req.query);
     const where: string[] = [];
     const params: Array<string | number> = [];
     if (req.user!.role !== 'admin') {
@@ -97,6 +99,11 @@ export function koRoutes(app: FastifyInstance, ctx: AppContext) {
     }
     if (q.open === '1') where.push('k.resolved_at IS NULL');
     if (q.open === '0') where.push('k.resolved_at IS NOT NULL');
+    if (q.jobId) {
+      // the reports of that installation and of its CPE (repointing without the job)
+      where.push("(k.job_id = ? OR (k.mac <> '' AND k.mac = (SELECT mac FROM provisioning_jobs WHERE id = ?)))");
+      params.push(q.jobId, q.jobId);
+    }
     const rows = db
       .prepare(
         `SELECT k.id, k.created_at createdAt, k.job_id jobId, k.kind, k.mode, k.step, k.reason, k.note, k.mac, k.ssid, k.data,
