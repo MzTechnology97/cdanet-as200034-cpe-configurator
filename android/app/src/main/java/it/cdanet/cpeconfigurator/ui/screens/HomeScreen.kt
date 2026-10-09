@@ -32,6 +32,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,64 +56,47 @@ import it.cdanet.cpeconfigurator.ui.NoticeKind
 import it.cdanet.cpeconfigurator.ui.Screen
 import kotlinx.coroutines.delay
 
-/** Home groups: each has its own accent color and a short label. */
-private enum class HomeGroup(val title: String, val area: Area) {
-    Work("Il mio lavoro", Area.Work),
-    Network("Rete e guasti", Area.Network),
-    Field("In campo", Area.Field),
-    Tools("Strumenti di rete", Area.Tools),
-    Help("Aiuto", Area.Help),
-}
+/** Where a Home counter or shortcut leads: a screen and, for areas with tabs, which tab. */
+data class Dest(val screen: Screen, val tab: String? = null)
 
-private data class Tile(
-    val screen: Screen,
-    val title: String,
-    val subtitle: String,
-    @DrawableRes val icon: Int,
-    val group: HomeGroup,
-    val needsLogin: Boolean = false,
-    val module: String? = null,
-    /** Admins see every customer, not "their" CPEs: other title and description. */
-    val admin: Pair<String, String>? = null,
-)
-
-// Installazione CPE is the hero card on top; everything else is a tile.
-private val TILES = listOf(
-    Tile(Screen.History, "Storico", "I miei provisioning e gli invii in attesa", R.drawable.ic_history, HomeGroup.Work, needsLogin = true),
-    Tile(Screen.Notifications, "Notifiche", "Approvazioni e attivazioni del NOC", R.drawable.ic_notifications, HomeGroup.Work, needsLogin = true, admin = "Notifiche" to "Falliti, KO, collaudi da approvare"),
-    Tile(Screen.CpeHealth, "Le mie CPE", "Stato attuale rispetto al collaudo", R.drawable.ic_monitor_heart, HomeGroup.Work, needsLogin = true, module = "cpe_health", admin = "Salute CPE" to "Tutte le CPE: offline, segnale, LAN"),
-    Tile(Screen.NetStatus, "Stato rete", "POP e AP, CPE offline, guasti vicini", R.drawable.ic_hub, HomeGroup.Network, needsLogin = true, module = "network_status"),
-    Tile(Screen.Outages, "Guasti Enel", "Interruzioni elettriche nelle tue zone", R.drawable.ic_power_off, HomeGroup.Network, needsLogin = true, module = "power_outages"),
-    Tile(Screen.Coverage, "Copertura", "AP più vicini da GPS o indirizzo", R.drawable.ic_map, HomeGroup.Network, needsLogin = true, module = "coverage"),
-    Tile(Screen.Pointing, "Trova l'AP", "Mappa, azimut, tilt e mirino AR", R.drawable.ic_explore, HomeGroup.Field, needsLogin = true, module = "compass"),
-    Tile(Screen.Alignment, "Puntamento antenna", "Segnale in tempo reale con bip", R.drawable.ic_signal_cellular_alt, HomeGroup.Field, needsLogin = true, module = "field_alignment"),
-    Tile(Screen.Diagnosis, "Diagnosi CPE", "Segnale, cavo, PPPoE, firmware", R.drawable.ic_troubleshoot, HomeGroup.Field, needsLogin = true, module = "field_diagnosis"),
-    Tile(Screen.Wifi, "Wi-Fi Analyzer", "Reti, canali e segnale", R.drawable.ic_wifi_find, HomeGroup.Tools, module = "network_tools"),
-    Tile(Screen.Network, "Strumenti di rete", "Ping, traceroute, DNS, speed test", R.drawable.ic_speed, HomeGroup.Tools, module = "network_tools"),
-    Tile(Screen.IpScanner, "Scanner IP", "Host attivi, produttore, tipo, porte", R.drawable.ic_radar, HomeGroup.Tools, module = "network_tools"),
-    Tile(Screen.PortScanner, "Port scanner", "Porte, banner, HTTP, certificati TLS", R.drawable.ic_manage_search, HomeGroup.Tools, module = "network_tools"),
-    Tile(Screen.NetDiag, "Diagnostica di rete", "Ping continuo, MTU, DNS, HTTP, WoL", R.drawable.ic_query_stats, HomeGroup.Tools, module = "network_tools"),
-    Tile(Screen.Discovery, "Discovery LAN", "Ubiquiti, NetBIOS, SNMP, ARP", R.drawable.ic_device_hub, HomeGroup.Tools, module = "network_tools"),
-    Tile(Screen.Snmp, "SNMP v2c", "Interroga apparati in LAN", R.drawable.ic_memory, HomeGroup.Tools, module = "network_tools"),
-    Tile(Screen.Camera, "TVCC", "ONVIF, Hikvision SADP, RTSP, banda", R.drawable.ic_videocam, HomeGroup.Tools, module = "network_tools"),
-    Tile(Screen.RouterOs, "MikroTik · RouterOS", "Sola lettura via SSH", R.drawable.ic_router, HomeGroup.Tools, module = "routeros"),
-    Tile(Screen.Remote, "Accesso remoto", "SSH e Remote Desktop", R.drawable.ic_terminal, HomeGroup.Tools, module = "network_tools"),
-    Tile(Screen.Guide, "Guida", "Installazione passo per passo e tutti gli strumenti", R.drawable.ic_menu_book, HomeGroup.Help, needsLogin = true),
-)
-
-/** Icon of each screen, also shown next to the title in the top bar. */
+/** Icon of each screen, shown next to the title in the top bar. */
 @DrawableRes
 fun screenIcon(s: Screen): Int? = when (s) {
-    Screen.Provision, Screen.CpeWeb -> R.drawable.ic_settings_input_antenna
+    Screen.Home -> null
+    Screen.Provision, Screen.CpeWeb, Screen.Installations -> R.drawable.ic_settings_input_antenna
     Screen.Acceptance -> R.drawable.ic_check_circle
-    Screen.Compass -> R.drawable.ic_explore
+    Screen.Compass, Screen.Pointing -> R.drawable.ic_explore
     Screen.ArAim -> R.drawable.ic_my_location
     Screen.Settings -> R.drawable.ic_settings
-    else -> TILES.firstOrNull { it.screen == s }?.icon
+    Screen.History -> R.drawable.ic_history
+    Screen.Notifications -> R.drawable.ic_notifications
+    Screen.CpeHealth -> R.drawable.ic_monitor_heart
+    Screen.NetStatus, Screen.NetHub -> R.drawable.ic_hub
+    Screen.Outages -> R.drawable.ic_power_off
+    Screen.Coverage -> R.drawable.ic_map
+    Screen.Alignment -> R.drawable.ic_signal_cellular_alt
+    Screen.Diagnosis -> R.drawable.ic_troubleshoot
+    Screen.Wifi -> R.drawable.ic_wifi_find
+    Screen.Network, Screen.Diag -> R.drawable.ic_speed
+    Screen.IpScanner, Screen.Lan -> R.drawable.ic_radar
+    Screen.PortScanner -> R.drawable.ic_manage_search
+    Screen.NetDiag -> R.drawable.ic_query_stats
+    Screen.Discovery -> R.drawable.ic_device_hub
+    Screen.Snmp, Screen.Devices -> R.drawable.ic_memory
+    Screen.Camera -> R.drawable.ic_videocam
+    Screen.RouterOs -> R.drawable.ic_router
+    Screen.Remote -> R.drawable.ic_terminal
+    Screen.Guide -> R.drawable.ic_menu_book
+    Screen.Tools -> R.drawable.ic_handyman
+    Screen.CpeHub -> R.drawable.ic_cell_tower
+    Screen.Search -> R.drawable.ic_search
 }
 
+/** Counters of the day (null = not loaded or not available). */
+private class Today(val todo: Int?, val outages: Int?, val cpeIssues: Int?)
+
 @Composable
-fun HomeScreen(c: AppContainer, offline: Boolean, onNavigate: (Screen) -> Unit, onLogin: () -> Unit) {
+fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) -> Unit, onLogin: () -> Unit) {
     val session by c.session.state.collectAsState()
     val pending by c.resultQueue.pending.collectAsState()
     val acc by c.acceptanceQueue.pending.collectAsState()
@@ -119,6 +104,16 @@ fun HomeScreen(c: AppContainer, offline: Boolean, onNavigate: (Screen) -> Unit, 
     val install by c.install.state.collectAsState()
     val modules by c.modules.collectAsState()
     val admin = session?.user?.role == "admin"
+    var today by remember { mutableStateOf(Today(null, null, null)) }
+    LaunchedEffect(offline, modules) {
+        if (offline) return@LaunchedEffect
+        val todo = runCatching { toDoItems(c.api.myJobs()).size }.getOrNull()
+        today = Today(todo, today.outages, today.cpeIssues)
+        val out = if (modules["power_outages"] != false) runCatching { c.api.outages().active.size }.getOrNull() else null
+        today = Today(today.todo, out, today.cpeIssues)
+        val issues = if (modules["cpe_health"] != false) runCatching { c.api.cpeHealth().totals.let { it.cpes - it.ok } }.getOrNull() else null
+        today = Today(today.todo, today.outages, issues)
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 12.dp)) {
         var order = 0
@@ -128,32 +123,47 @@ fun HomeScreen(c: AppContainer, offline: Boolean, onNavigate: (Screen) -> Unit, 
                 role = if (admin) "Amministratore" else "Installatore",
                 offline = offline,
                 resume = install.mode != null || (prov.pkg != null && prov.phase != Phase.Done),
-                onNew = { c.install.start(InstallMode.New); onNavigate(Screen.Provision) },
-                onRepoint = { c.install.start(InstallMode.Repoint); onNavigate(Screen.Provision) },
-                onResume = { onNavigate(Screen.Provision) },
+                onNew = { c.install.start(InstallMode.New); onOpen(Dest(Screen.Provision)) },
+                onRepoint = { c.install.start(InstallMode.Repoint); onOpen(Dest(Screen.Provision)) },
+                onResume = { onOpen(Dest(Screen.Provision)) },
                 onLogin = onLogin,
             )
-        }
-        if (prov.pkg != null && prov.phase != Phase.Done) {
-            Notice("Provisioning preparato per ${prov.pkg?.summary?.deviceName}: riprendi l'intervento per completarlo.", NoticeKind.Warn)
         }
         if (acc.isNotEmpty()) Notice("${acc.size} collaudi in attesa di invio (foto comprese): partiranno appena c'è rete.", NoticeKind.Info)
         if (pending.isNotEmpty()) Notice("${pending.size} esiti in attesa di invio al server: partiranno appena torni online.", NoticeKind.Info)
 
-        val visible = TILES.filter { (!it.needsLogin || !offline) && (it.module == null || modules[it.module] != false) }
-        HomeGroup.entries.forEach { g ->
-            val tiles = visible.filter { it.group == g }
-            if (tiles.isEmpty()) return@forEach
-            Enter(order++) { GroupHeader(g) }
-            tiles.chunked(2).forEach { pair ->
+        if (!offline) {
+            Enter(order++) { GroupHeader("Oggi", Area.Work) }
+            val counters = buildList {
+                add(Counter(today.todo, "da completare", R.drawable.ic_pending_actions, Area.Work, Dest(Screen.Installations, "Da completare")))
+                add(Counter(unread, "notifiche da leggere", R.drawable.ic_notifications, Area.Work, Dest(Screen.Notifications)))
+                if (modules["power_outages"] != false) add(Counter(today.outages, if (admin) "guasti Enel attivi" else "guasti nelle tue zone", R.drawable.ic_power_off, Area.Network, Dest(Screen.NetHub, "Guasti")))
+                if (modules["cpe_health"] != false) add(Counter(today.cpeIssues, "CPE con problemi", R.drawable.ic_monitor_heart, Area.Network, Dest(Screen.Installations, if (admin) "Salute CPE" else "Stato CPE")))
+            }
+            counters.chunked(2).forEach { pair ->
                 Enter(order++) {
                     Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        pair.forEach { t ->
-                            val title = t.admin?.takeIf { admin }?.first ?: t.title
-                            val subtitle = t.admin?.takeIf { admin }?.second ?: t.subtitle
-                            // the odd one out of a group spans the whole row, laid out horizontally
-                            FeatureTile(title, subtitle, t.icon, g.area, Modifier.weight(1f).fillMaxHeight(), wide = pair.size == 1) { onNavigate(t.screen) }
-                        }
+                        pair.forEach { k -> CounterTile(k, Modifier.weight(1f).fillMaxHeight()) { onOpen(k.dest) } }
+                        if (pair.size == 1) Spacer(Modifier.weight(1f))
+                    }
+                }
+            }
+        }
+
+        val shortcuts = buildList {
+            val cpe = cpeTabTitles(modules)
+            if (!offline && cpe.isNotEmpty()) add(Shortcut("CPE collegata", "Diagnosi, puntamento, AP visibili, collaudo", R.drawable.ic_cell_tower, Area.Field, Dest(Screen.CpeHub)))
+            if (!offline && "Puntamento" in cpe) add(Shortcut("Puntamento", "Segnale in tempo reale con bip", R.drawable.ic_signal_cellular_alt, Area.Field, Dest(Screen.CpeHub, "Puntamento")))
+            if (!offline && "AP vicini" in networkTabTitles(modules)) add(Shortcut("AP vicini", "Da qui o da un indirizzo", R.drawable.ic_explore, Area.Network, Dest(Screen.NetHub, "AP vicini")))
+            if (modules["network_tools"] != false) add(Shortcut("Scansione LAN", "Apparati nella rete del cliente", R.drawable.ic_radar, Area.Tools, Dest(Screen.Lan)))
+            if (!offline) add(Shortcut("Guida", "Installazione passo per passo", R.drawable.ic_menu_book, Area.Help, Dest(Screen.Guide)))
+        }
+        if (shortcuts.isNotEmpty()) {
+            Enter(order++) { GroupHeader("Scorciatoie", Area.Field) }
+            shortcuts.chunked(2).forEach { pair ->
+                Enter(order++) {
+                    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                        pair.forEach { t -> FeatureTile(t.title, t.subtitle, t.icon, t.area, Modifier.weight(1f).fillMaxHeight(), wide = pair.size == 1) { onOpen(t.dest) } }
                     }
                 }
             }
@@ -165,6 +175,39 @@ fun HomeScreen(c: AppContainer, offline: Boolean, onNavigate: (Screen) -> Unit, 
             modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
+    }
+}
+
+private class Counter(val value: Int?, val label: String, @DrawableRes val icon: Int, val area: Area, val dest: Dest)
+
+private class Shortcut(val title: String, val subtitle: String, @DrawableRes val icon: Int, val area: Area, val dest: Dest)
+
+/** A big number of the day: tap to open where it comes from. */
+@Composable
+private fun CounterTile(k: Counter, modifier: Modifier, onClick: () -> Unit) {
+    val accent = k.area.accent
+    Card(
+        onClick = onClick,
+        modifier = modifier,
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+    ) {
+        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    k.value?.toString() ?: "–",
+                    style = MaterialTheme.typography.headlineMedium,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
+                    color = if ((k.value ?: 0) > 0) accent.content else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(accent.container), contentAlignment = Alignment.Center) {
+                    Icon(painterResource(k.icon), contentDescription = null, tint = accent.content, modifier = Modifier.size(20.dp))
+                }
+            }
+            Text(k.label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
+        }
     }
 }
 
@@ -264,11 +307,11 @@ private fun HeroButton(text: String, @DrawableRes icon: Int, onClick: () -> Unit
 }
 
 @Composable
-private fun GroupHeader(g: HomeGroup) {
+private fun GroupHeader(title: String, area: Area) {
     Row(Modifier.padding(top = 10.dp, start = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(8.dp).clip(CircleShape).background(g.area.accent.content))
+        Box(Modifier.size(8.dp).clip(CircleShape).background(area.accent.content))
         Spacer(Modifier.width(8.dp))
-        Text(g.title.uppercase(), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(title.uppercase(), style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

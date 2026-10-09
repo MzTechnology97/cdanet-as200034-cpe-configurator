@@ -489,8 +489,12 @@ private fun CheckLine(title: String, v: Verdict, detail: String) = CheckRow(titl
 
 // ---- 4 · Aggancio all'AP --------------------------------------------------------------------
 
+/** "AP visibili" of the connected-CPE area: the CPE's own site survey and the move to a better AP. */
 @Composable
-private fun LinkStep(c: AppContainer) {
+fun CpeApsPanel(c: AppContainer) = CpeStep(c) { LinkStep(c, withNext = false) }
+
+@Composable
+private fun LinkStep(c: AppContainer, withNext: Boolean = true) {
     val scope = rememberCoroutineScope()
     val f by c.field.state.collectAsState()
     val st by c.install.state.collectAsState()
@@ -611,7 +615,7 @@ private fun LinkStep(c: AppContainer) {
         )
     }
 
-    NextButton(c, if (s?.associated == true) "Avanti: puntamento" else "Avanti comunque: puntamento", enabled = r?.running != true)
+    if (withNext) NextButton(c, if (s?.associated == true) "Avanti: puntamento" else "Avanti comunque: puntamento", enabled = r?.running != true)
 }
 
 // ---- 5 · Puntamento -------------------------------------------------------------------------

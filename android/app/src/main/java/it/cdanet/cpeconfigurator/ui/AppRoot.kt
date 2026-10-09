@@ -1,5 +1,21 @@
 package it.cdanet.cpeconfigurator.ui
 
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import it.cdanet.cpeconfigurator.ui.screens.CpeHub
+import it.cdanet.cpeconfigurator.ui.screens.Dest
+import it.cdanet.cpeconfigurator.ui.screens.DevicesHub
+import it.cdanet.cpeconfigurator.ui.screens.DiagHub
+import it.cdanet.cpeconfigurator.ui.screens.InstallationsHub
+import it.cdanet.cpeconfigurator.ui.screens.LanHub
+import it.cdanet.cpeconfigurator.ui.screens.NetworkHub
+import it.cdanet.cpeconfigurator.ui.screens.SearchScreen
+import it.cdanet.cpeconfigurator.ui.screens.ToolEntry
+import it.cdanet.cpeconfigurator.ui.screens.ToolsList
+import it.cdanet.cpeconfigurator.ui.screens.cpeTabTitles
+import it.cdanet.cpeconfigurator.ui.screens.installTabTitles
+import it.cdanet.cpeconfigurator.ui.screens.networkTabTitles
+import it.cdanet.cpeconfigurator.ui.screens.rememberHubTabs
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -113,7 +129,19 @@ enum class Screen(val title: String, val scroll: Boolean = true) {
     Notifications("Notifiche"),
     Settings("Impostazioni"),
     Guide("Guida installatore", scroll = false),
+    // areas of the bottom bar and their tabbed sections
+    Installations("Le mie installazioni", scroll = false),
+    NetHub("Rete", scroll = false),
+    Tools("Strumenti"),
+    CpeHub("CPE collegata", scroll = false),
+    Lan("Scansione LAN", scroll = false),
+    Diag("Diagnostica di rete", scroll = false),
+    Devices("Apparati in LAN", scroll = false),
+    Search("Cerca"),
 }
+
+/** The four areas of the bottom bar. */
+private val TOP = listOf(Screen.Home, Screen.Installations, Screen.NetHub, Screen.Tools)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -130,8 +158,28 @@ fun AppRoot(c: AppContainer) {
     val screen = stack.last()
     var lastDepth by remember { mutableStateOf(1) }
 
+    val hubTabs = rememberHubTabs()
+    val modules by c.modules.collectAsState()
+
     fun go(s: Screen) {
         stack = stack + s
+    }
+
+    /** An area of the bottom bar: Oggi is the root, the others sit right above it. */
+    fun top(s: Screen) {
+        stack = if (s == Screen.Home) listOf(Screen.Home) else listOf(Screen.Home, s)
+    }
+
+    /** Opens a screen, on a given tab for the areas with tabs. */
+    fun open(d: Dest) {
+        val titles = when (d.screen) {
+            Screen.Installations -> installTabTitles(modules, c.session.isAdmin)
+            Screen.NetHub -> networkTabTitles(modules)
+            Screen.CpeHub -> cpeTabTitles(modules)
+            else -> emptyList()
+        }
+        d.tab?.let { t -> titles.indexOf(t).takeIf { it >= 0 }?.let { hubTabs[d.screen.name] = it } }
+        if (d.screen in TOP) top(d.screen) else go(d.screen)
     }
     fun back() {
         if (stack.size > 1) stack = stack.dropLast(1)
@@ -231,6 +279,9 @@ fun AppRoot(c: AppContainer) {
                     }
                 },
                 actions = {
+                    if (session != null && screen != Screen.Search) {
+                        IconButton(onClick = { go(Screen.Search) }) { Icon(painterResource(R.drawable.ic_search), contentDescription = "Cerca") }
+                    }
                     if (session != null && screen != Screen.Notifications) {
                         IconButton(onClick = { go(Screen.Notifications) }) {
                             BadgedBox(badge = { if (unread > 0) Badge { Text(if (unread > 99) "99+" else "$unread") } }) {
@@ -245,11 +296,52 @@ fun AppRoot(c: AppContainer) {
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer),
             )
         },
+        bottomBar = {
+            if (screen in TOP) {
+                NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+                    listOf(
+                        Triple(Screen.Home, "Oggi", R.drawable.ic_home to R.drawable.ic_home_filled),
+                        Triple(Screen.Installations, "Installa", R.drawable.ic_settings_input_antenna to R.drawable.ic_settings_input_antenna_filled),
+                        Triple(Screen.NetHub, "Rete", R.drawable.ic_hub to R.drawable.ic_hub_filled),
+                        Triple(Screen.Tools, "Strumenti", R.drawable.ic_handyman to R.drawable.ic_handyman_filled),
+                    ).filter { (s, _, _) -> session != null || s == Screen.Home || s == Screen.Tools }.forEach { (s, label, icons) ->
+                        NavigationBarItem(
+                            selected = screen == s,
+                            onClick = { top(s) },
+                            icon = { Icon(painterResource(if (screen == s) icons.second else icons.first), contentDescription = null) },
+                            label = { Text(label) },
+                        )
+                    }
+                }
+            }
+        },
     ) { padding ->
         Box(Modifier.padding(padding).fillMaxSize()) {
             val body: @Composable () -> Unit = {
                 when (screen) {
-                    Screen.Home -> HomeScreen(c, offline = session == null, onNavigate = ::go, onLogin = { offline = false })
+                    Screen.Home -> HomeScreen(c, offline = session == null, unread = unread, onOpen = ::open, onLogin = { offline = false })
+                    Screen.Installations -> InstallationsHub(
+                        c,
+                        hubTabs[screen.name],
+                        { hubTabs[screen.name] = it },
+                        onResume = { go(Screen.Provision) },
+                        onAcceptance = { c.selectedJob.value = it; go(Screen.Acceptance) },
+                        onReplace = { c.provisioning.startReplacement(it); go(Screen.Provision) },
+                        onRepoint = if (c.moduleOn("field_alignment")) ({ c.install.start(InstallMode.Repoint); go(Screen.Provision) }) else null,
+                    )
+                    Screen.NetHub -> NetworkHub(
+                        c,
+                        hubTabs[screen.name],
+                        { hubTabs[screen.name] = it },
+                        onAim = { t -> c.compassTarget.value = t; arWithSignal = false; go(Screen.ArAim) },
+                        onCompass = { t -> c.compassTarget.value = t; go(Screen.Compass) },
+                    )
+                    Screen.CpeHub -> CpeHub(c, hubTabs[screen.name], { hubTabs[screen.name] = it }, onAcceptance = { c.selectedJob.value = null; go(Screen.Acceptance) })
+                    Screen.Lan -> LanHub(c, hubTabs[screen.name], { hubTabs[screen.name] = it }, onPortScan = { c.portScanTarget.value = it; hubTabs[Screen.Lan.name] = 2 })
+                    Screen.Diag -> DiagHub(c, hubTabs[screen.name]) { hubTabs[screen.name] = it }
+                    Screen.Devices -> DevicesHub(c, hubTabs[screen.name]) { hubTabs[screen.name] = it }
+                    Screen.Tools -> ToolsList(toolGroups(modules, offline = session == null, ::go))
+                    Screen.Search -> SearchScreen(c, onAcceptance = { c.selectedJob.value = it; go(Screen.Acceptance) })
                     Screen.Provision -> InstallScreen(
                         c,
                         onOpenCpeWeb = { go(Screen.CpeWeb) },
@@ -336,4 +428,26 @@ private fun ScreenEnter(forward: Boolean, content: @Composable () -> Unit) {
             translationX = (1f - p.value) * direction * 36.dp.toPx()
         },
     ) { content() }
+}
+
+/** The tools area: fewer, grouped entries (scansione LAN, diagnostica and apparati merge the old ones). */
+private fun toolGroups(m: Map<String, Boolean>, offline: Boolean, go: (Screen) -> Unit): List<Pair<String, List<ToolEntry>>> {
+    val net = m["network_tools"] != false
+    val cpe = !offline && cpeTabTitles(m).isNotEmpty()
+    return listOf(
+        "Con la CPE" to listOfNotNull(
+            if (cpe) ToolEntry("CPE collegata", "Diagnosi, puntamento, AP visibili e collaudo con un solo collegamento", R.drawable.ic_cell_tower) { go(Screen.CpeHub) } else null,
+        ),
+        "Rete del cliente" to listOfNotNull(
+            if (net) ToolEntry("Scansione LAN", "Host attivi, discovery Ubiquiti/NetBIOS/SNMP/ARP, porte", R.drawable.ic_radar) { go(Screen.Lan) } else null,
+            if (net) ToolEntry("Wi-Fi Analyzer", "Reti, canali e segnale intorno a te", R.drawable.ic_wifi_find) { go(Screen.Wifi) } else null,
+            if (net) ToolEntry("Diagnostica di rete", "Ping, traceroute, DNS, speed test, MTU, HTTP, Wake-on-LAN", R.drawable.ic_speed) { go(Screen.Diag) } else null,
+            if (net) ToolEntry("Apparati in LAN", "SNMP e telecamere (ONVIF, Hikvision, RTSP)", R.drawable.ic_memory) { go(Screen.Devices) } else null,
+            if (m["routeros"] != false) ToolEntry("MikroTik · RouterOS", "Consultazione in sola lettura via SSH", R.drawable.ic_router) { go(Screen.RouterOs) } else null,
+            if (net) ToolEntry("Accesso remoto", "SSH e Remote Desktop con app esterne", R.drawable.ic_terminal) { go(Screen.Remote) } else null,
+        ),
+        "Aiuto" to listOfNotNull(
+            if (!offline) ToolEntry("Guida", "Installazione passo per passo e tutti gli strumenti", R.drawable.ic_menu_book) { go(Screen.Guide) } else null,
+        ),
+    )
 }

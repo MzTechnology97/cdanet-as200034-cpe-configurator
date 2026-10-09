@@ -81,6 +81,6 @@ fun NotificationsScreen(c: AppContainer, onUnread: (Int) -> Unit) {
         }
         if (items.isEmpty() && !busy) EmptyState(R.drawable.ic_notifications, "Nessuna notifica", "Qui arrivano gli esiti delle tue installazioni: approvazioni e attivazioni del NOC (ultimi 90 giorni).")
         // the outcome of your installations also reaches Telegram once linked (choices: console web → Notifiche)
-        PersonalTelegramCard(c)
+        Text("Le notifiche su Telegram si collegano in Impostazioni.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
