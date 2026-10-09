@@ -123,8 +123,9 @@ export function findEntry(entries: DirEntry[], tileId: number): DirEntry | null 
 }
 
 export class PmTilesReader {
-  private header: PmHeader | null = null;
-  private fh: FileHandle | null = null;
+  // promises, not values: concurrent first requests must share one file handle and one header
+  private header: Promise<PmHeader> | null = null;
+  private fh: Promise<FileHandle> | null = null;
   private dirs = new Map<string, DirEntry[]>();
   private readonly file: string;
 
@@ -133,14 +134,14 @@ export class PmTilesReader {
   }
 
   private async read(offset: number, length: number): Promise<Buffer> {
-    this.fh ??= await open(this.file, 'r');
+    this.fh ??= open(this.file, 'r');
     const b = Buffer.alloc(length);
-    const { bytesRead } = await this.fh.read(b, 0, length, offset);
+    const { bytesRead } = await (await this.fh).read(b, 0, length, offset);
     return b.subarray(0, bytesRead);
   }
 
   async getHeader(): Promise<PmHeader> {
-    this.header ??= parseHeader(await this.read(0, 127));
+    this.header ??= this.read(0, 127).then(parseHeader);
     return this.header;
   }
 
@@ -171,7 +172,8 @@ export class PmTilesReader {
   }
 
   async close(): Promise<void> {
-    await this.fh?.close();
+    const fh = this.fh;
     this.fh = null;
+    await (await fh?.catch(() => null))?.close();
   }
 }

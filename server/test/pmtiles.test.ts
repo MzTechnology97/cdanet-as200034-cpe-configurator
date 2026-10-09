@@ -75,9 +75,18 @@ describe('Mappa: tile singole dal file PMTiles', () => {
     const file = join(dir, 'basemap.pmtiles');
     writeFileSync(file, buildPmtiles([{ z: 0, x: 0, y: 0, data: 'earth z0' }, { z: 12, x: 2210, y: 1586, data: 'roads enna' }]));
     const r = new PmTilesReader(file);
-    assert.equal(gunzipSync((await r.tile(12, 2210, 1586))!).toString(), 'roads enna');
+    // a map opening asks for many tiles at once: one header, one file handle, same answers
+    const many = await Promise.all(Array.from({ length: 30 }, (_, i) => r.tile(i % 2 ? 12 : 0, i % 2 ? 2210 : 0, i % 2 ? 1586 : 0)));
+    assert.deepEqual(new Set(many.map((t) => gunzipSync(t!).toString())), new Set(['roads enna', 'earth z0']));
     assert.equal(await r.tile(12, 2211, 1586), null);
     await r.close();
+    await r.close(); // twice is harmless
+    // a map asks for many tiles at once: a fresh reader opens the file once and serves them all
+    const fresh = new PmTilesReader(file);
+    const all = await Promise.all(Array.from({ length: 40 }, (_, i) => fresh.tile(i % 2 ? 12 : 0, i % 2 ? 2210 : 0, i % 2 ? 1586 : 0)));
+    assert.ok(all.every((t, i) => gunzipSync(t!).toString() === (i % 2 ? 'roads enna' : 'earth z0')));
+    await fresh.close();
+    await assert.rejects(new PmTilesReader(join(dir, 'missing.pmtiles')).tile(0, 0, 0));
 
     const { app } = await buildApp(testConfig({ MAP_FILE: file }), 'test', { db: openDatabase(':memory:'), logger: false, uisp: null });
     const cfg = (await app.inject({ method: 'GET', url: '/api/map/config' })).json();

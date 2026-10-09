@@ -95,8 +95,10 @@ export function mapRoutes(app: FastifyInstance, ctx: AppContext) {
     const i = info();
     if (!i) return reply.code(404).send({ error: 'basemap_missing' });
     if (reader?.mtime !== Date.parse(i.updatedAt)) {
-      await reader?.r.close();
+      // swapped synchronously: concurrent requests never create (and leak) more readers
+      const old = reader;
       reader = { mtime: Date.parse(i.updatedAt), r: new PmTilesReader(file) };
+      void old?.r.close();
     }
     const h = await reader.r.getHeader();
     const t = await reader.r.tile(z, x, y);
