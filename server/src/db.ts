@@ -182,6 +182,28 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY(user_id, module)
   );
   `,
+  // 10: power outages (e-distribuzione) in the areas of interest
+  `
+  CREATE TABLE outage_zones(
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    lat REAL NOT NULL,
+    lon REAL NOT NULL,
+    radius_km REAL NOT NULL,
+    created_at TEXT NOT NULL,
+    created_by INTEGER
+  );
+  CREATE TABLE power_outages(
+    id INTEGER PRIMARY KEY,
+    data TEXT NOT NULL,
+    zones TEXT NOT NULL,
+    first_seen TEXT NOT NULL,
+    last_seen TEXT NOT NULL,
+    ended_at TEXT,
+    notified INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX power_outages_active ON power_outages(ended_at);
+  `,
 ];
 
 export function openDatabase(path: string): Db {

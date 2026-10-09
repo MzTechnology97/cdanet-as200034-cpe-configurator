@@ -81,3 +81,17 @@ class ProToolsTest {
         assertEquals(2.0, s.jitter!!, 0.001)
     }
 }
+
+class OutageAlertsTest {
+    @org.junit.Test
+    fun onlyNewOutagesAreNotified() {
+        val feed = listOf(
+            it.cdanet.cpeconfigurator.outages.FeedOutage(1, "guasto_mt"),
+            it.cdanet.cpeconfigurator.outages.FeedOutage(2, "lavoro"),
+            it.cdanet.cpeconfigurator.outages.FeedOutage(3, "guasto_bt"),
+        )
+        val fresh = it.cdanet.cpeconfigurator.outages.OutageAlerts.newOnes(feed, setOf("3"), includePlanned = false)
+        org.junit.Assert.assertEquals(listOf(1L), fresh.map { it.id })
+        org.junit.Assert.assertEquals(2, it.cdanet.cpeconfigurator.outages.OutageAlerts.newOnes(feed, setOf("3"), includePlanned = true).size)
+    }
+}

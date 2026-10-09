@@ -161,6 +161,12 @@ class ApiClient(
             request("POST", "/api/provisioning/jobs/$oldJobId/replace", AppJson.encodeToJsonElement(ReplaceRequest.serializer(), req), client = true),
         )
 
+    suspend fun outages(): OutagesDto = AppJson.decodeFromString(OutagesDto.serializer(), request("GET", "/api/outages"))
+
+    /** Read-only token for background outage notifications (cannot open a session). */
+    suspend fun outageDeviceToken(): String =
+        ((AppJson.parseToJsonElement(request("POST", "/api/outages/device-token")) as JsonObject)["token"] as kotlinx.serialization.json.JsonPrimitive).content
+
     suspend fun cpeHealth(): CpeHealthDto = AppJson.decodeFromString(CpeHealthDto.serializer(), request("GET", "/api/cpe-health"))
 
     suspend fun signalHistory(jobId: String, range: String): SignalHistoryDto =

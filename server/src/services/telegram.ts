@@ -7,7 +7,7 @@ import { nowIso, type Db } from '../db.ts';
  * customer names, addresses, positions or secrets: only CPE model/MAC, SSID and installer.
  */
 
-export const TELEGRAM_EVENTS = ['provisioning_failed', 'uisp_pending', 'uisp_status', 'security', 'daily_summary'] as const;
+export const TELEGRAM_EVENTS = ['provisioning_failed', 'uisp_pending', 'uisp_status', 'security', 'daily_summary', 'power_outage'] as const;
 export type TelegramEvent = (typeof TELEGRAM_EVENTS)[number];
 
 interface Stored {

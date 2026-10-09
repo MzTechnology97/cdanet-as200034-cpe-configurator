@@ -13,6 +13,7 @@ import { acceptanceRoutes } from './routes/acceptance.ts';
 import { fieldRoutes } from './routes/field.ts';
 import { provisioningRoutes } from './routes/provisioning.ts';
 import { replaceRoutes } from './routes/replace.ts';
+import { outageRoutes } from './routes/outages.ts';
 import { statsRoutes } from './routes/stats.ts';
 import { publicRoutes } from './routes/public.ts';
 import { toolRoutes } from './routes/tools.ts';
@@ -21,6 +22,7 @@ import { createTemplates } from './services/templates.ts';
 import { createGeocoder } from './services/geocode.ts';
 import { createModules } from './services/modules.ts';
 import { createOui } from './services/oui.ts';
+import { createOutages, type Outages } from './services/outages.ts';
 import { createNotifier, type Notifier } from './services/notify.ts';
 import { createTelegram } from './services/telegram.ts';
 import type { Uisp } from './services/uisp.ts';
@@ -82,9 +84,18 @@ export async function buildApp(
     telegram,
     modules,
     oui,
+    outages: undefined as unknown as Outages,
     notify: undefined as unknown as Notifier,
     version,
   };
+  ctx.outages = createOutages(db, {
+    ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
+    getUisp: () => ctx.uisp,
+    notify: (html) => {
+      if (modules.enabled('telegram')) void telegram.notify('power_outage', html);
+    },
+    isOn: () => modules.enabled('power_outages') || (db.prepare("SELECT 1 FROM user_modules WHERE module = 'power_outages' AND enabled = 1 LIMIT 1").get() !== undefined),
+  });
   ctx.notify = createNotifier(db, cfg, telegram, () => ctx.uisp, version, () => modules.enabled('telegram'));
 
   const app = Fastify({
@@ -141,6 +152,7 @@ export async function buildApp(
   acceptanceRoutes(app, ctx);
   replaceRoutes(app, ctx);
   statsRoutes(app, ctx);
+  outageRoutes(app, ctx);
   adminRoutes(app, ctx);
   toolRoutes(app, ctx);
   uispRoutes(app, ctx);

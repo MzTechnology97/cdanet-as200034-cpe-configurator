@@ -43,6 +43,7 @@ import it.cdanet.cpeconfigurator.ui.screens.HistoryScreen
 import it.cdanet.cpeconfigurator.ui.screens.HomeScreen
 import it.cdanet.cpeconfigurator.ui.screens.IpScannerScreen
 import it.cdanet.cpeconfigurator.ui.screens.NetDiagScreen
+import it.cdanet.cpeconfigurator.ui.screens.OutagesScreen
 import it.cdanet.cpeconfigurator.ui.screens.PortScannerScreen
 import it.cdanet.cpeconfigurator.ui.screens.LoginScreen
 import it.cdanet.cpeconfigurator.ui.screens.NetworkScreen
@@ -72,6 +73,7 @@ enum class Screen(val title: String, val scroll: Boolean = true) {
     IpScanner("Scanner IP"),
     PortScanner("Port scanner"),
     NetDiag("Diagnostica di rete"),
+    Outages("Guasti Enel"),
     Snmp("SNMP"),
     Camera("TVCC / IP camera"),
     Remote("Accesso remoto"),
@@ -174,6 +176,7 @@ fun AppRoot(c: AppContainer) {
                     Screen.IpScanner -> WifiRequired(c, "alla Wi-Fi della rete locale da analizzare", "Lo scanner esamina la subnet della Wi-Fi collegata.") { IpScannerScreen(c, onPortScan = { c.portScanTarget.value = it; go(Screen.PortScanner) }) }
                     Screen.PortScanner -> WifiRequired(c, "alla Wi-Fi della rete locale da analizzare", "Le porte di host privati si verificano dalla stessa rete locale.") { PortScannerScreen(c) }
                     Screen.NetDiag -> NetDiagScreen(c)
+                    Screen.Outages -> OutagesScreen(c)
                     Screen.Snmp -> WifiRequired(c, "alla Wi-Fi della rete locale da analizzare", "Gli apparati SNMP si interrogano in rete locale.") { SnmpScreen(c) }
                     Screen.Camera -> WifiRequired(c, "alla Wi-Fi della rete delle telecamere", "ONVIF, SADP e RTSP funzionano sulla rete locale.") { CameraScreen(c) }
                     Screen.Remote -> RemoteScreen(c)

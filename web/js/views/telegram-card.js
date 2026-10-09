@@ -6,6 +6,7 @@ const EVENTS = [
   ['uisp_pending', 'CPE da accettare in UISP', 'con il link allo storico per premere "Accetta in UISP"'],
   ['uisp_status', 'UISP giù / di nuovo su', 'solo al cambio di stato, controllo ogni 5 minuti'],
   ['security', 'Sicurezza', 'account bloccato per tentativi, admin da un indirizzo nuovo, password admin cambiate'],
+  ['power_outage', 'Guasti Enel', 'guasti e lavori e-distribuzione nelle zone di interesse e vicino agli AP, e i ripristini'],
   ['daily_summary', 'Riepilogo serale', 'installazioni riuscite/fallite, collaudi, CPE ancora da accettare'],
 ];
 
