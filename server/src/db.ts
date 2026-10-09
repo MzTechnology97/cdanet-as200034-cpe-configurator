@@ -360,6 +360,10 @@ const MIGRATIONS: string[] = [
   ALTER TABLE work_orders ADD COLUMN reminders TEXT NOT NULL DEFAULT '';
   ALTER TABLE work_orders ADD COLUMN late_at TEXT;
   ALTER TABLE work_orders ADD COLUMN missed_at TEXT;
+  -- where the order's position comes from ('office' typed it, 'address' geocoded) and the last
+  -- check of the installer's GPS against it (JSON: distanceM, ok, at, notified)
+  ALTER TABLE work_orders ADD COLUMN location_from TEXT NOT NULL DEFAULT '';
+  ALTER TABLE work_orders ADD COLUMN position_check TEXT NOT NULL DEFAULT '';
   `,
 ];
 

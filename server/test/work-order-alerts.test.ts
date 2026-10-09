@@ -72,4 +72,31 @@ describe('Avvisi degli interventi', () => {
     assert.match(mine().at(-1)!.title, /Intervento modificato/);
     assert.equal((t.db.prepare('SELECT reminders, late_at l FROM work_orders WHERE id = ?').get(created.id) as { reminders: string; l: string | null }).l, null);
   });
+
+  it('the acceptance test needs the installer within 500 m of the order', async () => {
+    const t = await testApp();
+    const A = t.auth(await t.login());
+    const call = (url: string, payload: object, headers = A) => t.app.inject({ method: 'POST', url, headers, payload });
+    await call('/api/admin/users', { username: 'tecnico', password: 'Installer-Pass-123' });
+    const tid = ((await t.app.inject({ method: 'GET', url: '/api/admin/users', headers: A })).json() as Array<{ id: number; username: string }>).find((u) => u.username === 'tecnico')!.id;
+    const T = t.auth(await t.login('tecnico', 'Installer-Pass-123'));
+    const o = (await call('/api/admin/work-orders', { assignedTo: tid, day: todayRome(), customer: 'Cliente Demo 41', lat: 37.57, lon: 14.28 })).json().item;
+    const near = (await call(`/api/work-orders/${o.id}/position`, { lat: 37.5715, lon: 14.2805 }, T)).json();
+    assert.deepEqual([near.ok, near.checked, near.reference], [true, true, 'office']);
+    assert.ok(near.distanceM > 100 && near.distanceM < 500);
+    const far = (await call(`/api/work-orders/${o.id}/position`, { lat: 37.6, lon: 14.28 }, T)).json();
+    assert.equal(far.ok, false);
+    assert.ok(far.distanceM > 3000);
+    await call(`/api/work-orders/${o.id}/position`, { lat: 37.6, lon: 14.28 }, T);
+    const noc = t.db.prepare("SELECT title FROM notifications WHERE kind = 'work_order_noc'").all() as Array<{ title: string }>;
+    assert.equal(noc.length, 1, 'the NOC is told once');
+    assert.match(noc[0]!.title, /Posizione non corrispondente/);
+    // another installer cannot check someone else's order
+    await call('/api/admin/users', { username: 'altro', password: 'Installer-Pass-456' });
+    const O = t.auth(await t.login('altro', 'Installer-Pass-456'));
+    assert.equal((await call(`/api/work-orders/${o.id}/position`, { lat: 37.57, lon: 14.28 }, O)).statusCode, 404);
+    // no position and no usable address: nothing to compare, not blocked
+    const blank = (await call('/api/admin/work-orders', { assignedTo: tid, day: todayRome(), customer: 'Cliente Demo 42' })).json().item;
+    assert.deepEqual((await call(`/api/work-orders/${blank.id}/position`, { lat: 37.57, lon: 14.28 }, T)).json().checked, false);
+  });
 });
