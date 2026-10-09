@@ -124,6 +124,23 @@ fun ProvisionFormStep(c: AppContainer) {
             GmsBarcodeScanning.getClient(context).startScan()
                 .addOnSuccessListener { b -> b.rawValue?.let { raw -> c.provisioning.updateForm { Validation.applyScan(it, raw) } } }
         }) { Text("Scansiona etichetta (barcode/QR)") }
+        // on the CPE's Wi-Fi the CPE itself tells MAC and model (Ubiquiti discovery): nothing to type
+        var reading by remember { mutableStateOf(false) }
+        var readMsg by remember { mutableStateOf<String?>(null) }
+        BusyButton("Leggi MAC e modello dalla CPE", reading, primary = false, tonal = true) {
+            scope.launch {
+                reading = true
+                readMsg = runCatching {
+                    val found = it.cdanet.cpeconfigurator.tools.UbntDiscovery.discover(c.network)
+                    val d = found.firstOrNull { it.mac != null } ?: error("Nessuna CPE Ubiquiti risponde: collegati alla sua Wi-Fi di management")
+                    val model = Validation.modelFromDiscovery(d.model, d.fullModel)
+                    c.provisioning.updateForm { f -> f.copy(mac = d.mac!!.replace(":", ""), model = model ?: f.model) }
+                    "Letti dalla CPE: ${d.mac}" + (model?.let { " · $it" } ?: " · modello ${d.fullModel ?: d.model ?: "sconosciuto"} non supportato") + (if (found.size > 1) " (${found.size} CPE trovate: controlla)" else "")
+                }.getOrElse { it.message }
+                reading = false
+            }
+        }
+        readMsg?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
     }
 
     SectionCard("Posizione CPE e AP consigliati") {

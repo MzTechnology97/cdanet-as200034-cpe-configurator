@@ -626,18 +626,12 @@ private fun AimStep(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: 
     val context = LocalContext.current
     val f by c.field.state.collectAsState()
     val st by c.install.state.collectAsState()
-    var sound by remember { mutableStateOf(true) }
     var locating by remember { mutableStateOf(false) }
-    val tone = remember { AlignmentTone() }
-    LaunchedEffect(sound) { c.field.onSample = if (sound) { smp -> tone.beep(smp.signal) } else null }
 
     FieldConnection(c, FieldMode.Alignment)
     val s = f.status
     s?.let { AlignmentGauge(it, c.field.thresholds, f.peak, f.history) }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("Bip di puntamento", modifier = Modifier.weight(1f))
-        Switch(checked = sound, onCheckedChange = { sound = it })
-    }
+    RoofAids(c)
     s?.let { cur -> cur.rxModulation?.let { KeyValue("Modulazione", "↓ $it" + (cur.txModulation?.let { tx -> " · ↑ $tx" } ?: "")) } }
 
     val ssid = s?.takeIf { it.associated }?.essid ?: st.expectedSsid

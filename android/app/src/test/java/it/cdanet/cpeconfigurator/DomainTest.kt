@@ -167,3 +167,17 @@ class NetTest {
         assertEquals(0x30, req[0].toInt())
     }
 }
+
+class DiscoveryModelTest {
+    @org.junit.Test
+    fun mapsAnnouncedModels() {
+        val v = it.cdanet.cpeconfigurator.provisioning.Validation
+        org.junit.Assert.assertEquals("LiteBeam 5AC", v.modelFromDiscovery("LBE-5AC-Gen2", null))
+        org.junit.Assert.assertEquals("LiteBeam 5AC", v.modelFromDiscovery(null, "LiteBeam 5AC Gen2"))
+        org.junit.Assert.assertEquals("NanoStation Loco 5AC", v.modelFromDiscovery("Loco5AC", null))
+        org.junit.Assert.assertEquals("PowerBeam 5AC", v.modelFromDiscovery("PBE-5AC-Gen2", "PowerBeam 5AC Gen2"))
+        org.junit.Assert.assertEquals("NanoBeam 5AC", v.modelFromDiscovery("NBE-5AC-Gen2", null))
+        org.junit.Assert.assertEquals("NanoStation 5AC", v.modelFromDiscovery("NS-5AC", null))
+        org.junit.Assert.assertNull(v.modelFromDiscovery("UAP-AC-Lite", "UniFi AP"))
+    }
+}
