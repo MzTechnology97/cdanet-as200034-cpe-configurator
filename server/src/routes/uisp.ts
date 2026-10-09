@@ -12,6 +12,7 @@ import { isValidLatLon } from '../domain/geo.ts';
 import { TARGET_FIRMWARE } from '../domain/policy.ts';
 import type { ModuleKey } from '../services/modules.ts';
 import type { UispDevice } from '../services/uisp.ts';
+import { approxPoint, roughDistance } from '../domain/approx.ts';
 
 const SSID_PARTS = /^CDA-NET-N(\d+)-D(\d+)$/;
 
@@ -94,9 +95,13 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       maxKm: ctx.uispSettings.coverageMaxKm,
       restricted: !!keys,
       assignedCount: keys ? [...keys].filter((k) => !k.startsWith('z')).length : null,
-      aps: aps.map((a) => {
+      aps: aps.map(({ lat, lon, siteId: _site, ...a }) => {
         const m = a.ssid ? SSID_PARTS.exec(a.ssid) : null;
-        return { ...a, node: m ? Number(m[1]) : null, district: m ? Number(m[2]) : null };
+        const base = { ...a, node: m ? Number(m[1]) : null, district: m ? Number(m[2]) : null };
+        // Installers: exact direction for pointing, rounded distance and only an approximate area on the map.
+        if (!keys) return { ...base, lat, lon };
+        const stations = ctx.outages.config().installerClients ? base.stations : null;
+        return { ...base, stations, distanceM: roughDistance(a.distanceM), approx: approxPoint(lat, lon, `ap:${a.id}`, ctx.cfg.jwtSecret) };
       }),
     };
   });

@@ -301,6 +301,9 @@ export function createUisp(opts: UispOptions) {
             distanceM: Math.round(m),
             bearing: b,
             direction: cardinal(b),
+            siteId: d.siteId ?? null,
+            lat: d.location.lat,
+            lon: d.location.lon,
           };
         })
         .filter((x) => x.distanceM <= maxKm * 1000)

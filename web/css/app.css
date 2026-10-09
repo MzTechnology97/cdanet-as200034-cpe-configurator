@@ -192,3 +192,11 @@ button.link { background: none; border: none; color: var(--brand); padding: 4px 
 .pick-aps { padding-left: 26px; }
 .pick label.check { padding: 2px 0; flex-wrap: wrap; }
 .pick .small.muted { margin-left: 4px; }
+
+/* Maps (Leaflet + Protomaps) */
+.map { height: 420px; border-radius: 10px; border: 1px solid var(--line); margin: 8px 0; z-index: 0; }
+.map-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; margin: 4px 0 8px; }
+.map-legend .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; }
+.leaflet-popup-content-wrapper, .leaflet-popup-tip { background: var(--surface); color: var(--ink); }
+.map-popup b { display: block; margin-bottom: 2px; }
+@media (max-width: 640px) { .map { height: 320px; } }

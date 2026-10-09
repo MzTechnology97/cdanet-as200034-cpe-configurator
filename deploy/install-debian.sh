@@ -13,6 +13,10 @@
 #   regions: sicilia (default), isole (Sicilia+Sardegna), sud, centro, nord-est, nord-ovest,
 #            italia, custom (CDANET_GEOCODER_PBF_URL [+ CDANET_GEOCODER_REPLICATION_URL])
 #
+# Console maps (Protomaps basemap, OpenStreetMap data, downloaded once and refreshed monthly):
+#   CDANET_MAP=local (default) | off      CDANET_MAP_REGION=<region above> (default: the geocoder's)
+#   CDANET_MAP_BBOX=minLon,minLat,maxLon,maxLat for a custom area
+#
 # Unattended first install (no questions), e.g. for automation:
 #   CDANET_ADMIN_USER=admin CDANET_ADMIN_PASSWORD=... CDANET_GEOCODER=local|public
 # Image override (pin a version or test a local build): CDANET_IMAGE, CDANET_CHANNEL,
@@ -77,6 +81,9 @@ fetch() {
 fetch docker-compose.yml "$DEPLOY_DIR/docker-compose.yml"
 fetch Caddyfile "$DEPLOY_DIR/Caddyfile"
 fetch updater/update.sh "$DEPLOY_DIR/updater/update.sh"
+install -d -m0755 "$DEPLOY_DIR/maps"
+fetch maps/fetch-basemap.sh "$DEPLOY_DIR/maps/fetch-basemap.sh"
+chmod 0755 "$DEPLOY_DIR/maps" && chmod 0644 "$DEPLOY_DIR/maps/fetch-basemap.sh"
 fetch .env.example "$DEPLOY_DIR/.env.example"
 fetch reset-admin-password.sh "$DEPLOY_DIR/reset-admin-password.sh"
 chmod 0755 "$DEPLOY_DIR/reset-admin-password.sh"
@@ -220,6 +227,68 @@ setup_geocoder() {
 echo "[3b/5] OpenStreetMap"
 setup_geocoder
 
+MAP_FETCH=0
+setup_map() {
+  local mode=${CDANET_MAP:-$(get_env MAP_MODE)} region bbox old
+  mode=${mode:-local}
+  if [[ $mode == off ]]; then
+    set_env MAP_MODE off
+    echo "  Mappe: disattivate (la console usa le mappe pubbliche di OpenStreetMap)"
+    return 0
+  fi
+  [[ $mode == local ]] || fail "CDANET_MAP non valido: $mode (local|off)"
+  region=${CDANET_MAP_REGION:-$(get_env MAP_REGION)}
+  region=${region:-$(get_env NOMINATIM_REGION)}
+  region=${region:-sicilia}
+  case $region in
+    sicilia) bbox=11.85,35.45,15.70,38.85 ;;
+    isole) bbox=8.10,35.45,15.70,41.32 ;;
+    sud) bbox=13.00,37.90,18.60,42.90 ;;
+    centro) bbox=9.60,41.20,14.10,44.50 ;;
+    nord-est) bbox=10.30,43.70,13.95,47.10 ;;
+    nord-ovest) bbox=6.60,43.75,11.45,46.70 ;;
+    italia) bbox=6.60,35.45,18.60,47.10 ;;
+    custom) bbox=${CDANET_MAP_BBOX:-$(get_env MAP_BBOX)} ;;
+    *) fail "Regione mappa non valida: $region" ;;
+  esac
+  [[ $bbox =~ ^-?[0-9.]+,-?[0-9.]+,-?[0-9.]+,-?[0-9.]+$ ]] || fail "Area mappa non valida: '$bbox' (CDANET_MAP_BBOX=minLon,minLat,maxLon,maxLat)"
+  old=$(get_env MAP_BBOX)
+  set_env MAP_MODE local
+  set_env MAP_REGION "$region"
+  set_env MAP_BBOX "$bbox"
+  [[ $old != "$bbox" ]] && MAP_FETCH=1
+  # Monthly refresh (systemd timer: present on every Debian, unlike cron).
+  cat >/etc/systemd/system/cdanet-cpe-map.service <<'UNIT'
+[Unit]
+Description=CDA Net CPE - aggiornamento mappa (Protomaps / OpenStreetMap)
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/bin/cdanet-cpe map update
+UNIT
+  cat >/etc/systemd/system/cdanet-cpe-map.timer <<'UNIT'
+[Unit]
+Description=CDA Net CPE - aggiornamento mensile della mappa
+
+[Timer]
+OnCalendar=monthly
+RandomizedDelaySec=6h
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+UNIT
+  chmod 0644 /etc/systemd/system/cdanet-cpe-map.service /etc/systemd/system/cdanet-cpe-map.timer
+  if [[ -d /run/systemd/system ]]; then
+    systemctl daemon-reload && systemctl enable --now cdanet-cpe-map.timer >/dev/null 2>&1 || echo "  (timer mensile non attivato: systemd non disponibile)"
+  fi
+  echo "  Mappe: regione '$region' ($bbox), aggiornamento mensile"
+}
+echo "[3c/5] Mappe"
+setup_map
+
 echo "[4/5] Stop eventuale stack v0.5.x"
 # Only once: the legacy stack uses the same compose project name, so a later "down"
 # would stop the current stack too.
@@ -256,6 +325,12 @@ unset FIRST_ADMIN p1 p2
 docker compose --env-file .env up -d --remove-orphans
 wait_app
 docker compose exec -T app wget -qO- http://127.0.0.1:8787/api/health; echo
+if [[ $(get_env MAP_MODE) == local ]]; then
+  if [[ $MAP_FETCH == 1 ]] || ! docker compose exec -T app test -s /data/maps/basemap.pmtiles; then
+    echo "Download della mappa (Protomaps, regione $(get_env MAP_REGION)): qualche minuto..."
+    docker compose --env-file .env --profile maps run --rm maptiles || echo "  ATTENZIONE: mappa non scaricata, riprova con: sudo cdanet-cpe map update (intanto la console usa le mappe pubbliche)"
+  fi
+fi
 echo
 echo "=== Installazione completata ==="
 echo "Console: http://$(hostname -I | awk '{print $1}')  (APP_LISTEN=hostname in .env per HTTPS automatico)"

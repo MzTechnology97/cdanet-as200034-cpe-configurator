@@ -33,12 +33,17 @@ Console → **Guasti Enel** → "POP e AP da UISP" (admin):
 
 Un guasto più vicino di un raggio configurabile (default **1 km**, 0,1–5 km) a un POP o a un AP monitorato viene segnalato come **impatto probabile** anche fuori dalle zone: in console è in cima all'elenco con i POP/AP coinvolti, la distanza e le CPE collegate; su Telegram il messaggio inizia con 🚨 e riporta "Potenzialmente impattati".
 
+## Mappa
+
+In cima alla pagina una mappa (Protomaps, ospitata sul nostro server: vedi [MAPPE.md](MAPPE.md)) mostra guasti, zone, POP e AP, con quelli potenzialmente impattati in rosso. Gli installatori vedono POP e AP solo come **area approssimativa**.
+
 ## Cosa vede l'installatore
 
 - **Le sue zone di interesse**: ogni installatore crea le proprie (massimo 20) da web o app, con GPS, indirizzo o coordinate, e vede guasti e lavori in quelle zone.
 - **POP/AP potenzialmente impattati**: solo per i POP e gli AP che l'amministratore gli ha assegnato (un POP include tutti i suoi AP). Senza assegnazioni vede i guasti nelle sue zone, senza POP/AP.
 - Vede anche i guasti sui POP/AP e sulle zone condivise che gli sono stati assegnati.
 - Gli **amministratori vedono tutto**.
+- Il **numero di clienti (CPE)** dei POP/AP è nascosto agli installatori, salvo che l'amministratore lo abiliti (Account → "POP/AP assegnati agli installatori"). Le distanze da POP/AP sono arrotondate.
 - Nella console e nell'app l'installatore non vede riferimenti a UISP, alla fonte dei dati o ai moduli.
 
 Le assegnazioni si fanno in Console → **Account** → "POP/AP assegnati agli installatori" e valgono anche per la **verifica copertura** (vedi [UISP.md](UISP.md)).

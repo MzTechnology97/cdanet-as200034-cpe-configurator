@@ -76,6 +76,10 @@ sudo cdanet-cpe geocoder reset    # cancella i dati e rifà l'import (es. cambio
 
 Lo stato si vede anche dalla console: **Connettori → OpenStreetMap → Verifica servizio**. Per tornare al servizio pubblico: `sudo CDANET_GEOCODER=public ./deploy/install-debian.sh`.
 
+### Mappe (Protomaps)
+
+L'installer scarica anche la mappa della stessa regione (`CDANET_MAP=local`, default) e la aggiorna ogni mese; `CDANET_MAP=off` per non scaricarla (la console usa le mappe pubbliche). Comandi: `sudo cdanet-cpe map [update|remove]`. Dettagli in [MAPPE.md](MAPPE.md).
+
 ### Installazione senza domande
 
 Per automatizzare la prima installazione (nessuna domanda a terminale):

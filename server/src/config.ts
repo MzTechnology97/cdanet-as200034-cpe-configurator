@@ -24,6 +24,8 @@ const envSchema = z.object({
   DB_PATH: z.string().default('./data/cdanet.sqlite'),
   // Acceptance-test photos (default: 'photos' next to the database).
   PHOTOS_DIR: z.string().optional(),
+  // Protomaps basemap (default: maps/basemap.pmtiles next to the database).
+  MAP_FILE: z.string().optional(),
   STATIC_DIR: z.string().default('../web'),
   SECRETS_KEY_FILE: z.string().default('/run/secrets/cdanet_master_key'),
 
@@ -95,6 +97,8 @@ export interface Config {
   photosDir: string;
   /** IEEE OUI registries cache (MAC vendors). */
   ouiDir: string;
+  /** Protomaps basemap (PMTiles) served to the console maps. */
+  mapFile: string;
   staticDir: string;
   masterKey: Buffer;
   jwtSecret: Uint8Array;
@@ -165,6 +169,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     trustProxy: e.TRUST_PROXY,
     dbPath: e.DB_PATH,
     ouiDir: e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-oui-${process.pid}`) : join(dirname(e.DB_PATH), 'oui'),
+    mapFile: e.MAP_FILE || (e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-map-${process.pid}.pmtiles`) : join(dirname(e.DB_PATH), 'maps', 'basemap.pmtiles')),
     photosDir: e.PHOTOS_DIR || (e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-photos-${process.pid}`) : join(dirname(e.DB_PATH), 'photos')),
     staticDir: resolve(e.STATIC_DIR),
     masterKey: masterKey ?? loadMasterKey(e.SECRETS_KEY_FILE),

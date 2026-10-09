@@ -55,6 +55,8 @@ Le coordinate dell'AP sono quelle del dispositivo in UISP o, se mancano, quelle 
 
 **Installatori**: la verifica copertura considera solo i POP/AP assegnati dall'amministratore (Console → Account → "POP/AP assegnati agli installatori"; un POP include i suoi AP). Senza assegnazioni non viene proposto nessun AP. Gli amministratori vedono tutti gli AP.
 
+La verifica mostra anche una **mappa** con il punto e gli AP: per gli amministratori la posizione reale con la linea verso l'AP, per gli installatori un'area approssimativa con la sola direzione di puntamento (distanza arrotondata; numero di client nascosto salvo diversa scelta dell'admin). Vedi [MAPPE.md](MAPPE.md).
+
 - **App, provisioning**: *Usa* su un AP compila nodo e distretto dal suo SSID (`CDA-NET-N{nodo}-D{distretto}`).
 - **App e console, sezione Copertura**: la stessa verifica, senza provisioning, per sopralluoghi e preventivi.
 

@@ -45,9 +45,11 @@ export interface OutageConfig {
   impactRadiusKm: number;
   /** Monitor only the POPs/APs selected by the admin (imported from UISP) instead of all of them. */
   selectionOnly: boolean;
+  /** Installers see how many customers (CPEs) are on a POP/AP (outages, maps, coverage). */
+  installerClients: boolean;
 }
 
-const DEFAULT_CONFIG: OutageConfig = { apZones: true, apRadiusKm: 3, includePlanned: true, impactRadiusKm: 1, selectionOnly: false };
+const DEFAULT_CONFIG: OutageConfig = { apZones: true, apRadiusKm: 3, includePlanned: true, impactRadiusKm: 1, selectionOnly: false, installerClients: false };
 
 /** A POP/AP/zone reference: "pop:<uisp id>", "ap:<uisp id>" or "z<zone id>" (same as zone ids). */
 export interface ItemRef {
@@ -302,7 +304,9 @@ export function createOutages(
       if (rec.kind === 'lavoro' && !u.planned) continue;
       const keys = keysFor(u.id, u.role);
       const v = keys ? scopeOutage(rec, keys) : rec;
-      if (v) opts.sendPersonal(u.chat, personalText(v, kind));
+      if (!v) continue;
+      const hide = keys && !config().installerClients;
+      opts.sendPersonal(u.chat, personalText(hide ? { ...v, impact: v.impact.map((i) => ({ ...i, stations: null })) } : v, kind));
     }
   }
 
@@ -489,7 +493,7 @@ export function createOutages(
     }>;
     const all = rows.map((r) => {
       const d = JSON.parse(r.data) as PowerOutage & { impact?: Impact[] };
-      return { ...d, impact: d.impact ?? [], zones: JSON.parse(r.zones) as Array<{ id: string; name: string }>, firstSeen: r.first_seen, endedAt: r.ended_at };
+      return { ...d, impact: d.impact ?? [], zones: JSON.parse(r.zones) as Array<{ id: string; name: string; distanceM?: number }>, firstSeen: r.first_seen, endedAt: r.ended_at };
     });
     return keys ? all.map((o) => scopeOutage(o, keys)).filter((o) => o !== null) : all;
   }

@@ -3,6 +3,7 @@
 #   caddy    reverse proxy, automatic HTTPS when APP_LISTEN is a hostname
 #   updater  pulls new app images, backs up the DB, rolls back if unhealthy
 #   nominatim (optional, COMPOSE_PROFILES=geocoder) local OpenStreetMap address search
+#   maptiles  (one-shot, "sudo cdanet-cpe map update") Protomaps basemap for the console maps
 name: cdanet-cpe-configurator
 
 services:
@@ -111,6 +112,21 @@ services:
     logging:
       driver: json-file
       options: {max-size: "5m", max-file: "2"}
+
+  # One-shot: downloads/refreshes the Protomaps basemap (OpenStreetMap data) into the app data
+  # volume; run by the installer, by "sudo cdanet-cpe map update" and by a monthly systemd timer.
+  maptiles:
+    image: debian:12-slim
+    profiles: [maps]
+    restart: "no"
+    environment:
+      MAP_BBOX: ${MAP_BBOX:-11.85,35.45,15.70,38.85}
+      MAP_MAXZOOM: ${MAP_MAXZOOM:-15}
+    volumes:
+      - appdata:/data
+      - ./maps/fetch-basemap.sh:/fetch-basemap.sh:ro
+    entrypoint: ["/bin/sh", "/fetch-basemap.sh"]
+    networks: [private]
 
 networks:
   private:
