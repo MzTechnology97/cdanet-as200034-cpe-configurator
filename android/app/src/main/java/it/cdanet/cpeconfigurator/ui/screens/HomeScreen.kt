@@ -55,6 +55,7 @@ import it.cdanet.cpeconfigurator.ui.Notice
 import it.cdanet.cpeconfigurator.ui.NoticeKind
 import it.cdanet.cpeconfigurator.ui.Screen
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 /** Where a Home counter or shortcut leads: a screen and, for areas with tabs, which tab. */
 data class Dest(val screen: Screen, val tab: String? = null)
@@ -123,7 +124,7 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
                 role = if (admin) "Amministratore" else "Installatore",
                 offline = offline,
                 resume = install.mode != null || (prov.pkg != null && prov.phase != Phase.Done),
-                onNew = { c.install.start(InstallMode.New); onOpen(Dest(Screen.Provision)) },
+                onNew = { c.provisioning.reset(); c.install.start(InstallMode.New); onOpen(Dest(Screen.Provision)) },
                 onRepoint = { c.install.start(InstallMode.Repoint); onOpen(Dest(Screen.Provision)) },
                 onResume = { onOpen(Dest(Screen.Provision)) },
                 onLogin = onLogin,
@@ -131,6 +132,10 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
         }
         if (acc.isNotEmpty()) Notice("${acc.size} collaudi in attesa di invio (foto comprese): partiranno appena c'è rete.", NoticeKind.Info)
         if (pending.isNotEmpty()) Notice("${pending.size} esiti in attesa di invio al server: partiranno appena torni online.", NoticeKind.Info)
+
+        if (!offline && modules["work_orders"] != false) {
+            Enter(order++) { WorkOrdersToday(c, onOpen) }
+        }
 
         if (!offline) {
             Enter(order++) { GroupHeader("Oggi", Area.Work) }
@@ -359,4 +364,108 @@ private fun Enter(index: Int, content: @Composable () -> Unit) {
         p.animateTo(1f, tween(420, easing = FastOutSlowInEasing))
     }
     Box(Modifier.graphicsLayer { alpha = p.value; translationY = (1f - p.value) * 28.dp.toPx() }) { content() }
+}
+
+/**
+ * The day's work orders from the office: customer, slot, address and the actions of the field
+ * (navigate, start with everything filled in, postpone). Hidden when there are none.
+ */
+@Composable
+private fun WorkOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var orders by remember { mutableStateOf<List<it.cdanet.cpeconfigurator.data.WorkOrderDto>?>(null) }
+    var postpone by remember { mutableStateOf<it.cdanet.cpeconfigurator.data.WorkOrderDto?>(null) }
+    var note by remember { mutableStateOf("") }
+    suspend fun load() {
+        orders = runCatching { c.api.workOrders().items }.getOrNull()
+    }
+    LaunchedEffect(Unit) { load() }
+    val list = orders?.filter { it.status != "done" && it.status != "cancelled" } ?: return
+    val done = orders?.count { it.status == "done" } ?: 0
+    if (list.isEmpty() && done == 0) return
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        GroupHeader(if (list.isEmpty()) "Interventi di oggi · tutti fatti" else "Interventi di oggi · ${list.size} da fare" + if (done > 0) ", $done fatti" else "", Area.Work)
+        list.forEach { o ->
+            Card(
+                shape = MaterialTheme.shapes.large,
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+                elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Column(Modifier.weight(1f)) {
+                            Text(o.customer, style = MaterialTheme.typography.titleMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            Text(
+                                listOf(o.slot, o.kindLabel).filter { it.isNotBlank() }.joinToString(" · "),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary,
+                            )
+                        }
+                        when {
+                            o.overdue -> it.cdanet.cpeconfigurator.ui.StatusChip("in ritardo", it.cdanet.cpeconfigurator.ui.NoticeKind.Bad)
+                            o.status == "started" -> it.cdanet.cpeconfigurator.ui.StatusChip("in corso", it.cdanet.cpeconfigurator.ui.NoticeKind.Warn)
+                            o.status == "postponed" -> it.cdanet.cpeconfigurator.ui.StatusChip("rimandato", it.cdanet.cpeconfigurator.ui.NoticeKind.Warn)
+                        }
+                    }
+                    if (o.address.isNotBlank()) Text(o.address, style = MaterialTheme.typography.bodyMedium)
+                    if (o.contact.isNotBlank()) Text("Contatto: ${o.contact}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (o.notes.isNotBlank()) Text(o.notes, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (o.statusNote.isNotBlank()) Text("Nota: ${o.statusNote}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Button(onClick = {
+                            when (o.kind) {
+                                "new" -> {
+                                    c.provisioning.startWorkOrder(o)
+                                    c.install.start(InstallMode.New)
+                                    onOpen(Dest(Screen.Provision))
+                                }
+                                "survey" -> onOpen(Dest(Screen.NetHub, "AP vicini"))
+                                else -> {
+                                    c.install.start(InstallMode.Repoint)
+                                    onOpen(Dest(Screen.Provision))
+                                }
+                            }
+                            scope.launch { runCatching { c.api.setWorkOrderStatus(o.id, "started") } }
+                        }) {
+                            Icon(painterResource(R.drawable.ic_arrow_forward), contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Inizia")
+                        }
+                        if (o.address.isNotBlank() || o.lat != null) {
+                            OutlinedButton(onClick = {
+                                val uri = if (o.lat != null && o.lon != null) "geo:${o.lat},${o.lon}?q=${o.lat},${o.lon}(${android.net.Uri.encode(o.customer)})" else "geo:0,0?q=${android.net.Uri.encode(o.address)}"
+                                runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(uri))) }
+                            }) { Text("Naviga") }
+                        }
+                        Spacer(Modifier.weight(1f))
+                        androidx.compose.material3.TextButton(onClick = { note = ""; postpone = o }) { Text("Rimanda") }
+                    }
+                }
+            }
+        }
+    }
+    postpone?.let { o ->
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { postpone = null },
+            title = { Text("Rimandare l'intervento?") },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("${o.customer}: l'ufficio vede che è rimandato e il motivo.")
+                    androidx.compose.material3.OutlinedTextField(note, { note = it.take(300) }, label = { Text("Motivo (es. cliente assente)") }, modifier = Modifier.fillMaxWidth())
+                }
+            },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    postpone = null
+                    scope.launch {
+                        runCatching { c.api.setWorkOrderStatus(o.id, "postponed", note.trim()) }
+                        load()
+                    }
+                }) { Text("Rimanda") }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { postpone = null }) { Text("Annulla") } },
+        )
+    }
 }

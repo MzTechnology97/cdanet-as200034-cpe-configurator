@@ -31,7 +31,10 @@ export const provisionRequestSchema = z
     serial: z.string().trim().min(1).max(128).regex(/^[\x20-\x7e]+$/),
     ssid: z.string().regex(SSID_RX),
     pppoeUser: z.string().trim().min(3).max(128).regex(PPPOE_USER_RX),
-    pppoePassword: z.string().min(1).max(200),
+    /** Omitted when the job starts from a work order: the server uses the order's sealed password. */
+    pppoePassword: z.string().min(1).max(200).optional(),
+    /** Work order of the office this installation comes from. */
+    workOrderId: z.number().int().positive().optional(),
     /** Named template of the model; omitted = the model's default template. */
     templateId: z.number().int().positive().optional(),
     /** CPE position: phone GPS, geocoded address or manual entry. */
@@ -45,7 +48,8 @@ export const provisionRequestSchema = z
       .strict()
       .optional(),
   })
-  .strict();
+  .strict()
+  .refine((x) => x.pppoePassword !== undefined || x.workOrderId !== undefined, { message: 'Password PPPoE obbligatoria', path: ['pppoePassword'] });
 export type ProvisionRequest = z.infer<typeof provisionRequestSchema>;
 
 export const provisionResultSchema = z
@@ -185,7 +189,28 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
     ];
   }
 
-  function createJob(x: ProvisionRequest, viewer: Viewer, client: string) {
+  /** The work order a job starts from: assigned to this installer (admins: any), still to do. */
+  function workOrderFor(id: number, viewer: Viewer) {
+    const o = db.prepare('SELECT id, assigned_to assignedTo, status, pppoe_ciphertext ciphertext FROM work_orders WHERE id = ?').get(id) as
+      | { id: number; assignedTo: number | null; status: string; ciphertext: string }
+      | undefined;
+    if (!o || (o.assignedTo !== viewer.id && viewer.role !== 'admin')) throw new HttpError(404, 'work_order_not_found');
+    if (o.status === 'done' || o.status === 'cancelled') throw new HttpError(409, 'work_order_closed');
+    return o;
+  }
+
+  function createJob(x0: ProvisionRequest, viewer: Viewer, client: string) {
+    const order = x0.workOrderId ? workOrderFor(x0.workOrderId, viewer) : null;
+    let password = x0.pppoePassword;
+    if (password === undefined && order) {
+      if (!order.ciphertext) throw new HttpError(409, 'work_order_password_missing');
+      try {
+        password = sealer.open(order.ciphertext);
+      } catch {
+        throw new HttpError(500, 'secret_decrypt_failed');
+      }
+    }
+    const x = { ...x0, pppoePassword: password };
     const userId = viewer.id;
     const r = readiness(x, viewer);
     if (r.missing.length) throw new HttpError(409, r.missing[0] as string, { missing: r.missing });
@@ -229,6 +254,10 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'prepared')`,
     ).run(id, created.toISOString(), expiresAt, userId, client, x.model, x.mac, x.serial, x.ssid, x.pppoeUser, name, profile.sha256, configSha256, profile.name,
       x.location?.latitude ?? null, x.location?.longitude ?? null, x.location?.accuracy ?? null, x.location?.source ?? '');
+    if (order) {
+      db.prepare('UPDATE provisioning_jobs SET work_order_id = ? WHERE id = ?').run(order.id, id);
+      db.prepare("UPDATE work_orders SET status = 'started', updated_at = ? WHERE id = ? AND status IN ('open','postponed')").run(nowIso(), order.id);
+    }
 
     return {
       jobId: id,
@@ -265,6 +294,12 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
       sanitizeError(input.error),
       jobId,
     );
+    // a work order closes with the successful installation that came from it
+    if (input.result === 'success') {
+      db.prepare(
+        "UPDATE work_orders SET status = 'done', done_at = ?, job_id = ?, updated_at = ? WHERE id = (SELECT work_order_id FROM provisioning_jobs WHERE id = ?) AND status <> 'cancelled'",
+      ).run(nowIso(), jobId, nowIso(), jobId);
+    }
     return { ok: true, duplicate: false, ...(retry ? { retry: true } : {}) };
   }
 

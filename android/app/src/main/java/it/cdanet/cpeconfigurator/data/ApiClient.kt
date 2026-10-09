@@ -232,6 +232,12 @@ class ApiClient(
     suspend fun reverseGeocode(lat: Double, lon: Double): ReverseGeocodeDto =
         AppJson.decodeFromString(ReverseGeocodeDto.serializer(), request("GET", "/api/geocode/reverse?lat=$lat&lon=$lon"))
 
+    suspend fun workOrders(): WorkOrdersDto = AppJson.decodeFromString(WorkOrdersDto.serializer(), request("GET", "/api/work-orders"))
+
+    suspend fun setWorkOrderStatus(id: Long, status: String, note: String = "") {
+        request("POST", "/api/work-orders/$id/status", buildJsonObject { put("status", status); put("note", note) })
+    }
+
     suspend fun myOutageZones(): MyZonesDto = AppJson.decodeFromString(MyZonesDto.serializer(), request("GET", "/api/outages/zones"))
 
     /** Personal area of interest of the user. */

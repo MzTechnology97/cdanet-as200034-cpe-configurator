@@ -38,10 +38,13 @@ data class ProvisionForm(
     /** Job of the broken CPE being replaced: customer, SSID, position and template come from it. */
     val replaces: String? = null,
     val replacesLabel: String = "",
+    /** Work order of the office this installation comes from (PPPoE password from the server). */
+    val workOrderId: Long? = null,
+    val workOrderLabel: String = "",
 ) {
     val ssid: String get() = "CDA-NET-N$node-D${district.toString().padStart(2, '0')}" + (relay?.let { "-R$it" } ?: "")
     val customerName: String get() = Validation.customerName(pppoeUser)
-    fun toRequest() = ProvisionRequest(model, Validation.normalizeMac(mac), serial.trim(), ssid, pppoeUser.trim(), pppoePassword, templateId, location)
+    fun toRequest() = ProvisionRequest(model, Validation.normalizeMac(mac), serial.trim(), ssid, pppoeUser.trim(), pppoePassword.ifEmpty { null }, templateId, location, workOrderId)
     fun errors(): List<String> = Validation.formErrors(this)
 
     companion object {
@@ -104,7 +107,7 @@ class ProvisioningController(
         val old = _form.value.replaces
         busy {
             if (old == null) api.createJob(req)
-            else api.replaceJob(old, ReplaceRequest(req.model, req.mac, req.serial, req.pppoePassword.ifEmpty { null }, req.templateId, req.location))
+            else api.replaceJob(old, ReplaceRequest(req.model, req.mac, req.serial, req.pppoePassword, req.templateId, req.location))
         }?.let { pkg ->
             _form.update { it.copy(pppoePassword = "") }
             _state.update { it.copy(phase = Phase.Prepared, pkg = pkg, stages = emptyList(), success = null, probe = null) }
@@ -177,6 +180,22 @@ class ProvisioningController(
             pppoeUser = j.pppoeUser,
             replaces = j.id,
             replacesLabel = "${j.deviceName.ifBlank { j.pppoeUser }} · ${j.mac}",
+        )
+    }
+
+    /**
+     * Starts a new installation from a work order of the office: customer, PPPoE user, position and
+     * model are filled in; the password stays on the server.
+     */
+    fun startWorkOrder(o: it.cdanet.cpeconfigurator.data.WorkOrderDto) {
+        _state.value = ProvisioningState()
+        _form.value = ProvisionForm(
+            model = o.model.takeIf { it in ProvisionForm.MODELS } ?: ProvisionForm.MODELS.first(),
+            pppoeUser = o.pppoeUser,
+            location = if (o.lat != null && o.lon != null) it.cdanet.cpeconfigurator.data.CpeLocation(o.lat, o.lon, null, "address") else null,
+            locationLabel = o.address,
+            workOrderId = o.id,
+            workOrderLabel = listOf(o.customer, o.address).filter { it.isNotBlank() }.joinToString(" · "),
         )
     }
 

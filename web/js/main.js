@@ -22,12 +22,14 @@ import { toolsView } from './views/tools.js';
 import { usersView } from './views/users.js';
 import { wirelessView } from './views/wireless.js';
 import { adminGuideView } from './views/guide.js';
+import { workOrdersView } from './views/work-orders.js';
 import { setAdmin } from './terms.js';
 
 const ROUTES = [
   { group: 'Operatività' },
   { id: 'dashboard', label: 'Panoramica', view: dashboardView, admin: true },
   { id: 'notifications', label: 'Notifiche', view: notificationsView },
+  { id: 'work-orders', label: 'Interventi', installerLabel: 'I miei interventi', view: workOrdersView, module: 'work_orders' },
   { id: 'jobs', label: 'Storico provisioning', view: jobsView },
   { id: 'health', label: 'Salute CPE', installerLabel: 'Le mie CPE', view: healthView, module: 'cpe_health' },
   { id: 'stats', label: 'Statistiche', view: statsView, admin: true, module: 'stats' },

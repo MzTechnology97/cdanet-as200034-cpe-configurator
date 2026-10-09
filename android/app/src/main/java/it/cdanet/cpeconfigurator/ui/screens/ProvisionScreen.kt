@@ -64,6 +64,15 @@ fun ProvisionFormStep(c: AppContainer) {
     val parsedMac = Validation.parseMac(form.mac)
     val errors = form.errors()
 
+    if (form.workOrderId != null) {
+        SectionCard("Intervento dell'ufficio", icon = it.cdanet.cpeconfigurator.R.drawable.ic_pending_actions) {
+            Text(form.workOrderLabel, fontWeight = FontWeight.SemiBold)
+            Text(
+                "Cliente, utente PPPoE e posizione vengono dall'intervento. La password PPPoE la inserisce il server: non serve scriverla.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+        }
+    }
     if (form.replaces != null) {
         SectionCard("Sostituzione CPE") {
             Text("CPE sostituita: ${form.replacesLabel}", fontWeight = FontWeight.SemiBold)
@@ -153,8 +162,9 @@ fun ProvisionFormStep(c: AppContainer) {
     SectionCard("3 · Router / PPPoE") {
         Field("Username RADIUS / PPPoE", form.pppoeUser, { v -> c.provisioning.updateForm { it.copy(pppoeUser = v.trim()) } },
             readOnly = form.replaces != null, placeholder = "cognome.nome@cda-net.it", supporting = form.customerName.takeIf { it.isNotBlank() }?.let { "Device Name / SNMP location: $it" })
-        Field("Password PPPoE", form.pppoePassword, { v -> c.provisioning.updateForm { it.copy(pppoePassword = v) } }, password = true,
+        if (form.workOrderId == null) Field("Password PPPoE", form.pppoePassword, { v -> c.provisioning.updateForm { it.copy(pppoePassword = v) } }, password = true,
             supporting = if (form.replaces != null) "Facoltativa: vuota = presa dal backup della CPE sostituita" else "Usata solo per questo provisioning, mai salvata")
+        else Text("Password PPPoE: dall'intervento (non visibile)", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 
     if (showErrors && errors.isNotEmpty()) Banner(errors.joinToString("\n"), MaterialTheme.colorScheme.error)
@@ -176,7 +186,7 @@ fun ProvisionFormStep(c: AppContainer) {
         BusyButton("Verifica piano", state.busy, Modifier.fillMaxWidth(), primary = false) {
             showErrors = true
             // The dry-run never uses the password: a placeholder keeps it valid in replacement mode.
-            if (errors.isEmpty()) scope.launch { c.provisioning.plan(form.toRequest().let { r -> if (r.pppoePassword.isEmpty()) r.copy(pppoePassword = "-") else r }) }
+            if (errors.isEmpty()) scope.launch { c.provisioning.plan(form.toRequest().let { r -> if (r.pppoePassword == null && r.workOrderId == null) r.copy(pppoePassword = "-") else r }) }
         }
         BusyButton("Prepara provisioning", state.busy, Modifier.fillMaxWidth()) {
             showErrors = true

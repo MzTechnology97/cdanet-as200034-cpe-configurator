@@ -306,11 +306,39 @@ data class ProvisionRequest(
     val serial: String,
     val ssid: String,
     val pppoeUser: String,
-    val pppoePassword: String,
+    /** null when the job starts from a work order: the server uses the office's sealed password. */
+    val pppoePassword: String? = null,
     /** Named template of the model; null = the model's default (omitted from JSON). */
     val templateId: Int? = null,
     val location: CpeLocation? = null,
+    val workOrderId: Long? = null,
 )
+
+/** A work order of the office (agenda): never the PPPoE password, only whether it is set. */
+@Serializable
+data class WorkOrderDto(
+    val id: Long,
+    val day: String,
+    val slot: String = "",
+    val kind: String = "new",
+    val kindLabel: String = "",
+    val customer: String,
+    val address: String = "",
+    val lat: Double? = null,
+    val lon: Double? = null,
+    val contact: String = "",
+    val pppoeUser: String = "",
+    val hasPassword: Boolean = false,
+    val model: String = "",
+    val notes: String = "",
+    val status: String = "open",
+    val statusNote: String = "",
+    val overdue: Boolean = false,
+    val jobId: String? = null,
+)
+
+@Serializable
+data class WorkOrdersDto(val day: String = "", val items: List<WorkOrderDto> = emptyList())
 
 /** CPE position: phone GPS, geocoded address or manual entry. */
 @Serializable

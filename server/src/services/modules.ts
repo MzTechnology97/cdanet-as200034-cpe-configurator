@@ -24,6 +24,7 @@ export const MODULES = [
   { key: 'routeros', label: 'MikroTik · RouterOS', area: 'web + app', description: 'Consultazione in sola lettura di apparati RouterOS.', default: true },
   { key: 'power_outages', label: 'Guasti Enel', area: 'web + app', description: 'Guasti e lavori e-distribuzione nelle zone di interesse e attorno agli AP, con notifiche Telegram e sull’app.', default: false },
   { key: 'network_status', label: 'Stato rete', area: 'web + app', description: 'Stato di POP e AP (raggiungibili, CPE offline, guasti Enel vicini): installatori solo quelli assegnati, senza notifiche.', default: false },
+  { key: 'work_orders', label: 'Agenda interventi', area: 'web + app', description: 'Interventi assegnati dall’ufficio con cliente, indirizzo e PPPoE già compilati: l’installatore li trova in Oggi e li avvia con un tocco.', default: true },
   { key: 'telegram', label: 'Notifiche Telegram', area: 'server', description: 'Gruppo del NOC e notifiche personali di ogni utente (bot in Connettori → Telegram).', default: true, global: true },
 ] as const;
 
