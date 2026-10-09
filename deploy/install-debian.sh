@@ -289,6 +289,25 @@ UNIT
 echo "[3c/5] Mappe"
 setup_map
 
+# HTTPS with a certificate of Caddy's local CA on the server's addresses (no public certificate):
+# CDANET_HTTPS_SITES="https://<public ip> https://<lan ip>" to choose them, saved in .env.
+setup_https() {
+  local sites=${CDANET_HTTPS_SITES:-$(get_env HTTPS_SITES)} ips
+  if [[ -z $sites ]]; then
+    ips=$(ip -4 -o addr show scope global 2>/dev/null | awk '$2 !~ /^(docker|br-|veth)/ {split($4, a, "/"); print a[1]}')
+    sites=$(for i in $ips; do printf 'https://%s ' "$i"; done)
+    sites=${sites% }
+  fi
+  set_env HTTPS_SITES "${sites:-https://localhost}"
+  # certificate for connections without a server name (IP addresses): the first address
+  local first=${sites%% *}
+  first=${first#https://}
+  set_env HTTPS_DEFAULT_SNI "${first:-localhost}"
+  echo "  HTTPS con certificato autofirmato su: ${sites:-https://localhost}"
+}
+echo "[3d/5] HTTPS"
+setup_https
+
 echo "[4/5] Stop eventuale stack v0.5.x"
 # Only once: the legacy stack uses the same compose project name, so a later "down"
 # would stop the current stack too.
@@ -324,16 +343,19 @@ wait_app
 unset FIRST_ADMIN p1 p2
 docker compose --env-file .env up -d --remove-orphans
 wait_app
-docker compose exec -T app wget -qO- http://127.0.0.1:8787/api/health; echo
+# </dev/null on every command that may read stdin: with "curl ... | bash" the script itself
+# arrives on stdin, and a reader (docker compose exec/run) would swallow the rest of it.
+docker compose exec -T app wget -qO- http://127.0.0.1:8787/api/health </dev/null; echo
 if [[ $(get_env MAP_MODE) == local ]]; then
-  if [[ $MAP_FETCH == 1 ]] || ! docker compose exec -T app test -s /data/maps/basemap.pmtiles; then
+  if [[ $MAP_FETCH == 1 ]] || ! docker compose exec -T app test -s /data/maps/basemap.pmtiles </dev/null; then
     echo "Download della mappa (Protomaps, regione $(get_env MAP_REGION)): qualche minuto..."
-    docker compose --env-file .env --profile maps run --rm maptiles || echo "  ATTENZIONE: mappa non scaricata, riprova con: sudo cdanet-cpe map update (intanto la console usa le mappe pubbliche)"
+    docker compose --env-file .env --profile maps run --rm maptiles </dev/null || echo "  ATTENZIONE: mappa non scaricata, riprova con: sudo cdanet-cpe map update (intanto la console usa le mappe pubbliche)"
   fi
 fi
 echo
 echo "=== Installazione completata ==="
 echo "Console: http://$(hostname -I | awk '{print $1}')  (APP_LISTEN=hostname in .env per HTTPS automatico)"
+echo "HTTPS autofirmato: $(get_env HTTPS_SITES)  (il browser chiede di accettare il certificato; CA: sudo cdanet-cpe https-ca)"
 echo "Aggiornamenti automatici: container 'updater' (log: sudo cdanet-cpe logs -f updater)"
 echo "Comandi: sudo cdanet-cpe help"
 if [[ $GEOCODER_LOCAL == 1 ]]; then
