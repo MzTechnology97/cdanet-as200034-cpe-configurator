@@ -237,6 +237,20 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX cpe_assignments_user ON cpe_assignments(user_id);
   `,
+  // 14: phones enabled for quick (biometric) login. Only the hash of the device key is stored;
+  // the key is valid while the account's token_version is unchanged (logout-all, password change).
+  `
+  CREATE TABLE auth_devices(
+    id TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    secret_hash TEXT NOT NULL,
+    name TEXT NOT NULL DEFAULT '',
+    token_version INTEGER NOT NULL,
+    created_at TEXT NOT NULL,
+    last_used_at TEXT
+  );
+  CREATE INDEX auth_devices_user ON auth_devices(user_id);
+  `,
 ];
 
 export function openDatabase(path: string): Db {

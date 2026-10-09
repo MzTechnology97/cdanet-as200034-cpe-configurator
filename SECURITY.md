@@ -56,3 +56,12 @@ Prima di dichiarare una versione pronta per la produzione:
 - Un amministratore può rendere il 2FA **obbligatorio per gli admin** (Account → Sicurezza), ma solo dopo averlo attivato sul proprio account. Gli admin senza 2FA vedono solo "Il mio account" finché non lo attivano.
 - Telefono perso: un admin può azzerare il 2FA di un account (Account → utente). Le sessioni vengono revocate.
 - Attivazioni, disattivazioni, codici di recupero usati, cambi di politica e azzeramenti finiscono nel Registro attività e, se configurate, nelle notifiche Telegram di sicurezza.
+
+## Accesso rapido con impronta o volto (v1.30.0)
+
+- L'app non salva la password. Dopo un accesso completo (password e, se attivo, codice TOTP) il server rilascia una **chiave del telefono**: 32 byte casuali, di cui nel database resta solo l'hash SHA-256.
+- Sul telefono la chiave è cifrata con una chiave AES dell'Android Keystore. Con biometria forte (impronta, volto 3D) la chiave del keystore si sblocca solo con il prompt biometrico ed è invalidata se cambiano le impronte registrate. Con biometria debole (lo sblocco col volto della maggior parte dei telefoni) il prompt autorizza l'uso di una chiave che comunque non lascia il keystore.
+- L'accesso rapido non richiede di nuovo il codice TOTP: il telefono è stato registrato dopo la verifica in due passaggi e resta legato alla biometria.
+- La chiave vale finché non cambia la versione dei token dell'account. È revocata da: "Esci da tutti i dispositivi", cambio password, reset o disattivazione da parte di un admin, revoca dal singolo telefono (Il mio account o Impostazioni dell'app). Al massimo 5 telefoni per account.
+- Solo l'app Android (header client) può registrare un telefono o usarne la chiave. Tentativi errati soggetti al limitatore di accesso. Ogni attivazione, uso e revoca finisce nel Registro attività.
+- Console web: il browser può salvare le credenziali (Credential Management API). Il gestore password del browser le compila, chiedendo impronta o volto se il dispositivo è configurato così. Le passkey (WebAuthn) richiedono un nome di dominio e non funzionano su un indirizzo IP.

@@ -23,12 +23,20 @@ import it.cdanet.cpeconfigurator.ui.Banner
 import it.cdanet.cpeconfigurator.ui.Screen
 import it.cdanet.cpeconfigurator.ui.WarnAmber
 
-private data class Tile(val screen: Screen, val title: String, val subtitle: String, val needsLogin: Boolean = false, val module: String? = null)
+private data class Tile(
+    val screen: Screen,
+    val title: String,
+    val subtitle: String,
+    val needsLogin: Boolean = false,
+    val module: String? = null,
+    /** Admins see every customer, not "their" CPEs: other title and description. */
+    val admin: Pair<String, String>? = null,
+)
 
 private val TILES = listOf(
     Tile(Screen.Provision, "Installazione CPE", "Nuova installazione o ripuntamento: configurazione, aggancio all'AP migliore, puntamento AR, collaudo"),
     Tile(Screen.History, "Storico", "I miei provisioning e risultati in attesa di invio", needsLogin = true),
-    Tile(Screen.CpeHealth, "Le mie CPE", "Stato delle CPE che ho installato, rispetto al collaudo", needsLogin = true, module = "cpe_health"),
+    Tile(Screen.CpeHealth, "Le mie CPE", "Stato delle CPE che ho installato, rispetto al collaudo", needsLogin = true, module = "cpe_health", admin = "Salute CPE" to "Tutte le CPE dei clienti: offline, segnale, porta LAN, con ricerca e filtri"),
     Tile(Screen.NetStatus, "Stato rete", "POP e AP: raggiungibili, CPE offline, guasti Enel vicini", needsLogin = true, module = "network_status"),
     Tile(Screen.Outages, "Guasti Enel", "Guasti e lavori della rete elettrica nelle tue zone, con notifiche", needsLogin = true, module = "power_outages"),
     Tile(Screen.Pointing, "Trova l'AP", "AP vicini su mappa e lista: distanza, azimut, tilt, mirino in fotocamera", needsLogin = true, module = "compass"),
@@ -80,8 +88,9 @@ fun HomeScreen(c: AppContainer, offline: Boolean, onNavigate: (Screen) -> Unit, 
             ) {
                 Row(Modifier.padding(16.dp)) {
                     Column(Modifier.weight(1f)) {
-                        Text(t.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
-                        Text(t.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        val admin = session?.user?.role == "admin"
+                        Text(t.admin?.takeIf { admin }?.first ?: t.title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                        Text(t.admin?.takeIf { admin }?.second ?: t.subtitle, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                 }
             }

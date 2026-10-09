@@ -33,6 +33,10 @@ class AppContainer(context: Context) {
     val tools = LocalTools(network, api, session)
     val field = FieldController(api, network, scope)
     val install = it.cdanet.cpeconfigurator.install.InstallController(api, field)
+    val quickLogin = it.cdanet.cpeconfigurator.security.QuickLogin(appContext)
+
+    /** Set after a login with the password: the app then offers the fingerprint/face quick login. */
+    val offerQuickLogin = kotlinx.coroutines.flow.MutableStateFlow(false)
     val acceptanceQueue = it.cdanet.cpeconfigurator.field.AcceptanceQueue(appContext, api, session, resultQueue, scope)
 
     init {

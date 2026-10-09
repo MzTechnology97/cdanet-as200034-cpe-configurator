@@ -11,6 +11,27 @@ export const MAP_COLORS = COLORS;
 
 let vendor = null;
 
+/**
+ * Reads of the local basemap file. The PMTiles reader swallows its own errors and still draws
+ * (empty) tiles, so only the reads tell whether the map really works: header and directories
+ * are the first 2-3, the tiles come after.
+ */
+const reads = { ok: 0, fail: 0, error: '' };
+if (!window.__cdaFetch) {
+  window.__cdaFetch = window.fetch.bind(window);
+  window.fetch = async (input, init) => {
+    const isMap = String(input?.url ?? input).includes('/map/basemap');
+    try {
+      const r = await window.__cdaFetch(input, init);
+      if (isMap) r.ok ? reads.ok++ : (reads.fail++, (reads.error = `HTTP ${r.status}`));
+      return r;
+    } catch (e) {
+      if (isMap) (reads.fail++, (reads.error = e.message));
+      throw e;
+    }
+  };
+}
+
 const script = (src) =>
   new Promise((res, rej) => {
     const s = document.createElement('script');
@@ -39,21 +60,40 @@ const attached = (el) =>
     tick(0);
   });
 
-/** Leaflet map in [el] with the basemap; resolves to the map (null if the page went away). */
-export async function createMap(el, { center = [37.57, 14.27], zoom = 9 } = {}) {
+/**
+ * Leaflet map in [el] with the basemap; resolves to the map (null if the page went away).
+ * If the local basemap draws nothing within a few seconds (old browser engine, broken file) the
+ * public OpenStreetMap tiles are added instead; [onStatus] receives what happened (diagnostics).
+ */
+export async function createMap(el, { center = [37.57, 14.27], zoom = 9, onStatus = null } = {}) {
   await Promise.all([loadVendor(), attached(el)]);
   if (!el.isConnected) return null;
   // read every time: the basemap may have been installed meanwhile
   const config = await api('/api/map/config');
   const L = window.L;
   const map = L.map(el, { center, zoom, scrollWheelZoom: false });
+  // OpenStreetMap's tile policy requires a Referer (the console sends none by default)
+  const publicTiles = () => L.tileLayer(config.fallback.url, { maxZoom: 19, attribution: config.fallback.attribution, referrerPolicy: 'strict-origin-when-cross-origin' }).addTo(map);
   if (config.basemap && window.protomapsL) {
     const dark = matchMedia('(prefers-color-scheme: dark)').matches;
-    window.protomapsL.leafletLayer({ url: config.basemap.url, flavor: dark ? 'dark' : 'light', lang: 'it', maxDataZoom: config.basemap.maxZoom }).addTo(map);
+    const pm = window.protomapsL.leafletLayer({ url: config.basemap.url, flavor: dark ? 'dark' : 'light', lang: 'it', maxDataZoom: config.basemap.maxZoom }).addTo(map);
+    const start = reads.ok;
+    setTimeout(() => {
+      if (!el.isConnected) return;
+      const size = map.getSize();
+      // no tile data after header and directories: unreadable here, or outside the downloaded area
+      const working = reads.ok - start > 3;
+      onStatus?.(working ? 'basemap_ok' : 'basemap_fallback', `letture ${reads.ok - start} ok, ${reads.fail} fallite${reads.error ? ` (${reads.error})` : ''}, mappa ${size.x}×${size.y}, zoom ${map.getZoom()}`);
+      if (!working && size.x > 0 && size.y > 0) {
+        map.removeLayer(pm);
+        publicTiles();
+      }
+    }, 8000);
   } else {
-    // OpenStreetMap's tile policy requires a Referer (the console sends none by default)
-    L.tileLayer(config.fallback.url, { maxZoom: 19, attribution: config.fallback.attribution, referrerPolicy: 'strict-origin-when-cross-origin' }).addTo(map);
+    publicTiles();
   }
+  // the container may get its real size after the map was created (embedded views, tabs)
+  if (window.ResizeObserver) new ResizeObserver(() => map.invalidateSize()).observe(el);
   map.on('focus', () => map.scrollWheelZoom.enable());
   map.on('blur', () => map.scrollWheelZoom.disable());
   return map;

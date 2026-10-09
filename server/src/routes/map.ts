@@ -1,5 +1,6 @@
 import { createReadStream, openSync, readSync, closeSync, statSync } from 'node:fs';
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import type { AppContext } from '../context.ts';
 
 /**
@@ -58,6 +59,22 @@ export function mapRoutes(app: FastifyInstance, ctx: AppContext) {
     fallback: { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '© OpenStreetMap contributors' },
     attribution: '© OpenStreetMap contributors · Protomaps',
   }));
+
+  /**
+   * Problems of the map page embedded in the Android app (no console there): written to the server
+   * log, nothing stored. Public like the page itself, small and rate limited.
+   */
+  const reports = { n: 0, since: Date.now() };
+  app.post('/api/map/client-log', { bodyLimit: 4096 }, async (req, reply) => {
+    if (Date.now() - reports.since > 60_000) Object.assign(reports, { n: 0, since: Date.now() });
+    if (++reports.n > 60) return reply.code(429).send({ error: 'too_many_requests' });
+    const b = z
+      .object({ kind: z.string().max(40), message: z.string().max(500), ua: z.string().max(300).optional(), size: z.string().max(20).optional() })
+      .strict()
+      .parse(req.body);
+    req.log.warn({ map: b }, 'embedded map');
+    return reply.code(204).send();
+  });
 
   /** Range requests only (PMTiles readers fetch the parts they need). Public map data, no customer data. */
   app.get('/map/basemap.pmtiles', async (req, reply) => {

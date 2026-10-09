@@ -1,3 +1,4 @@
+import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
@@ -12,6 +13,7 @@ import {
   NODE_RANGE,
   SUPPORTED_MODELS,
   TARGET_FIRMWARE,
+  parseClientHeader,
 } from '../domain/policy.ts';
 import { loadLatestRelease } from '../services/releases.ts';
 import { escapeHtml } from '../services/telegram.ts';
@@ -217,6 +219,69 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     ctx.db.prepare('UPDATE users SET token_version = token_version + 1 WHERE id = ?').run(req.user!.id);
     recordEvent(ctx.db, req.user!.id, 'account.logout_all', req.user!.username, 'tutte le sessioni chiuse');
     return { ok: true };
+  });
+
+  // ---- Quick login from the app (fingerprint / face) -----------------------------------------
+  // After a full login (password and, when enabled, the TOTP code) the app registers the phone:
+  // it gets a random device key, kept in the Android keystore behind the biometric prompt.
+  // The server keeps only its hash; the key stops working with logout-all, a password change,
+  // an admin reset or when it is removed (Il mio account / app settings).
+  const deviceRow = ctx.db.prepare('SELECT d.*, u.username, u.role, u.active, u.token_version tv, u.totp_enabled FROM auth_devices d JOIN users u ON u.id = d.user_id WHERE d.id = ?');
+  const sha = (s: string) => createHash('sha256').update(s).digest('hex');
+  const trusted = (req: FastifyRequest) => {
+    const c = parseClientHeader(req.headers['x-cda-client'] as string | undefined);
+    if (!c) throw new HttpError(403, 'trusted_client_required');
+  };
+
+  app.post('/api/auth/devices', { preHandler: ctx.auth.requireUser }, async (req, reply) => {
+    trusted(req);
+    const b = z.object({ name: z.string().trim().min(1).max(60) }).strict().parse(req.body);
+    const u = selfRow.get(req.user!.id) as SelfRow;
+    // a few phones per account: the oldest ones make room
+    const old = ctx.db.prepare('SELECT id FROM auth_devices WHERE user_id = ? ORDER BY created_at DESC').all(u.id) as Array<{ id: string }>;
+    for (const o of old.slice(4)) ctx.db.prepare('DELETE FROM auth_devices WHERE id = ?').run(o.id);
+    const id = randomUUID();
+    const secret = randomBytes(32).toString('base64url');
+    ctx.db
+      .prepare('INSERT INTO auth_devices(id, user_id, secret_hash, name, token_version, created_at) VALUES(?,?,?,?,?,?)')
+      .run(id, u.id, sha(secret), b.name, u.token_version, nowIso());
+    recordEvent(ctx.db, u.id, 'account.quick_login_on', u.username, `accesso rapido attivato su ${b.name}`);
+    reply.header('Cache-Control', 'no-store');
+    return reply.code(201).send({ id, secret });
+  });
+
+  app.get('/api/auth/devices', { preHandler: ctx.auth.requireUser }, async (req) => {
+    const u = selfRow.get(req.user!.id) as SelfRow;
+    const rows = ctx.db
+      .prepare('SELECT id, name, created_at createdAt, last_used_at lastUsedAt, token_version tv FROM auth_devices WHERE user_id = ? ORDER BY created_at DESC')
+      .all(u.id) as Array<{ id: string; name: string; createdAt: string; lastUsedAt: string | null; tv: number }>;
+    return { devices: rows.map(({ tv, ...d }) => ({ ...d, active: tv === u.token_version })) };
+  });
+
+  app.delete('/api/auth/devices/:id', { preHandler: ctx.auth.requireUser }, async (req) => {
+    const id = z.string().uuid().parse((req.params as { id: string }).id);
+    const r = ctx.db.prepare('DELETE FROM auth_devices WHERE id = ? AND user_id = ?').run(id, req.user!.id);
+    if (!r.changes) throw new HttpError(404, 'device_not_found');
+    recordEvent(ctx.db, req.user!.id, 'account.quick_login_off', req.user!.username, 'accesso rapido disattivato');
+    return { ok: true };
+  });
+
+  app.post('/api/auth/device-login', async (req) => {
+    trusted(req);
+    const b = z.object({ id: z.string().uuid(), secret: z.string().min(20).max(100) }).strict().parse(req.body);
+    if (limiter.blocked(req.ip, `device:${b.id}`)) throw new HttpError(429, 'too_many_attempts');
+    const d = deviceRow.get(b.id) as
+      | { user_id: number; secret_hash: string; token_version: number; name: string; username: string; role: 'admin' | 'installer'; active: number; tv: number; totp_enabled: number }
+      | undefined;
+    const ok = !!d && timingSafeEqual(Buffer.from(sha(b.secret)), Buffer.from(d.secret_hash)) && !!d.active && d.token_version === d.tv;
+    if (!d || !ok) {
+      limiter.fail(req.ip, `device:${b.id}`);
+      throw new HttpError(401, 'device_revoked');
+    }
+    limiter.clear(req.ip, `device:${b.id}`);
+    ctx.db.prepare('UPDATE auth_devices SET last_used_at = ? WHERE id = ?').run(nowIso(), b.id);
+    recordEvent(ctx.db, d.user_id, 'account.quick_login', d.username, d.name);
+    return session({ id: d.user_id, username: d.username, role: d.role, token_version: d.tv, totp_enabled: d.totp_enabled }, req.ip);
   });
 
   app.get('/api/meta', { preHandler: ctx.auth.requireUser }, async (req) => ({

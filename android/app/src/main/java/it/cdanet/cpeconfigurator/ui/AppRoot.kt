@@ -145,11 +145,12 @@ fun AppRoot(c: AppContainer) {
     }
 
     BackHandler(enabled = stack.size > 1) { back() }
+    QuickLoginOffer(c)
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(screen.title) },
+                title = { Text(if (screen == Screen.CpeHealth && session?.user?.role == "admin") "Salute CPE" else screen.title) },
                 navigationIcon = {
                     if (stack.size > 1) {
                         IconButton(onClick = { back() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro") }

@@ -8,7 +8,51 @@ import { createMap, drawOutages, fit, MAP_COLORS as C, popup, towards } from './
 const el = document.getElementById('map');
 let layer = null;
 let arrow = null;
-const ready = createMap(el, { zoom: 12 }).then((map) => {
+
+/**
+ * Problems of the embedded map reach the server log (the page runs inside the Android app,
+ * where no console is visible) and, for errors, the page itself.
+ */
+function report(kind, message) {
+  try {
+    fetch('/api/map/client-log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ kind, message: String(message).slice(0, 500), ua: navigator.userAgent.slice(0, 300), size: `${innerWidth}x${innerHeight}` }),
+      keepalive: true,
+    }).catch(() => {});
+  } catch {
+    /* diagnostics only */
+  }
+}
+function showError(text) {
+  let box = document.getElementById('map-error');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'map-error';
+    box.className = 'map-error';
+    document.body.append(box);
+  }
+  box.textContent = `Mappa: ${text}`;
+}
+window.addEventListener('error', (e) => {
+  report('error', `${e.message} @${e.filename}:${e.lineno}:${e.colno}`);
+  showError(e.message);
+});
+// the PMTiles reader logs its failures instead of throwing them
+const consoleError = console.error.bind(console);
+let logged = 0;
+console.error = (...args) => {
+  if (logged++ < 5) report('console', args.map((a) => a?.stack || a?.message || String(a)).join(' '));
+  consoleError(...args);
+};
+window.addEventListener('unhandledrejection', (e) => {
+  const r = e.reason;
+  report('rejection', r?.stack || r?.message || r);
+  showError(r?.message || String(r));
+});
+
+const ready = createMap(el, { zoom: 12, onStatus: (kind, msg) => report(kind, msg) }).then((map) => {
   if (map) {
     map.scrollWheelZoom.enable();
     layer = window.L.layerGroup().addTo(map);

@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.QuickLoginCard
 import android.content.Intent
 import android.net.Uri
 import android.provider.Settings as AndroidSettings
@@ -140,6 +141,7 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
 
         if (session != null) {
             PasswordCard(c, onDone = { msg = it }, onError = { error = it })
+            QuickLoginCard(c)
             PersonalTelegramCard(c)
             SectionCard("Sessioni") {
                 Text("Telefono perso o accesso da un dispositivo condiviso? Chiudi tutte le sessioni dell'account, anche questa.", style = MaterialTheme.typography.bodySmall)

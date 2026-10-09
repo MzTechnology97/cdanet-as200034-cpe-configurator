@@ -50,6 +50,12 @@ describe('Mappa (Protomaps)', () => {
     assert.equal(r.headers['content-range'], 'bytes 0-6/4096');
     assert.equal((await app.inject({ method: 'GET', url: '/map/basemap.pmtiles' })).statusCode, 416);
     assert.equal((await app.inject({ method: 'GET', url: '/map/basemap.pmtiles', headers: { range: 'bytes=9999-' } })).statusCode, 416);
+    // diagnostics of the map embedded in the app: logged, validated, rate limited
+    const log = (payload: object) => app.inject({ method: 'POST', url: '/api/map/client-log', payload });
+    assert.equal((await log({ kind: 'basemap_empty', message: '0 tile', ua: 'Android WebView', size: '360x640' })).statusCode, 204);
+    assert.equal((await log({ kind: 'x', message: 'y', extra: 1 })).statusCode, 400);
+    for (let i = 0; i < 60; i++) await log({ kind: 'error', message: 'flood' });
+    assert.equal((await log({ kind: 'error', message: 'flood' })).statusCode, 429);
     await app.close();
 
     const none = await buildApp(testConfig({ MAP_FILE: join(dir, 'missing.pmtiles') }), 'test', { db: openDatabase(':memory:'), logger: false, uisp: null });

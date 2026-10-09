@@ -46,6 +46,7 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 | 20 | **Infrastruttura dal portale** (indirizzo/HTTPS, aggiornamenti automatici e canale, mappe) applicata dall'agente di aggiornamento, che aggiorna da solo anche i file di deploy | niente SSH neanche per l'infrastruttura | ✅ v1.27.0 |
 | 21 | **Installazione CPE guidata**: AP consigliati dal GPS, scrittura, convalida, aggancio con scansione AP della CPE e cambio AP, puntamento con mirino AR e segnale, verifica finale (SNR, modulazione) e collaudo; percorso **ripuntamento** per CPE già installate | un unico percorso dal .cfg al collaudo | ✅ v1.28.0 |
 | 22 | **Telegram personale per tutti gli account** (Il mio account / Impostazioni dell'app): basta il token del bot, gruppo NOC facoltativo, interruttore per l'admin e messaggi che dicono cosa manca | ogni utente riceve le proprie notifiche | ✅ v1.29.0 |
+| 23 | **Accesso rapido con impronta o volto** nell'app (chiave del telefono revocabile, nessuna password salvata) e **salvataggio delle credenziali** nel browser della console | entrare in un attimo sul campo | ✅ v1.30.0 |
 
 ## Da verificare sul campo
 
@@ -60,6 +61,7 @@ Funzioni scritte e testate senza l'apparato reale: vanno provate su una CPE di l
 
 ## Già rilasciato
 
+- v1.30.0: accesso rapido con impronta o volto nell'app, credenziali salvabili nel browser.
 - v1.29.0: notifiche Telegram personali per tutti gli account, con il solo token del bot.
 - v1.28.0: installazione CPE guidata (AP consigliati, cambio AP, mirino AR con segnale, collaudo) e ripuntamento; Salute CPE nell'app con ricerca, filtri e lista compatta; mappe dell'app tramite il client dell'app.
 - v1.27.0: infrastruttura dal portale (indirizzo/HTTPS, aggiornamenti, mappe) tramite l'agente di aggiornamento, che aggiorna anche i file di deploy.

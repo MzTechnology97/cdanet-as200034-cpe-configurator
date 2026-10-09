@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.QuickLoginButton
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -83,6 +84,7 @@ fun LoginScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) ->
                         try {
                             c.api.loginTotp(token, code)
                             c.settings.setLastUsername(username)
+                            c.offerQuickLogin.value = true
                         } catch (e: Exception) {
                             error = e.message ?: e.toString()
                             if ((e as? it.cdanet.cpeconfigurator.data.ApiException)?.code == "mfa_expired") mfaToken = null
@@ -97,6 +99,7 @@ fun LoginScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) ->
         }
 
         if (mfaToken == null) SectionCard("Accesso installatore") {
+            QuickLoginButton(c, savedBackend) { error = it }
             Field("Username", username, { username = it.trim() })
             Field("Password", password, { password = it }, password = true)
             BusyButton("Accedi", busy, Modifier.fillMaxWidth(), enabled = username.isNotBlank() && password.isNotBlank()) {
@@ -106,7 +109,10 @@ fun LoginScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) ->
                     try {
                         if (backend != savedBackend) c.settings.setBackendUrl(backend)
                         mfaToken = c.api.login(username, password)
-                        if (mfaToken == null) c.settings.setLastUsername(username)
+                        if (mfaToken == null) {
+                            c.settings.setLastUsername(username)
+                            c.offerQuickLogin.value = true
+                        }
                     } catch (e: Exception) {
                         error = e.message ?: e.toString()
                     } finally {
