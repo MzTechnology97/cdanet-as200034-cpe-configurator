@@ -387,7 +387,7 @@ private fun WorkOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
             c.scope.launch { c.pointingCache.prefetch(c.api, user, places) }
         }
     }
-    LaunchedEffect(Unit) { load() }
+    LaunchedEffect(c.refresh.collectAsState().value) { load() }
     val list = orders?.filter { it.status != "done" && it.status != "cancelled" } ?: return
     val done = orders?.count { it.status == "done" } ?: 0
     if (list.isEmpty() && done == 0) return

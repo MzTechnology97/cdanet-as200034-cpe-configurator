@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import androidx.compose.runtime.collectAsState
 import it.cdanet.cpeconfigurator.ui.RefreshButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -84,10 +85,11 @@ fun CpeHealthScreen(c: AppContainer, onRepoint: (() -> Unit)? = null) {
         runCatching { c.api.cpeHealth() }.onSuccess { data = it }.onFailure { error = it.message }
         busy = false
     }
-    LaunchedEffect(Unit) { load() }
+    LaunchedEffect(c.refresh.collectAsState().value) { load() }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         ErrorBanner(error) { error = null }
+        if (data == null && busy) it.cdanet.cpeconfigurator.ui.SkeletonRows(4)
         val d = data
         if (d == null) {
             BusyButton("Aggiorna", busy, Modifier.fillMaxWidth(), primary = false) { scope.launch { load() } }

@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui
 
+import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import it.cdanet.cpeconfigurator.ui.screens.FieldReadiness
@@ -299,6 +301,16 @@ fun AppRoot(c: AppContainer) {
     BackHandler(enabled = stack.size > 1) { back() }
     QuickLoginOffer(c)
 
+    // wider than tall and at least 600 dp: navigation rail instead of the bottom bar
+    val config = androidx.compose.ui.platform.LocalConfiguration.current
+    val wide = config.screenWidthDp >= 600 && config.screenWidthDp > config.screenHeightDp
+    val areas = listOf(
+        Triple(Screen.Home, "Oggi", R.drawable.ic_home to R.drawable.ic_home_filled),
+        Triple(Screen.Installations, "Installa", R.drawable.ic_settings_input_antenna to R.drawable.ic_settings_input_antenna_filled),
+        Triple(Screen.NetHub, "Rete", R.drawable.ic_hub to R.drawable.ic_hub_filled),
+        Triple(Screen.Tools, "Strumenti", R.drawable.ic_handyman to R.drawable.ic_handyman_filled),
+    ).filter { (s, _, _) -> session != null || s == Screen.Home || s == Screen.Tools }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -350,14 +362,9 @@ fun AppRoot(c: AppContainer) {
             )
         },
         bottomBar = {
-            if (screen in TOP) {
+            if (screen in TOP && !wide) {
                 NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                    listOf(
-                        Triple(Screen.Home, "Oggi", R.drawable.ic_home to R.drawable.ic_home_filled),
-                        Triple(Screen.Installations, "Installa", R.drawable.ic_settings_input_antenna to R.drawable.ic_settings_input_antenna_filled),
-                        Triple(Screen.NetHub, "Rete", R.drawable.ic_hub to R.drawable.ic_hub_filled),
-                        Triple(Screen.Tools, "Strumenti", R.drawable.ic_handyman to R.drawable.ic_handyman_filled),
-                    ).filter { (s, _, _) -> session != null || s == Screen.Home || s == Screen.Tools }.forEach { (s, label, icons) ->
+                    areas.forEach { (s, label, icons) ->
                         NavigationBarItem(
                             selected = screen == s,
                             onClick = { top(s) },
@@ -369,7 +376,23 @@ fun AppRoot(c: AppContainer) {
             }
         },
     ) { padding ->
-        Box(Modifier.padding(padding).fillMaxSize()) {
+        Row(Modifier.padding(padding).fillMaxSize()) {
+        // landscape and tablets: the four areas on the side, the height stays for the content
+        if (screen in TOP && wide) {
+            androidx.compose.material3.NavigationRail(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
+                Spacer(Modifier.weight(1f))
+                areas.forEach { (s, label, icons) ->
+                    androidx.compose.material3.NavigationRailItem(
+                        selected = screen == s,
+                        onClick = { top(s) },
+                        icon = { Icon(painterResource(if (screen == s) icons.second else icons.first), contentDescription = null) },
+                        label = { Text(label) },
+                    )
+                }
+                Spacer(Modifier.weight(1f))
+            }
+        }
+        Box(Modifier.weight(1f).fillMaxHeight()) {
             val body: @Composable () -> Unit = {
                 when (screen) {
                     Screen.Home -> HomeScreen(c, offline = session == null, unread = unread, onOpen = ::open, onLogin = { offline = false })
@@ -458,17 +481,41 @@ fun AppRoot(c: AppContainer) {
             // field polling, camera and WebViews never run twice during the animation
             key(screen, stack.size) {
                 ScreenEnter(forward = stack.size >= lastDepth) {
-                    if (screen.scroll) {
-                        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
-                            if (screen == Screen.Home) UpdateBanner(c, update) { update = it }
-                            body()
+                    // drag down to reload (not where the gesture belongs to the camera, the compass or a page)
+                    val pullable = screen !in setOf(Screen.ArAim, Screen.Compass, Screen.CpeWeb, Screen.Guide)
+                    var refreshing by remember { mutableStateOf(false) }
+                    androidx.compose.material3.pulltorefresh.PullToRefreshBox(
+                        isRefreshing = refreshing,
+                        onRefresh = {
+                            if (pullable) {
+                                refreshing = true
+                                c.refresh.value++
+                                scope.launch {
+                                    delay(800)
+                                    refreshing = false
+                                }
+                            }
+                        },
+                        modifier = Modifier.fillMaxSize(),
+                    ) {
+                        // wide screens (tablet, landscape): a readable column in the middle
+                        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
+                            Box(Modifier.widthIn(max = 760.dp).fillMaxSize()) {
+                                if (screen.scroll) {
+                                    Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
+                                        if (screen == Screen.Home) UpdateBanner(c, update) { update = it }
+                                        body()
+                                    }
+                                } else {
+                                    body()
+                                }
+                            }
                         }
-                    } else {
-                        body()
                     }
                 }
             }
             SideEffect { lastDepth = stack.size }
+        }
         }
     }
 }

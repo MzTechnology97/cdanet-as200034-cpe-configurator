@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import androidx.compose.runtime.collectAsState
 import it.cdanet.cpeconfigurator.ui.RefreshButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -71,7 +72,7 @@ fun NetworkStatusScreen(c: AppContainer) {
         runCatching { c.api.networkStatus() }.onSuccess { data = it; error = null }.onFailure { error = it.message }
         busy = false
     }
-    LaunchedEffect(Unit) {
+    LaunchedEffect(c.refresh.collectAsState().value) {
         while (true) {
             load()
             delay(60_000)
@@ -84,6 +85,7 @@ fun NetworkStatusScreen(c: AppContainer) {
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         ErrorBanner(error) { error = null }
+        if (data == null && busy) it.cdanet.cpeconfigurator.ui.SkeletonRows(3)
         val d = data
         if (d == null) {
             BusyButton("Aggiorna", busy, Modifier.fillMaxWidth(), primary = false) { scope.launch { load() } }

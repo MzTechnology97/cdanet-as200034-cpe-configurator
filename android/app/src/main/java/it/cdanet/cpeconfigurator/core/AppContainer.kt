@@ -43,6 +43,9 @@ class AppContainer(context: Context) {
     /** "Sblocco a ogni apertura": the app came back after a while, fingerprint/face needed. */
     val locked = kotlinx.coroutines.flow.MutableStateFlow(false)
 
+    /** Pull to refresh: each pull bumps it, the screens with data load again. */
+    val refresh = kotlinx.coroutines.flow.MutableStateFlow(0)
+
     /** Work order started from Oggi: the acceptance test checks the GPS against its position. */
     val activeWorkOrder = kotlinx.coroutines.flow.MutableStateFlow<it.cdanet.cpeconfigurator.data.WorkOrderDto?>(null)
     @Volatile var backgroundSince = 0L
