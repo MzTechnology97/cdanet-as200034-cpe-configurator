@@ -30,7 +30,17 @@ export function toolRoutes(app: FastifyInstance, ctx: AppContext) {
   app.post('/api/tools/onvif', user, () => tools.onvifDiscovery());
   app.post('/api/tools/hikvision', user, () => tools.hikvisionDiscovery());
   app.post('/api/tools/bgp', user, (req) => tools.bgpView(z.object({ resource: z.string().trim().max(64) }).parse(req.body).resource));
-  app.post('/api/tools/mac-vendor', user, (req) => tools.macVendor(z.object({ mac: z.string().trim().max(32) }).parse(req.body).mac));
+  app.post('/api/tools/mac-vendor', user, async (req) => {
+    const mac = z.object({ mac: z.string().trim().max(32) }).parse(req.body).mac;
+    const vendor = (await ctx.oui.lookup([mac]))[mac];
+    return vendor ? { mac, vendor, source: 'IEEE' } : tools.macVendor(mac);
+  });
+
+  /** Vendors of many MACs at once (IP scanner): IEEE registries kept by the server. */
+  app.post('/api/tools/mac-vendors', user, async (req) => {
+    const { macs } = z.object({ macs: z.array(z.string().trim().max(32)).max(1024) }).parse(req.body);
+    return ctx.oui.lookup([...new Set(macs)]);
+  });
 
   // Throughput test between the client and the CDA Net server.
   app.get('/api/tools/speed/ping', speed, async () => ({ ok: true, ts: Date.now() }));

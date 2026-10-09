@@ -40,6 +40,9 @@ import it.cdanet.cpeconfigurator.ui.screens.DiagnosisScreen
 import it.cdanet.cpeconfigurator.ui.screens.DiscoveryScreen
 import it.cdanet.cpeconfigurator.ui.screens.HistoryScreen
 import it.cdanet.cpeconfigurator.ui.screens.HomeScreen
+import it.cdanet.cpeconfigurator.ui.screens.IpScannerScreen
+import it.cdanet.cpeconfigurator.ui.screens.NetDiagScreen
+import it.cdanet.cpeconfigurator.ui.screens.PortScannerScreen
 import it.cdanet.cpeconfigurator.ui.screens.LoginScreen
 import it.cdanet.cpeconfigurator.ui.screens.NetworkScreen
 import it.cdanet.cpeconfigurator.ui.screens.ProvisionScreen
@@ -65,6 +68,9 @@ enum class Screen(val title: String, val scroll: Boolean = true) {
     Acceptance("Collaudo installazione"),
     Compass("Bussola verso l'AP"),
     CpeHealth("Le mie CPE"),
+    IpScanner("Scanner IP"),
+    PortScanner("Port scanner"),
+    NetDiag("Diagnostica di rete"),
     Snmp("SNMP"),
     Camera("TVCC / IP camera"),
     Remote("Accesso remoto"),
@@ -164,6 +170,9 @@ fun AppRoot(c: AppContainer) {
                     Screen.Acceptance -> AcceptanceScreen(c)
                     Screen.Compass -> CompassScreen(c)
                     Screen.CpeHealth -> CpeHealthScreen(c)
+                    Screen.IpScanner -> IpScannerScreen(c, onPortScan = { c.portScanTarget.value = it; go(Screen.PortScanner) })
+                    Screen.PortScanner -> PortScannerScreen(c)
+                    Screen.NetDiag -> NetDiagScreen(c)
                     Screen.Snmp -> SnmpScreen(c)
                     Screen.Camera -> CameraScreen(c)
                     Screen.Remote -> RemoteScreen(c)

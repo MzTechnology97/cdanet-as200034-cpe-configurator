@@ -61,9 +61,9 @@ object Ip {
     }
 
     /** Scans are limited to private /24 (or smaller) networks. */
-    fun parseScanCidr(text: String): Cidr {
+    fun parseScanCidr(text: String, minPrefix: Int = 24): Cidr {
         val c = parseCidr(text)
-        if (c.prefix < 24) throw IllegalArgumentException("Scansione limitata a /24 o reti più piccole")
+        if (c.prefix < minPrefix) throw IllegalArgumentException("Scansione limitata a /$minPrefix o reti più piccole")
         if (!isPrivate(format(c.network))) throw IllegalArgumentException("Consentite solo reti private/CGNAT")
         return c
     }
