@@ -42,6 +42,7 @@ private val TILES = listOf(
     Tile(Screen.Pointing, "Trova l'AP", "AP vicini su mappa e lista: distanza, azimut, tilt, mirino in fotocamera", needsLogin = true, module = "compass"),
     Tile(Screen.Alignment, "Puntamento antenna", "Segnale in tempo reale con bip, picco e segnale atteso", needsLogin = true, module = "field_alignment"),
     Tile(Screen.Diagnosis, "Diagnosi CPE", "Guasto: segnale, cavo LAN, PPPoE, firmware, con rapporto per il NOC", needsLogin = true, module = "field_diagnosis"),
+    Tile(Screen.Guide, "Guida", "Come si fa una nuova installazione, passo per passo, e tutti gli strumenti", needsLogin = true),
     Tile(Screen.Coverage, "Copertura", "AP più vicini da GPS o indirizzo, con direzione di puntamento", needsLogin = true, module = "coverage"),
     Tile(Screen.Wifi, "Wi-Fi Analyzer", "Reti, canali e segnale", module = "network_tools"),
     Tile(Screen.Network, "Strumenti di rete", "Connessione, ping, traceroute, DNS, speed test", module = "network_tools"),

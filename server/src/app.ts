@@ -36,6 +36,7 @@ import { networkRoutes } from './routes/network.ts';
 import { pointingRoutes } from './routes/pointing.ts';
 import { serverSettingsRoutes } from './routes/server-settings.ts';
 import { infraRoutes } from './routes/infra.ts';
+import { guideRoutes } from './routes/guide.ts';
 import { createServerSettings } from './services/server-settings.ts';
 import { createDem } from './services/dem.ts';
 
@@ -198,6 +199,7 @@ export async function buildApp(
   pointingRoutes(app, ctx);
   serverSettingsRoutes(app, ctx);
   infraRoutes(app, ctx);
+  guideRoutes(app, ctx);
   adminRoutes(app, ctx);
   toolRoutes(app, ctx);
   uispRoutes(app, ctx);
