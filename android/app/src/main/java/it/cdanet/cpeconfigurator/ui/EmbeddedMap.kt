@@ -10,6 +10,7 @@ import android.webkit.WebResourceRequest
 import android.webkit.WebResourceResponse
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -39,6 +40,8 @@ fun EmbeddedMap(c: AppContainer, script: String?, modifier: Modifier = Modifier,
 /**
  * A public page of our server (no session) in a WebView: [path] is loaded and links stay inside
  * only while they start with [insidePrefix] (default: the whole server); anything else opens outside.
+ * [document]: a page to read rather than a map, with pinch zoom and the back button going back
+ * inside the page first (e.g. closing an enlarged photo) before leaving the screen.
  */
 @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 @Composable
@@ -49,6 +52,7 @@ fun ServerPage(
     script: String? = null,
     modifier: Modifier = Modifier,
     insidePrefix: String = "/",
+    document: Boolean = false,
     onReady: (WebView) -> Unit = {},
 ) {
     val baseUrl by produceState<String?>(null) { value = c.api.base().trimEnd('/') }
@@ -60,6 +64,8 @@ fun ServerPage(
     var page by remember { mutableStateOf<WebView?>(null) }
     var loaded by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<String?>(null) }
+    var canGoBack by remember { mutableStateOf(false) }
+    BackHandler(enabled = document && canGoBack) { page?.goBack() }
     failure?.let {
         Text("$label non disponibile: $it", modifier.padding(14.dp), color = androidx.compose.material3.MaterialTheme.colorScheme.error)
         return
@@ -80,6 +86,11 @@ fun ServerPage(
                 setBackgroundColor(background)
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
+                if (document) {
+                    settings.setSupportZoom(true)
+                    settings.builtInZoomControls = true
+                    settings.displayZoomControls = false
+                }
                 // pan/zoom the map instead of scrolling the screen around it
                 setOnTouchListener { v, _ ->
                     v.parent?.requestDisallowInterceptTouchEvent(true)
@@ -88,6 +99,11 @@ fun ServerPage(
                 webViewClient = object : WebViewClient() {
                     override fun onPageFinished(view: WebView, url: String) {
                         loaded = true
+                    }
+
+                    // in-page history too (anchors, history.pushState of the enlarged photo)
+                    override fun doUpdateVisitedHistory(view: WebView, url: String?, isReload: Boolean) {
+                        canGoBack = view.canGoBack()
                     }
 
                     // Pages and files of our server go through the app's HTTP client: same certificate

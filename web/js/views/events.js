@@ -7,6 +7,8 @@ const LABELS = {
   'wireless.set': 'WPA2 impostata',
   'wireless.delete': 'WPA2 eliminata',
   'wireless.import': 'Import WPA2 da CSV',
+  'wireless.uisp_import': 'Chiave WPA2 comune applicata agli SSID di UISP',
+  'wireless.export': 'Chiavi WPA2 esportate in chiaro (CSV)',
   'wireless.bulk_delete': 'WPA2 eliminate (multiplo)',
   'profile.set': 'Profilo caricato',
   'template.create': 'Template creato',

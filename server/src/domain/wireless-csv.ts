@@ -20,6 +20,24 @@ export interface CsvError {
 
 export const WPA2_RX = /^[\x20-\x7e]{8,63}$/;
 
+/**
+ * A key a spreadsheet would run as a formula (= + - @) gets an apostrophe in front; a key that
+ * already starts with one gets a second, so the import strips exactly one and gets the key back.
+ */
+const QUOTE_RX = /^'(?=[=+\-@'])/;
+export const wpa2ToCsv = (wpa2: string) => (/^[=+\-@']/.test(wpa2) ? `'${wpa2}` : wpa2);
+const wpa2FromCsv = (cell: string) => cell.replace(QUOTE_RX, '');
+
+/** The networks with their keys in clear, in the format the import reads back (nodo;distretto;ssid;wpa2). */
+export function wirelessCsv(rows: Array<{ ssid: string; wpa2: string }>): string {
+  const cell = (s: string) => (/[";,\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s);
+  const lines = rows.map(({ ssid, wpa2 }) => {
+    const m = /^CDA-NET-N(\d+)-D(\d+)/.exec(ssid);
+    return [m?.[1] ?? '', m?.[2] ?? '', ssid, wpa2ToCsv(wpa2)].map(cell).join(';');
+  });
+  return '﻿' + ['nodo;distretto;ssid;wpa2', ...lines].join('\r\n') + '\r\n';
+}
+
 export function parseCsv(text: string): string[][] {
   const src = text.replace(/^﻿/, '');
   const firstLine = src.split(/\r?\n/, 1)[0] ?? '';
@@ -99,7 +117,7 @@ export function parseWirelessCsv(text: string): { rows: WirelessRow[]; errors: C
       return;
     }
     // WPA2 is taken verbatim (no trim of inner spaces), only surrounding whitespace is ignored.
-    const wpa2 = get(iWpa);
+    const wpa2 = wpa2FromCsv(get(iWpa));
     if (!WPA2_RX.test(wpa2)) {
       errors.push({ line, error: `Chiave WPA2 di ${ssid} non valida: 8-63 caratteri ASCII stampabili` });
       return;

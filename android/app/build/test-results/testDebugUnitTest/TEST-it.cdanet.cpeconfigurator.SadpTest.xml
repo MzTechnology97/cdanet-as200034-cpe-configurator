@@ -1,8 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="it.cdanet.cpeconfigurator.SadpTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-10-09T17:44:16" hostname="ALFIO" time="0.01">
-  <properties/>
-  <testcase name="ignoresOwnProbe" classname="it.cdanet.cpeconfigurator.SadpTest" time="0.003"/>
-  <testcase name="parsesAnswer" classname="it.cdanet.cpeconfigurator.SadpTest" time="0.006"/>
-  <system-out><![CDATA[]]></system-out>
-  <system-err><![CDATA[]]></system-err>
-</testsuite>

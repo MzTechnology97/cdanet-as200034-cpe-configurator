@@ -35,6 +35,8 @@ describe('Guide', () => {
 
   it('references only images that exist', () => {
     const wiki = readFileSync(new URL('wiki/index.html', WEB), 'utf8');
+    assert.match(wiki, /<script src="wiki\.js" defer><\/script>/, 'photo enlargement');
+    assert.ok(existsSync(new URL('wiki/wiki.js', WEB)));
     const pub = [...wiki.matchAll(/<img src="([^"]+)"/g)].map((m) => m[1]!);
     assert.ok(pub.length > 30);
     for (const src of pub) assert.ok(existsSync(new URL(`wiki/${src}`, WEB)), src);

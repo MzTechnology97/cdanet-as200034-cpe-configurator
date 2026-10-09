@@ -259,7 +259,7 @@ fun AppRoot(c: AppContainer) {
                     )
                     Screen.Notifications -> NotificationsScreen(c, onUnread = { unread = it })
                     // the installer guide of the server (/wiki/): its links outside the guide open in the browser
-                    Screen.Guide -> ServerPage(c, "/wiki/", "Guida", modifier = Modifier.fillMaxSize(), insidePrefix = "/wiki/")
+                    Screen.Guide -> ServerPage(c, "/wiki/", "Guida", modifier = Modifier.fillMaxSize(), insidePrefix = "/wiki/", document = true)
                     Screen.Settings -> SettingsScreen(c, update = update, onUpdate = { update = it }, onLogout = {
                         c.session.clear()
                         offline = false

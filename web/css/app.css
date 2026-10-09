@@ -192,6 +192,11 @@ button.link { background: none; border: none; color: var(--brand); padding: 4px 
 .pick-aps { padding-left: 26px; }
 .pick label.check { padding: 2px 0; flex-wrap: wrap; }
 .pick .small.muted { margin-left: 4px; }
+.ssid-pick { max-height: 340px; padding: 4px 10px; }
+.ssid-pick .pick-pop { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; }
+.ssid-pick .pick-pop > b { min-width: 38px; }
+.ssid-pick .chips { margin: 0; gap: 4px 6px; }
+.ssid-pick label.check { padding: 1px 8px 1px 4px; border: 1px solid var(--line); border-radius: 999px; font-family: ui-monospace, Consolas, monospace; font-size: .78rem; gap: 4px; }
 
 /* Maps (Leaflet + Protomaps) */
 .map { height: 420px; border-radius: 10px; border: 1px solid var(--line); margin: 8px 0; z-index: 0; }
@@ -225,6 +230,21 @@ button.small { padding: 2px 8px; font-size: .8rem; margin-top: 4px; }
 @media (max-width: 760px) {
   .guide nav ol { columns: 1; }
 }
+.guide figure img { cursor: zoom-in; }
+body.lb-open { overflow: hidden; }
+.lightbox { position: fixed; inset: 0; z-index: 50; background: #0b0c0e; color: #fff; display: flex; flex-direction: column; }
+.lightbox[hidden] { display: none; }
+.lb-stage { flex: 1; min-height: 0; overflow: auto; display: flex; padding: 52px 12px 8px; }
+.lb-stage img { margin: auto; max-width: 100%; max-height: 100%; object-fit: contain; border-radius: 8px; background: #fff; }
+.lightbox.zoomed .lb-stage img { max-width: none; max-height: none; }
+.lb-caption { margin: 0; padding: 6px 60px 10px; text-align: center; font-size: 14px; color: #ddd; }
+.lightbox button { position: absolute; border: 0; background: rgb(255 255 255 / 14%); color: #fff; border-radius: 999px; cursor: pointer; font: inherit; min-height: 0; }
+.lightbox button:hover { background: rgb(255 255 255 / 26%); }
+.lb-close { top: 10px; right: 12px; width: 40px; height: 40px; font-size: 26px; line-height: 1; padding: 0; }
+.lb-prev, .lb-next { top: 50%; width: 44px; height: 44px; margin-top: -22px; font-size: 30px; line-height: 1; padding: 0; }
+.lb-prev { left: 10px; }
+.lb-next { right: 10px; }
+.lb-zoom { top: 12px; left: 12px; padding: 8px 14px; font-size: 14px; }
 
 /* Notifications: bell, menu badge, list */
 .bell { position: relative; text-decoration: none; font-size: 1.15rem; padding: 4px 6px; }
