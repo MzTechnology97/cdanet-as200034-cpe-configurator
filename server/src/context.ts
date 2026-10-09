@@ -9,6 +9,7 @@ import type { Uisp } from './services/uisp.ts';
 import type { Connectors } from './services/connectors.ts';
 import type { Modules } from './services/modules.ts';
 import type { Oui } from './services/oui.ts';
+import type { Outages } from './services/outages.ts';
 import type { Notifier } from './services/notify.ts';
 import type { Telegram } from './services/telegram.ts';
 
@@ -27,6 +28,7 @@ export interface AppContext {
   telegram: Telegram;
   modules: Modules;
   oui: Oui;
+  outages: Outages;
   notify: Notifier;
   version: string;
 }

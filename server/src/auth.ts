@@ -54,6 +54,34 @@ export function createAuth(db: Db, secret: Uint8Array, ttlHours: number) {
     }
   }
 
+  /**
+   * Long-lived token for the app's background checks (power outages): it only opens
+   * the outage feed, never a session; revoked with the account's sessions.
+   */
+  async function issueFeedToken(u: { id: number; username: string; token_version: number }) {
+    return new SignJWT({ username: u.username, tv: u.token_version, scope: 'outages' })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject(String(u.id))
+      .setIssuer(ISSUER)
+      .setIssuedAt()
+      .setExpirationTime('90d')
+      .sign(secret);
+  }
+
+  async function verifyFeedToken(req: FastifyRequest): Promise<AuthUser> {
+    const m = /^Bearer\s+(\S+)$/i.exec(req.headers.authorization ?? '');
+    try {
+      if (!m) throw new Error('missing');
+      const { payload } = await jwtVerify(m[1] as string, secret, { issuer: ISSUER, algorithms: ['HS256'] });
+      if (payload.scope !== 'outages') throw new Error('scope');
+      const row = userStmt.get(Number(payload.sub)) as { id: number; username: string; role: Role; active: number; token_version: number } | undefined;
+      if (!row || !row.active || row.token_version !== payload.tv) throw new Error('revoked');
+      return { id: row.id, username: row.username, role: row.role };
+    } catch {
+      throw new HttpError(401, 'unauthorized');
+    }
+  }
+
   /** Admin policy: two-step verification required for administrators (settings table). */
   const policyStmt = db.prepare("SELECT value FROM settings WHERE key = 'security.totp_admins'");
   const totpRequiredForAdmins = () => (policyStmt.get() as { value: string } | undefined)?.value === 'required';
@@ -79,7 +107,7 @@ export function createAuth(db: Db, secret: Uint8Array, ttlHours: number) {
     if (!m) throw new HttpError(401, 'unauthorized');
     try {
       const { payload } = await jwtVerify(m[1] as string, secret, { issuer: ISSUER, algorithms: ['HS256'] });
-      if (payload.mfa === true) throw new Error('mfa_token_is_not_a_session');
+      if (payload.mfa === true || payload.scope !== undefined) throw new Error('not_a_session_token');
       const row = userStmt.get(Number(payload.sub)) as
         | { id: number; username: string; role: Role; active: number; token_version: number; totp_enabled: number }
         | undefined;
@@ -100,7 +128,7 @@ export function createAuth(db: Db, secret: Uint8Array, ttlHours: number) {
     if (!req.user.totp && totpRequiredForAdmins()) throw new HttpError(403, 'mfa_setup_required');
   };
 
-  return { issueToken, issueMfaToken, verifyMfaToken, totpRequiredForAdmins, authenticate, requireUser, requireAdmin };
+  return { issueToken, issueMfaToken, verifyMfaToken, issueFeedToken, verifyFeedToken, totpRequiredForAdmins, authenticate, requireUser, requireAdmin };
 }
 export type Auth = ReturnType<typeof createAuth>;
 

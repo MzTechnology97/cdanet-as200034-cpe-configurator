@@ -223,6 +223,11 @@ export function createUisp(opts: UispOptions) {
     },
 
     /** Nearest APs within maxKm (never the whole network). */
+    /** APs with a position (device or site), for the power-outage zones. */
+    async apsWithLocation() {
+      return aps();
+    },
+
     async nearestAps(from: LatLon, limit: number, maxKm: number) {
       return (await aps())
         .map((d) => {

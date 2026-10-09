@@ -87,6 +87,30 @@ data class MetaDto(
 )
 
 @Serializable
+data class OutageZoneDto(val name: String = "", val distanceM: Int = 0)
+
+@Serializable
+data class OutageDto(
+    val id: Long,
+    val kind: String,
+    val cause: String = "",
+    val customers: Int = 0,
+    val start: String? = null,
+    val expectedRestore: String? = null,
+    val place: String = "",
+    val province: String = "",
+    val lat: Double,
+    val lon: Double,
+    val zones: List<OutageZoneDto> = emptyList(),
+)
+
+@Serializable
+data class OutageRunDto(val at: String? = null, val ok: Boolean = true, val error: String? = null)
+
+@Serializable
+data class OutagesDto(val active: List<OutageDto> = emptyList(), val lastRun: OutageRunDto? = null)
+
+@Serializable
 data class CpeNowDto(
     val status: String = "",
     val signal: Double? = null,
