@@ -41,7 +41,9 @@ describe('Stato rete', () => {
     assert.equal(ap.state, 'ok');
     assert.equal(ap.cpe, null, 'customer numbers hidden from installers');
     assert.equal(ap.cpeOffline, 'none');
-    assert.ok(!/37\.6|14\.1|Contrada|uisp/i.test(r.body), 'no positions, addresses or data sources');
+    // timestamps out first: "…T13:19:14.1…Z" is not a coordinate
+    const body = r.body.replace(/\d{4}-\d\d-\d\dT[\d:.]+Z/g, '');
+    assert.ok(!/37\.6|14\.1|Contrada|uisp/i.test(body), 'no positions, addresses or data sources');
 
     await call('PUT', '/api/admin/modules', { network_status: true });
     const all = (await call('GET', '/api/network/status')).json();
