@@ -23,21 +23,22 @@ import it.cdanet.cpeconfigurator.ui.Banner
 import it.cdanet.cpeconfigurator.ui.Screen
 import it.cdanet.cpeconfigurator.ui.WarnAmber
 
-private data class Tile(val screen: Screen, val title: String, val subtitle: String, val needsLogin: Boolean = false)
+private data class Tile(val screen: Screen, val title: String, val subtitle: String, val needsLogin: Boolean = false, val module: String? = null)
 
 private val TILES = listOf(
     Tile(Screen.Provision, "Provisioning CPE", "airMAX AC · prepara online, applica sulla Wi-Fi della CPE"),
     Tile(Screen.History, "Storico", "I miei provisioning e risultati in attesa di invio", needsLogin = true),
-    Tile(Screen.Alignment, "Puntamento antenna", "Segnale in tempo reale con bip, picco e segnale atteso", needsLogin = true),
-    Tile(Screen.Diagnosis, "Diagnosi CPE", "Guasto: segnale, cavo LAN, PPPoE, firmware, con rapporto per il NOC", needsLogin = true),
-    Tile(Screen.Coverage, "Copertura", "AP più vicini da GPS o indirizzo, con direzione di puntamento", needsLogin = true),
-    Tile(Screen.Wifi, "Wi-Fi Analyzer", "Reti, canali e segnale"),
-    Tile(Screen.Network, "Strumenti di rete", "Connessione, ping, traceroute, DNS, speed test"),
-    Tile(Screen.Discovery, "Discovery LAN", "Scansione subnet, ARP, porte, NetBIOS"),
-    Tile(Screen.Snmp, "SNMP v2c", "Interroga apparati in LAN"),
-    Tile(Screen.Camera, "TVCC", "ONVIF, Hikvision SADP, RTSP, calcolo banda"),
-    Tile(Screen.RouterOs, "MikroTik · RouterOS", "Consultazione in sola lettura via SSH"),
-    Tile(Screen.Remote, "Accesso remoto", "SSH e Remote Desktop con app esterne"),
+    Tile(Screen.CpeHealth, "Le mie CPE", "Stato delle CPE che ho installato, rispetto al collaudo", needsLogin = true, module = "cpe_health"),
+    Tile(Screen.Alignment, "Puntamento antenna", "Segnale in tempo reale con bip, picco e segnale atteso", needsLogin = true, module = "field_alignment"),
+    Tile(Screen.Diagnosis, "Diagnosi CPE", "Guasto: segnale, cavo LAN, PPPoE, firmware, con rapporto per il NOC", needsLogin = true, module = "field_diagnosis"),
+    Tile(Screen.Coverage, "Copertura", "AP più vicini da GPS o indirizzo, con direzione di puntamento", needsLogin = true, module = "coverage"),
+    Tile(Screen.Wifi, "Wi-Fi Analyzer", "Reti, canali e segnale", module = "network_tools"),
+    Tile(Screen.Network, "Strumenti di rete", "Connessione, ping, traceroute, DNS, speed test", module = "network_tools"),
+    Tile(Screen.Discovery, "Discovery LAN", "Scansione subnet, ARP, porte, NetBIOS", module = "network_tools"),
+    Tile(Screen.Snmp, "SNMP v2c", "Interroga apparati in LAN", module = "network_tools"),
+    Tile(Screen.Camera, "TVCC", "ONVIF, Hikvision SADP, RTSP, calcolo banda", module = "network_tools"),
+    Tile(Screen.RouterOs, "MikroTik · RouterOS", "Consultazione in sola lettura via SSH", module = "routeros"),
+    Tile(Screen.Remote, "Accesso remoto", "SSH e Remote Desktop con app esterne", module = "network_tools"),
 )
 
 @Composable
@@ -63,7 +64,8 @@ fun HomeScreen(c: AppContainer, offline: Boolean, onNavigate: (Screen) -> Unit, 
         if (pending.isNotEmpty()) {
             Banner("${pending.size} esiti in attesa di invio al server (verranno inviati quando torni online e connesso).", WarnAmber)
         }
-        TILES.filter { !it.needsLogin || !offline }.forEach { t ->
+        val modules by c.modules.collectAsState()
+        TILES.filter { (!it.needsLogin || !offline) && (it.module == null || modules[it.module] != false) }.forEach { t ->
             Card(
                 modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp).clickable { onNavigate(t.screen) },
                 colors = CardDefaults.cardColors(

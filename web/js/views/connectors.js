@@ -139,7 +139,7 @@ export async function connectorsView() {
       h('div', { class: 'btns' }, testBtn, saveBtn, u.source === 'console' ? resetBtn : null),
       result,
     ),
-    telegramCard(data.telegram, async () => document.getElementById('view').replaceChildren(await connectorsView())),
+    data.telegram ? telegramCard(data.telegram, async () => document.getElementById('view').replaceChildren(await connectorsView())) : null,
     geocoderCard(data.geocoder),
   );
 }

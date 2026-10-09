@@ -7,7 +7,17 @@ import type { Uisp } from './uisp.ts';
  * What the NOC is told on Telegram (only what needs an action):
  * failed provisioning, CPE to accept in UISP, UISP down/up, security events, evening summary.
  */
-export function createNotifier(db: Db, cfg: Config, telegram: Telegram, getUisp: () => Uisp | null, version: string, log: (m: string) => void = () => {}) {
+export function createNotifier(
+  db: Db,
+  cfg: Config,
+  rawTelegram: Telegram,
+  getUisp: () => Uisp | null,
+  version: string,
+  isOn: () => boolean = () => true,
+  log: (m: string) => void = () => {},
+) {
+  // Module "Notifiche Telegram" off: every notification is dropped here.
+  const telegram = { ...rawTelegram, notify: (...a: Parameters<Telegram['notify']>) => (isOn() ? rawTelegram.notify(...a) : Promise.resolve()), summaryHour: () => (isOn() ? rawTelegram.summaryHour() : null) };
   const jobLink = (mac: string) => (cfg.publicUrl ? `\n<a href="${e(cfg.publicUrl)}/#/jobs?q=${encodeURIComponent(mac)}">Apri nello storico</a>` : '');
 
   function provisioningResult(jobId: string) {

@@ -34,6 +34,7 @@ import it.cdanet.cpeconfigurator.ui.screens.AlignmentScreen
 import it.cdanet.cpeconfigurator.ui.screens.CameraScreen
 import it.cdanet.cpeconfigurator.ui.screens.CompassScreen
 import it.cdanet.cpeconfigurator.ui.screens.CoverageScreen
+import it.cdanet.cpeconfigurator.ui.screens.CpeHealthScreen
 import it.cdanet.cpeconfigurator.ui.screens.CpeWebScreen
 import it.cdanet.cpeconfigurator.ui.screens.DiagnosisScreen
 import it.cdanet.cpeconfigurator.ui.screens.DiscoveryScreen
@@ -63,6 +64,7 @@ enum class Screen(val title: String, val scroll: Boolean = true) {
     Diagnosis("Diagnosi CPE"),
     Acceptance("Collaudo installazione"),
     Compass("Bussola verso l'AP"),
+    CpeHealth("Le mie CPE"),
     Snmp("SNMP"),
     Camera("TVCC / IP camera"),
     Remote("Accesso remoto"),
@@ -98,6 +100,8 @@ fun AppRoot(c: AppContainer) {
     }
     LaunchedEffect(session) {
         if (session != null) {
+            // Features enabled by the admin: hidden screens and buttons follow this map.
+            launch { runCatching { c.api.meta() }.onSuccess { c.modules.value = it.modules } }
             c.resultQueue.syncInBackground()
             c.acceptanceQueue.syncInBackground()
             scope.launch { c.routerOs.refreshCatalog() }
@@ -111,7 +115,7 @@ fun AppRoot(c: AppContainer) {
                 }
             }
             // CPE credentials for alignment/diagnosis, so they also work later without Internet.
-            scope.launch { c.field.prefetch() }
+            scope.launch { if (listOf("field_alignment", "field_diagnosis", "acceptance").any { c.moduleOn(it) }) c.field.prefetch() }
         } else {
             c.field.forget()
         }
@@ -151,11 +155,15 @@ fun AppRoot(c: AppContainer) {
                     Screen.Wifi -> WifiScreen(c)
                     Screen.Network -> NetworkScreen(c)
                     Screen.Discovery -> DiscoveryScreen(c)
-                    Screen.Coverage -> CoverageScreen(c, onCompass = { c.compassTarget.value = it; go(Screen.Compass) })
+                    Screen.Coverage -> CoverageScreen(
+                        c,
+                        onCompass = if (c.moduleOn("compass")) ({ t: it.cdanet.cpeconfigurator.field.CompassTarget -> c.compassTarget.value = t; go(Screen.Compass) }) else null,
+                    )
                     Screen.Alignment -> AlignmentScreen(c)
                     Screen.Diagnosis -> DiagnosisScreen(c)
                     Screen.Acceptance -> AcceptanceScreen(c)
                     Screen.Compass -> CompassScreen(c)
+                    Screen.CpeHealth -> CpeHealthScreen(c)
                     Screen.Snmp -> SnmpScreen(c)
                     Screen.Camera -> CameraScreen(c)
                     Screen.Remote -> RemoteScreen(c)

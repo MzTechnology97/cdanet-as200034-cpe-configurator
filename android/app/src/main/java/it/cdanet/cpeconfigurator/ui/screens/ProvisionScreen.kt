@@ -138,7 +138,7 @@ private fun FormStep(c: AppContainer) {
     SectionCard("Posizione CPE e AP vicini") {
         Text("La posizione viene salvata nello storico e scritta nella CPE (UISP la mostra sulla mappa).", style = MaterialTheme.typography.bodySmall)
         LocationPicker(c, form.location, form.locationLabel) { l, label -> c.provisioning.updateForm { it.copy(location = l, locationLabel = label) } }
-        form.location?.let { l ->
+        if (c.moduleOn("coverage")) form.location?.let { l ->
             NearbyAps(c, l, onPick = { ap -> c.provisioning.updateForm { it.copy(node = ap.node ?: it.node, district = ap.district ?: it.district) } })
         }
     }
@@ -275,7 +275,7 @@ private fun DoneStep(c: AppContainer, onAcceptance: () -> Unit) {
         BusyButton("Riprova con lo stesso pacchetto", false, Modifier.fillMaxWidth(), primary = false) { c.provisioning.retry() }
     }
     val pkg = state.pkg
-    if (ok && pkg != null) {
+    if (ok && pkg != null && c.moduleOn("acceptance")) {
         BusyButton("Collaudo: misure, foto e verbale", false, Modifier.fillMaxWidth()) {
             val s = pkg.summary
             c.selectedJob.value = JobDto(

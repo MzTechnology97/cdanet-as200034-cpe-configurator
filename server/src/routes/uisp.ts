@@ -6,10 +6,11 @@ import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { toCsv } from '../domain/csv.ts';
 import { configDrift } from '../domain/drift.ts';
-import { networkHealth } from '../domain/health.ts';
+import { installedHealth, type InstalledJob } from '../domain/health.ts';
 import { FIELD_THRESHOLDS } from './field.ts';
 import { isValidLatLon } from '../domain/geo.ts';
 import { TARGET_FIRMWARE } from '../domain/policy.ts';
+import type { ModuleKey } from '../services/modules.ts';
 import type { UispDevice } from '../services/uisp.ts';
 
 const SSID_PARTS = /^CDA-NET-N(\d+)-D(\d+)$/;
@@ -31,6 +32,7 @@ interface JobRow {
 export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
   const user = { preHandler: ctx.auth.requireUser };
   const admin = { preHandler: ctx.auth.requireAdmin };
+  const mod = (k: ModuleKey, base: typeof user | typeof admin = user) => ({ preHandler: [base.preHandler, ctx.modules.require(k)] });
   const { db } = ctx;
 
   const uisp = () => {
@@ -73,7 +75,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     return ctx.geocoder.search(q);
   });
 
-  app.get('/api/coverage', user, async (req) => {
+  app.get('/api/coverage', mod('coverage'), async (req) => {
     const q = z
       .object({ lat: z.coerce.number(), lon: z.coerce.number(), limit: z.coerce.number().int().min(1).max(10).default(5) })
       .parse(req.query);
@@ -104,7 +106,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   /** Signal history of the CPE of a job (fault diagnosis: sudden failure vs slow degradation). */
-  app.get('/api/provisioning/jobs/:id/uisp/statistics', user, async (req) => {
+  app.get('/api/provisioning/jobs/:id/uisp/statistics', mod('signal_history'), async (req) => {
     const job = loadJob(req);
     const range = z.enum(['day', 'week', 'month']).default('week').parse((req.query as { range?: string }).range);
     const device = await deviceOf(job);
@@ -113,20 +115,61 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     return { device: { id: device.id, name: device.name }, ...stats, outages };
   });
 
-  // ---- Network health (NOC) -----------------------------------------------------------------
-  const health = async () => {
-    const t = { ...FIELD_THRESHOLDS, targetFirmware: TARGET_FIRMWARE };
-    return { generatedAt: nowIso(), thresholds: t, ...networkHealth(await uisp().allDevices(), t) };
-  };
-  app.get('/api/admin/network/health', admin, async () => health());
+  // ---- Salute CPE installate (module cpe_health) --------------------------------------------
+  /** CPEs installed with the app (latest successful job per MAC, not replaced). Installers: their own. */
+  const installedJobs = (viewer: { id: number; role: string }, installer?: string): InstalledJob[] =>
+    (
+      db
+        .prepare(
+          `SELECT j.id jobId, j.created_at createdAt, j.device_name deviceName, j.model, j.mac, j.ssid, u.username installer,
+                  a.verdict acceptanceVerdict,
+                  json_extract(a.data, '$.radio.signal') acceptanceSignal,
+                  json_extract(a.data, '$.internet.downloadMbps') acceptanceDownload
+           FROM provisioning_jobs j
+           JOIN users u ON u.id = j.user_id
+           LEFT JOIN job_acceptance a ON a.job_id = j.id
+           WHERE j.status = 'success'
+             AND NOT EXISTS (SELECT 1 FROM provisioning_jobs r WHERE r.replaces_job_id = j.id AND r.status = 'success')
+             AND NOT EXISTS (SELECT 1 FROM provisioning_jobs n WHERE n.mac = j.mac AND n.status = 'success' AND n.created_at > j.created_at)
+             ${viewer.role !== 'admin' ? 'AND j.user_id = ?' : installer ? 'AND u.username = ?' : ''}
+           ORDER BY j.created_at DESC LIMIT 5000`,
+        )
+        .all(...(viewer.role !== 'admin' ? [viewer.id] : installer ? [installer] : [])) as unknown as InstalledJob[]
+    );
 
-  app.get('/api/admin/network/health.csv', admin, async (req, reply) => {
-    const h = await health();
-    const label: Record<string, string> = { offline: 'offline', pending: 'da accettare', weak_signal: 'segnale debole', ethernet: 'porta LAN', low_capacity: 'capacità bassa', firmware: 'firmware' };
-    const rows = h.cpes.map((c) => [c.name, c.mac, c.model, c.status, c.signal, c.ethMbps ? `${c.ethMbps}${c.ethHalfDuplex ? ' half' : ''}` : '', c.dlCapacityMbps, c.firmware, c.apName, c.siteName, c.lastSeen, c.issues.map((i) => label[i] ?? i).join(', ')]);
-    recordEvent(db, req.user!.id, 'network.export', `${rows.length} CPE`, '');
-    reply.header('Content-Type', 'text/csv; charset=utf-8').header('Content-Disposition', `attachment; filename="salute-rete-${h.generatedAt.slice(0, 10)}.csv"`);
-    return '\uFEFF' + toCsv([['CPE', 'MAC', 'Modello', 'Stato', 'Segnale dBm', 'Porta LAN', 'Capacità Mbit/s', 'Firmware', 'AP', 'Site', 'Ultimo contatto', 'Problemi'], ...rows]);
+  const cpeHealth = async (req: FastifyRequest) => {
+    const q = z.object({ installer: z.string().trim().max(80).optional() }).parse(req.query);
+    const jobs = installedJobs(req.user!, q.installer);
+    const byMac = new Map<string, UispDevice>();
+    let uispOk = true;
+    if (ctx.uisp && jobs.length) {
+      try {
+        for (const d of await ctx.uisp.allDevices()) if (d.mac) byMac.set(d.mac, d);
+      } catch {
+        uispOk = false;
+      }
+    }
+    const t = { ...FIELD_THRESHOLDS, targetFirmware: TARGET_FIRMWARE, signalDropDb: 6 };
+    return { generatedAt: nowIso(), uisp: !!ctx.uisp && uispOk, thresholds: t, ...installedHealth(jobs, byMac, t) };
+  };
+  const healthUser = { preHandler: [ctx.auth.requireUser, ctx.modules.require('cpe_health')] };
+
+  app.get('/api/cpe-health', healthUser, async (req) => {
+    if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
+    return cpeHealth(req);
+  });
+
+  app.get('/api/cpe-health.csv', { preHandler: [ctx.auth.requireUser, ctx.modules.require('cpe_health'), ctx.modules.require('csv_export')] }, async (req, reply) => {
+    if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
+    const h = await cpeHealth(req);
+    const label: Record<string, string> = { offline: 'offline', not_in_uisp: 'non trovata in UISP', pending: 'da accettare', weak_signal: 'segnale debole', signal_drop: 'segnale calato', ethernet: 'porta LAN', low_capacity: 'capacità bassa', firmware: 'firmware' };
+    const rows = h.cpes.map((c) => [
+      c.createdAt.slice(0, 10), c.deviceName, c.model, c.mac, c.ssid, c.installer, c.now?.status ?? '', c.acceptanceSignal ?? '', c.now?.signal ?? '', c.signalDelta ?? '',
+      c.now?.ethMbps ? `${c.now.ethMbps}${c.now.ethHalfDuplex ? ' half' : ''}` : '', c.now?.firmware ?? '', c.now?.apName ?? '', c.issues.map((i) => label[i] ?? i).join(', '),
+    ]);
+    recordEvent(db, req.user!.id, 'cpe_health.export', `${rows.length} CPE`, '');
+    reply.header('Content-Type', 'text/csv; charset=utf-8').header('Content-Disposition', `attachment; filename="salute-cpe-${h.generatedAt.slice(0, 10)}.csv"`);
+    return '\uFEFF' + toCsv([['Installata il', 'Cliente', 'Modello', 'MAC', 'SSID', 'Installatore', 'Stato', 'Segnale al collaudo', 'Segnale ora', 'Differenza dB', 'Porta LAN', 'Firmware', 'AP', 'Problemi'], ...rows]);
   });
 
   // ---- Admin actions ------------------------------------------------------------------------
@@ -173,7 +216,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   /** What changed on the CPE compared with the CDA Net configuration (latest UISP backup). */
-  app.get('/api/admin/provisioning/jobs/:id/uisp/drift', admin, async (req) => {
+  app.get('/api/admin/provisioning/jobs/:id/uisp/drift', mod('config_drift', admin), async (req) => {
     const job = loadJob(req);
     if (job.status !== 'success') throw new HttpError(409, 'job_not_completed');
     const full = db.prepare('SELECT model, mac, serial, ssid, pppoe_user, template_name, latitude, longitude FROM provisioning_jobs WHERE id = ?').get(job.id) as {

@@ -4,7 +4,7 @@ import type { AppContext } from '../context.ts';
 
 /** Installation statistics for the management: per month and per installer. */
 export function statsRoutes(app: FastifyInstance, ctx: AppContext) {
-  const admin = { preHandler: ctx.auth.requireAdmin };
+  const admin = { preHandler: [ctx.auth.requireAdmin, ctx.modules.require('stats')] };
 
   app.get('/api/admin/stats', admin, async (req) => {
     const { months } = z.object({ months: z.coerce.number().int().min(1).max(36).default(6) }).parse(req.query);

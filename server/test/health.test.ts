@@ -2,71 +2,99 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { buildApp } from '../src/app.ts';
 import { openDatabase } from '../src/db.ts';
-import { firmwareIs, networkHealth } from '../src/domain/health.ts';
+import { firmwareIs, installedHealth, type InstalledJob } from '../src/domain/health.ts';
 import { ethSpeed, normalizeDevice } from '../src/services/uisp.ts';
 import { fakeUisp } from './fake-uisp.ts';
-import { ADMIN, testConfig } from './helpers.ts';
+import { ADMIN, SAMPLE_TEMPLATE, testConfig } from './helpers.ts';
 
-const T = { signalGood: -65, signalMin: -75, ethMinMbps: 100, capacityMinMbps: 100, targetFirmware: '8.7.4' };
-const sta = (id: string, overview: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
+const T = { signalGood: -65, signalMin: -75, ethMinMbps: 100, capacityMinMbps: 100, targetFirmware: '8.7.4', signalDropDb: 6 };
+const job = (mac: string, acceptanceSignal: number | null = null): InstalledJob => ({
+  jobId: mac, createdAt: '2026-09-01T10:00:00Z', deviceName: 'CLIENTE', model: 'LiteBeam 5AC', mac, ssid: 'CDA-NET-N2-D01', installer: 'tecnico',
+  acceptanceVerdict: acceptanceSignal === null ? null : 'ok', acceptanceSignal, acceptanceDownload: null,
+});
+const dev = (mac: string, overview: Record<string, unknown>, extra: Record<string, unknown> = {}) =>
   normalizeDevice({
-    identification: { id, name: `CPE ${id}`, mac: '24:A4:3C:00:00:' + id.padStart(2, '0'), role: 'station', firmwareVersion: 'XC.qca956x.v8.7.4', authorized: true, ...extra },
+    identification: { id: mac, name: 'x', mac, role: 'station', firmwareVersion: 'XC.qca956x.v8.7.4', authorized: true, ...extra },
     overview: { status: 'active', ...overview },
     attributes: { ssid: 'CDA-NET-N2-D01', apDevice: { id: 'ap1', name: 'AP N2' } },
   });
 
-describe('Network health (NOC)', () => {
+describe('Salute CPE installate', () => {
   it('parses LAN speed and firmware', () => {
     assert.deepEqual(ethSpeed({ availableSpeed: '1000-full' }), { ethMbps: 1000, ethHalfDuplex: false });
     assert.deepEqual(ethSpeed({ availableSpeed: '10-half' }), { ethMbps: 10, ethHalfDuplex: true });
     assert.deepEqual(ethSpeed(undefined), { ethMbps: null, ethHalfDuplex: false });
     assert.ok(firmwareIs('XC.qca956x.v8.7.4.45112.210415.1103', '8.7.4'));
     assert.ok(!firmwareIs('XC.qca956x.v8.7.11', '8.7.4'));
-    assert.ok(firmwareIs('8.7.4', '8.7.4'));
   });
 
-  it('classifies CPEs and summarises each AP sector', () => {
-    const ap = normalizeDevice({ identification: { id: 'ap1', name: 'AP N2', role: 'ap', authorized: true }, overview: { status: 'active', stationsCount: 5 }, attributes: { ssid: 'CDA-NET-N2-D01' } });
-    const devs = [
-      ap,
-      sta('1', { signal: -60, mainInterfaceSpeed: { availableSpeed: '1000-full' }, downlinkCapacity: 300e6 }),
-      sta('2', { signal: -79 }),
-      sta('3', { status: 'disconnected', signal: -90, lastSeen: '2026-10-08T10:00:00Z' }),
-      sta('4', { signal: -62, mainInterfaceSpeed: { availableSpeed: '100-half' } }),
-      sta('5', { signal: -61 }, { firmwareVersion: 'XC.v8.7.11', authorized: false }),
+  it('compares the current state with the acceptance test', () => {
+    const devices = [
+      dev('AA:00:00:00:00:01', { signal: -60, mainInterfaceSpeed: { availableSpeed: '1000-full' }, downlinkCapacity: 300e6 }),
+      dev('AA:00:00:00:00:02', { signal: -68 }), // was -58 at acceptance: dropped 10 dB
+      dev('AA:00:00:00:00:03', { status: 'disconnected', signal: -90 }),
+      dev('AA:00:00:00:00:04', { signal: -62, mainInterfaceSpeed: { availableSpeed: '100-half' } }),
     ];
-    const h = networkHealth(devs, T);
+    const byMac = new Map(devices.map((d) => [d.mac!, d]));
+    const h = installedHealth([job('AA:00:00:00:00:01', -61), job('AA:00:00:00:00:02', -58), job('AA:00:00:00:00:03'), job('AA:00:00:00:00:04'), job('AA:00:00:00:00:05')], byMac, T);
     assert.equal(h.totals.cpes, 5);
     assert.equal(h.totals.ok, 1);
+    assert.equal(h.totals.signal_drop, 1);
+    assert.equal(h.totals.not_in_uisp, 1);
     assert.equal(h.totals.offline, 1);
-    assert.equal(h.totals.weak_signal, 1, 'offline CPEs are not also counted as weak');
     assert.equal(h.totals.ethernet, 1);
-    assert.equal(h.totals.pending, 1);
-    assert.equal(h.totals.firmware, 1);
-    assert.equal(h.cpes[0]!.id, '3', 'offline first');
-    assert.deepEqual(h.cpes.find((c) => c.id === '5')!.issues.sort(), ['firmware', 'pending']);
-    assert.equal(h.aps[0]!.stations, 5);
-    assert.equal(h.aps[0]!.offline, 1);
-    assert.equal(h.aps[0]!.weak, 1);
-    assert.equal(h.aps[0]!.avgSignal, -65); // (-60 -79 -62 -61) / 4 = -65.5
+    assert.equal(h.cpes[0]!.mac, 'AA:00:00:00:00:03', 'offline first');
+    const dropped = h.cpes.find((c) => c.mac === 'AA:00:00:00:00:02')!;
+    assert.equal(dropped.signalDelta, -10);
+    assert.deepEqual(dropped.issues, ['signal_drop']);
+    assert.equal(h.cpes.find((c) => c.mac === 'AA:00:00:00:00:01')!.signalDelta, 1);
   });
 
-  it('serves the page data and the CSV to admins only', async () => {
+  it('module off by default; installers see only their CPEs, without PPPoE data', async () => {
     const fake = fakeUisp();
     const { app } = await buildApp(testConfig(), 'test', { db: openDatabase(':memory:'), logger: false, uisp: fake.uisp });
-    const tok = (await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: ADMIN.username, password: ADMIN.password } })).json().token;
-    const H = { authorization: `Bearer ${tok}` };
-    const h = (await app.inject({ method: 'GET', url: '/api/admin/network/health', headers: H })).json();
-    assert.equal(h.totals.cpes, 1);
-    assert.deepEqual(h.cpes[0].issues.sort(), ['ethernet', 'pending']); // fake station: 10-half, not yet accepted
-    assert.equal(h.cpes[0].dlCapacityMbps, 250);
-    assert.ok(h.aps.length >= 2);
-    const csv = await app.inject({ method: 'GET', url: '/api/admin/network/health.csv', headers: H });
-    assert.match(csv.body, /^﻿CPE;MAC;Modello/);
-    assert.match(csv.body, /ROSSI MARIO;AA:BB:CC:DD:EE:FF;.*10 half.*porta LAN/);
-    await app.inject({ method: 'POST', url: '/api/admin/users', headers: H, payload: { username: 'tecnico', password: 'Installer-Pass-123' } });
-    const it2 = (await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'tecnico', password: 'Installer-Pass-123' } })).json().token;
-    assert.equal((await app.inject({ method: 'GET', url: '/api/admin/network/health', headers: { authorization: `Bearer ${it2}` } })).statusCode, 403);
+    const login = async (u: string, p: string) => (await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: u, password: p } })).json().token as string;
+    const admin = await login(ADMIN.username, ADMIN.password);
+    const H = (t: string, extra: Record<string, string> = {}) => ({ authorization: `Bearer ${t}`, ...extra });
+    assert.equal((await app.inject({ method: 'GET', url: '/api/cpe-health', headers: H(admin) })).json().error, 'module_disabled');
+    assert.equal((await app.inject({ method: 'GET', url: '/api/meta', headers: H(admin) })).json().modules.cpe_health, false);
+
+    // enable the module (Funzionalità)
+    const mods = (await app.inject({ method: 'PUT', url: '/api/admin/modules', headers: H(admin), payload: { cpe_health: true, nonexistent: true } })).json();
+    assert.equal(mods.find((m: { key: string }) => m.key === 'cpe_health').enabled, true);
+
+    await app.inject({ method: 'POST', url: '/api/admin/users', headers: H(admin), payload: { username: 'tecnico', password: 'Installer-Pass-123' } });
+    await app.inject({ method: 'POST', url: '/api/admin/users', headers: H(admin), payload: { username: 'altro', password: 'Installer-Pass-456' } });
+    await app.inject({ method: 'POST', url: '/api/admin/profiles/LiteBeam%205AC/templates', headers: H(admin), payload: { name: 'Standard', template: SAMPLE_TEMPLATE, boardMatch: 'board\\.name=LiteBeam 5AC' } });
+    await app.inject({ method: 'PUT', url: '/api/admin/wireless-networks/CDA-NET-N2-D01', headers: H(admin), payload: { wpa2Password: 'test-psk-12345' } });
+    const tec = await login('tecnico', 'Installer-Pass-123');
+    const altro = await login('altro', 'Installer-Pass-456');
+    const install = async (tok: string, mac: string) => {
+      const id = (
+        await app.inject({
+          method: 'POST', url: '/api/provisioning/jobs', headers: H(tok, { 'x-cda-client': 'android/1.11.0' }),
+          payload: { model: 'LiteBeam 5AC', mac, serial: 'S', ssid: 'CDA-NET-N2-D01', pppoeUser: 'rossi.mario@cda-net.it', pppoePassword: 'Secret-Pppoe' },
+        })
+      ).json().jobId;
+      await app.inject({ method: 'POST', url: `/api/provisioning/jobs/${id}/result`, headers: H(tok), payload: { result: 'success', stages: [], detected: {} } });
+      return id;
+    };
+    await install(tec, 'AA:BB:CC:DD:EE:FF'); // the fake UISP station
+    await install(altro, '11:22:33:44:55:66');
+
+    const mine = (await app.inject({ method: 'GET', url: '/api/cpe-health', headers: H(tec) })).json();
+    assert.equal(mine.cpes.length, 1);
+    assert.equal(mine.cpes[0].mac, 'AA:BB:CC:DD:EE:FF');
+    assert.equal(mine.cpes[0].now.signal, -58);
+    assert.deepEqual(mine.cpes[0].issues.sort(), ['ethernet', 'pending']);
+    assert.ok(!JSON.stringify(mine).match(/rossi\.mario|Secret-Pppoe|pppoe/i), 'no PPPoE data');
+    const all = (await app.inject({ method: 'GET', url: '/api/cpe-health', headers: H(admin) })).json();
+    assert.equal(all.cpes.length, 2);
+    assert.equal(all.cpes.find((c: { mac: string }) => c.mac === '11:22:33:44:55:66').issues[0], 'not_in_uisp');
+    assert.equal((await app.inject({ method: 'GET', url: '/api/cpe-health?installer=altro', headers: H(admin) })).json().cpes.length, 1);
+    const csv = await app.inject({ method: 'GET', url: '/api/cpe-health.csv', headers: H(tec) });
+    assert.match(csv.body, /^﻿Installata il;Cliente/);
+    assert.equal(csv.body.trim().split('\r\n').length, 2);
     await app.close();
   });
 });

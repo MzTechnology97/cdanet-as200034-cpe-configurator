@@ -69,7 +69,7 @@ export function provisioningRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   /** Same filters as the history page, as CSV for Excel (Italian locale: ';', UTF-8 BOM). */
-  app.get('/api/provisioning/jobs.csv', user, async (req, reply) => {
+  app.get('/api/provisioning/jobs.csv', { preHandler: [ctx.auth.requireUser, ctx.modules.require('csv_export')] }, async (req, reply) => {
     const q = listQuery.extend({ limit: z.coerce.number().int().min(1).max(20000).default(5000) }).parse(req.query);
     const rows = ctx.provisioning.listJobs(req.user!, { ...q, ...range(q) }) as Array<Record<string, unknown>>;
     const header = ['Data', 'Esito', 'Cliente', 'Utente PPPoE', 'Modello', 'Template', 'MAC', 'Seriale', 'SSID', 'Installatore', 'Collaudo', 'Foto', 'Site UISP', 'Accettata in UISP', 'Latitudine', 'Longitudine', 'Sostituisce job', 'Errore'];

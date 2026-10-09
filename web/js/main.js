@@ -1,4 +1,5 @@
 import { api, session } from './api.js';
+import { isOn, loadModules, modulesLoaded, resetModules } from './modules.js';
 import { h, mount, toast } from './dom.js';
 import { accountView } from './views/account.js';
 import { connectorsView } from './views/connectors.js';
@@ -7,6 +8,7 @@ import { dashboardView } from './views/dashboard.js';
 import { eventsView } from './views/events.js';
 import { healthView } from './views/health.js';
 import { jobsView } from './views/jobs.js';
+import { modulesView } from './views/modules-view.js';
 import { loginView } from './views/login.js';
 import { myTemplatesView } from './views/mytemplates.js';
 import { profilesView } from './views/profiles.js';
@@ -20,17 +22,18 @@ const ROUTES = [
   { group: 'Operatività' },
   { id: 'dashboard', label: 'Panoramica', view: dashboardView, admin: true },
   { id: 'jobs', label: 'Storico provisioning', view: jobsView },
-  { id: 'health', label: 'Salute rete', view: healthView, admin: true },
-  { id: 'stats', label: 'Statistiche', view: statsView, admin: true },
+  { id: 'health', label: 'Salute CPE installate', installerLabel: 'Le mie CPE', view: healthView, module: 'cpe_health' },
+  { id: 'stats', label: 'Statistiche', view: statsView, admin: true, module: 'stats' },
   { id: 'mytemplates', label: 'Template disponibili', view: myTemplatesView, installer: true },
-  { id: 'coverage', label: 'Copertura', view: coverageView },
-  { id: 'tools', label: 'Strumenti di rete', view: toolsView },
-  { id: 'routeros', label: 'MikroTik · RouterOS', view: routerosView },
+  { id: 'coverage', label: 'Copertura', view: coverageView, module: 'coverage' },
+  { id: 'tools', label: 'Strumenti di rete', view: toolsView, module: 'network_tools' },
+  { id: 'routeros', label: 'MikroTik · RouterOS', view: routerosView, module: 'routeros' },
   { group: 'Amministrazione', admin: true },
   { id: 'users', label: 'Account', view: usersView, admin: true },
   { id: 'wireless', label: 'Reti Wi-Fi (WPA2)', view: wirelessView, admin: true },
   { id: 'profiles', label: 'Profili airOS', view: profilesView, admin: true },
   { id: 'connectors', label: 'Connettori', view: connectorsView, admin: true },
+  { id: 'modules', label: 'Funzionalità', view: (ctx) => modulesView({ ...ctx, onChange: () => renderChrome(session.get()?.user) }), admin: true },
   { id: 'events', label: 'Registro attività', view: eventsView, admin: true },
   { group: 'Profilo' },
   { id: 'account', label: 'Il mio account', view: accountView },
@@ -49,6 +52,7 @@ function setMenu(open) {
 }
 
 function allowed(r, user) {
+  if (r.module && !isOn(r.module)) return false;
   if (r.installer) return user?.role !== 'admin'; // admins manage templates in Profili airOS
   return !r.admin || user?.role === 'admin';
 }
@@ -68,7 +72,7 @@ function renderChrome(user) {
   mount(
     sidebar,
     ROUTES.filter((r) => allowed(r, user)).map((r) =>
-      r.group ? h('div', { class: 'group' }, r.group) : h('a', { href: `#/${r.id}`, 'data-route': r.id }, r.label),
+      r.group ? h('div', { class: 'group' }, r.group) : h('a', { href: `#/${r.id}`, 'data-route': r.id }, user.role !== 'admin' && r.installerLabel ? r.installerLabel : r.label),
     ),
   );
   mount(
@@ -80,6 +84,7 @@ function renderChrome(user) {
 
 function logout() {
   session.clear();
+  resetModules();
   location.hash = '';
   route();
 }
@@ -91,6 +96,10 @@ async function route() {
   if (!s?.token) {
     mount(viewEl, loginView(onLogin, onTotp));
     return;
+  }
+  if (!modulesLoaded()) {
+    await loadModules();
+    renderChrome(s.user);
   }
   // #/route?key=value — the query part is handed to the view (e.g. #/profiles?user=5).
   const [path, query = ''] = location.hash.replace(/^#\//, '').split('?');
