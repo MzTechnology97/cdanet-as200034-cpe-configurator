@@ -1,25 +1,28 @@
 # Pagine NOC della console
 
-## Salute rete (admin)
+## Salute CPE installate (modulo, spento di default)
 
-Elenca le CPE che richiedono attenzione, partendo dai dispositivi UISP (cache di un minuto: UISP non viene sovraccaricato). Non mostra la mappa della rete.
+Riguarda **solo le CPE installate con l'app**: per ogni MAC si considera l'ultimo provisioning riuscito non seguito da una sostituzione. Il resto della rete UISP non viene mostrato.
+
+- **Installatori**: menu *Le mie CPE* (web e app), solo le CPE installate da loro.
+- **Admin**: menu *Salute CPE installate*, tutte; filtrabili per installatore (`?installer=`).
+
+Per ogni CPE si confronta lo stato attuale in UISP con il **collaudo**:
 
 | Problema | Regola |
 |---|---|
-| Offline | stato UISP `disconnected`, `inactive` o `unknown` (con l'ultimo contatto) |
-| Segnale debole | sotto la soglia minima (−75 dBm), solo per le CPE online |
-| Porta LAN | velocità sotto 100 Mbit/s oppure half duplex (`mainInterfaceSpeed` UISP): quasi sempre cavo o connettore |
+| Offline | stato UISP `disconnected`, `inactive` o `unknown` |
+| Non trovata in UISP | nessun dispositivo UISP con quel MAC |
+| Segnale debole | sotto −75 dBm (solo CPE online) |
+| Segnale calato | almeno 6 dB in meno rispetto al collaudo (vegetazione, antenna spostata) |
+| Porta LAN | sotto 100 Mbit/s oppure half duplex: quasi sempre cavo o connettore |
 | Capacità bassa | capacità airMAX in download sotto 100 Mbit/s |
-| Da accettare | CPE ancora in attesa in UISP |
-| Firmware | diverso dallo standard CDA Net (8.7.4) |
+| Da accettare | ancora in attesa in UISP |
+| Firmware | diverso dallo standard CDA Net |
 
-L'ordine mette in cima i casi più gravi (offline, poi segnale debole e porta LAN). Per ogni CPE c'è il link allo storico, filtrato sul MAC.
+Dati esposti: nome del cliente (già visibile nello storico), modello, MAC, SSID, AP, segnale, porta LAN, firmware, data di installazione. **Mai** utente o password PPPoE, chiavi Wi-Fi o configurazione.
 
-La tabella **Settori (AP)** mostra per ogni AP: stato, CPE agganciate, segnale medio delle CPE online, CPE deboli e offline. Utile per capire se un problema riguarda una singola CPE o tutto il settore.
-
-**Esporta CSV** produce lo stesso elenco per Excel.
-
-Le soglie sono quelle degli strumenti di campo (`FIELD_THRESHOLDS` nel server).
+Dall'elenco: link allo storico della CPE e, nell'app, lo storico del segnale degli ultimi 7 giorni (se il modulo Storico segnale è attivo). Export CSV con il modulo Export CSV attivo.
 
 ## Statistiche (admin)
 
