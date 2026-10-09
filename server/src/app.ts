@@ -31,6 +31,7 @@ import { createNotifier, type Notifier } from './services/notify.ts';
 import { createTelegram } from './services/telegram.ts';
 import type { Uisp } from './services/uisp.ts';
 import { createConnectors } from './services/connectors.ts';
+import { createCrmSettings } from './services/crm.ts';
 import { connectorRoutes } from './routes/connectors.ts';
 import { uispRoutes } from './routes/uisp.ts';
 import { mapRoutes } from './routes/map.ts';
@@ -100,6 +101,7 @@ export async function buildApp(
     uisp: opts.uisp !== undefined ? opts.uisp : uispCfg ? connectors.build(uispCfg) : null,
     uispSettings: { autoBackup: uispCfg?.autoBackup ?? cfg.uispAutoBackup, coverageMaxKm: uispCfg?.coverageMaxKm ?? cfg.coverageMaxKm },
     connectors,
+    crm: createCrmSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
     geocoder: createGeocoder({ ...cfg.geocoder, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
     telegram,
     modules,

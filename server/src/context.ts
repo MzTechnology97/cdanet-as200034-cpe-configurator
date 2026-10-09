@@ -7,6 +7,7 @@ import type { Templates } from './services/templates.ts';
 import type { Geocoder } from './services/geocode.ts';
 import type { Uisp } from './services/uisp.ts';
 import type { Connectors } from './services/connectors.ts';
+import type { CrmSettings } from './services/crm.ts';
 import type { Modules } from './services/modules.ts';
 import type { Oui } from './services/oui.ts';
 import type { Outages } from './services/outages.ts';
@@ -26,6 +27,8 @@ export interface AppContext {
   uisp: Uisp | null;
   uispSettings: { autoBackup: boolean; coverageMaxKm: number };
   connectors: Connectors;
+  /** CRM connector (ISP Billing): settings and client, configured from Connettori. */
+  crm: CrmSettings;
   geocoder: Geocoder;
   telegram: Telegram;
   modules: Modules;
