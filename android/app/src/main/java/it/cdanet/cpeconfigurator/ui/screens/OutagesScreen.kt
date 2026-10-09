@@ -19,7 +19,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -117,10 +116,8 @@ fun OutagesScreen(c: AppContainer) {
             },
             style = MaterialTheme.typography.bodySmall,
         )
-        val mapJson by produceState<String?>(null, d) {
-            val json = runCatching { c.api.outagesMapJson() }.getOrNull()
-            value = json
-        }
+        var mapJson by remember(d) { mutableStateOf<String?>(null) }
+        LaunchedEffect(d) { mapJson = runCatching { c.api.outagesMapJson() }.getOrNull() }
         SectionCard("Mappa") {
             EmbeddedMap(c, mapJson?.let { "window.cdaOutages($it)" }, Modifier.fillMaxWidth().height(360.dp))
             Text(
