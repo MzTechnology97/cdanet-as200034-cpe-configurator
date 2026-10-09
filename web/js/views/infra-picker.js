@@ -93,6 +93,13 @@ export function assignmentsCard() {
       return;
     }
     const names = itemNames(inf, data.zones);
+    const clients = h('input', { type: 'checkbox' });
+    clients.checked = data.installerClients;
+    clients.onchange = () =>
+      api('/api/admin/assignments/settings', { method: 'PUT', body: { installerClients: clients.checked } }).then(
+        () => toast(clients.checked ? 'Numero clienti visibile agli installatori' : 'Numero clienti nascosto agli installatori'),
+        (e) => toast(e.message, 'bad'),
+      );
     const edit = (u) => {
       const chosen = new Set(u.items.map((i) => i.key));
       for (const it of u.items) if (!names.has(it.key)) names.set(it.key, it.name);
@@ -140,6 +147,7 @@ export function assignmentsCard() {
               data.users,
             )
           : h('p', { class: 'small muted' }, 'Nessun installatore.'),
+        h('label', { class: 'check' }, clients, 'Mostra agli installatori il numero di clienti (CPE) dei loro POP/AP (guasti, mappe, copertura)'),
         editor,
       ),
     );

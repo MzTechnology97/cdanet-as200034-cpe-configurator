@@ -10,9 +10,10 @@
 #   sudo cdanet-cpe backup                  database backup
 #   sudo cdanet-cpe version                 running version
 #   sudo cdanet-cpe geocoder [logs|reset]   local OpenStreetMap (Nominatim) status
+#   sudo cdanet-cpe map [update|remove]     console maps (Protomaps basemap)
 set -eu
 DEPLOY_DIR="${DEPLOY_DIR:-/opt/cdanet-cpe}"
-case "${1:-}" in ""|-h|--help|help) sed -n '2,12p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+case "${1:-}" in ""|-h|--help|help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
 [ "$(id -u)" -eq 0 ] || { echo "Usa: sudo cdanet-cpe $*" >&2; exit 1; }
 dc() { docker compose -f "$DEPLOY_DIR/docker-compose.yml" --project-directory "$DEPLOY_DIR" "$@"; }
 case "${1:-}" in
@@ -51,6 +52,19 @@ case "${1:-}" in
           echo "Import in corso o servizio non ancora pronto. Ultime righe del log:"
           dc logs --tail=15 nominatim
         fi
+        ;;
+    esac
+    ;;
+  map)
+    case "${2:-status}" in
+      update) dc --profile maps run --rm maptiles ;;
+      remove)
+        dc --profile maps run --rm --entrypoint rm maptiles -f /data/maps/basemap.pmtiles
+        echo "Mappa rimossa: la console usa le mappe pubbliche di OpenStreetMap."
+        ;;
+      *)
+        grep -E '^MAP_(MODE|REGION|BBOX)=' "$DEPLOY_DIR/.env" || echo "Mappe non configurate"
+        dc exec -T app sh -c 'ls -lh /data/maps/basemap.pmtiles 2>/dev/null || echo "Mappa non ancora scaricata: sudo cdanet-cpe map update"'
         ;;
     esac
     ;;

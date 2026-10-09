@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { HttpError, type AuthUser } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
+import { approxPoint, roughDistance } from '../domain/approx.ts';
 import { isValidLatLon } from '../domain/geo.ts';
 import { KIND_LABEL, OUTAGE_SOURCE } from '../services/outages.ts';
 
@@ -18,6 +19,15 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
    * to them; the potentially affected POPs/APs only for the assigned ones.
    */
   const keysFor = (u: AuthUser) => ctx.outages.keysFor(u.id, u.role);
+  /** Installers: distances from POPs/APs rounded (no way back to the real position). */
+  const shown = <T extends { impact: Array<{ distanceM: number; stations: number | null }>; zones: Array<{ distanceM?: number }> }>(u: AuthUser, list: T[]): T[] =>
+    u.role === 'admin'
+      ? list
+      : list.map((o) => ({
+          ...o,
+          impact: o.impact.map((i) => ({ ...i, distanceM: roughDistance(i.distanceM), stations: ctx.outages.config().installerClients ? i.stations : null })),
+          zones: o.zones.map((z) => (z.distanceM != null ? { ...z, distanceM: roughDistance(z.distanceM) } : z)),
+        }));
 
   const view = (u: AuthUser) => ({
     generatedAt: ctx.outages.status()?.at ?? null,
@@ -25,12 +35,12 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
     source: 'e-distribuzione',
     labels: KIND_LABEL,
     scope: u.role === 'admin' ? { all: true, assigned: [], zones: [] } : { all: false, assigned: ctx.outages.assignments(u.id), zones: ctx.outages.manualZones(u.id) },
-    active: ctx.outages.active(keysFor(u)),
+    active: shown(u, ctx.outages.active(keysFor(u))),
   });
 
   app.get('/api/outages', user, async (req) => {
     const { recent } = z.object({ recent: z.coerce.boolean().default(false) }).parse(req.query);
-    return { ...view(req.user!), ...(recent ? { recent: ctx.outages.recent(48, keysFor(req.user!)) } : {}) };
+    return { ...view(req.user!), ...(recent ? { recent: shown(req.user!, ctx.outages.recent(48, keysFor(req.user!))) } : {}) };
   });
 
   // ---- Personal areas of interest (every user with the module) -------------------------------
@@ -122,6 +132,32 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
     return telegramState(req.user!.id);
   });
 
+  /**
+   * Map data. Admins: outages, every zone and the monitored POPs/APs with their real position.
+   * Installers: outages they may see, their zones, and only the assigned POPs/APs as an approximate area.
+   */
+  app.get('/api/outages/map', user, async (req) => {
+    const u = req.user!;
+    const keys = keysFor(u);
+    const active = ctx.outages.active(keys);
+    const hit = new Set(active.flatMap((o) => o.impact.map((i) => `${i.type}:${i.id}`)));
+    const inf = await ctx.outages.infra();
+    const mineAp = (a: { id: string; siteId: string | null }) => !keys || keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`));
+    const place = (key: string, lat: number, lon: number) => (keys ? { approx: approxPoint(lat, lon, key, ctx.cfg.jwtSecret) } : { lat, lon });
+    const clients = (n: number | null) => (keys && !ctx.outages.config().installerClients ? null : n);
+    const zones = keys
+      ? [...ctx.outages.manualZones(u.id).map((z) => ({ ...z, personal: true })), ...ctx.outages.manualZones('shared').filter((z) => keys.has(z.id)).map((z) => ({ ...z, personal: false }))]
+      : ctx.outages.manualZones('all').map((z) => ({ ...z, personal: z.ownerId != null }));
+    return {
+      outages: active.map((o) => ({ id: o.id, kind: o.kind, label: KIND_LABEL[o.kind], place: o.place, province: o.province, customers: o.customers, expectedRestore: o.expectedRestore, lat: o.lat, lon: o.lon, impacted: o.impact.length > 0 })),
+      zones: zones.map((z) => ({ id: z.id, name: z.name, lat: z.lat, lon: z.lon, radiusKm: z.radiusKm, personal: z.personal })),
+      infra: [
+        ...inf.pops.filter((p) => !keys || keys.has(`pop:${p.id}`)).map((p) => ({ type: 'pop' as const, id: p.id, name: p.name, stations: clients(p.stations), impacted: hit.has(`pop:${p.id}`), ...place(`pop:${p.id}`, p.lat, p.lon) })),
+        ...inf.aps.filter(mineAp).map((a) => ({ type: 'ap' as const, id: a.id, name: a.name, stations: clients(a.stations), impacted: hit.has(`ap:${a.id}`), ...place(`ap:${a.id}`, a.lat, a.lon) })),
+      ],
+    };
+  });
+
   /** Read-only token for the app's background notifications (outage feed only). */
   app.post('/api/outages/device-token', user, async (req) => {
     const u = db.prepare('SELECT id, username, token_version FROM users WHERE id = ?').get(req.user!.id) as { id: number; username: string; token_version: number };
@@ -135,7 +171,7 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!ctx.modules.stateFor(u.id).power_outages) throw new HttpError(404, 'module_disabled');
     return {
       generatedAt: ctx.outages.status()?.at ?? null,
-      active: ctx.outages.active(keysFor(u)).map((o) => ({
+      active: shown(u, ctx.outages.active(keysFor(u))).map((o) => ({
         id: o.id,
         kind: o.kind,
         label: KIND_LABEL[o.kind],
@@ -203,12 +239,21 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
     const all = ctx.outages.allAssignments();
     const users = db.prepare("SELECT id, username, role, active FROM users WHERE role = 'installer' ORDER BY username").all() as Array<{ id: number; username: string; role: string; active: number }>;
     return {
+      installerClients: ctx.outages.config().installerClients,
       zones: ctx.outages.manualZones('shared'),
       users: users.map((u) => {
         const m = ctx.modules.stateFor(u.id);
         return { id: u.id, username: u.username, active: !!u.active, modules: { power_outages: m.power_outages, coverage: m.coverage }, items: all.get(u.id) ?? [] };
       }),
     };
+  });
+
+  /** What installers may see of the POPs/APs (independent of the Guasti Enel module). */
+  app.put('/api/admin/assignments/settings', adminOnly, async (req) => {
+    const b = z.object({ installerClients: z.boolean() }).strict().parse(req.body);
+    ctx.outages.setConfig(b, req.user!.id);
+    recordEvent(db, req.user!.id, 'assignments.settings', 'POP/AP installatori', b.installerClients ? 'numero clienti visibile' : 'numero clienti nascosto');
+    return b;
   });
 
   app.put('/api/admin/assignments/:userId', adminOnly, async (req) => {
@@ -224,7 +269,13 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.put('/api/admin/outages/config', admin, async (req) => {
     const b = z
-      .object({ apZones: z.boolean().optional(), apRadiusKm: z.number().min(0.5).max(30).optional(), includePlanned: z.boolean().optional(), impactRadiusKm: z.number().min(0.1).max(5).optional() })
+      .object({
+        apZones: z.boolean().optional(),
+        apRadiusKm: z.number().min(0.5).max(30).optional(),
+        includePlanned: z.boolean().optional(),
+        impactRadiusKm: z.number().min(0.1).max(5).optional(),
+        installerClients: z.boolean().optional(),
+      })
       .strict()
       .parse(req.body);
     const c = ctx.outages.setConfig(b, req.user!.id);

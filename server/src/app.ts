@@ -29,12 +29,15 @@ import type { Uisp } from './services/uisp.ts';
 import { createConnectors } from './services/connectors.ts';
 import { connectorRoutes } from './routes/connectors.ts';
 import { uispRoutes } from './routes/uisp.ts';
+import { mapRoutes } from './routes/map.ts';
 
 const CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self'",
-  "img-src 'self' data:",
+  // OpenStreetMap tiles: map fallback when the local Protomaps basemap is not installed yet.
+  "img-src 'self' data: https://tile.openstreetmap.org",
+  "worker-src 'self' blob:",
   "connect-src 'self'",
   "object-src 'none'",
   "base-uri 'none'",
@@ -157,6 +160,7 @@ export async function buildApp(
   replaceRoutes(app, ctx);
   statsRoutes(app, ctx);
   outageRoutes(app, ctx);
+  mapRoutes(app, ctx);
   adminRoutes(app, ctx);
   toolRoutes(app, ctx);
   uispRoutes(app, ctx);

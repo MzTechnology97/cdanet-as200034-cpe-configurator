@@ -1,5 +1,6 @@
 import { api } from '../api.js';
 import { badge, busy, card, field, fmtDate, h, mount, pageHead, stat, table, toast } from '../dom.js';
+import { createMap, fit, legend, MAP_COLORS as C, popup } from '../map.js';
 import { itemLabel, itemNames, picker } from './infra-picker.js';
 
 const KIND = { guasto_mt: ['Guasto MT', 'bad'], guasto_bt: ['Guasto BT', 'warn'], lavoro: ['Lavoro programmato', ''], altro: ['Interruzione', 'warn'] };
@@ -101,6 +102,55 @@ const zonesTable = (zones, del, owner = false) =>
     zones,
   );
 
+/** Map of outages, zones and POPs/APs (installers: only assigned POPs/APs, as an approximate area). */
+function outagesMap(admin) {
+  const el = h('div', { class: 'map' });
+  const note = h('p', { class: 'small muted' }, admin ? '' : 'POP e AP sono mostrati come area approssimativa.');
+  const box = card(
+    h('h2', {}, 'Mappa'),
+    el,
+    legend([
+      [C.guasto_mt, 'Guasto MT'],
+      [C.guasto_bt, 'Guasto BT'],
+      [C.lavoro, 'Lavoro programmato'],
+      [C.pop, 'POP'],
+      [C.ap, 'AP'],
+      [C.impacted, 'POP/AP potenzialmente impattato'],
+      [admin ? C.zone : C.personal, admin ? 'Zona condivisa / personale' : 'Le tue zone'],
+    ]),
+    note,
+  );
+  (async () => {
+    const map = await createMap(el);
+    if (!map) return;
+    const L = window.L;
+    const d = await api('/api/outages/map');
+    const layers = [];
+    for (const z of d.zones) {
+      layers.push(L.circle([z.lat, z.lon], { radius: z.radiusKm * 1000, color: z.personal ? C.personal : C.zone, weight: 1, dashArray: '4 4', fillOpacity: 0.04 }).bindPopup(popup(`Zona ${z.name}`, `raggio ${z.radiusKm} km`)).addTo(map));
+    }
+    for (const i of d.infra) {
+      const color = i.impacted ? C.impacted : C[i.type];
+      const title = `${i.type === 'pop' ? 'POP' : 'AP'} ${i.name}`;
+      const info = [i.stations != null ? `${i.stations} CPE` : null, i.impacted ? 'potenzialmente impattato da un guasto' : null];
+      layers.push(
+        i.approx
+          ? L.circle([i.approx.lat, i.approx.lon], { radius: i.approx.radiusM, color, weight: 1, fillOpacity: 0.12 }).bindPopup(popup(title, ...info, 'posizione approssimativa')).addTo(map)
+          : L.circleMarker([i.lat, i.lon], { radius: i.type === 'pop' ? 8 : 5, color, weight: 2, fillOpacity: 0.85 }).bindPopup(popup(title, ...info)).addTo(map),
+      );
+    }
+    for (const o of d.outages) {
+      layers.push(
+        L.circleMarker([o.lat, o.lon], { radius: 7, color: o.impacted ? C.impacted : C[o.kind], fillColor: C[o.kind], weight: o.impacted ? 3 : 1.5, fillOpacity: 0.9 })
+          .bindPopup(popup(o.label, `${o.place} (${o.province})`, `${o.customers} clienti Enel`, o.expectedRestore ? `ripristino previsto ${local(o.expectedRestore)}` : null, o.impacted ? 'POP/AP potenzialmente impattati' : null))
+          .addTo(map),
+      );
+    }
+    fit(map, layers);
+  })().catch((e) => (note.textContent = e.message));
+  return box;
+}
+
 /** Personal Telegram: the bot set by the admin writes to the user's own chat. */
 function telegramCard() {
   const box = h('div', {});
@@ -180,6 +230,7 @@ export async function outagesView({ user }) {
   const adminBox = h('div', {});
   const infraBox = h('div', {});
   const myBox = h('div', {});
+  const mapBox = outagesMap(admin);
 
   /** Admin: POPs and APs straight from UISP (names, addresses, coordinates): pick the ones to monitor. */
   async function loadInfra() {
@@ -281,6 +332,7 @@ export async function outagesView({ user }) {
           ? h('p', { class: 'small muted' }, d.lastRun ? `Ultimo controllo ${fmtDate(d.lastRun.at)}${d.lastRun.ok ? '' : ` · errore: ${d.lastRun.error}`} · ` : 'Nessun controllo ancora eseguito · ', 'fonte: mappa pubblica dei guasti di e-distribuzione, controllata ogni 10 minuti.')
           : h('p', { class: 'small muted' }, d.generatedAt ? `Aggiornato ${fmtDate(d.generatedAt)} · ogni 10 minuti` : 'In attesa del primo aggiornamento'),
       ),
+      mapBox,
       !admin && d.scope
         ? card(
             h('h2', {}, 'POP/AP assegnati a te'),

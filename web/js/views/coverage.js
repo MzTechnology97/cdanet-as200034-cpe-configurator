@@ -1,5 +1,6 @@
 import { api } from '../api.js';
 import { badge, busy, card, field, h, mount, pageHead, table } from '../dom.js';
+import { createMap, fit, legend, MAP_COLORS as C, popup, towards } from '../map.js';
 import { nms } from '../terms.js';
 
 /**
@@ -29,6 +30,32 @@ export function orientArrows(root) {
   for (const el of root.querySelectorAll('.arrow[data-deg]')) el.style.transform = `rotate(${Number(el.dataset.deg)}deg)`;
 }
 
+/** The checked point and the APs: real positions for admins, approximate areas plus direction for installers. */
+function coverageMap(la, lo, aps) {
+  const el = h('div', { class: 'map' });
+  const restricted = aps.some((a) => a.approx);
+  const note = h('p', { class: 'small muted' }, restricted ? 'Gli AP sono mostrati come area approssimativa; la linea indica la direzione di puntamento.' : '');
+  (async () => {
+    const map = await createMap(el, { center: [la, lo], zoom: 13 });
+    if (!map) return;
+    const L = window.L;
+    const layers = [L.circleMarker([la, lo], { radius: 7, color: C.point, weight: 2, fillOpacity: 0.9 }).bindPopup(popup('Punto verificato', `${la.toFixed(5)}, ${lo.toFixed(5)}`)).addTo(map)];
+    for (const a of aps) {
+      const info = [a.ssid, `${km(a.distanceM)} · ${a.bearing}° ${a.direction}`, a.stations != null ? `${a.stations} client` : null];
+      const color = a.status === 'active' ? C.ap : C.impacted;
+      if (a.approx) {
+        layers.push(L.circle([a.approx.lat, a.approx.lon], { radius: a.approx.radiusM, color, weight: 1, fillOpacity: 0.1 }).bindPopup(popup(a.name, ...info, 'posizione approssimativa')).addTo(map));
+        L.polyline([[la, lo], towards(la, lo, a.bearing, Math.min(a.distanceM, 600))], { color, weight: 3 }).addTo(map);
+      } else {
+        layers.push(L.circleMarker([a.lat, a.lon], { radius: 6, color, weight: 2, fillOpacity: 0.85 }).bindPopup(popup(a.name, ...info)).addTo(map));
+        L.polyline([[la, lo], [a.lat, a.lon]], { color, weight: 2, dashArray: '6 6' }).addTo(map);
+      }
+    }
+    fit(map, layers);
+  })().catch((e) => (note.textContent = e.message));
+  return h('div', {}, el, legend([[C.point, 'Punto verificato'], [C.ap, 'AP online'], [C.impacted, 'AP non attivo']]), note);
+}
+
 export async function coverageView() {
   const out = h('div', {});
   const addr = h('input', { placeholder: 'Via Roma 12, 94100 Enna', autocomplete: 'off' });
@@ -46,7 +73,7 @@ export async function coverageView() {
           h('h2', {}, 'AP più vicini'),
           h('p', { class: 'small muted' }, `${label} · ${la.toFixed(5)}, ${lo.toFixed(5)} · `, h('a', { href: osmLink(la, lo), target: '_blank', rel: 'noopener' }, 'apri il punto su OpenStreetMap')),
           r.aps.length
-            ? apTable(r.aps)
+            ? [coverageMap(la, lo, r.aps), apTable(r.aps)]
             : h('div', { class: 'notice warn' }, r.restricted && !r.assignedCount
                 ? 'Nessun POP/AP assegnato al tuo account: chiedi all’amministratore.'
                 : nms(`Nessun AP con posizione entro ${r.maxKm} km: verifica la posizione o le coordinate degli AP in UISP.`, `Nessun AP${r.restricted ? ' tra quelli assegnati' : ''} entro ${r.maxKm} km da questo punto.`)),
