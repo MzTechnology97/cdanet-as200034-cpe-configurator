@@ -21,6 +21,7 @@ import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import it.cdanet.cpeconfigurator.core.AppContainer
@@ -39,6 +40,7 @@ fun EmbeddedMap(c: AppContainer, script: String?, modifier: Modifier = Modifier,
         Text("Caricamento mappa…", modifier.padding(14.dp))
         return
     }
+    val background = androidx.compose.material3.MaterialTheme.colorScheme.background.toArgb()
     var page by remember { mutableStateOf<WebView?>(null) }
     var loaded by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<String?>(null) }
@@ -58,6 +60,8 @@ fun EmbeddedMap(c: AppContainer, script: String?, modifier: Modifier = Modifier,
         modifier = modifier,
         factory = { ctx ->
             WebView(ctx).apply {
+                // theme color while the page loads (no white frame in dark mode)
+                setBackgroundColor(background)
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
                 // pan/zoom the map instead of scrolling the screen around it

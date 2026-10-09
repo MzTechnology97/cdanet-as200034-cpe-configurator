@@ -1,12 +1,10 @@
 <?xml version="1.0" encoding="utf-8"?>
+<!-- Dark system mode: dark window (no white flash) and a dark theme, which WebViews (maps) follow too. -->
 <resources>
-    <color name="cda_orange">#F15A2C</color>
-    <color name="launcher_background">#FFFFFF</color>
-    <color name="window_dark">#111317</color>
-    <style name="Theme.CdaNet" parent="android:Theme.Material.Light.NoActionBar">
+    <style name="Theme.CdaNet" parent="android:Theme.Material.NoActionBar">
         <item name="android:statusBarColor">@android:color/transparent</item>
         <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:windowBackground">@color/window_dark</item>
         <item name="android:colorAccent">@color/cda_orange</item>
     </style>
 </resources>
