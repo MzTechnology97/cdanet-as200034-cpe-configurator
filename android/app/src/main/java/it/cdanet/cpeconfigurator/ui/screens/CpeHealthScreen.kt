@@ -1,5 +1,16 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
+import it.cdanet.cpeconfigurator.data.CpeHealthItemDto
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.rememberScrollState
@@ -63,6 +74,7 @@ fun CpeHealthScreen(c: AppContainer, onRepoint: (() -> Unit)? = null) {
     var query by remember { mutableStateOf("") }
     var limit by remember { mutableStateOf(PAGE) }
     var open by remember { mutableStateOf<String?>(null) }
+    var history by remember { mutableStateOf<String?>(null) }
     val admin = c.session.isAdmin
 
     suspend fun load() {
@@ -75,13 +87,24 @@ fun CpeHealthScreen(c: AppContainer, onRepoint: (() -> Unit)? = null) {
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         ErrorBanner(error) { error = null }
-        BusyButton("Aggiorna", busy, Modifier.fillMaxWidth(), primary = false) { scope.launch { load() } }
-        val d = data ?: return@Column
-        SectionCard {
-            Text("${d.totals.cpes} CPE installate · ${d.totals.ok} senza problemi", fontWeight = FontWeight.SemiBold)
-            if (d.totals.offline > 0) Text("${d.totals.offline} offline", color = BadRed)
-            if (d.totals.signalDrop > 0) Text("${d.totals.signalDrop} con segnale calato dal collaudo", color = WarnAmber)
-            if (d.totals.ethernet > 0) Text("${d.totals.ethernet} con porta LAN lenta o half duplex (cavo)", color = WarnAmber)
+        val d = data
+        if (d == null) {
+            BusyButton("Aggiorna", busy, Modifier.fillMaxWidth(), primary = false) { scope.launch { load() } }
+            return@Column
+        }
+        Row(verticalAlignment = Alignment.CenterVertically) {
+        Text(
+            listOfNotNull(
+                "${d.totals.cpes} CPE",
+                "${d.totals.ok} ok",
+                d.totals.offline.takeIf { it > 0 }?.let { "$it offline" },
+                d.totals.signalDrop.takeIf { it > 0 }?.let { "$it segnale calato" },
+                d.totals.ethernet.takeIf { it > 0 }?.let { "$it porta LAN" },
+            ).joinToString(" · "),
+            fontWeight = FontWeight.SemiBold,
+            modifier = Modifier.weight(1f),
+        )
+            TextButton(onClick = { scope.launch { load() } }, enabled = !busy) { Text(if (busy) "…" else "Aggiorna") }
         }
         OutlinedTextField(
             value = query,
@@ -114,42 +137,13 @@ fun CpeHealthScreen(c: AppContainer, onRepoint: (() -> Unit)? = null) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        shown.take(limit).forEach { cpe ->
-            SectionCard {
-                Text(cpe.deviceName.ifBlank { cpe.mac }, style = MaterialTheme.typography.titleMedium)
-                Text("${cpe.model} · ${cpe.mac} · ${cpe.now?.apName ?: cpe.ssid}", style = MaterialTheme.typography.bodySmall)
-                if (cpe.issues.isEmpty()) {
-                    Text("Nessun problema", color = GoodGreen)
-                } else {
-                    Text(cpe.issues.joinToString(" · ") { ISSUES[it] ?: it }, color = if (cpe.issues.any { it == "offline" || it == "not_in_uisp" || it == "weak_signal" }) BadRed else WarnAmber)
-                }
-                Text(
-                    "Segnale al collaudo ${cpe.acceptanceSignal?.toInt() ?: "—"} dBm → ora ${cpe.now?.signal?.toInt() ?: "—"} dBm" +
-                        (cpe.signalDelta?.let { " (${if (it > 0) "+" else ""}$it dB)" } ?: ""),
-                    style = MaterialTheme.typography.bodySmall,
-                )
-                cpe.now?.let { n -> n.ethMbps?.let { Text("Porta LAN $it Mbit/s${if (n.ethHalfDuplex) " half duplex" else ""}", style = MaterialTheme.typography.bodySmall) } }
-                Text(
-                    listOfNotNull(
-                        cpe.createdAt?.let { "Installata il ${it.take(10).split('-').reversed().joinToString("/")}" } ?: if (admin) "Non installata con l'app" else "Assegnata dall'amministratore",
-                        cpe.installer.takeIf { admin && it.isNotBlank() }?.let { "da $it" },
-                        cpe.assignedTo?.takeIf { admin }?.let { "assegnata a ${it.username}" },
-                    ).joinToString(" · "),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                val jobId = cpe.jobId
-                if (c.moduleOn("signal_history") && cpe.now != null && jobId != null) {
-                    Row {
-                        TextButton(onClick = { open = if (open == jobId) null else jobId }) { Text(if (open == jobId) "Nascondi storico" else "Storico segnale 7 giorni") }
-                    }
-                    if (open == jobId) {
-                        SignalHistory(c, JobDto(id = jobId, createdAt = cpe.createdAt ?: "", status = "success", model = cpe.model, mac = cpe.mac, serial = "", ssid = cpe.ssid, pppoeUser = ""))
-                    }
-                }
-                if (onRepoint != null && cpe.issues.any { it in REPOINT }) {
-                    TextButton(onClick = onRepoint) { Text("Vai al ripuntamento") }
-                }
+        if (shown.isNotEmpty()) SectionCard {
+            shown.take(limit).forEachIndexed { i, cpe ->
+                if (i > 0) HorizontalDivider()
+                CpeRow(c, cpe, admin, expanded = open == cpe.mac, history = history == cpe.mac,
+                    onToggle = { open = if (open == cpe.mac) null else cpe.mac },
+                    onHistory = { history = if (history == cpe.mac) null else cpe.mac },
+                    onRepoint = if (cpe.issues.any { it in REPOINT }) onRepoint else null)
             }
         }
         if (shown.size > limit) {
@@ -162,3 +156,75 @@ private const val PAGE = 50
 
 /** Problems a re-pointing or a change of AP can fix. */
 private val REPOINT = setOf("weak_signal", "signal_drop", "low_capacity")
+
+private val SERIOUS = setOf("offline", "not_in_uisp", "weak_signal")
+
+/** One dense row: state, customer, AP or problem, signal now (and the change since the acceptance test). Tap for details. */
+@Composable
+private fun CpeRow(
+    c: AppContainer,
+    cpe: CpeHealthItemDto,
+    admin: Boolean,
+    expanded: Boolean,
+    history: Boolean,
+    onToggle: () -> Unit,
+    onHistory: () -> Unit,
+    onRepoint: (() -> Unit)?,
+) {
+    val color = when {
+        cpe.issues.any { it in SERIOUS } -> BadRed
+        cpe.issues.isNotEmpty() -> WarnAmber
+        else -> GoodGreen
+    }
+    Column {
+        Row(Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(10.dp).clip(CircleShape).background(color))
+            Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                Text(cpe.deviceName.ifBlank { cpe.mac }, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    if (cpe.issues.isNotEmpty()) cpe.issues.joinToString(" · ") { ISSUES[it] ?: it } else cpe.now?.apName ?: cpe.ssid,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (cpe.issues.isNotEmpty()) color else MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+            Column(horizontalAlignment = Alignment.End) {
+                Text(cpe.now?.signal?.let { "${it.toInt()} dBm" } ?: "—", fontWeight = FontWeight.SemiBold)
+                cpe.signalDelta?.takeIf { it != 0 }?.let { d ->
+                    Text("${if (d > 0) "+" else ""}$d dB", style = MaterialTheme.typography.bodySmall, color = if (d < 0) WarnAmber else GoodGreen)
+                }
+            }
+        }
+        if (expanded) {
+            Column(Modifier.padding(start = 20.dp, bottom = 6.dp)) {
+                val small = MaterialTheme.typography.bodySmall
+                Text("${cpe.model.ifBlank { "CPE" }} · ${cpe.mac}", style = small)
+                Text(listOfNotNull(cpe.now?.apName, cpe.ssid.ifBlank { null }).joinToString(" · "), style = small)
+                Text("Collaudo ${cpe.acceptanceSignal?.toInt() ?: "—"} dBm → ora ${cpe.now?.signal?.toInt() ?: "—"} dBm", style = small)
+                cpe.now?.let { n -> n.ethMbps?.let { Text("Porta LAN $it Mbit/s${if (n.ethHalfDuplex) " half duplex" else ""}", style = small) } }
+                Text(
+                    listOfNotNull(
+                        cpe.createdAt?.let { "Installata il ${it.take(10).split('-').reversed().joinToString("/")}" } ?: if (admin) "Non installata con l'app" else "Assegnata dall'amministratore",
+                        cpe.installer.takeIf { admin && it.isNotBlank() }?.let { "da $it" },
+                        cpe.assignedTo?.takeIf { admin }?.let { "assegnata a ${it.username}" },
+                    ).joinToString(" · "),
+                    style = small,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                Row {
+                    val jobId = cpe.jobId
+                    if (c.moduleOn("signal_history") && cpe.now != null && jobId != null) {
+                        TextButton(onClick = onHistory) { Text(if (history) "Nascondi storico" else "Storico 7 giorni") }
+                    }
+                    if (onRepoint != null) TextButton(onClick = onRepoint) { Text("Ripuntamento") }
+                }
+                val jobId = cpe.jobId
+                if (history && jobId != null) {
+                    SignalHistory(c, JobDto(id = jobId, createdAt = cpe.createdAt ?: "", status = "success", model = cpe.model, mac = cpe.mac, serial = "", ssid = cpe.ssid, pppoeUser = ""))
+                }
+            }
+        }
+    }
+}
+
