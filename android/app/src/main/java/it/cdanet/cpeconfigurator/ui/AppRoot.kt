@@ -130,7 +130,7 @@ enum class Screen(val title: String, val scroll: Boolean = true) {
     Settings("Impostazioni"),
     Guide("Guida installatore", scroll = false),
     // areas of the bottom bar and their tabbed sections
-    Installations("Le mie installazioni", scroll = false),
+    Installations("Installazioni", scroll = false),
     NetHub("Rete", scroll = false),
     Tools("Strumenti"),
     CpeHub("CPE collegata", scroll = false),
@@ -281,8 +281,11 @@ fun AppRoot(c: AppContainer) {
                                 }
                                 Spacer(Modifier.width(12.dp))
                             }
+                            val title = if (screen == Screen.CpeHealth && session?.user?.role == "admin") "Salute CPE" else screen.title
                             Text(
-                                if (screen == Screen.CpeHealth && session?.user?.role == "admin") "Salute CPE" else screen.title,
+                                title,
+                                // long titles one step smaller instead of cut ("Collaudo installazione")
+                                style = if (title.length > 16) MaterialTheme.typography.titleMedium else MaterialTheme.typography.titleLarge,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                             )

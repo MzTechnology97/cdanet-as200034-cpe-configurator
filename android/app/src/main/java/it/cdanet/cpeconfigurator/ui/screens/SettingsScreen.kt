@@ -123,7 +123,8 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
 
         SectionCard("Account", icon = it.cdanet.cpeconfigurator.R.drawable.ic_person) {
             KeyValue("Utente", session?.user?.let { "${it.username} (${if (it.role == "admin") "amministratore" else "installatore"})" } ?: "non connesso")
-            KeyValue("Sessione fino a", session?.expiresAt?.replace('T', ' ')?.take(16) ?: "—")
+            // with the persistent login the session renews by itself: its expiry is in "Accesso su questo telefono"
+            if (c.quickLogin.saved() == null) KeyValue("Sessione fino a", session?.expiresAt?.replace('T', ' ')?.take(16) ?: "—")
             OutlinedButton(onClick = onLogout) { Text(if (session != null) "Esci" else "Torna al login") }
         }
 

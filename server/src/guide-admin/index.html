@@ -11,7 +11,9 @@
     <li><a href="#g-server">Impostazioni server</a></li>
     <li><a href="#g-wifi">Reti Wi-Fi (WPA2)</a></li>
     <li><a href="#g-profili">Profili airOS e template</a></li>
-    <li><a href="#g-funzionalita">Funzionalità</a></li>
+    <li><a href="#g-funzionalita">Funzionalità</a>
+      <ol><li><a href="#g-interventi">Agenda interventi</a></li><li><a href="#g-firmware">Firmware airOS</a></li></ol>
+    </li>
     <li><a href="#g-account">Account e POP/AP assegnati</a></li>
     <li><a href="#g-nuovo-installatore">Un nuovo installatore, dall'account al primo intervento</a></li>
     <li><a href="#g-storico">Storico, accettazione in UISP e verbali</a></li>
@@ -26,6 +28,7 @@
 <h2 id="g-accesso">1. Accesso e sicurezza dell'account</h2>
 <p>Il primo amministratore nasce all'installazione del server. Dopo il primo accesso apri <b>Il mio account</b>: cambia la password e attiva la <b>verifica in due passaggi</b> (app di autenticazione). In <b>Account → Sicurezza</b> puoi renderla obbligatoria per tutti gli amministratori: chi non l'ha ancora attivata potrà aprire solo Il mio account finché non la attiva. Per abilitare l'obbligo devi averla già attiva tu.</p>
 <p>Gli installatori possono attivarla quando vogliono. In caso di telefono perso, <b>Esci da tutti i dispositivi</b> chiude tutte le sessioni dell'account; disabilitare un account o reimpostarne la password revoca subito le sue sessioni.</p>
+<p><b>App sempre collegata.</b> Dopo il primo accesso con la password l'app resta collegata con una chiave del telefono: si rinnova a ogni apertura e scade dopo 30 giorni senza uso (al massimo 180 giorni dal login con la password). La chiave smette di funzionare con il cambio o il reset della password, con <i>Esci da tutti i dispositivi</i>, con la disattivazione o la rimozione dell'account e con una reinstallazione dell'app. Ogni utente vede i propri telefoni in <b>Il mio account → Telefoni collegati</b> e può scollegarli. Nell'app si può chiedere impronta o volto a ogni apertura. Gli accessi automatici degli amministratori non mandano la notifica di login a ogni apertura.</p>
 <figure><img data-guide="admin-account.jpg" alt="Il mio account dell'amministratore"><figcaption>Il mio account: password, verifica in due passaggi, sessioni, Telegram personale.</figcaption></figure>
 
 <h2 id="g-panoramica">2. Panoramica</h2>
@@ -95,7 +98,12 @@
 <figure><img data-guide="admin-profiles.jpg" alt="Profili airOS"><figcaption>Profili airOS: solo LiteBeam 5AC ha un template (Standard CDA Net, per tutti).</figcaption></figure>
 
 <h2 id="g-funzionalita">8. Funzionalità</h2>
-<p>I moduli facoltativi, ognuno con l'indicazione <i>web</i>, <i>app</i> o <i>web + app</i>. Se disattivi un modulo sparisce dalla console e dall'app e il server ne rifiuta le richieste. Esempi: Copertura AP, Puntamento antenna, Diagnosi CPE, Trova l'AP, Collaudo e verbale, Sostituzione CPE, Storico segnale, Confronto con il template, Salute CPE, Guasti Enel, Stato rete, Statistiche, Strumenti di rete, RouterOS.</p>
+<p>I moduli facoltativi, ognuno con l'indicazione <i>web</i>, <i>app</i> o <i>web + app</i>. Se disattivi un modulo sparisce dalla console e dall'app e il server ne rifiuta le richieste. Esempi: Copertura AP, Puntamento antenna, Diagnosi CPE, Trova l'AP, Collaudo e verbale, Sostituzione CPE, Storico segnale, Confronto con il template, Salute CPE, Guasti Enel, Stato rete, Statistiche, Strumenti di rete, RouterOS, Agenda interventi, Aggiornamento firmware.</p>
+<h3 id="g-interventi">Agenda interventi</h3>
+<p>In <b>Interventi</b> l'ufficio pianifica la giornata di ogni installatore: giorno, fascia oraria, tipo (nuova installazione, ripuntamento, guasto, sopralluogo), cliente, indirizzo o coordinate, contatto, modello, note e i dati PPPoE del cliente. La password PPPoE viene cifrata sul server e non arriva mai al telefono: l'installatore tocca <b>Inizia</b> e il provisioning la usa da solo. Lo stato si aggiorna dal campo (<i>in corso</i>, <i>rimandato</i> con il motivo, <i>fatto</i> quando il provisioning riesce); gli interventi non chiusi dei giorni passati risultano <i>in ritardo</i>.</p>
+<h3 id="g-firmware">Firmware airOS</h3>
+<p>Il provisioning scrive solo su CPE con il firmware richiesto (8.7.4). Con il modulo <b>Aggiornamento firmware</b> attivo (spento di default), in <b>Firmware airOS</b> carichi il file <code>.bin</code> ufficiale Ubiquiti di ogni piattaforma usata dalle CPE (XC, WA, 2XC…): piattaforma e versione si leggono dal file, che viene rifiutato se non è un firmware airOS. L'installatore scarica sul telefono i firmware della versione richiesta e, dalla Wi-Fi della CPE, la aggiorna: l'app controlla piattaforma, integrità (SHA-256 e MD5) e memoria libera prima di scrivere. Download ed esiti finiscono nel Registro attività.</p>
+<div class="notice warn">Prova l'aggiornamento su una CPE di laboratorio per ogni piattaforma prima di attivare il modulo per gli installatori.</div>
 <p>Gli installatori non vedono i nomi dei moduli né le fonti dei dati: se una funzione è spenta, semplicemente non c'è.</p>
 <figure><img data-guide="admin-modules.jpg" alt="Funzionalità"><figcaption>Funzionalità: moduli con ambito web, app o entrambi.</figcaption></figure>
 
@@ -136,6 +144,7 @@
   <li><b>Zone di interesse</b>: zone automatiche attorno a ogni POP/AP monitorato, con il loro raggio, e il raggio entro cui un POP/AP è "potenzialmente impattato".</li>
   <li><b>Zone condivise</b> per aree senza AP (es. una frazione), notificate a tutti; sotto trovi anche le <b>zone personali</b> degli installatori, notificate solo a loro.</li>
 </ul>
+<p>Le <b>aree di interesse personali</b> restano di ogni utente anche fuori dai POP/AP assegnati. Per ognuna l'utente sceglie le regole: attiva o in pausa, guasti MT, guasti BT, lavori programmati. Le stesse regole valgono per le notifiche sul telefono e per il suo Telegram personale.</p>
 <p>Le notifiche partono su Telegram (gruppo del NOC e personali) e sul telefono (app → Guasti Enel → "Avvisami dei guasti").</p>
 <p><b>Stato rete</b>: tutti i POP e gli AP, raggiungibili o no, con molte CPE offline (almeno il 30%, probabile problema di settore) e guasto Enel vicino.</p>
 <figure><img data-guide="admin-outages.jpg" alt="Guasti Enel"><figcaption>Guasti Enel: un guasto MT a 556 m dal POP Demo Monte.</figcaption></figure>

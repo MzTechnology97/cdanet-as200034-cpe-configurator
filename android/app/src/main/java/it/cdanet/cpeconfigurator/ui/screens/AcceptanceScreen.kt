@@ -31,7 +31,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import it.cdanet.cpeconfigurator.core.AppContainer
@@ -74,7 +73,6 @@ fun AcceptanceScreen(c: AppContainer) {
     }
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val view = LocalView.current
     val st by c.field.state.collectAsState()
     val samples = remember { mutableStateListOf<AirosStatus>() }
     var measuring by remember { mutableStateOf(false) }
@@ -89,11 +87,10 @@ fun AcceptanceScreen(c: AppContainer) {
     var ready by remember { mutableStateOf<Boolean?>(null) }
     var ko by remember { mutableStateOf(false) }
 
+    it.cdanet.cpeconfigurator.ui.KeepScreenOn()
     DisposableEffect(Unit) {
-        view.keepScreenOn = true
         scope.launch { ready = c.field.prefetch("acceptance") }
         onDispose {
-            view.keepScreenOn = false
             c.field.onSample = null
             c.field.stop()
         }
