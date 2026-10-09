@@ -49,6 +49,10 @@ import it.cdanet.cpeconfigurator.ui.KeyValue
 import it.cdanet.cpeconfigurator.ui.SectionCard
 import it.cdanet.cpeconfigurator.ui.WarnAmber
 import kotlin.math.roundToInt
+import androidx.compose.runtime.rememberCoroutineScope
+import kotlinx.coroutines.launch
+import it.cdanet.cpeconfigurator.ui.BusyButton
+import it.cdanet.cpeconfigurator.field.SurveyAp
 
 private fun verdictColor(v: Verdict, fallback: Color): Color = when (v) {
     Verdict.Ok -> GoodGreen
@@ -142,6 +146,53 @@ fun AlignmentScreen(c: AppContainer) {
             Switch(checked = sound, onCheckedChange = { sound = it })
         }
         OutlinedButton(onClick = { c.field.resetPeak() }) { Text("Azzera picco e grafico") }
+        SurveyCard(c, st.status?.apMac)
+    }
+}
+
+/** APs heard by the CPE's own radio (airOS site survey): pick the best one from the roof. */
+@Composable
+private fun SurveyCard(c: AppContainer, currentAp: String?) {
+    val scope = rememberCoroutineScope()
+    var aps by remember { mutableStateOf<List<SurveyAp>?>(null) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    SectionCard("AP visibili dalla CPE") {
+        Text("Scansione fatta dalla radio della CPE (site survey): mostra gli AP che l'antenna sente da qui. Durante la scansione il collegamento della CPE può interrompersi per qualche secondo.", style = MaterialTheme.typography.bodySmall)
+        BusyButton("Scansiona AP dalla CPE", busy, Modifier.fillMaxWidth(), primary = false) {
+            scope.launch {
+                busy = true
+                error = null
+                runCatching { c.field.siteSurvey() }.onSuccess { aps = it }.onFailure { error = it.message }
+                busy = false
+            }
+        }
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
+        aps?.let { list ->
+            if (list.isEmpty()) Text("Nessun AP rilevato.", style = MaterialTheme.typography.bodySmall)
+            val cda = list.filter { it.cdaNet != null }
+            if (cda.isNotEmpty()) Text("${cda.size} AP CDA Net · migliore: ${cda.first().essid} (${cda.first().signal ?: "—"} dBm)", fontWeight = FontWeight.SemiBold, color = GoodGreen)
+            list.forEach { a ->
+                val mine = currentAp != null && a.mac.equals(currentAp, ignoreCase = true)
+                Text(
+                    "${a.essid.ifBlank { "(nascosto)" }}${if (mine) " · agganciato" else ""}",
+                    fontWeight = if (a.cdaNet != null || mine) FontWeight.SemiBold else FontWeight.Normal,
+                )
+                Text(
+                    listOfNotNull(
+                        a.signal?.let { "$it dBm" },
+                        a.snr?.let { "SNR $it dB" },
+                        a.frequencyMhz?.let { "$it MHz" },
+                        a.channel?.let { "ch $it" },
+                        a.mode.ifBlank { null },
+                        a.security.ifBlank { null },
+                        a.airmax?.let { if (it) "airMAX" else null },
+                        a.mac,
+                    ).joinToString(" · "),
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+        }
     }
 }
 

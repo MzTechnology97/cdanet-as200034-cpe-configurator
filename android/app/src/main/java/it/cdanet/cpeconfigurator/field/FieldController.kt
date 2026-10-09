@@ -121,6 +121,17 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
 
     fun resetPeak() = _state.update { it.copy(peak = null, history = emptyList()) }
 
+    /** APs heard by the CPE (site survey), on the current or a new airOS session. */
+    suspend fun siteSurvey(): List<SurveyAp> = withContext(Dispatchers.IO) {
+        val c = client ?: connect(null).also { client = it }
+        try {
+            c.survey()
+        } catch (e: AirosAuthException) {
+            client = null
+            connect(null).also { client = it }.survey()
+        }
+    }
+
     /** Gateway of the current Wi-Fi first (CPE in router mode or its management Wi-Fi), then the configured IPs. */
     private suspend fun connect(manualHost: String?): AirosClient = withContext(Dispatchers.IO) {
         val a = access ?: throw IllegalStateException("Credenziali CPE non disponibili: apri lo strumento una volta con Internet attivo (dopo l'accesso)")

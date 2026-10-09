@@ -42,7 +42,7 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 | 16 | **Hikvision SADP completo** (attivazione, rete, porte, azioni) e **mappa di rete** della LAN scansionata nell'app | strumenti TVCC e di rete da tecnico | ✅ v1.22.0 |
 | 17 | **Wi-Fi Analyzer stile WiFiman**: spettro, occupazione canali e consigliati, segnale nel tempo, dettagli reti e connessione | analisi Wi-Fi dal campo | ✅ v1.23.0 |
 | 18 | **Topologia di rete**: discovery multi-vendor (MikroTik MNDP, Ubiquiti, Hikvision SADP, Dahua, ONVIF, UPnP/SSDP, mDNS, NetBIOS, Netgear NSDP, TP-Link) + SNMP (community `public` predefinita o manuali) con LLDP/CDP, tabelle MAC e ARP; senza SNMP mappa base dal gateway | mappa reale della LAN del cliente | ✅ v1.24.0 |
-| 4 | Scansione degli AP visibili dalla CPE | scegliere l'AP migliore | ⏳ (serve una CPE reale per verificare il comando airOS) |
+| 4 | Scansione degli AP visibili dalla CPE | scegliere l'AP migliore | ✅ v1.25.0 (da verificare su CPE reale) |
 
 ## Già rilasciato
 

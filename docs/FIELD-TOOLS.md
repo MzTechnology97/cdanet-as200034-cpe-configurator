@@ -35,6 +35,9 @@ Lo stato si legge da `/status.cgi` dopo il login su `/api/auth`, cioè la stessa
 - AP agganciato, distanza, frequenza, segnale lato AP, CINR, capacità e rumore.
 - Lo schermo resta acceso finché lo strumento è aperto.
 
+### AP visibili dalla CPE (site survey)
+Nella schermata Puntamento, **Scansiona AP dalla CPE** chiede alla radio della CPE quali AP sente da lì (site survey airOS): SSID, segnale, rumore e SNR, frequenza/canale, modalità, sicurezza, airMAX; gli AP CDA Net (`CDA-NET-Nx-Dy`) sono evidenziati con il migliore in cima e l'AP agganciato è segnato. Durante la scansione il collegamento della CPE può interrompersi per qualche secondo. *Da verificare su CPE reale*: gli endpoint del site survey cambiano tra le versioni di airOS (vengono provati quelli noti; se nessuno risponde compare "Site survey non disponibile su questo firmware").
+
 ## Diagnosi CPE
 
 Elenco di controlli, ognuno con la spiegazione di cosa fare:
