@@ -251,8 +251,7 @@ fun CameraScreen(c: AppContainer) {
                             "mask ${d.subnetMask} · gw ${d.gateway} · ${when (d.dhcp) { true -> "DHCP"; false -> "IP statico"; null -> "" }}",
                             listOfNotNull(d.httpPort?.let { "HTTP $it" }, d.sdkPort?.let { "SDK $it" }).joinToString(" · "),
                             listOfNotNull(d.analogChannels?.takeIf { it > 0 }?.let { "$it canali analogici" }, d.digitalChannels?.takeIf { it > 0 }?.let { "$it canali IP" }).joinToString(" · "),
-                        ).filter { it.isNotBlank() }.joinToString("
-"),
+                        ).filter { it.isNotBlank() }.joinToString("\n"),
                         style = MaterialTheme.typography.bodySmall,
                     )
                     Row {
