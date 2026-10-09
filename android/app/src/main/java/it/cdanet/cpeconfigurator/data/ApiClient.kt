@@ -76,6 +76,9 @@ class ApiClient(
 ) {
     private val jsonType = "application/json; charset=utf-8".toMediaType()
 
+    /** Set when the server refuses this app version (426): the app then blocks until updated. */
+    val updateRequired = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
     suspend fun base(): String = settings.backendUrlNow()
 
     suspend fun request(method: String, path: String, body: JsonElement? = null, auth: Boolean = true, client: Boolean = false): String =
@@ -91,6 +94,7 @@ class ApiClient(
                     val err = runCatching { AppJson.decodeFromString(ApiErrorDto.serializer(), text) }.getOrNull()
                     val code = err?.error?.ifBlank { null } ?: "HTTP ${r.code}"
                     if (r.code == 401 && auth) session.clear()
+                    if (r.code == 426) updateRequired.value = err?.minVersion ?: "nuova"
                     val detail = err?.minVersion?.let { " (minima $it)" } ?: ""
                     throw ApiException(r.code, code, apiMessage(code) + detail)
                 }

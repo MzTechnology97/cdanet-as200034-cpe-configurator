@@ -1,4 +1,6 @@
 import { existsSync } from 'node:fs';
+import { parseClientHeader, versionAtLeast } from './domain/policy.ts';
+import { loadLatestRelease } from './services/releases.ts';
 import { join } from 'node:path';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -134,6 +136,26 @@ export async function buildApp(
     payload.on('data', (c: Buffer) => (bytes += c.length));
     payload.on('end', () => done(null, { bytes }));
     payload.on('error', (e) => done(e, undefined));
+  });
+
+  // Android app always on the latest release (Impostazioni server → "App sempre all'ultima
+  // versione"): an older app gets 426 on every call, login included, and can only update itself.
+  // Apps before v1.31 send their version only on some calls: their OkHttp user agent gives them away.
+  let latest: { at: number; version: string | null } = { at: 0, version: null };
+  const requiredAndroid = (): string => {
+    if (Date.now() - latest.at > 30_000) latest = { at: Date.now(), version: loadLatestRelease(cfg.releases.dir)?.versionName ?? null };
+    const pinned = cfg.minAndroidVersion;
+    const newest = cfg.appForceLatest ? latest.version?.replace(/[-+].*$/, '') : undefined;
+    return newest && !versionAtLeast(pinned, newest) ? newest : pinned;
+  };
+  const ALWAYS_OPEN = ['/api/health', '/api/mobile/', '/api/map/'];
+  app.addHook('onRequest', async (req, reply) => {
+    if (!req.url.startsWith('/api/') || ALWAYS_OPEN.some((p) => req.url.startsWith(p))) return;
+    const client = parseClientHeader(req.headers['x-cda-client'] as string | undefined);
+    const version = client?.version ?? (/^okhttp\//i.test(String(req.headers['user-agent'] ?? '')) ? '0.0.0' : null);
+    if (version === null) return; // browsers (console) and other tools
+    const min = requiredAndroid();
+    if (!versionAtLeast(version, min)) return reply.code(426).send({ error: 'client_update_required', minVersion: min });
   });
 
   app.addHook('onSend', async (req, reply, payload) => {
