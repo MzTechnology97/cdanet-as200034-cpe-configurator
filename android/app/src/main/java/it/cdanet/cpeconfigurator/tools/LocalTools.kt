@@ -30,11 +30,13 @@ import java.net.Socket
 import java.net.SocketTimeoutException
 import java.util.UUID
 import java.util.concurrent.TimeUnit
+import it.cdanet.cpeconfigurator.tools.pro.DeviceGuess
 import it.cdanet.cpeconfigurator.tools.pro.Sadp
 import it.cdanet.cpeconfigurator.tools.pro.SadpDevice
 
 /** Generic result rendered by the tools UI. */
-data class ToolItem(val title: String, val subtitle: String = "", val trailing: String = "")
+/** [host]: a device on the LAN (the list then offers web page, copy and port check); [tag]: its kind. */
+data class ToolItem(val title: String, val subtitle: String = "", val trailing: String = "", val host: String? = null, val tag: String = "")
 data class ToolResult(val rows: List<Pair<String, String>> = emptyList(), val items: List<ToolItem> = emptyList(), val note: String? = null)
 
 /** Diagnostics executed from the phone, i.e. on the customer's / site LAN. */
@@ -204,6 +206,8 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
                     title = "${d.ip ?: "IP sconosciuto"} · ${d.hostname ?: d.model ?: "—"}",
                     subtitle = listOfNotNull(d.fullModel ?: d.model, d.firmware, d.mac, d.ssid?.let { "SSID $it" }).joinToString(" · "),
                     trailing = d.uptimeSec?.let { it.formatUptime() }.orEmpty(),
+                    host = d.ip,
+                    tag = d.model?.let { "Ubiquiti $it" } ?: "Ubiquiti",
                 )
             },
             note = if (list.isEmpty()) "Nessuna risposta: verifica di essere sulla LAN giusta (la discovery non attraversa i router)." else "Discovery Ubiquiti (UDP 10001) e annunci (UDP 10002).",
@@ -220,7 +224,7 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
         val t = arpTable()
         ToolResult(
             rows = listOf("Voci" to t.size.toString()),
-            items = t.entries.sortedBy { Ip.parse(it.key) ?: 0 }.map { ToolItem(it.key, it.value) },
+            items = t.entries.sortedBy { Ip.parse(it.key) ?: 0 }.map { ToolItem(it.key, it.value, host = it.key) },
             note = if (t.isEmpty()) "Android 10+ limita l'accesso alla tabella ARP: usa la scansione subnet." else null,
         )
     }
@@ -246,11 +250,18 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
         val (hosts, macs) = withContext(Dispatchers.IO) { if (viaWifi) network.onWifi(block) else block() }
         // Vendor lookup after leaving the Wi-Fi binding: the server is reached over mobile data if needed.
         val vendors = vendorsOf(hosts.mapNotNull { macs[it.first] })
+        val gateway = network.wifiLink()?.gateway
         return ToolResult(
             rows = listOf("Rete" to cidr.toString(), "Host attivi" to hosts.size.toString(), "Con MAC" to hosts.count { macs[it.first] != null }.toString()),
             items = hosts.map { (ip, name) ->
                 val mac = macs[ip]
-                ToolItem(ip, listOf(name, mac.orEmpty(), mac?.let { vendors[it] }.orEmpty()).filter { it.isNotBlank() }.joinToString(" · "))
+                val vendor = mac?.let { vendors[it] }
+                ToolItem(
+                    title = if (name.isNotBlank()) "$ip · $name" else ip,
+                    subtitle = listOfNotNull(vendor, mac).joinToString(" · "),
+                    host = ip,
+                    tag = DeviceGuess.guess(vendor, emptySet(), name, isGateway = ip == gateway),
+                )
             },
         )
     }

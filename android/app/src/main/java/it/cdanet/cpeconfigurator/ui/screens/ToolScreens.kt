@@ -55,9 +55,9 @@ private class Runner {
 private fun rememberRunner() = remember { Runner() }
 
 @Composable
-private fun RunnerOutput(r: Runner) {
+private fun RunnerOutput(r: Runner, onPorts: (suspend (String) -> String)? = null) {
     ErrorBanner(r.error) { r.error = null }
-    r.result?.let { SectionCard(r.title) { ToolResultView(it) } }
+    r.result?.let { SectionCard(r.title) { ToolResultView(it, onPorts) } }
 }
 
 @Composable
@@ -155,7 +155,11 @@ fun DiscoveryScreen(c: AppContainer) {
             ToolButton(r, "Verifica porte") { c.tools.portProbe(host, ports.split(',', ' ', ';').mapNotNull { it.trim().toIntOrNull() }.filter { it in 1..65535 }, viaWifi) }
             ToolButton(r, "NetBIOS") { c.tools.netbios(host, viaWifi) }
         }
-        RunnerOutput(r)
+        // "Porte" on a found device: the usual ports, shown in its row (the list stays)
+        RunnerOutput(r) { h ->
+            val list = ports.split(',', ' ', ';').mapNotNull { it.trim().toIntOrNull() }.filter { it in 1..65535 }
+            c.tools.portProbe(h, list, viaWifi).rows.firstOrNull { it.first == "Porte aperte" }?.let { "Porte aperte: ${it.second}" } ?: "nessuna risposta"
+        }
     }
 }
 

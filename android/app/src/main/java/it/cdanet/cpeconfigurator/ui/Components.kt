@@ -1,5 +1,15 @@
 package it.cdanet.cpeconfigurator.ui
 
+import kotlinx.coroutines.launch
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.mutableStateMapOf
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.foundation.clickable
+import android.net.Uri
+import android.content.Intent
+import android.content.ClipboardManager
+import android.content.ClipData
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -150,7 +160,11 @@ fun KeyValue(key: String, value: String) {
 }
 
 @Composable
-fun ToolResultView(result: ToolResult) {
+fun ToolResultView(result: ToolResult, onPorts: (suspend (String) -> String)? = null) {
+    if (result.items.any { it.host != null }) {
+        DeviceListView(result, onPorts)
+        return
+    }
     result.rows.forEach { (k, v) -> KeyValue(k, v) }
     if (result.items.isNotEmpty()) {
         HorizontalDivider(Modifier.padding(vertical = 6.dp))
@@ -164,6 +178,51 @@ fun ToolResultView(result: ToolResult) {
             }
         }
     }
+    result.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+}
+
+/** Devices found on the LAN: one dense row each (IP and name, kind, vendor/MAC), actions on tap. */
+@Composable
+private fun DeviceListView(result: ToolResult, onPorts: (suspend (String) -> String)?) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    val ports = remember { mutableStateMapOf<String, String>() }
+    var open by remember { mutableStateOf<String?>(null) }
+    var query by remember { mutableStateOf("") }
+    Text(result.rows.joinToString(" · ") { (k, v) -> "$k $v" }, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    if (result.items.size > 10) {
+        OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), singleLine = true, placeholder = { Text("Cerca IP, nome, produttore, MAC") })
+    }
+    val q = query.trim().lowercase()
+    val shown = result.items.filter { q.isEmpty() || "${it.title} ${it.subtitle} ${it.tag}".lowercase().contains(q) }
+    shown.forEachIndexed { i, item ->
+        if (i > 0) HorizontalDivider()
+        val key = item.host ?: item.title
+        val expanded = open == key
+        Column(Modifier.fillMaxWidth().clickable { open = if (expanded) null else key }.padding(vertical = 6.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(item.title, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                if (item.trailing.isNotBlank()) Text(item.trailing, style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            val line = listOf(item.tag, item.subtitle).filter { it.isNotBlank() }.joinToString(" · ")
+            if (line.isNotBlank()) {
+                Text(line, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = if (expanded) 4 else 1, overflow = TextOverflow.Ellipsis)
+            }
+            val host = item.host
+            if (expanded && host != null) {
+                Row {
+                    TextButton(onClick = { runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("http://$host"))) } }) { Text("Apri web") }
+                    TextButton(onClick = { context.getSystemService(ClipboardManager::class.java)?.setPrimaryClip(ClipData.newPlainText("IP", host)) }) { Text("Copia IP") }
+                    if (onPorts != null) TextButton(onClick = {
+                        ports[host] = "verifica delle porte…"
+                        scope.launch { ports[host] = runCatching { onPorts(host) }.getOrElse { it.message ?: "verifica non riuscita" } }
+                    }) { Text("Porte") }
+                }
+                ports[host]?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+            }
+        }
+    }
+    if (q.isNotEmpty() && shown.isEmpty()) Text("Nessun dispositivo con questa ricerca.", style = MaterialTheme.typography.bodySmall)
     result.note?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
 }
 
