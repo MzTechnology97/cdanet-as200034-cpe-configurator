@@ -59,6 +59,8 @@ import it.cdanet.cpeconfigurator.tools.wifi.WifiMath
 import it.cdanet.cpeconfigurator.ui.BadRed
 import it.cdanet.cpeconfigurator.ui.GoodGreen
 import it.cdanet.cpeconfigurator.ui.KeyValue
+import it.cdanet.cpeconfigurator.ui.NoticeKind
+import it.cdanet.cpeconfigurator.ui.StatusChip
 import it.cdanet.cpeconfigurator.ui.SectionCard
 import it.cdanet.cpeconfigurator.ui.WarnAmber
 import it.cdanet.cpeconfigurator.ui.wifiPanelIntent
@@ -159,6 +161,7 @@ fun WifiAnalyzerScreen(c: AppContainer) {
             return@Column
         }
         ConnectionCard(c, aps)
+        RouterAdviceCard(c, aps)
         Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             WifiBand.entries.forEach { b ->
                 val n = aps.count { it.band == b }
@@ -207,6 +210,59 @@ private fun ConnectionCard(c: AppContainer, aps: List<WifiAp>) {
         KeyValue("Velocità link", listOfNotNull(tx?.let { "TX $it" }, rx?.let { "RX $it" }).joinToString(" · ").ifBlank { link.linkSpeedMbps?.let { "$it" } ?: "—" } + " Mbps")
         me?.security?.let { KeyValue("Sicurezza", it) }
         KeyValue("IP / gateway", "${link.addresses.firstOrNull { it.contains('.') } ?: "—"} · ${link.gateway ?: "—"}")
+    }
+}
+
+/**
+ * What to set on the customer's router: channel and width per band, computed without the router's
+ * own networks. The router is the Wi-Fi the phone is on, or one picked among the strongest.
+ */
+@Composable
+private fun RouterAdviceCard(c: AppContainer, aps: List<WifiAp>) {
+    if (aps.isEmpty()) return
+    val connected = c.network.wifiLink()?.wifiSsid?.trim('"') ?: aps.firstOrNull { it.connected }?.ssid
+    var picked by remember { mutableStateOf<String?>(null) }
+    val router = picked ?: connected
+    SectionCard("Router del cliente", icon = it.cdanet.cpeconfigurator.R.drawable.ic_router) {
+        val strongest = aps.filter { it.ssid != "(nascosta)" && it.band != WifiBand.B6 }.sortedByDescending { it.rssi }.map { it.ssid }.distinct().take(5)
+        if (router == null) Text("Qual è la rete del router del cliente? (di solito la più forte, vicino al router)", style = MaterialTheme.typography.bodyMedium)
+        Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            (listOfNotNull(router) + strongest).distinct().forEach { s ->
+                FilterChip(selected = s == router, onClick = { picked = s }, label = { Text(s.take(20)) })
+            }
+        }
+        if (router == null) return@SectionCard
+        val ssids = WifiMath.routerSsids(aps, router)
+        if (ssids.size > 1) Text("Stesso router: ${ssids.joinToString(", ")}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        WifiMath.routerAdvice(aps, ssids).forEach { a ->
+            HorizontalDivider()
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text(a.band.label, fontWeight = FontWeight.SemiBold)
+                    Text(
+                        a.currentChannel?.let { ch -> "Ora: canale $ch" + (a.currentWidthMhz?.let { " · $it MHz" } ?: "") + (a.currentRating?.let { " · libero $it/10" } ?: "") }
+                            ?: "Rete del router non vista in questa banda",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                when {
+                    a.currentChannel == null -> {}
+                    a.move -> StatusChip("da cambiare", NoticeKind.Warn)
+                    else -> StatusChip("va bene", NoticeKind.Good)
+                }
+            }
+            Text(
+                (if (a.currentChannel != null && !a.move) "Puoi lasciarlo così. Alternativa: " else "Imposta: ") +
+                    "canale ${a.best.channel}, larghezza ${a.widthMhz} MHz" + (if (a.best.dfs) " (DFS)" else ""),
+                fontWeight = FontWeight.SemiBold,
+                color = if (a.move || a.currentChannel == null) GoodGreen else MaterialTheme.colorScheme.onSurface,
+            )
+        }
+        Text(
+            "In 2.4 GHz solo 1, 6 o 11 a 20 MHz. I canali DFS (52-140) vanno bene ma il router può spostarsi se rileva un radar. Misura vicino al router e dove il cliente usa la rete.",
+            style = MaterialTheme.typography.bodySmall,
+        )
     }
 }
 

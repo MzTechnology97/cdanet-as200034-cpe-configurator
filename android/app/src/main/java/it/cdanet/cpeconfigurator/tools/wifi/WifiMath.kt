@@ -44,6 +44,19 @@ data class ChannelScore(
     val dfs: Boolean,
 )
 
+/** What to set on the customer's router in one band. */
+data class RouterAdvice(
+    val band: WifiBand,
+    /** The router's current channel in this band and how busy its span is (null = not seen). */
+    val currentChannel: Int?,
+    val currentWidthMhz: Int?,
+    val currentRating: Int?,
+    val best: ChannelScore,
+    val widthMhz: Int,
+    /** Moving is worth it: the suggested channel is clearly freer, or 2.4 GHz is off 1/6/11. */
+    val move: Boolean,
+)
+
 /** Wi-Fi analyzer math (pure, unit-tested): channels, bands, spectrum overlap, channel rating. */
 object WifiMath {
     fun band(f: Int): WifiBand = when {
@@ -132,5 +145,58 @@ object WifiMath {
             else -> scores
         }
         return candidates.sortedWith(compareByDescending<ChannelScore> { it.rating }.thenBy { it.dfs }.thenBy { it.networks }.thenBy { it.channel }).take(3)
+    }
+
+    /**
+     * The customer's router networks: the chosen SSID plus the other band's SSID of the same box
+     * ("Casa" / "Casa_5G"), recognised by BSSIDs that differ only in the first or last octet.
+     */
+    fun routerSsids(aps: List<WifiAp>, ssid: String): Set<String> {
+        val mine = aps.filter { it.ssid == ssid }.map { it.bssid.uppercase() }
+        fun head(b: String) = b.substringBeforeLast(':')
+        fun tail(b: String) = b.substringAfter(':')
+        val heads = mine.map(::head).toSet()
+        val tails = mine.map(::tail).toSet()
+        return setOf(ssid) + aps.filter { a -> a.bssid.uppercase().let { head(it) in heads || tail(it) in tails } }.map { it.ssid }
+    }
+
+    /** 5 GHz 80 MHz blocks usable in Europe. */
+    private val BLOCKS_80 = listOf(36..48, 52..64, 100..112, 116..128, 132..140, 149..161)
+
+    /**
+     * Channel and width to set on the customer's router, per band, computed without the router's
+     * own networks. 2.4 GHz stays at 20 MHz on 1/6/11; 5 GHz goes to 80 MHz when a whole block is
+     * free (non-DFS first: DFS makes the router jump channel when it hears a radar), else 40 or 20.
+     */
+    fun routerAdvice(aps: List<WifiAp>, routerSsids: Set<String>): List<RouterAdvice> {
+        val others = aps.filter { it.ssid !in routerSsids }.map { it.copy(connected = false) }
+        return listOf(WifiBand.B24, WifiBand.B5).mapNotNull { band ->
+            val scores = rate(others, band)
+            val byCh = scores.associateBy { it.channel }
+            val (best, width) = if (band == WifiBand.B24) {
+                (recommend(others, band).firstOrNull() ?: return@mapNotNull null) to 20
+            } else {
+                fun group(r: IntRange) = r.step(4).mapNotNull { byCh[it] }
+                val pairs = BLOCKS_80.flatMap { b -> group(b).chunked(2).filter { it.size == 2 } }
+                val order = compareBy<List<ChannelScore>> { g -> g.any { it.dfs } }.thenByDescending { g -> g.minOf { it.rating } }
+                val free80 = BLOCKS_80.map(::group).filter { g -> g.size == 4 && g.all { it.rating >= 7 } }.sortedWith(order).firstOrNull()
+                val free40 = pairs.filter { g -> g.all { it.rating >= 7 } }.sortedWith(order).firstOrNull()
+                fun pick(g: List<ChannelScore>) = g.sortedWith(compareByDescending<ChannelScore> { it.rating }.thenBy { it.channel }).first()
+                when {
+                    free80 != null -> pick(free80) to 80
+                    free40 != null -> pick(free40) to 40
+                    else -> (recommend(others, band).firstOrNull() ?: return@mapNotNull null) to 20
+                }
+            }
+            val mine = aps.filter { it.ssid in routerSsids && it.band == band }.maxByOrNull { it.rssi }
+            // a wide 5 GHz channel is as good as the busiest 20 MHz slot it covers
+            val currentRating = mine?.let { m ->
+                if (band == WifiBand.B24) byCh[m.channel]?.rating
+                else scores.filter { it.freq > m.lowMhz && it.freq < m.highMhz }.minOfOrNull { it.rating } ?: byCh[m.channel]?.rating
+            }
+            val move = mine != null && mine.channel != best.channel &&
+                ((band == WifiBand.B24 && mine.channel !in setOf(1, 6, 11)) || best.rating - (currentRating ?: 0) >= 2)
+            RouterAdvice(band, mine?.channel, mine?.widthMhz, currentRating, best, width, move)
+        }
     }
 }

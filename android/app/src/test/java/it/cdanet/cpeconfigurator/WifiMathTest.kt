@@ -41,4 +41,36 @@ class WifiMathTest {
         assertEquals(0, r.getValue(52).networks)
         assertTrue(WifiMath.recommend(listOf(ap("W", 5180, -50, 80, 5210)), WifiBand.B5).none { it.channel in 36..48 })
     }
+
+    @Test
+    fun routerAdviceIgnoresTheRouterItselfAndPicksWidth() {
+        val aps = listOf(
+            // the customer's box: 2.4 GHz on 3 (overlapping) and 5 GHz on 36/80 under another name
+            WifiAp("11:22:33:44:55:10", "Casa", 2422, 2422, 20, -40, "WPA2", "Wi-Fi 6", connected = true),
+            WifiAp("11:22:33:44:55:11", "Casa_5G", 5180, 5210, 80, -45, "WPA2", "Wi-Fi 6"),
+            ap("Vicino1", 2412, -55), ap("Vicino2", 2437, -60),
+            ap("Vicino5", 5180, -50, 80, 5210),
+        )
+        val ssids = WifiMath.routerSsids(aps, "Casa")
+        assertEquals(setOf("Casa", "Casa_5G"), ssids)
+        val adv = WifiMath.routerAdvice(aps, ssids).associateBy { it.band }
+        val b24 = adv.getValue(WifiBand.B24)
+        assertEquals(3, b24.currentChannel)
+        assertEquals(11, b24.best.channel)
+        assertEquals(20, b24.widthMhz)
+        assertTrue(b24.move)
+        val b5 = adv.getValue(WifiBand.B5)
+        // 36-48 is taken by the neighbour: the free non-DFS block 149-161 at 80 MHz
+        assertEquals(80, b5.widthMhz)
+        assertTrue(b5.best.channel in 149..161)
+        assertTrue(b5.move)
+    }
+
+    @Test
+    fun routerAdviceKeepsAGoodChannel() {
+        val aps = listOf(WifiAp("11:22:33:44:55:10", "Casa", 2412, 2412, 20, -40, "WPA2", "Wi-Fi 6"), ap("Lontano", 2462, -85))
+        val b24 = WifiMath.routerAdvice(aps, setOf("Casa")).first { it.band == WifiBand.B24 }
+        assertEquals(1, b24.currentChannel)
+        assertTrue(!b24.move)
+    }
 }

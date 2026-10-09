@@ -440,7 +440,7 @@ private fun toolGroups(m: Map<String, Boolean>, offline: Boolean, go: (Screen) -
         ),
         "Rete del cliente" to listOfNotNull(
             if (net) ToolEntry("Scansione LAN", "Host attivi, discovery Ubiquiti/NetBIOS/SNMP/ARP, porte", R.drawable.ic_radar) { go(Screen.Lan) } else null,
-            if (net) ToolEntry("Wi-Fi Analyzer", "Reti, canali e segnale intorno a te", R.drawable.ic_wifi_find) { go(Screen.Wifi) } else null,
+            if (net) ToolEntry("Wi-Fi Analyzer", "Reti, canali e consiglio per il router del cliente", R.drawable.ic_wifi_find) { go(Screen.Wifi) } else null,
             if (net) ToolEntry("Diagnostica di rete", "Ping, traceroute, DNS, speed test, MTU, HTTP, Wake-on-LAN", R.drawable.ic_speed) { go(Screen.Diag) } else null,
             if (net) ToolEntry("Apparati in LAN", "SNMP e telecamere (ONVIF, Hikvision, RTSP)", R.drawable.ic_memory) { go(Screen.Devices) } else null,
             if (m["routeros"] != false) ToolEntry("MikroTik · RouterOS", "Consultazione in sola lettura via SSH", R.drawable.ic_router) { go(Screen.RouterOs) } else null,
