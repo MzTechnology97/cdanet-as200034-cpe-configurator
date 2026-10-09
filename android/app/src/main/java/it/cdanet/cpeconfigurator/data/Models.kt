@@ -29,7 +29,7 @@ data class TotpLoginRequest(val mfaToken: String, val code: String)
 data class SeriesDto(val points: List<List<Double>> = emptyList(), val min: Double? = null, val avg: Double? = null, val max: Double? = null, val trend: Double? = null)
 
 @Serializable
-data class OutageDto(val start: String? = null, val end: String? = null, val type: String? = null, val inProgress: Boolean = false)
+data class UispOutageDto(val start: String? = null, val end: String? = null, val type: String? = null, val inProgress: Boolean = false)
 
 /** GET /api/provisioning/jobs/{id}/uisp/statistics */
 @Serializable
@@ -38,7 +38,7 @@ data class SignalHistoryDto(
     val remoteSignal: SeriesDto = SeriesDto(),
     val downlinkCapacity: SeriesDto = SeriesDto(),
     val uplinkCapacity: SeriesDto = SeriesDto(),
-    val outages: List<OutageDto>? = null,
+    val outages: List<UispOutageDto>? = null,
 )
 
 /** Body of POST /api/provisioning/jobs/{id}/replace: the rest comes from the replaced job. */
