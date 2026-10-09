@@ -16,17 +16,20 @@ let vendor = null;
  * (empty) tiles, so only the reads tell whether the map really works: header and directories
  * are the first 2-3, the tiles come after.
  */
-const reads = { ok: 0, fail: 0, error: '' };
+const reads = { ok: 0, fail: 0, error: '', other: new Set() };
 if (!window.__cdaFetch) {
   window.__cdaFetch = window.fetch.bind(window);
   window.fetch = async (input, init) => {
-    const isMap = String(input?.url ?? input).includes('/map/basemap');
+    const url = String(input?.url ?? input);
+    const isMap = url.includes('/map/basemap');
     try {
       const r = await window.__cdaFetch(input, init);
       if (isMap) r.ok ? reads.ok++ : (reads.fail++, (reads.error = `HTTP ${r.status}`));
       return r;
     } catch (e) {
       if (isMap) (reads.fail++, (reads.error = e.message));
+      // other failed requests (diagnostics): address without query
+      else if (reads.other.size < 5) reads.other.add(url.split('?')[0].slice(0, 120));
       throw e;
     }
   };
@@ -83,8 +86,9 @@ export async function createMap(el, { center = [37.57, 14.27], zoom = 9, onStatu
       const size = map.getSize();
       // no tile data after header and directories: unreadable here, or outside the downloaded area
       const working = reads.ok - start > 3;
-      onStatus?.(working ? 'basemap_ok' : 'basemap_fallback', `letture ${reads.ok - start} ok, ${reads.fail} fallite${reads.error ? ` (${reads.error})` : ''}, mappa ${size.x}×${size.y}, zoom ${map.getZoom()}`);
-      if (!working && size.x > 0 && size.y > 0) {
+      const other = reads.other.size ? `, altre richieste fallite: ${[...reads.other].join(' ')}` : '';
+      onStatus?.(working ? 'basemap_ok' : 'basemap_fallback', `letture ${reads.ok - start} ok, ${reads.fail} fallite${reads.error ? ` (${reads.error})` : ''}, mappa ${size.x}×${size.y}, zoom ${map.getZoom()}${other}`);
+      if (!working) {
         map.removeLayer(pm);
         publicTiles();
       }
@@ -165,3 +169,37 @@ export function legend(items) {
     }),
   );
 }
+
+const km = (m) => (m < 1000 ? `${m} m` : `${(m / 1000).toFixed(m < 10000 ? 2 : 1)} km`);
+
+/**
+ * Coverage check (console and app): the point and the nearest APs. Admins get the real position
+ * and the area already served by the customers; installers an approximate area and the direction.
+ * [onAp] receives each AP's layer and the bounds to show it (the app focuses an AP from its list).
+ */
+export function drawCoverage(target, la, lo, aps, onAp = null) {
+  const L = window.L;
+  const layers = [L.circleMarker([la, lo], { radius: 7, color: COLORS.point, weight: 2, fillOpacity: 0.9 }).bindPopup(popup('Punto verificato', `${la.toFixed(5)}, ${lo.toFixed(5)}`)).addTo(target)];
+  for (const a of aps) {
+    const info = [a.ssid, `${km(a.distanceM)} · ${a.bearing}° ${a.direction}`, a.stations != null ? `${a.stations} client` : null];
+    const color = a.status === 'active' ? COLORS.ap : COLORS.impacted;
+    let marker;
+    if (a.approx) {
+      marker = L.circle([a.approx.lat, a.approx.lon], { radius: a.approx.radiusM, color, weight: 1, fillOpacity: 0.1 }).bindPopup(popup(a.name, ...info, 'posizione approssimativa')).addTo(target);
+      L.polyline([[la, lo], towards(la, lo, a.bearing, Math.min(a.distanceM, 600))], { color, weight: 3 }).addTo(target);
+    } else {
+      marker = L.circleMarker([a.lat, a.lon], { radius: 6, color, weight: 2, fillOpacity: 0.85 }).bindPopup(popup(a.name, ...info)).addTo(target);
+      L.polyline([[la, lo], [a.lat, a.lon]], { color, weight: 2, dashArray: '6 6' }).addTo(target);
+      // area already served (from the customers' positions): admins only
+      if (a.served?.servedM) {
+        const pts = [[a.lat, a.lon]];
+        for (let i = 0; i <= 12; i++) pts.push(towards(a.lat, a.lon, a.served.center - a.served.width / 2 + (a.served.width * i) / 12, a.served.servedM));
+        L.polygon(pts, { color: COLORS.ap, weight: 1, fillOpacity: 0.08, dashArray: '3 5' }).bindPopup(popup(`${a.name}: area servita`, `settore ${a.served.width}° verso ${a.served.center}°`, `clienti fino a ${km(a.served.servedM)}`)).addTo(target);
+      }
+    }
+    layers.push(marker);
+    onAp?.(a, marker, L.featureGroup([layers[0], marker]).getBounds());
+  }
+  return layers;
+}
+

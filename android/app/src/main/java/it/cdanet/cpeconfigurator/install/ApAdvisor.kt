@@ -40,7 +40,8 @@ data class ApChoice(
  * Pure, unit-tested.
  */
 object ApAdvisor {
-    private val CDA = Regex("^CDA-NET-N\\d+-D\\d+$", RegexOption.IGNORE_CASE)
+    /** Customer APs, relays included ("CDA-NET-N6-D02-R1"); same rule as the server. */
+    private val CDA = Regex("^CDA-NET-N\\d+-D[A-Za-z0-9_-]+$", RegexOption.IGNORE_CASE)
 
     fun isCdaNet(ssid: String?) = ssid != null && CDA.matches(ssid)
 

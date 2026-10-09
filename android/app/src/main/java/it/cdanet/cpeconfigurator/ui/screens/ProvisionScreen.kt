@@ -30,6 +30,7 @@ import it.cdanet.cpeconfigurator.data.JobDto
 import it.cdanet.cpeconfigurator.data.TemplateDto
 import it.cdanet.cpeconfigurator.provisioning.Phase
 import it.cdanet.cpeconfigurator.provisioning.ProvisionForm
+import it.cdanet.cpeconfigurator.provisioning.ProvisioningController
 import it.cdanet.cpeconfigurator.provisioning.Validation
 import it.cdanet.cpeconfigurator.ui.Banner
 import it.cdanet.cpeconfigurator.ui.BusyButton
@@ -121,12 +122,12 @@ fun ProvisionFormStep(c: AppContainer) {
         LocationPicker(c, form.location, form.locationLabel) { l, label -> c.provisioning.updateForm { it.copy(location = l, locationLabel = label) } }
         if (c.moduleOn("compass")) form.location?.let { l ->
             BestApsBeforeInstall(c, l, form.ssid) { ap ->
-                Regex("""^CDA-NET-N(\d+)-D(\d+)$""").find(ap.ssid)?.let { m ->
-                    c.provisioning.updateForm { it.copy(node = m.groupValues[1].toInt(), district = m.groupValues[2].toInt()) }
+                ProvisioningController.SSID_PARTS.find(ap.ssid)?.let { m ->
+                    c.provisioning.updateForm { it.copy(node = m.groupValues[1].toInt(), district = m.groupValues[2].toInt(), relay = m.groupValues[3].toIntOrNull()) }
                 }
             }
         } else if (c.moduleOn("coverage")) form.location?.let { l ->
-            NearbyAps(c, l, onPick = { ap -> c.provisioning.updateForm { it.copy(node = ap.node ?: it.node, district = ap.district ?: it.district) } })
+            NearbyAps(c, l, onPick = { ap -> c.provisioning.updateForm { it.copy(node = ap.node ?: it.node, district = ap.district ?: it.district, relay = ap.relay) } })
         }
     }
 
@@ -134,6 +135,9 @@ fun ProvisionFormStep(c: AppContainer) {
         if (form.replaces == null) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             Dropdown("Nodo", (2..99).toList(), form.node, { it.toString() }, { n -> c.provisioning.updateForm { it.copy(node = n) } }, Modifier.weight(1f))
             Dropdown("Distretto", (1..99).toList(), form.district, { it.toString().padStart(2, '0') }, { d -> c.provisioning.updateForm { it.copy(district = d) } }, Modifier.weight(1f))
+        }
+        if (form.replaces == null) {
+            Dropdown("Rilancio", listOf<Int?>(null) + (1..9).toList(), form.relay, { r -> r?.let { "R$it" } ?: "nessuno (AP del distretto)" }, { r -> c.provisioning.updateForm { it.copy(relay = r) } }, Modifier.fillMaxWidth())
         }
         KeyValue("SSID", form.ssid)
         if (configuredSsids?.contains(form.ssid) == false) {

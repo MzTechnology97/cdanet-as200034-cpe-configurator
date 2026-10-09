@@ -48,6 +48,7 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 | 22 | **Telegram personale per tutti gli account** (Il mio account / Impostazioni dell'app): basta il token del bot, gruppo NOC facoltativo, interruttore per l'admin e messaggi che dicono cosa manca | ogni utente riceve le proprie notifiche | ✅ v1.29.0 |
 | 23 | **Accesso rapido con impronta o volto** nell'app (chiave del telefono revocabile, nessuna password salvata) e **salvataggio delle credenziali** nel browser della console | entrare in un attimo sul campo | ✅ v1.30.0 |
 | 24 | **Aggiornamento obbligatorio dell'app**: controllo all'avvio, ogni 15 minuti e al rifiuto del server; download automatico; senza l'ultima versione niente login né uso (disattivabile in Impostazioni server) | tutti i tecnici sempre sulla stessa versione | ✅ v1.31.0 |
+| 25 | **Regione OpenStreetMap dal portale** (reimport da zero con conferma) e **SSID dei rilanci** `CDA-NET-N<pop>-D<distretto>-R<n>` in reti Wi-Fi, provisioning, cambio AP e copertura | niente SSH anche per il geocoder; AP di rilancio gestiti come gli altri | ✅ v1.32.0 |
 
 ## Da verificare sul campo
 
@@ -62,6 +63,7 @@ Funzioni scritte e testate senza l'apparato reale: vanno provate su una CPE di l
 
 ## Già rilasciato
 
+- v1.32.0: regione OpenStreetMap dal portale, SSID dei rilanci (…-R<n>).
 - v1.31.1: collegamenti PtP esclusi da copertura, Trova l'AP, Stato rete e Salute CPE (SSID CDA-NET-N…-D…).
 - v1.31.0: aggiornamento obbligatorio e automatico dell'app.
 - v1.30.0: accesso rapido con impronta o volto nell'app, credenziali salvabili nel browser.

@@ -320,6 +320,8 @@ data class CoverageAp(
     val direction: String,
     val node: Int? = null,
     val district: Int? = null,
+    /** Relay ("rilancio") number of the AP: SSID …-R{n}. */
+    val relay: Int? = null,
     /** Expected signal of a new CPE here, from the customers already on this AP. */
     val estimate: SignalEstimateDto? = null,
 )

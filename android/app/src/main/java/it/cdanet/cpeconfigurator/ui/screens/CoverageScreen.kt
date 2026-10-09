@@ -1,5 +1,10 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import android.webkit.WebView
+import androidx.compose.foundation.layout.height
+import it.cdanet.cpeconfigurator.data.AppJson
+import it.cdanet.cpeconfigurator.ui.EmbeddedMap
+import kotlinx.serialization.json.JsonPrimitive
 import android.content.Intent
 import android.net.Uri
 import androidx.compose.foundation.layout.Arrangement
@@ -107,20 +112,34 @@ fun LocationPicker(c: AppContainer, current: CpeLocation?, label: String, onLoca
 
 /** Nearest APs (from UISP, via the server) with distance and pointing direction. */
 @Composable
-fun NearbyAps(c: AppContainer, location: CpeLocation, onPick: ((CoverageAp) -> Unit)? = null, onCompass: ((CompassTarget) -> Unit)? = null) {
+fun NearbyAps(c: AppContainer, location: CpeLocation, onPick: ((CoverageAp) -> Unit)? = null, onCompass: ((CompassTarget) -> Unit)? = null, withMap: Boolean = false) {
     var data by remember { mutableStateOf<CoverageDto?>(null) }
+    var raw by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
+    var page by remember { mutableStateOf<WebView?>(null) }
     LaunchedEffect(location) {
         data = null
+        raw = null
         error = null
         try {
-            data = c.api.coverage(location.latitude, location.longitude)
+            val json = c.api.coverageJson(location.latitude, location.longitude)
+            data = AppJson.decodeFromString(CoverageDto.serializer(), json)
+            raw = json
         } catch (e: Exception) {
             error = e.message
         }
     }
     ErrorBanner(error)
     val d = data
+    // map of the point and the APs (same drawing as the console); "Mappa" on a row shows that AP
+    val json = raw
+    if (withMap && json != null && d != null && d.aps.isNotEmpty()) {
+        EmbeddedMap(
+            c,
+            "window.cdaCoverage(Object.assign($json, { lat: ${location.latitude}, lon: ${location.longitude} }))",
+            Modifier.fillMaxWidth().height(320.dp),
+        ) { page = it }
+    }
     when {
         d == null && error == null -> Text("Ricerca AP vicini…", color = MaterialTheme.colorScheme.onSurfaceVariant)
         d != null && d.aps.isEmpty() -> Text(
@@ -149,6 +168,9 @@ fun NearbyAps(c: AppContainer, location: CpeLocation, onPick: ((CoverageAp) -> U
                     )
                     ap.estimate?.describe()?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium) }
                 }
+                if (withMap && page != null) {
+                    TextButton(onClick = { page?.evaluateJavascript("window.cdaFocus(${JsonPrimitive(ap.id)})", null) }) { Text("Mappa") }
+                }
                 if (onCompass != null) {
                     androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
                     OutlinedButton(onClick = { onCompass(CompassTarget(ap.name.ifBlank { ap.id }, ap.bearing, ap.distanceM, location.latitude, location.longitude)) }) { Text("Bussola") }
@@ -175,7 +197,7 @@ fun CoverageScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? = null
         }
         location?.let { l ->
             SectionCard("AP più vicini") {
-                NearbyAps(c, l, onCompass = onCompass)
+                NearbyAps(c, l, onCompass = onCompass, withMap = true)
                 Text(
                     "La freccia indica la direzione di puntamento (0° = nord). Vengono mostrati solo gli AP più vicini entro il raggio configurato.",
                     style = MaterialTheme.typography.bodySmall,

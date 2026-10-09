@@ -21,8 +21,8 @@ data class SurveyAp(
     val airmax: Boolean?,
 ) {
     val snr: Int? get() = if (signal != null && noise != null) signal - noise else null
-    /** CDA Net SSID "CDA-NET-N{node}-D{district}". */
-    val cdaNet: Pair<Int, Int>? get() = Regex("^CDA-NET-N(\\d+)-D(\\d+)$", RegexOption.IGNORE_CASE).find(essid)?.let { it.groupValues[1].toInt() to it.groupValues[2].toInt() }
+    /** CDA Net SSID "CDA-NET-N{node}-D{district}", also of a relay AP ("…-R{n}"). */
+    val cdaNet: Pair<Int, Int>? get() = Regex("^CDA-NET-N(\\d+)-D(\\d+)(?:-R\\d+)?$", RegexOption.IGNORE_CASE).find(essid)?.let { it.groupValues[1].toInt() to it.groupValues[2].toInt() }
 }
 
 /**

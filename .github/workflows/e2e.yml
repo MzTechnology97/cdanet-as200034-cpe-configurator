@@ -7,9 +7,9 @@ name: Installer e2e
 on:
   push:
     branches: [main]
-    paths: ['deploy/**', 'server/**', 'web/**', '.github/workflows/e2e.yml']
+    paths: ['deploy/**', 'server/**', 'web/**', 'VERSION', '.github/workflows/e2e.yml']
   pull_request:
-    paths: ['deploy/**', 'server/**', 'web/**', '.github/workflows/e2e.yml']
+    paths: ['deploy/**', 'server/**', 'web/**', 'VERSION', '.github/workflows/e2e.yml']
   workflow_dispatch:
 
 permissions:

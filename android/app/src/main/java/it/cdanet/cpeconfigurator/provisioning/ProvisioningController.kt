@@ -28,6 +28,8 @@ data class ProvisionForm(
     val serial: String = "",
     val node: Int = 2,
     val district: Int = 1,
+    /** Relay ("rilancio") AP of the district: SSID …-R{n}; null = the district's own AP. */
+    val relay: Int? = null,
     val pppoeUser: String = "",
     val pppoePassword: String = "",
     val templateId: Int? = null,
@@ -37,7 +39,7 @@ data class ProvisionForm(
     val replaces: String? = null,
     val replacesLabel: String = "",
 ) {
-    val ssid: String get() = "CDA-NET-N$node-D${district.toString().padStart(2, '0')}"
+    val ssid: String get() = "CDA-NET-N$node-D${district.toString().padStart(2, '0')}" + (relay?.let { "-R$it" } ?: "")
     val customerName: String get() = Validation.customerName(pppoeUser)
     fun toRequest() = ProvisionRequest(model, Validation.normalizeMac(mac), serial.trim(), ssid, pppoeUser.trim(), pppoePassword, templateId, location)
     fun errors(): List<String> = Validation.formErrors(this)
@@ -165,12 +167,13 @@ class ProvisioningController(
 
     /** Starts the replacement of the CPE of a completed job (History → Sostituisci CPE). */
     fun startReplacement(j: it.cdanet.cpeconfigurator.data.JobDto) {
-        val m = Regex("""^CDA-NET-N(\d+)-D(\d+)$""").find(j.ssid)
+        val m = SSID_PARTS.find(j.ssid)
         _state.value = ProvisioningState()
         _form.value = ProvisionForm(
             model = j.model,
             node = m?.groupValues?.get(1)?.toIntOrNull() ?: 2,
             district = m?.groupValues?.get(2)?.toIntOrNull() ?: 1,
+            relay = m?.groupValues?.get(3)?.toIntOrNull(),
             pppoeUser = j.pppoeUser,
             replaces = j.id,
             replacesLabel = "${j.deviceName.ifBlank { j.pppoeUser }} · ${j.mac}",
@@ -179,7 +182,12 @@ class ProvisioningController(
 
     fun reset() {
         _state.value = ProvisioningState()
-        _form.update { ProvisionForm(model = it.model, node = it.node, district = it.district) }
+        _form.update { ProvisionForm(model = it.model, node = it.node, district = it.district, relay = it.relay) }
+    }
+
+    companion object {
+        /** CDA-NET-N{node}-D{district}, -R{n} for a relay ("rilancio") AP: node, district, relay. */
+        val SSID_PARTS = Regex("""^CDA-NET-N(\d+)-D(\d+)(?:-R(\d+))?$""", RegexOption.IGNORE_CASE)
     }
 
     fun clearError() {

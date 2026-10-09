@@ -277,8 +277,10 @@ class ApiClient(
         AppJson.decodeFromString(kotlinx.serialization.builtins.ListSerializer(JobDto.serializer()), request("GET", "/api/provisioning/jobs?limit=100"))
 
     /** Nearest APs from UISP (server keeps the list to the closest few within range). */
-    suspend fun coverage(lat: Double, lon: Double): CoverageDto =
-        AppJson.decodeFromString(CoverageDto.serializer(), request("GET", "/api/coverage?lat=$lat&lon=$lon&limit=5"))
+    suspend fun coverage(lat: Double, lon: Double): CoverageDto = AppJson.decodeFromString(CoverageDto.serializer(), coverageJson(lat, lon))
+
+    /** The same answer as is, for the embedded map (positions, approximate areas, served sectors). */
+    suspend fun coverageJson(lat: Double, lon: Double): String = request("GET", "/api/coverage?lat=$lat&lon=$lon&limit=5")
 
     suspend fun geocode(query: String): List<GeocodeResult> =
         AppJson.decodeFromString(

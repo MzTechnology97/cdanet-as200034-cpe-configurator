@@ -22,6 +22,8 @@ export const INFRA_KEYS = {
   CDANET_CHANNEL: /^[a-z0-9][a-z0-9._-]{0,39}$/,
   MAP_MODE: /^(local|off)$/,
   MAP_REGION: /^(sicilia|isole|sud|centro|nord-est|nord-ovest|italia|custom)$/,
+  /** Local OpenStreetMap (Nominatim) region: changing it imports the data again from scratch. */
+  NOMINATIM_REGION: /^(sicilia|isole|sud|centro|nord-est|nord-ovest|italia)$/,
   MAP_BBOX: /^-?[0-9]{1,3}(\.[0-9]+)?,-?[0-9]{1,2}(\.[0-9]+)?,-?[0-9]{1,3}(\.[0-9]+)?,-?[0-9]{1,2}(\.[0-9]+)?$/,
 } as const;
 type InfraKey = keyof typeof INFRA_KEYS;
@@ -71,6 +73,8 @@ export function infraRoutes(app: FastifyInstance, ctx: AppContext) {
     return {
       agent: current?.AGENT === '1',
       values,
+      /** "local" = OpenStreetMap installed on this server (Nominatim); otherwise the public service. */
+      geocoderMode: current?.GEOCODER_MODE || null,
       status: st ? { at: st.AT || null, result: st.RESULT || null, message: st.MESSAGE || '' } : null,
       pending: pendingSince != null,
       stale: pendingSince != null && Date.now() - Date.parse(pendingSince) > STALE_MS,
@@ -84,7 +88,7 @@ export function infraRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.put('/api/admin/infra', admin, async (req, reply) => {
     const b = z
-      .object({ values: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}), action: z.enum(['map_update']).optional() })
+      .object({ values: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).default({}), action: z.enum(['map_update', 'geocoder_reimport']).optional() })
       .strict()
       .parse(req.body);
     const lines: string[] = [];

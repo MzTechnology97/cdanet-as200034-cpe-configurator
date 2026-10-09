@@ -16,10 +16,12 @@ describe('Infrastruttura dal web (richieste all’agente di aggiornamento)', () 
 
     // the updater publishes the current values
     mkdirSync(cfg.infraDir, { recursive: true });
-    writeFileSync(join(cfg.infraDir, 'current.env'), 'APP_LISTEN=:80\nHTTPS_SITES=https://10.0.0.1\nMAP_MODE=local\nMAP_REGION=sicilia\nAGENT=1\n');
+    writeFileSync(join(cfg.infraDir, 'current.env'), 'APP_LISTEN=:80\nHTTPS_SITES=https://10.0.0.1\nMAP_MODE=local\nMAP_REGION=sicilia\nNOMINATIM_REGION=isole\nGEOCODER_MODE=local\nAGENT=1\n');
     const v = (await call('GET')).json();
     assert.equal(v.agent, true);
     assert.equal(v.values.HTTPS_SITES, 'https://10.0.0.1');
+    assert.equal(v.values.NOMINATIM_REGION, 'isole');
+    assert.equal(v.geocoderMode, 'local');
     assert.equal(v.pending, false);
 
     // validation: unknown keys, bad values, injection attempts never reach the request file
@@ -33,6 +35,7 @@ describe('Infrastruttura dal web (richieste all’agente di aggiornamento)', () 
     await app.inject({ method: 'POST', url: '/api/admin/users', headers: H, payload: { username: 'tecnico', password: 'Installer-Pass-123' } });
     assert.equal((await call('GET', undefined, auth(await login('tecnico', 'Installer-Pass-123')))).statusCode, 403);
 
+    assert.equal((await call('PUT', { values: { NOMINATIM_REGION: 'custom' } })).json().error, 'invalid_value', 'no free download URLs from the web');
     const r = await call('PUT', { values: { MAP_BBOX: '12.1,37.5,13.2,38.3', MAP_REGION: 'custom', AUTOUPDATE: false, UPDATE_WINDOW: '02-05', HTTPS_SITES: 'https://10.0.0.1  https://cpe.lan' }, action: 'map_update' });
     assert.equal(r.statusCode, 202, r.body);
     assert.equal(r.json().pending, true);

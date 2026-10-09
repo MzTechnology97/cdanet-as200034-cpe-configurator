@@ -176,7 +176,9 @@ async function infraCard(box) {
       ]),
       MAP_REGION: sel('MAP_REGION', REGIONS),
       MAP_BBOX: txt('MAP_BBOX', { placeholder: 'minLon,minLat,maxLon,maxLat' }),
+      NOMINATIM_REGION: sel('NOMINATIM_REGION', REGIONS.filter(([r]) => r !== 'custom')),
     };
+    const osmLocal = d.geocoderMode === 'local';
     i.AUTOUPDATE.checked = (v.AUTOUPDATE ?? '1') !== '0';
     const bboxRow = h('label', {}, 'Area (minLon,minLat,maxLon,maxLat)', i.MAP_BBOX);
     const syncMap = () => {
@@ -204,6 +206,7 @@ async function infraCard(box) {
       ['Indirizzo e HTTPS', ['APP_LISTEN', 'HTTPS_SITES']],
       ['Aggiornamenti automatici', ['AUTOUPDATE', 'UPDATE_INTERVAL', 'UPDATE_WINDOW', 'CDANET_CHANNEL']],
       ['Mappe della console', ['MAP_MODE', 'MAP_REGION', 'MAP_BBOX']],
+      ['OpenStreetMap locale (ricerca indirizzi)', osmLocal ? ['NOMINATIM_REGION'] : []],
     ];
     const value = (k) => (k === 'AUTOUPDATE' ? (i[k].checked ? '1' : '0') : String(i[k].value).trim().replace(/\s+/g, ' '));
     const save = h('button', { type: 'button', class: 'primary' }, 'Applica');
@@ -218,12 +221,18 @@ async function infraCard(box) {
       // the self-signed certificate is issued for the first address when the browser sends no name
       if (values.HTTPS_SITES) values.HTTPS_DEFAULT_SNI = values.HTTPS_SITES.split(' ')[0].replace(/^https:\/\//, '');
       if (values.APP_LISTEN && !values.APP_LISTEN.startsWith(':') && !confirm(`Con un nome (${values.APP_LISTEN}) la console sulla porta 80 risponde solo a quel nome, con certificato pubblico Let’s Encrypt: il nome deve puntare a questo server e le porte 80/443 devono essere raggiungibili da Internet. Gli indirizzi HTTPS autofirmati restano attivi. Continuare?`)) return;
+      if (values.NOMINATIM_REGION && !confirm(`Cambiare la regione di OpenStreetMap in "${values.NOMINATIM_REGION}"? I dati attuali vengono cancellati e reimportati: da 20 minuti a qualche ora (tutta Italia anche di più). Nel frattempo la ricerca indirizzi usa il servizio pubblico.`)) return;
       if (!Object.keys(values).length) return toast('Nessuna modifica', 'bad');
       send(save, values);
     };
     const mapNow = h('button', { type: 'button' }, 'Aggiorna la mappa ora');
     mapNow.disabled = d.values.MAP_MODE === 'off';
     mapNow.onclick = () => send(mapNow, {}, 'map_update');
+    const osmReimport = h('button', { type: 'button' }, 'Reimporta OpenStreetMap da zero');
+    osmReimport.hidden = !osmLocal;
+    osmReimport.onclick = () =>
+      confirm('Cancellare i dati OpenStreetMap importati e rifare l’import da zero (da 20 minuti a qualche ora)? Nel frattempo la ricerca indirizzi usa il servizio pubblico.') &&
+      send(osmReimport, {}, 'geocoder_reimport');
 
     const help = {
       APP_LISTEN: ':80 = HTTP sulla rete; un nome (es. cpe.cda-net.it) attiva HTTPS automatico con certificato pubblico.',
@@ -232,6 +241,7 @@ async function infraCard(box) {
       UPDATE_WINDOW: 'Ore in cui sono ammessi gli aggiornamenti; vuoto = sempre.',
       CDANET_CHANNEL: '“stable” segue le nuove versioni; un numero (es. 1.26.0) blocca quella versione.',
       MAP_REGION: 'Cambiando area la mappa viene riscaricata (qualche minuto).',
+      NOMINATIM_REGION: 'Area degli indirizzi cercati sul server. Cambiandola i dati vengono reimportati da zero (RAM e disco: Sicilia ~3 GB / 15 GB, Italia ~8 GB / 90 GB).',
     };
     const labels = {
       APP_LISTEN: 'Indirizzo della console',
@@ -241,6 +251,7 @@ async function infraCard(box) {
       CDANET_CHANNEL: 'Canale / versione',
       MAP_MODE: 'Tipo di mappa',
       MAP_REGION: 'Regione',
+      NOMINATIM_REGION: 'Regione OpenStreetMap',
     };
     const row = (k) =>
       k === 'MAP_BBOX'
@@ -263,12 +274,20 @@ async function infraCard(box) {
         st
           ? h('p', { class: 'small' }, badge(st.result === 'running' ? 'in corso' : st.result === 'ok' ? 'applicato' : 'errore', STATUS[st.result] ?? ''), ` ${fmtDate(st.at)} · ${st.message}`)
           : null,
-        ...groups.map(([title, keys]) => h('div', {}, h('h3', {}, title), ...keys.map(row))),
-        h('div', { class: 'btns' }, save, mapNow),
+        ...groups.map(([title, keys]) =>
+          h(
+            'div',
+            {},
+            h('h3', {}, title),
+            ...keys.map(row),
+            keys.length ? null : h('p', { class: 'small muted' }, 'Non installato su questo server: la ricerca indirizzi usa il servizio pubblico. Si installa con l’installer (CDANET_GEOCODER=local).'),
+          ),
+        ),
+        h('div', { class: 'btns' }, save, mapNow, osmReimport),
       ),
     );
     // one request at a time: the form is locked until the agent reports the outcome
-    if (!d.agent || d.pending || st?.result === 'running') for (const el of [...Object.values(i), save, mapNow]) el.disabled = true;
+    if (!d.agent || d.pending || st?.result === 'running') for (const el of [...Object.values(i), save, mapNow, osmReimport]) el.disabled = true;
   }
 
   await load();

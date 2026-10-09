@@ -87,14 +87,15 @@ export function parseWirelessCsv(text: string): { rows: WirelessRow[]; errors: C
         return;
       }
       const derived = ssidFor(n, d);
-      if (ssid && ssid !== derived) {
+      // an SSID column may name a relay AP of the same district (…-R1)
+      if (ssid && ssid.replace(/-R\d+$/, '') !== derived) {
         errors.push({ line, error: `SSID ${ssid} diverso da nodo/distretto (${derived})` });
         return;
       }
-      ssid = derived;
+      ssid = ssid || derived;
     }
     if (!SSID_RX.test(ssid)) {
-      errors.push({ line, error: `SSID non valido "${ssid}" (atteso CDA-NET-N{nodo}-D{distretto})` });
+      errors.push({ line, error: `SSID non valido "${ssid}" (atteso CDA-NET-N{nodo}-D{distretto}, con -R{n} per un rilancio)` });
       return;
     }
     // WPA2 is taken verbatim (no trim of inner spaces), only surrounding whitespace is ignored.
