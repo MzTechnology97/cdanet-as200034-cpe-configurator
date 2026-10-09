@@ -12,6 +12,7 @@ import type { Oui } from './services/oui.ts';
 import type { Outages } from './services/outages.ts';
 import type { Notifier } from './services/notify.ts';
 import type { Telegram } from './services/telegram.ts';
+import type { Dem } from './services/dem.ts';
 
 export interface AppContext {
   cfg: Config;
@@ -29,6 +30,7 @@ export interface AppContext {
   modules: Modules;
   oui: Oui;
   outages: Outages;
+  dem: Dem;
   notify: Notifier;
   version: string;
 }

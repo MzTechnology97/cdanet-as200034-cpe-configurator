@@ -1,5 +1,6 @@
 import { HttpError } from '../auth.ts';
 import { parseMac } from '../domain/policy.ts';
+import { buildApModel, type ApModel, type ClientSample } from '../domain/coverage-model.ts';
 import { bearingDeg, cardinal, distanceM, isValidLatLon, type LatLon } from '../domain/geo.ts';
 
 /**
@@ -239,6 +240,30 @@ export function createUisp(opts: UispOptions) {
      * POPs and APs exactly as UISP knows them (name, address, coordinates and where the
      * position comes from): nothing is typed by hand in CDA Net.
      */
+    /**
+     * Coverage model of each AP from its customers (position of the CPE or of its site, signal).
+     * Positions stay on the server: callers expose only estimates.
+     */
+    async apModels(apIds: string[]) {
+      const want = new Set(apIds);
+      const [ds, ss] = await Promise.all([devices(), sites().catch(() => [] as UispSite[])]);
+      const siteLoc = new Map(ss.map((s) => [s.id, s.location]));
+      const apLoc = new Map(ds.filter(isAp).map((d) => [d.id, d.location ?? (d.siteId ? (siteLoc.get(d.siteId) ?? null) : null)]));
+      const clients = new Map<string, ClientSample[]>();
+      for (const d of ds) {
+        if (!d.apId || !want.has(d.apId) || isAp(d)) continue;
+        const loc = d.location ?? (d.siteId ? (siteLoc.get(d.siteId) ?? null) : null);
+        if (!loc) continue;
+        clients.set(d.apId, [...(clients.get(d.apId) ?? []), { lat: loc.lat, lon: loc.lon, signal: d.status === 'active' ? d.signal : null }]);
+      }
+      const out = new Map<string, ApModel>();
+      for (const id of want) {
+        const loc = apLoc.get(id);
+        if (loc) out.set(id, buildApModel(loc, clients.get(id) ?? []));
+      }
+      return out;
+    },
+
     /** CPEs (stations) per AP id: how many and how many not active (Stato rete). */
     async cpeCounts() {
       const m = new Map<string, { total: number; offline: number }>();

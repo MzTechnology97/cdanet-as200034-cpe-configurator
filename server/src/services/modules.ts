@@ -12,7 +12,7 @@ export const MODULES = [
   { key: 'coverage', label: 'Copertura AP', area: 'web + app', description: 'AP più vicini da indirizzo o GPS, con direzione di puntamento (richiede UISP).', default: true },
   { key: 'field_alignment', label: 'Puntamento antenna', area: 'app', description: 'Segnale in tempo reale con bip, picco e segnale atteso.', default: true },
   { key: 'field_diagnosis', label: 'Diagnosi CPE', area: 'app', description: 'Controlli su segnale, cavo LAN, PPPoE e firmware con rapporto per il NOC.', default: true },
-  { key: 'compass', label: 'Bussola verso l’AP', area: 'app', description: 'Direzione dell’AP con verifica di calibrazione e disturbi magnetici.', default: true },
+  { key: 'compass', label: 'Trova l’AP (bussola e fotocamera)', area: 'app', description: 'AP vicini con distanza, azimut, altitudine e tilt; mappa, bussola con verifica di calibrazione e mirino in fotocamera.', default: true },
   { key: 'acceptance', label: 'Collaudo e verbale', area: 'web + app', description: 'Misure, foto e verbale di installazione salvati nel job.', default: true },
   { key: 'replacement', label: 'Sostituzione CPE', area: 'app', description: 'Nuova CPE con i dati del job sostituito (password PPPoE dal backup UISP).', default: true },
   { key: 'signal_history', label: 'Storico segnale', area: 'web + app', description: 'Andamento del segnale e interruzioni da UISP.', default: true },

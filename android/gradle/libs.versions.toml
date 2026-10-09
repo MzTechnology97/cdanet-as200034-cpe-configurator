@@ -16,6 +16,7 @@ media3 = "1.5.0"
 codeScanner = "16.1.0"
 playLocation = "21.3.0"
 browser = "1.8.0"
+camerax = "1.4.1"
 junit = "4.13.2"
 
 [libraries]
@@ -45,6 +46,10 @@ play-code-scanner = { module = "com.google.android.gms:play-services-code-scanne
 play-location = { module = "com.google.android.gms:play-services-location", version.ref = "playLocation" }
 kotlinx-coroutines-play-services = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-play-services", version.ref = "coroutines" }
 junit = { module = "junit:junit", version.ref = "junit" }
+camera-core = { module = "androidx.camera:camera-core", version.ref = "camerax" }
+camera-camera2 = { module = "androidx.camera:camera-camera2", version.ref = "camerax" }
+camera-lifecycle = { module = "androidx.camera:camera-lifecycle", version.ref = "camerax" }
+camera-view = { module = "androidx.camera:camera-view", version.ref = "camerax" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

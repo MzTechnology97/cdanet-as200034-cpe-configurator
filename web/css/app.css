@@ -201,3 +201,7 @@ button.link { background: none; border: none; color: var(--brand); padding: 4px 
 .map-popup b { display: block; margin-bottom: 2px; }
 @media (max-width: 640px) { .map { height: 320px; } }
 .net-ap { padding: 3px 0; }
+/* Map embedded in the Android app */
+body.embed { margin: 0; padding: 0; background: var(--bg); }
+.map.embed-map { height: 100vh; border: 0; border-radius: 0; margin: 0; }
+.me-icon .me-arrow { width: 0; height: 0; margin: 0 auto; border-left: 9px solid transparent; border-right: 9px solid transparent; border-bottom: 24px solid #ef4444; transform-origin: 50% 50%; }

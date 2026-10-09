@@ -17,7 +17,18 @@ import kotlin.math.sin
 import kotlin.math.sqrt
 
 /** AP to point at (bearing from the server, true north) seen from the CPE position (used for the declination). */
-data class CompassTarget(val name: String, val bearing: Int, val distanceM: Int?, val fromLatitude: Double, val fromLongitude: Double)
+data class CompassTarget(
+    val name: String,
+    val bearing: Int,
+    val distanceM: Int?,
+    val fromLatitude: Double,
+    val fromLongitude: Double,
+    /** Elevation angle towards the AP (terrain + antenna heights), degrees; null = unknown. */
+    val tiltDeg: Double? = null,
+    /** AP antenna and installation point altitude, metres a.s.l. */
+    val altitude: Double? = null,
+    val fromAltitude: Double? = null,
+)
 
 enum class CompassQuality { Good, Fair, Poor }
 

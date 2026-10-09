@@ -43,7 +43,9 @@ import it.cdanet.cpeconfigurator.ui.screens.HistoryScreen
 import it.cdanet.cpeconfigurator.ui.screens.HomeScreen
 import it.cdanet.cpeconfigurator.ui.screens.IpScannerScreen
 import it.cdanet.cpeconfigurator.ui.screens.NetDiagScreen
+import it.cdanet.cpeconfigurator.ui.screens.ArAimScreen
 import it.cdanet.cpeconfigurator.ui.screens.NetworkStatusScreen
+import it.cdanet.cpeconfigurator.ui.screens.PointingScreen
 import it.cdanet.cpeconfigurator.ui.screens.OutagesScreen
 import it.cdanet.cpeconfigurator.ui.screens.PortScannerScreen
 import it.cdanet.cpeconfigurator.ui.screens.LoginScreen
@@ -70,6 +72,8 @@ enum class Screen(val title: String, val scroll: Boolean = true) {
     Diagnosis("Diagnosi CPE"),
     Acceptance("Collaudo installazione"),
     Compass("Bussola verso l'AP"),
+    Pointing("Trova l'AP", scroll = false),
+    ArAim("Mirino verso l'AP", scroll = false),
     CpeHealth("Le mie CPE"),
     IpScanner("Scanner IP"),
     PortScanner("Port scanner"),
@@ -174,6 +178,12 @@ fun AppRoot(c: AppContainer) {
                     Screen.Diagnosis -> WifiRequired(c, "alla Wi-Fi della CPE (management, es. \"LBE-5AC-Gen2:xxxx\") oppure a quella del router del cliente", "La diagnosi interroga la CPE in rete locale.") { DiagnosisScreen(c) }
                     Screen.Acceptance -> AcceptanceScreen(c)
                     Screen.Compass -> CompassScreen(c)
+                    Screen.Pointing -> PointingScreen(
+                        c,
+                        onAim = { t -> c.compassTarget.value = t; go(Screen.ArAim) },
+                        onCompass = { t -> c.compassTarget.value = t; go(Screen.Compass) },
+                    )
+                    Screen.ArAim -> ArAimScreen(c)
                     Screen.CpeHealth -> CpeHealthScreen(c)
                     Screen.IpScanner -> WifiRequired(c, "alla Wi-Fi della rete locale da analizzare", "Lo scanner esamina la subnet della Wi-Fi collegata.") { IpScannerScreen(c, onPortScan = { c.portScanTarget.value = it; go(Screen.PortScanner) }) }
                     Screen.PortScanner -> WifiRequired(c, "alla Wi-Fi della rete locale da analizzare", "Le porte di host privati si verificano dalla stessa rete locale.") { PortScannerScreen(c) }

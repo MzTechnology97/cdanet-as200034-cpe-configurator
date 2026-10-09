@@ -13,6 +13,7 @@ import { TARGET_FIRMWARE } from '../domain/policy.ts';
 import type { ModuleKey } from '../services/modules.ts';
 import type { UispDevice } from '../services/uisp.ts';
 import { approxPoint, roughDistance } from '../domain/approx.ts';
+import { estimateSignal, type ApModel } from '../domain/coverage-model.ts';
 
 const SSID_PARTS = /^CDA-NET-N(\d+)-D(\d+)$/;
 
@@ -91,6 +92,19 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     const keys = req.user!.role === 'admin' ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
     const allow = keys ? (a: { id: string; siteId: string | null }) => keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`)) : undefined;
     const aps = await uisp().nearestAps({ lat: q.lat, lon: q.lon }, q.limit, ctx.uispSettings.coverageMaxKm, allow);
+    const models = await uisp().apModels(aps.map((a) => a.id)).catch(() => new Map<string, ApModel>());
+    const clientsShown = !keys || ctx.outages.config().installerClients;
+    const estimateFor = (a: { id: string; distanceM: number; bearing: number }) => {
+      const m = models.get(a.id);
+      if (!m) return null;
+      // bearing from the AP towards the point = reverse of the pointing direction
+      const e = estimateSignal(m, a.distanceM, (a.bearing + 180) % 360);
+      return { ...e, basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null };
+    };
+    const served = (a: { id: string }) => {
+      const m = models.get(a.id);
+      return m && m.sector ? { center: m.sector.center, width: m.sector.width, servedM: m.servedM } : null;
+    };
     return {
       maxKm: ctx.uispSettings.coverageMaxKm,
       restricted: !!keys,
@@ -99,9 +113,9 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
         const m = a.ssid ? SSID_PARTS.exec(a.ssid) : null;
         const base = { ...a, node: m ? Number(m[1]) : null, district: m ? Number(m[2]) : null };
         // Installers: exact direction for pointing, rounded distance and only an approximate area on the map.
-        if (!keys) return { ...base, lat, lon };
+        if (!keys) return { ...base, lat, lon, estimate: estimateFor(a), served: served(a) };
         const stations = ctx.outages.config().installerClients ? base.stations : null;
-        return { ...base, stations, distanceM: roughDistance(a.distanceM), approx: approxPoint(lat, lon, `ap:${a.id}`, ctx.cfg.jwtSecret) };
+        return { ...base, stations, distanceM: roughDistance(a.distanceM), approx: approxPoint(lat, lon, `ap:${a.id}`, ctx.cfg.jwtSecret), estimate: estimateFor(a) };
       }),
     };
   });

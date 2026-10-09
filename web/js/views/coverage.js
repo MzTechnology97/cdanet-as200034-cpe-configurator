@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { badge, busy, card, field, h, mount, pageHead, table } from '../dom.js';
+import { badge, busy, card, field, h, mount, pageHead, table, toast } from '../dom.js';
 import { createMap, fit, legend, MAP_COLORS as C, popup, towards } from '../map.js';
 import { nms } from '../terms.js';
 
@@ -10,6 +10,24 @@ import { nms } from '../terms.js';
 export const osmLink = (lat, lon) => `https://www.openstreetmap.org/?mlat=${lat}&mlon=${lon}#map=17/${lat}/${lon}`;
 const km = (m) => (m < 1000 ? `${m} m` : `${(m / 1000).toFixed(m < 10000 ? 2 : 1)} km`);
 
+const CONF = { alta: 'good', media: 'warn', bassa: '' };
+
+/** Expected signal of a new CPE, learned from the customers already on the AP. */
+function estimateCell(e) {
+  if (!e || e.signalDbm == null) return h('span', { class: 'small muted' }, 'nessun cliente con segnale');
+  return h(
+    'div',
+    {},
+    h('b', {}, `${e.signalDbm} dBm`),
+    h('span', { class: 'small muted' }, ` (${e.low}…${e.high})`),
+    ' ',
+    badge(`affidabilità ${e.confidence}`, CONF[e.confidence] ?? ''),
+    e.inSector === false ? h('div', { class: 'small' }, 'fuori dal settore già servito') : null,
+    e.beyondServed ? h('div', { class: 'small' }, 'più lontano dei clienti attuali') : null,
+    e.basis != null ? h('div', { class: 'small muted' }, `stima da ${e.basis} clienti${e.nearby ? `, ${e.nearby} vicini` : ''}`) : null,
+  );
+}
+
 export function apTable(aps) {
   return table(
     [
@@ -17,6 +35,7 @@ export function apTable(aps) {
       { label: 'SSID', render: (a) => h('span', { class: 'mono' }, a.ssid ?? '—') },
       { label: 'Distanza', render: (a) => km(a.distanceM) },
       { label: 'Puntamento', render: (a) => h('span', { class: 'bearing' }, h('span', { class: 'arrow', style: null, 'data-deg': a.bearing }, '↑'), ` ${a.bearing}° ${a.direction}`) },
+      { label: 'Segnale stimato', render: (a) => estimateCell(a.estimate) },
       { label: 'Stato', render: (a) => badge(a.status === 'active' ? 'online' : a.status, a.status === 'active' ? 'good' : 'bad') },
       { label: 'Client', render: (a) => (a.stations ?? '—') },
       { label: 'Frequenza', render: (a) => (a.frequency ? `${a.frequency} MHz` : '—') },
@@ -49,14 +68,55 @@ function coverageMap(la, lo, aps) {
       } else {
         layers.push(L.circleMarker([a.lat, a.lon], { radius: 6, color, weight: 2, fillOpacity: 0.85 }).bindPopup(popup(a.name, ...info)).addTo(map));
         L.polyline([[la, lo], [a.lat, a.lon]], { color, weight: 2, dashArray: '6 6' }).addTo(map);
+        // area already served (from the customers' positions): admins only
+        if (a.served?.servedM) {
+          const pts = [[a.lat, a.lon]];
+          for (let i = 0; i <= 12; i++) pts.push(towards(a.lat, a.lon, a.served.center - a.served.width / 2 + (a.served.width * i) / 12, a.served.servedM));
+          L.polygon(pts, { color: C.ap, weight: 1, fillOpacity: 0.08, dashArray: '3 5' }).bindPopup(popup(`${a.name}: area servita`, `settore ${a.served.width}° verso ${a.served.center}°`, `clienti fino a ${km(a.served.servedM)}`)).addTo(map);
+        }
       }
     }
     fit(map, layers);
   })().catch((e) => (note.textContent = e.message));
-  return h('div', {}, el, legend([[C.point, 'Punto verificato'], [C.ap, 'AP online'], [C.impacted, 'AP non attivo']]), note);
+  return h(
+    'div',
+    {},
+    el,
+    legend([[C.point, 'Punto verificato'], [C.ap, restricted ? 'AP online' : 'AP online (tratteggio: area già servita dai clienti)'], [C.impacted, 'AP non attivo']]),
+    note,
+    h('p', { class: 'small muted' }, 'Il segnale stimato usa le CPE già collegate a ogni AP (posizione e segnale reale): distanza, direzione e clienti vicini al punto. Vale con visibilità ottica; ostacoli locali (alberi, edifici) possono peggiorarlo.'),
+  );
 }
 
-export async function coverageView() {
+/** Admin: antenna heights for the tilt shown in the app ("Trova l'AP"). */
+function pointingSettings() {
+  const box = h('div', {});
+  api('/api/admin/pointing/config')
+    .then((c) => {
+      const ap = h('input', { type: 'number', min: 0, max: 200, step: 1, value: c.apHeightM });
+      const cpe = h('input', { type: 'number', min: 0, max: 100, step: 0.5, value: c.cpeHeightM });
+      const save = h('button', { type: 'button', class: 'primary' }, 'Salva');
+      save.onclick = () =>
+        busy(save, async () => {
+          await api('/api/admin/pointing/config', { method: 'PUT', body: { apHeightM: Number(ap.value) || 0, cpeHeightM: Number(cpe.value) || 0 } });
+          toast('Altezze salvate');
+        });
+      mount(
+        box,
+        card(
+          h('h2', {}, 'Puntamento (app)'),
+          h('p', { class: 'small muted' }, 'Per il tilt verso gli AP l’app usa l’altitudine del terreno (modello SRTM, scaricato dal server solo per le zone usate) più queste altezze dal suolo.'),
+          h('div', { class: 'row' }, field('Altezza antenne AP (m dal suolo)', ap), field('Altezza CPE predefinita (m dal suolo)', cpe)),
+          c.dem ? null : h('div', { class: 'notice warn' }, 'Modello del terreno disattivato (DEM_URL vuoto): il tilt non viene calcolato.'),
+          h('div', { class: 'btns' }, save),
+        ),
+      );
+    })
+    .catch(() => {});
+  return box;
+}
+
+export async function coverageView({ user } = {}) {
   const out = h('div', {});
   const addr = h('input', { placeholder: 'Via Roma 12, 94100 Enna', autocomplete: 'off' });
   const lat = h('input', { inputmode: 'decimal', placeholder: '37.5671' });
@@ -168,5 +228,6 @@ export async function coverageView() {
     card(h('h2', {}, 'Da indirizzo'), addrForm, results),
     card(h('h2', {}, 'Da coordinate o GPS'), coordForm, h('div', { class: 'btns' }, gps)),
     out,
+    user?.role === 'admin' ? pointingSettings() : null,
   );
 }

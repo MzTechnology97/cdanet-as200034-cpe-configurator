@@ -94,6 +94,19 @@ La bussola indica dove girare ("Gira di 23° a destra", "Allineato" entro ±3°)
 
 La bussola serve per il puntamento grossolano; quello fine si fa con il segnale (Puntamento antenna).
 
+## Trova l'AP (mappa, lista e mirino in fotocamera)
+
+Dal GPS del telefono l'app mostra gli AP vicini (per gli installatori solo quelli assegnati):
+- **Lista**: distanza, altitudine dell'antenna (m s.l.m.), **azimut** (Nord vero), **tilt** e **segnale stimato**; per ogni AP i pulsanti **Mirino** e **Bussola**.
+- **Mappa**: la mappa della console (Protomaps sul nostro server) con la tua posizione e una freccia che segue la direzione del telefono; gli AP come punto (admin) o area approssimativa (installatori) con la linea di puntamento.
+- **Mirino in fotocamera**: inquadri con la fotocamera posteriore; il punto dell'AP viene disegnato dove si trova (azimut + tilt), con frecce quando è fuori schermo e il mirino che diventa verde (e vibra) quando sei allineato entro 2°. In basso: azimut e tilt richiesti e quelli attuali del telefono. Funziona in verticale; avvisa se la bussola non è calibrata (movimento a 8).
+
+**Tilt**: altitudine del terreno dal modello SRTM (il server scarica e tiene in cache solo le zone usate, ~12 MB per grado; `DEM_URL` vuoto lo disattiva) più le altezze dal suolo impostate dall'admin in Copertura → "Puntamento (app)" (antenne AP, default 15 m; CPE, default 6 m, modificabile dal tecnico). Tiene conto della curvatura terrestre.
+
+**Segnale stimato**: per ogni AP il server usa le CPE già collegate (posizione del cliente e segnale reale da UISP): ricava il settore già servito, fin dove arrivano i clienti e l'andamento del segnale con la distanza, poi corregge con i clienti più vicini al punto. Mostra valore, intervallo e affidabilità (alta/media/bassa); avvisa se il punto è fuori dal settore servito o più lontano dei clienti attuali. Le posizioni dei clienti non lasciano mai il server; agli installatori il numero di clienti su cui si basa la stima è nascosto salvo diversa scelta dell'admin.
+
+Il puntamento fine resta quello sul segnale reale (Puntamento antenna).
+
 ## Storico segnale (UISP)
 
 Per una CPE già accettata in UISP, lo storico è disponibile in due punti: nella console web (Storico → job → *Storico segnale*, per giorno, settimana o mese) e nell'app (Storico → job → *Storico segnale*, ultimi 7 giorni).
