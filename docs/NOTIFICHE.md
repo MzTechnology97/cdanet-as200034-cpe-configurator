@@ -27,6 +27,7 @@ Il link apre lo storico già filtrato sul MAC della CPE (`/#/jobs?q=<MAC>`).
 | CPE da accettare in UISP | provisioning riuscito (con UISP configurato) | modello, MAC, SSID, installatore, indicazione se è una sostituzione |
 | UISP giù / di nuovo su | controllo ogni 5 minuti, messaggio solo al cambio di stato | — |
 | Sicurezza | account bloccato per troppi tentativi; admin che accede da un indirizzo mai usato da quell'account; password di un admin cambiata o reimpostata; utente promosso admin | utente, indirizzo IP |
+| Guasti Enel | nuovo guasto o lavoro e-distribuzione in una zona di interesse (o vicino a un AP), e ripristino | tipo (MT/BT/lavoro), località, zona/AP e distanza, clienti, ripristino previsto, mappa |
 | Riepilogo serale | ogni giorno all'ora scelta (ora italiana) | installazioni riuscite e fallite, collaudi registrati, CPE ancora da accettare in UISP, versione del server |
 
 Ogni provisioning riuscito non genera un messaggio singolo, ma entra nel riepilogo serale.
