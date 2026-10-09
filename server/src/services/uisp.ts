@@ -35,6 +35,8 @@ export interface UispDevice {
   uptime: number | null;
   lastSeen: string | null;
   location: LatLon | null;
+  /** Antenna altitude a.s.l. from the device GPS (UISP location/GPS data), metres; null if not reported. */
+  altitude: number | null;
 }
 
 export interface UispSite {
@@ -52,6 +54,20 @@ type Json = Record<string, unknown>;
 const obj = (v: unknown): Json => (v && typeof v === 'object' ? (v as Json) : {});
 const str = (v: unknown): string | null => (typeof v === 'string' && v.length ? v : null);
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+/**
+ * Altitude of a device from its GPS as reported by UISP. The field name is not documented: the
+ * usual variants are read (location.altitude/elevation, overview.gps.altitude, gps.altitude).
+ */
+export function gpsAltitude(d: Json): number | null {
+  const ov = obj(d.overview);
+  const cands = [obj(d.location).altitude, obj(d.location).elevation, obj(ov.gps).altitude, obj(d.gps).altitude, obj(obj(d.identification).location).altitude];
+  for (const c of cands) {
+    const v = num(c) ?? (typeof c === 'string' && c.trim() !== '' && Number.isFinite(Number(c)) ? Number(c) : null);
+    if (v !== null && v > -100 && v < 5000 && v !== 0) return v;
+  }
+  return null;
+}
 
 function latLon(v: unknown): LatLon | null {
   const o = obj(v);
@@ -99,6 +115,7 @@ export function normalizeDevice(raw: unknown): UispDevice {
     uptime: num(ov.uptime),
     lastSeen: str(ov.lastSeen),
     location: latLon(d.location) ?? latLon(obj(d.identification).location),
+    altitude: gpsAltitude(d),
   };
 }
 
@@ -341,6 +358,7 @@ export function createUisp(opts: UispOptions) {
             bearing: b,
             direction: cardinal(b),
             siteId: d.siteId ?? null,
+            gpsAltitude: d.altitude,
             lat: d.location.lat,
             lon: d.location.lon,
           };

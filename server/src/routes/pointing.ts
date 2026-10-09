@@ -68,7 +68,8 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
       assignedCount: keys ? [...keys].filter((k) => !k.startsWith('z')).length : null,
       aps: aps.map(({ lat, lon, siteId: _site, stations: _st, ...a }, i) => {
         const g = apGround[i] ?? null;
-        const altitude = g === null ? null : g + c.apHeightM;
+        // the AP's own GPS altitude when UISP has it, else terrain + configured antenna height
+        const altitude = a.gpsAltitude ?? (g === null ? null : g + c.apHeightM);
         const base = {
           id: a.id,
           name: a.name,
@@ -78,6 +79,7 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
           bearing: a.bearing,
           direction: a.direction,
           altitude,
+          altitudeFrom: a.gpsAltitude !== null ? ('gps' as const) : altitude !== null ? ('terreno' as const) : null,
           tiltDeg: altitude !== null && from !== null ? elevationAngle(a.distanceM, from, altitude) : null,
           estimate: (() => {
             const m = models.get(a.id);

@@ -171,6 +171,8 @@ data class PointingApDto(
     val direction: String = "",
     val distanceM: Int = 0,
     val altitude: Double? = null,
+    /** "gps" = the AP's own GPS (from UISP), "terreno" = terrain model + configured antenna height. */
+    val altitudeFrom: String? = null,
     val tiltDeg: Double? = null,
     val lat: Double? = null,
     val lon: Double? = null,

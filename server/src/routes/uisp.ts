@@ -109,7 +109,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       maxKm: ctx.uispSettings.coverageMaxKm,
       restricted: !!keys,
       assignedCount: keys ? [...keys].filter((k) => !k.startsWith('z')).length : null,
-      aps: aps.map(({ lat, lon, siteId: _site, ...a }) => {
+      aps: aps.map(({ lat, lon, siteId: _site, gpsAltitude: _alt, ...a }) => {
         const m = a.ssid ? SSID_PARTS.exec(a.ssid) : null;
         const base = { ...a, node: m ? Number(m[1]) : null, district: m ? Number(m[2]) : null };
         // Installers: exact direction for pointing, rounded distance and only an approximate area on the map.

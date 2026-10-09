@@ -139,7 +139,7 @@ fun PointingScreen(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (
                             Text(a.name, fontWeight = FontWeight.SemiBold)
                             Text(
                                 listOfNotNull(
-                                    a.altitude?.let { "Alt: ${it.roundToInt()} m s.l.m." },
+                                    a.altitude?.let { "Alt: ${it.roundToInt()} m s.l.m." + if (a.altitudeFrom == "gps") " (GPS)" else "" },
                                     "Azi: ${a.bearing}°",
                                     a.tiltDeg?.let { "Tilt: ${"%.1f".format(java.util.Locale.ITALY, it)}°" },
                                 ).joinToString("   "),

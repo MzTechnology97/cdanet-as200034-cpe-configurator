@@ -4,6 +4,7 @@ import { gzipSync } from 'node:zlib';
 import { buildApp } from '../src/app.ts';
 import { openDatabase } from '../src/db.ts';
 import { elevationAngle, sampleHgt, tileName } from '../src/services/dem.ts';
+import { gpsAltitude } from '../src/services/uisp.ts';
 import { fakeUisp } from './fake-uisp.ts';
 import { ADMIN, testConfig } from './helpers.ts';
 
@@ -23,6 +24,12 @@ describe('Puntamento: terreno e tilt', () => {
     assert.equal(sampleHgt(t, 37.5, 14.5), 200);
     assert.equal(sampleHgt(t, 37.5, 14.25), 150);
     assert.equal(sampleHgt(hgt(3, () => -32768), 37.5, 14.5), null, 'voids');
+  });
+
+  it('reads the AP altitude from its GPS when UISP reports it', () => {
+    assert.equal(gpsAltitude({ location: { latitude: 37.6, longitude: 14.1, altitude: 932.4 } }), 932.4);
+    assert.equal(gpsAltitude({ overview: { gps: { altitude: '871' } } }), 871);
+    assert.equal(gpsAltitude({ location: { latitude: 37.6, longitude: 14.1 } }), null);
   });
 
   it('computes the tilt with earth curvature', () => {
@@ -49,6 +56,7 @@ describe('Puntamento: terreno e tilt', () => {
     assert.equal(r.from.altitude, 506);
     const ap = r.aps.find((a: { name: string }) => a.name === 'AP N2 D01');
     assert.equal(ap.altitude, 515, 'ground + 15 m antenna height');
+    assert.equal(ap.altitudeFrom, 'terreno');
     assert.ok(ap.tiltDeg > 0 && ap.tiltDeg < 1, String(ap.tiltDeg));
     assert.equal(typeof ap.lat, 'number');
 
