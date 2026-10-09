@@ -147,6 +147,7 @@ fun NearbyAps(c: AppContainer, location: CpeLocation, onPick: ((CoverageAp) -> U
                             (ap.stations?.let { " · $it client" } ?: "") + (if (ap.status != "active") " · ${ap.status}" else ""),
                         style = MaterialTheme.typography.bodySmall,
                     )
+                    ap.estimate?.describe()?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium) }
                 }
                 if (onCompass != null) {
                     androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))

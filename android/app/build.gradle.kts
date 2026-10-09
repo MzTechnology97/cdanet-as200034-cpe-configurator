@@ -93,6 +93,10 @@ dependencies {
     implementation(libs.media3.ui)
     implementation(libs.play.code.scanner)
     implementation(libs.play.location)
+    implementation(libs.camera.core)
+    implementation(libs.camera.camera2)
+    implementation(libs.camera.lifecycle)
+    implementation(libs.camera.view)
     implementation(libs.kotlinx.coroutines.play.services)
 
     testImplementation(libs.junit)

@@ -52,7 +52,8 @@ export function mapRoutes(app: FastifyInstance, ctx: AppContext) {
     return cached.info;
   };
 
-  app.get('/api/map/config', { preHandler: ctx.auth.requireUser }, async () => ({
+  // Public: basemap info only (the app's embedded map page has no session).
+  app.get('/api/map/config', async () => ({
     basemap: info(),
     fallback: { url: 'https://tile.openstreetmap.org/{z}/{x}/{y}.png', attribution: '© OpenStreetMap contributors' },
     attribution: '© OpenStreetMap contributors · Protomaps',

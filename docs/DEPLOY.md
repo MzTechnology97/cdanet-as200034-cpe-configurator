@@ -76,6 +76,22 @@ sudo cdanet-cpe geocoder reset    # cancella i dati e rifà l'import (es. cambio
 
 Lo stato si vede anche dalla console: **Connettori → OpenStreetMap → Verifica servizio**. Per tornare al servizio pubblico: `sudo CDANET_GEOCODER=public ./deploy/install-debian.sh`.
 
+### HTTPS senza certificato pubblico
+
+Oltre all'HTTP su `APP_LISTEN`, Caddy serve la console in **HTTPS con un certificato della propria CA locale** sugli indirizzi in `HTTPS_SITES` (l'installer ci mette gli IP del server; per aggiungere l'IP pubblico dietro NAT: `sudo CDANET_HTTPS_SITES="https://<ip pubblico> https://<ip lan>" ./deploy/install-debian.sh`). `HTTPS_DEFAULT_SNI` è il certificato usato quando ci si collega a un IP (i browser non inviano il nome).
+
+I certificati durano 12 ore e Caddy li rinnova da solo. Per non vedere avvisi installa sui PC e sui telefoni la **CA radice** (valida 10 anni):
+
+```bash
+sudo cdanet-cpe https-ca > cdanet-root-ca.crt
+```
+
+Windows: doppio clic → Installa certificato → "Autorità di certificazione radice attendibili". Android: Impostazioni → Sicurezza → Crittografia e credenziali → Installa un certificato → Certificato CA. Senza la CA il browser chiede di accettare il certificato (e può richiederlo di nuovo dopo il rinnovo).
+
+**App Android**: accetta la CA installata dall'utente sul telefono (consigliato). Solo per i test c'è anche Impostazioni → Server → **"Accetta certificato non verificato (solo test)"**: vale solo verso il server CDA Net (API, aggiornamenti, notifiche, mappa) e va spento appena possibile.
+
+L'HTTPS serve anche per il GPS del browser (zone dei guasti da "Usa GPS di questo dispositivo").
+
 ### Mappe (Protomaps)
 
 L'installer scarica anche la mappa della stessa regione (`CDANET_MAP=local`, default) e la aggiorna ogni mese; `CDANET_MAP=off` per non scaricarla (la console usa le mappe pubbliche). Comandi: `sudo cdanet-cpe map [update|remove]`. Dettagli in [MAPPE.md](MAPPE.md).

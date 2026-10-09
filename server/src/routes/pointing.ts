@@ -1,0 +1,106 @@
+import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
+import { HttpError } from '../auth.ts';
+import type { AppContext } from '../context.ts';
+import { nowIso, recordEvent } from '../db.ts';
+import { approxPoint, roughDistance } from '../domain/approx.ts';
+import { isValidLatLon } from '../domain/geo.ts';
+import { estimateSignal, type ApModel } from '../domain/coverage-model.ts';
+import { elevationAngle } from '../services/dem.ts';
+
+/**
+ * Altitude of the AP antenna, metres a.s.l. UISP's location.altitude is the GPS altitude on GPS
+ * APs; on the others it holds small values (a height above the ground typed in UISP). Otherwise:
+ * terrain + antenna height (site height in UISP, else the admin default). Pure, unit-tested.
+ */
+export function resolveApAltitude(reported: number | null, ground: number | null, height: number): { altitude: number | null; from: 'gps' | 'uisp' | 'terreno' | null } {
+  if (reported !== null) {
+    if (ground !== null ? reported >= ground - 30 : reported >= 100) return { altitude: reported, from: 'gps' };
+    if (ground !== null && reported >= 0 && reported < 100) return { altitude: ground + reported, from: 'uisp' };
+  }
+  return ground === null ? { altitude: null, from: null } : { altitude: ground + height, from: 'terreno' };
+}
+
+export interface PointingConfig {
+  /** Height of the AP antennas above the ground (UISP has no field for it). */
+  apHeightM: number;
+  /** Default height of the CPE above the ground (the technician can change it). */
+  cpeHeightM: number;
+}
+const DEFAULT: PointingConfig = { apHeightM: 15, cpeHeightM: 6 };
+
+/**
+ * Pointing from the installation point (module "compass"): the nearest APs with distance, azimuth,
+ * altitude a.s.l. and tilt (terrain from the DEM + antenna heights). Installers: only assigned
+ * APs, approximate position, rounded distance; azimuth and tilt stay exact (needed to aim).
+ */
+export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
+  const { db } = ctx;
+  const config = (): PointingConfig => {
+    const r = db.prepare("SELECT value FROM settings WHERE key = 'pointing.config'").get() as { value: string } | undefined;
+    return { ...DEFAULT, ...(r ? (JSON.parse(r.value) as Partial<PointingConfig>) : {}) };
+  };
+
+  app.get('/api/admin/pointing/config', { preHandler: ctx.auth.requireAdmin }, async () => ({ ...config(), dem: ctx.dem.enabled }));
+
+  app.put('/api/admin/pointing/config', { preHandler: ctx.auth.requireAdmin }, async (req) => {
+    const b = z.object({ apHeightM: z.number().min(0).max(200), cpeHeightM: z.number().min(0).max(100) }).strict().parse(req.body);
+    db.prepare(
+      `INSERT INTO settings(key, value, updated_at, updated_by) VALUES('pointing.config', ?, ?, ?)
+       ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
+    ).run(JSON.stringify(b), nowIso(), req.user!.id);
+    recordEvent(db, req.user!.id, 'pointing.config', 'Puntamento', `AP ${b.apHeightM} m, CPE ${b.cpeHeightM} m`);
+    return b;
+  });
+
+  app.get('/api/pointing', { preHandler: [ctx.auth.requireUser, ctx.modules.require('compass')] }, async (req) => {
+    const c = config();
+    const q = z
+      .object({
+        lat: z.coerce.number(),
+        lon: z.coerce.number(),
+        height: z.coerce.number().min(0).max(100).optional(),
+        limit: z.coerce.number().int().min(1).max(15).default(8),
+      })
+      .parse(req.query);
+    if (!isValidLatLon(q.lat, q.lon)) throw new HttpError(400, 'invalid_position');
+    if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
+    const keys = req.user!.role === 'admin' ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
+    const allow = keys ? (a: { id: string; siteId: string | null }) => keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`)) : undefined;
+    const aps = await ctx.uisp.nearestAps({ lat: q.lat, lon: q.lon }, q.limit, ctx.uispSettings.coverageMaxKm, allow);
+    const models = await ctx.uisp.apModels(aps.map((a) => a.id)).catch(() => new Map<string, ApModel>());
+    const clientsShown = !keys || ctx.outages.config().installerClients;
+    const height = q.height ?? c.cpeHeightM;
+    const [ground, ...apGround] = await Promise.all([ctx.dem.elevation(q.lat, q.lon), ...aps.map((a) => ctx.dem.elevation(a.lat, a.lon))]);
+    const from = ground === null ? null : ground + height;
+    return {
+      from: { lat: q.lat, lon: q.lon, ground, height, altitude: from },
+      apHeightM: c.apHeightM,
+      maxKm: ctx.uispSettings.coverageMaxKm,
+      restricted: !!keys,
+      assignedCount: keys ? [...keys].filter((k) => !k.startsWith('z')).length : null,
+      aps: aps.map(({ lat, lon, siteId: _site, stations: _st, ...a }, i) => {
+        const { altitude, from: altitudeFrom } = resolveApAltitude(a.gpsAltitude, apGround[i] ?? null, a.siteHeight ?? c.apHeightM);
+        const base = {
+          id: a.id,
+          name: a.name,
+          ssid: a.ssid,
+          siteName: a.siteName,
+          status: a.status,
+          bearing: a.bearing,
+          direction: a.direction,
+          altitude,
+          altitudeFrom,
+          tiltDeg: altitude !== null && from !== null ? elevationAngle(a.distanceM, from, altitude) : null,
+          estimate: (() => {
+            const m = models.get(a.id);
+            if (!m) return null;
+            const e = estimateSignal(m, a.distanceM, (a.bearing + 180) % 360);
+            return { ...e, basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null };
+          })(),
+        };
+        return keys ? { ...base, distanceM: roughDistance(a.distanceM), approx: approxPoint(lat, lon, `ap:${a.id}`, ctx.cfg.jwtSecret) } : { ...base, distanceM: a.distanceM, lat, lon };
+      }),
+    };
+  });
+}

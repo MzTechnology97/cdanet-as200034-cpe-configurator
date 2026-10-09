@@ -12,6 +12,7 @@ import java.io.IOException
 import java.net.InetAddress
 import java.util.concurrent.TimeUnit
 import kotlin.math.abs
+import it.cdanet.cpeconfigurator.network.TestTls
 
 /**
  * Speed and latency towards the CDA Net server **through the Wi-Fi** (customer router behind
@@ -20,7 +21,7 @@ import kotlin.math.abs
 object InternetProbe {
     suspend fun measure(network: NetworkHelper, baseUrl: String, token: String?): InternetTest = withContext(Dispatchers.IO) {
         val wifi = network.wifiNetwork() ?: return@withContext InternetTest(false, note = "Telefono non collegato a una Wi-Fi")
-        val http = OkHttpClient.Builder()
+        val http = TestTls.apply(OkHttpClient.Builder())
             .socketFactory(wifi.socketFactory)
             .dns(object : Dns {
                 override fun lookup(hostname: String): List<InetAddress> = wifi.getAllByName(hostname).toList()

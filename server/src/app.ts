@@ -31,6 +31,8 @@ import { connectorRoutes } from './routes/connectors.ts';
 import { uispRoutes } from './routes/uisp.ts';
 import { mapRoutes } from './routes/map.ts';
 import { networkRoutes } from './routes/network.ts';
+import { pointingRoutes } from './routes/pointing.ts';
+import { createDem } from './services/dem.ts';
 
 const CSP = [
   "default-src 'self'",
@@ -89,6 +91,7 @@ export async function buildApp(
     modules,
     oui,
     outages: undefined as unknown as Outages,
+    dem: createDem({ dir: cfg.dem.dir, baseUrl: cfg.dem.url, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
     notify: undefined as unknown as Notifier,
     version,
   };
@@ -163,6 +166,7 @@ export async function buildApp(
   outageRoutes(app, ctx);
   mapRoutes(app, ctx);
   networkRoutes(app, ctx);
+  pointingRoutes(app, ctx);
   adminRoutes(app, ctx);
   toolRoutes(app, ctx);
   uispRoutes(app, ctx);

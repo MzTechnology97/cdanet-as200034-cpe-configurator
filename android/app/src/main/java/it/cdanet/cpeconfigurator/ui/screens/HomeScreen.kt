@@ -31,6 +31,7 @@ private val TILES = listOf(
     Tile(Screen.CpeHealth, "Le mie CPE", "Stato delle CPE che ho installato, rispetto al collaudo", needsLogin = true, module = "cpe_health"),
     Tile(Screen.NetStatus, "Stato rete", "POP e AP: raggiungibili, CPE offline, guasti Enel vicini", needsLogin = true, module = "network_status"),
     Tile(Screen.Outages, "Guasti Enel", "Guasti e lavori della rete elettrica nelle tue zone, con notifiche", needsLogin = true, module = "power_outages"),
+    Tile(Screen.Pointing, "Trova l'AP", "AP vicini su mappa e lista: distanza, azimut, tilt, mirino in fotocamera", needsLogin = true, module = "compass"),
     Tile(Screen.Alignment, "Puntamento antenna", "Segnale in tempo reale con bip, picco e segnale atteso", needsLogin = true, module = "field_alignment"),
     Tile(Screen.Diagnosis, "Diagnosi CPE", "Guasto: segnale, cavo LAN, PPPoE, firmware, con rapporto per il NOC", needsLogin = true, module = "field_diagnosis"),
     Tile(Screen.Coverage, "Copertura", "AP più vicini da GPS o indirizzo, con direzione di puntamento", needsLogin = true, module = "coverage"),

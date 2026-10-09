@@ -35,6 +35,9 @@ import it.cdanet.cpeconfigurator.ui.WarnAmber
 import it.cdanet.cpeconfigurator.update.UpdateInfo
 import it.cdanet.cpeconfigurator.update.UpdateState
 import kotlinx.coroutines.launch
+import androidx.compose.foundation.layout.Row
+import androidx.compose.material3.Switch
+import androidx.compose.ui.Alignment
 
 @Composable
 fun UpdateBanner(c: AppContainer, state: UpdateState, onState: (UpdateState) -> Unit) {
@@ -149,6 +152,18 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
 
         SectionCard("Server") {
             Field("URL server", backend, { backend = it.trim() }, keyboardType = KeyboardType.Uri)
+            val insecure by c.settings.insecureTls.collectAsState(initial = false)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Accetta certificato non verificato (solo test)", modifier = Modifier.weight(1f))
+                Switch(checked = insecure, onCheckedChange = { on -> scope.launch { c.settings.setInsecureTls(on) } })
+            }
+            if (insecure) {
+                Text(
+                    "Attivo: l'app non verifica il certificato HTTPS del server (solo verso il server CDA Net). Usalo solo per i test con certificato autofirmato; la soluzione definitiva è installare sul telefono la CA del server.",
+                    color = BadRed,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
             BusyButton("Salva e verifica", busy, Modifier.fillMaxWidth()) {
                 scope.launch {
                     busy = true

@@ -15,6 +15,8 @@ import it.cdanet.cpeconfigurator.update.AppUpdater
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
+import it.cdanet.cpeconfigurator.network.TestTls
 
 /** Process-wide singletons. Secrets held here live only in process memory. */
 class AppContainer(context: Context) {
@@ -31,6 +33,11 @@ class AppContainer(context: Context) {
     val tools = LocalTools(network, api, session)
     val field = FieldController(api, network, scope)
     val acceptanceQueue = it.cdanet.cpeconfigurator.field.AcceptanceQueue(appContext, api, session, resultQueue, scope)
+
+    init {
+        // test option "unverified server certificate": kept in sync for every client of our server
+        scope.launch { settings.insecureTls.collect { TestTls.enabled = it } }
+    }
 
     /** Optional features enabled by the admin (from /api/meta at login). Empty = all on (offline). */
     val modules = kotlinx.coroutines.flow.MutableStateFlow<Map<String, Boolean>>(emptyMap())

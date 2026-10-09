@@ -1,11 +1,33 @@
+{
+	# HTTPS_SITES use a certificate of Caddy's own local CA (no public certificate needed):
+	# no HTTP -> HTTPS redirect, so the plain-HTTP console on APP_LISTEN keeps working,
+	# and no attempt to install the local CA in the container's trust store.
+	auto_https disable_redirects
+	skip_install_trust
+	# Browsers send no server name (SNI) when connecting to an IP address: use this certificate.
+	default_sni {$HTTPS_DEFAULT_SNI:localhost}
+}
+
+(console) {
+	encode zstd gzip
+	header {
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "no-referrer"
+		X-Frame-Options "DENY"
+		Permissions-Policy "camera=(self), geolocation=(self)"
+		-Server
+	}
+	reverse_proxy app:8787
+}
+
+# Main address: ":80" (plain HTTP) or a public hostname (automatic Let's Encrypt certificate).
 {$APP_LISTEN::80} {
-  encode zstd gzip
-  header {
-    X-Content-Type-Options "nosniff"
-    Referrer-Policy "no-referrer"
-    X-Frame-Options "DENY"
-    Permissions-Policy "camera=(self), geolocation=(self)"
-    -Server
-  }
-  reverse_proxy app:8787
+	import console
+}
+
+# Self-signed HTTPS on the server's addresses, space separated, e.g. "https://185.198.209.31 https://172.31.0.29"
+# (set by the installer; the browser asks once to accept the certificate).
+{$HTTPS_SITES:https://localhost} {
+	tls internal
+	import console
 }

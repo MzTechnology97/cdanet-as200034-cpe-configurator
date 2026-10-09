@@ -1,5 +1,6 @@
 import { HttpError } from '../auth.ts';
 import { parseMac } from '../domain/policy.ts';
+import { buildApModel, sectorWidth, type ApModel, type ClientSample } from '../domain/coverage-model.ts';
 import { bearingDeg, cardinal, distanceM, isValidLatLon, type LatLon } from '../domain/geo.ts';
 
 /**
@@ -34,6 +35,10 @@ export interface UispDevice {
   uptime: number | null;
   lastSeen: string | null;
   location: LatLon | null;
+  /** location.altitude as reported by UISP (GPS altitude a.s.l. on GPS devices), metres; null if not reported. */
+  altitude: number | null;
+  /** location.heading: antenna azimuth set in UISP, degrees; null if not set. */
+  heading: number | null;
 }
 
 export interface UispSite {
@@ -45,12 +50,28 @@ export interface UispSite {
   address: string | null;
   parentId: string | null;
   status: string | null;
+  /** description.height: antenna height above ground set on the site in UISP, metres. */
+  height: number | null;
 }
 
 type Json = Record<string, unknown>;
 const obj = (v: unknown): Json => (v && typeof v === 'object' ? (v as Json) : {});
 const str = (v: unknown): string | null => (typeof v === 'string' && v.length ? v : null);
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) ? v : null);
+
+/**
+ * Altitude of a device from its GPS as reported by UISP. The field name is not documented: the
+ * usual variants are read (location.altitude/elevation, overview.gps.altitude, gps.altitude).
+ */
+export function gpsAltitude(d: Json): number | null {
+  const ov = obj(d.overview);
+  const cands = [obj(d.location).altitude, obj(d.location).elevation, obj(ov.gps).altitude, obj(d.gps).altitude, obj(obj(d.identification).location).altitude];
+  for (const c of cands) {
+    const v = num(c) ?? (typeof c === 'string' && c.trim() !== '' && Number.isFinite(Number(c)) ? Number(c) : null);
+    if (v !== null && v > -100 && v < 5000 && v !== 0) return v;
+  }
+  return null;
+}
 
 function latLon(v: unknown): LatLon | null {
   const o = obj(v);
@@ -98,6 +119,8 @@ export function normalizeDevice(raw: unknown): UispDevice {
     uptime: num(ov.uptime),
     lastSeen: str(ov.lastSeen),
     location: latLon(d.location) ?? latLon(obj(d.identification).location),
+    altitude: gpsAltitude(d),
+    heading: num(obj(d.location).heading),
   };
 }
 
@@ -113,6 +136,7 @@ export function normalizeSite(raw: unknown): UispSite {
     address: str(desc.address),
     parentId: str(obj(id.parent).id),
     status: str(id.status),
+    height: num(desc.height),
   };
 }
 
@@ -201,13 +225,16 @@ export function createUisp(opts: UispOptions) {
   const invalidate = () => cache.clear();
 
   /** AP coordinates: device location, else its site location. */
-  async function aps(): Promise<Array<UispDevice & { location: LatLon }>> {
+  async function aps(): Promise<Array<UispDevice & { location: LatLon; siteHeight: number | null }>> {
     const [ds, ss] = await Promise.all([devices(), sites().catch(() => [] as UispSite[])]);
-    const siteLoc = new Map(ss.map((s) => [s.id, s.location]));
+    const siteById = new Map(ss.map((s) => [s.id, s]));
     return ds
       .filter(isAp)
-      .map((d) => ({ ...d, location: d.location ?? (d.siteId ? siteLoc.get(d.siteId) ?? null : null) }))
-      .filter((d): d is UispDevice & { location: LatLon } => d.location !== null);
+      .map((d) => {
+        const site = d.siteId ? siteById.get(d.siteId) : undefined;
+        return { ...d, location: d.location ?? site?.location ?? null, siteHeight: site?.height ?? null };
+      })
+      .filter((d): d is UispDevice & { location: LatLon; siteHeight: number | null } => d.location !== null);
   }
 
   return {
@@ -239,6 +266,34 @@ export function createUisp(opts: UispOptions) {
      * POPs and APs exactly as UISP knows them (name, address, coordinates and where the
      * position comes from): nothing is typed by hand in CDA Net.
      */
+    /**
+     * Coverage model of each AP from its customers (position of the CPE or of its site, signal).
+     * Positions stay on the server: callers expose only estimates.
+     */
+    async apModels(apIds: string[]) {
+      const want = new Set(apIds);
+      const [ds, ss] = await Promise.all([devices(), sites().catch(() => [] as UispSite[])]);
+      const siteLoc = new Map(ss.map((s) => [s.id, s.location]));
+      const apLoc = new Map(ds.filter(isAp).map((d) => [d.id, d.location ?? (d.siteId ? (siteLoc.get(d.siteId) ?? null) : null)]));
+      const apDev = new Map(ds.filter(isAp).map((d) => [d.id, d]));
+      const clients = new Map<string, ClientSample[]>();
+      for (const d of ds) {
+        if (!d.apId || !want.has(d.apId) || isAp(d)) continue;
+        const loc = d.location ?? (d.siteId ? (siteLoc.get(d.siteId) ?? null) : null);
+        if (!loc) continue;
+        clients.set(d.apId, [...(clients.get(d.apId) ?? []), { lat: loc.lat, lon: loc.lon, signal: d.status === 'active' ? d.signal : null }]);
+      }
+      const out = new Map<string, ApModel>();
+      for (const id of want) {
+        const loc = apLoc.get(id);
+        const ap = apDev.get(id);
+        // azimuth set in UISP: the sector of the antenna instead of the one guessed from the customers
+        const heading = ap?.heading != null ? { center: ap.heading, width: sectorWidth(ap.model) } : null;
+        if (loc) out.set(id, buildApModel(loc, clients.get(id) ?? [], heading));
+      }
+      return out;
+    },
+
     /** CPEs (stations) per AP id: how many and how many not active (Stato rete). */
     async cpeCounts() {
       const m = new Map<string, { total: number; offline: number }>();
@@ -316,6 +371,8 @@ export function createUisp(opts: UispOptions) {
             bearing: b,
             direction: cardinal(b),
             siteId: d.siteId ?? null,
+            gpsAltitude: d.altitude,
+            siteHeight: d.siteHeight,
             lat: d.location.lat,
             lon: d.location.lon,
           };
@@ -349,7 +406,7 @@ export function createUisp(opts: UispOptions) {
         if (near) candidates.sort((a, b) => (a.location ? distanceM(near, a.location) : 1e12) - (b.location ? distanceM(near, b.location) : 1e12));
         ap = candidates[0];
       }
-      return ap?.siteId ? byId.get(ap.siteId) ?? { id: ap.siteId, name: ap.siteName ?? '', type: '', location: null, address: null, parentId: null, status: null } : null;
+      return ap?.siteId ? byId.get(ap.siteId) ?? { id: ap.siteId, name: ap.siteName ?? '', type: '', location: null, address: null, parentId: null, status: null, height: null } : null;
     },
 
     /** All devices (cached like the rest: UISP is not hammered by the NOC page). */

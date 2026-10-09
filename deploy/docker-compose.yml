@@ -37,6 +37,9 @@ services:
     security_opt: ["no-new-privileges:true"]
     environment:
       APP_LISTEN: ${APP_LISTEN:-:80}
+      # self-signed HTTPS (Caddy local CA) on these addresses, space separated
+      HTTPS_SITES: ${HTTPS_SITES:-https://localhost}
+      HTTPS_DEFAULT_SNI: ${HTTPS_DEFAULT_SNI:-localhost}
     ports:
       - "80:80"
       - "443:443"

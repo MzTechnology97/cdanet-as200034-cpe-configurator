@@ -132,6 +132,66 @@ data class MyZonesDto(val zones: List<OutageZoneItemDto> = emptyList())
 data class OutageTelegramDto(val available: Boolean = false, val linked: Boolean = false, val chatHint: String = "", val planned: Boolean = true)
 
 @Serializable
+data class ApproxDto(val lat: Double, val lon: Double, val radiusM: Int = 1500)
+
+@Serializable
+data class PointingFromDto(val lat: Double, val lon: Double, val ground: Double? = null, val height: Double = 6.0, val altitude: Double? = null)
+
+@Serializable
+data class SignalEstimateDto(
+    val signalDbm: Int? = null,
+    val low: Int? = null,
+    val high: Int? = null,
+    val inSector: Boolean? = null,
+    val confidence: String = "bassa",
+    val basis: Int? = null,
+    val beyondServed: Boolean = false,
+    val nearby: Int? = null,
+) {
+    /** "−63 dBm (−67…−59) · affidabilità alta · fuori dal settore servito", or null without customers. */
+    fun describe(): String? = signalDbm?.let { s ->
+        listOfNotNull(
+            "Segnale stimato $s dBm ($low…$high)",
+            "affidabilità $confidence",
+            if (inSector == false) "fuori dal settore servito" else null,
+            if (beyondServed) "più lontano dei clienti attuali" else null,
+            basis?.let { b -> "da $b clienti" },
+        ).joinToString(" · ")
+    }
+}
+
+@Serializable
+data class PointingApDto(
+    val id: String,
+    val name: String = "",
+    val ssid: String? = null,
+    val siteName: String? = null,
+    val status: String = "",
+    val bearing: Int = 0,
+    val direction: String = "",
+    val distanceM: Int = 0,
+    val altitude: Double? = null,
+    /** "gps" = the AP's own GPS (from UISP), "terreno" = terrain model + configured antenna height. */
+    val altitudeFrom: String? = null,
+    val tiltDeg: Double? = null,
+    val lat: Double? = null,
+    val lon: Double? = null,
+    val approx: ApproxDto? = null,
+    val estimate: SignalEstimateDto? = null,
+)
+
+/** "Trova l'AP": nearest APs from the installation point with altitude and tilt. */
+@Serializable
+data class PointingDto(
+    val from: PointingFromDto,
+    val apHeightM: Double = 15.0,
+    val maxKm: Int = 15,
+    val restricted: Boolean = false,
+    val assignedCount: Int? = null,
+    val aps: List<PointingApDto> = emptyList(),
+)
+
+@Serializable
 data class NetCpeDto(val total: Int = 0, val offline: Int = 0)
 
 @Serializable
@@ -240,6 +300,8 @@ data class CoverageAp(
     val direction: String,
     val node: Int? = null,
     val district: Int? = null,
+    /** Expected signal of a new CPE here, from the customers already on this AP. */
+    val estimate: SignalEstimateDto? = null,
 )
 
 @Serializable

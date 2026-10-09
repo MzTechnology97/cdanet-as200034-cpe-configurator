@@ -11,9 +11,10 @@
 #   sudo cdanet-cpe version                 running version
 #   sudo cdanet-cpe geocoder [logs|reset]   local OpenStreetMap (Nominatim) status
 #   sudo cdanet-cpe map [update|remove]     console maps (Protomaps basemap)
+#   sudo cdanet-cpe https-ca                 CA of the self-signed HTTPS (to trust it on PCs/phones)
 set -eu
 DEPLOY_DIR="${DEPLOY_DIR:-/opt/cdanet-cpe}"
-case "${1:-}" in ""|-h|--help|help) sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+case "${1:-}" in ""|-h|--help|help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
 [ "$(id -u)" -eq 0 ] || { echo "Usa: sudo cdanet-cpe $*" >&2; exit 1; }
 dc() { docker compose -f "$DEPLOY_DIR/docker-compose.yml" --project-directory "$DEPLOY_DIR" "$@"; }
 case "${1:-}" in
@@ -54,6 +55,9 @@ case "${1:-}" in
         fi
         ;;
     esac
+    ;;
+  https-ca)
+    dc exec -T caddy cat /data/caddy/pki/authorities/local/root.crt
     ;;
   map)
     case "${2:-status}" in

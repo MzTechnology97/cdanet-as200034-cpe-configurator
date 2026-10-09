@@ -26,6 +26,8 @@ import kotlinx.serialization.json.Json
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.util.concurrent.TimeUnit
+import it.cdanet.cpeconfigurator.network.TestTls
+import it.cdanet.cpeconfigurator.data.Settings
 
 @Serializable
 data class FeedOutage(
@@ -92,7 +94,9 @@ object OutageAlerts {
         val p = prefs(c)
         val token = p.getString("token", null) ?: return@withContext true
         val backend = p.getString("backend", null) ?: return@withContext true
-        val http = OkHttpClient.Builder().connectTimeout(10, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS).build()
+        // the worker can run without the app open: read the test TLS option here too
+        TestTls.enabled = Settings(c).insecureTlsNow()
+        val http = TestTls.apply(OkHttpClient.Builder()).connectTimeout(10, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS).build()
         http.newCall(Request.Builder().url("$backend/api/outages/feed").header("Authorization", "Bearer $token").build()).execute().use { r ->
             if (r.code == 401 || r.code == 404) {
                 // token revoked (password change, logout everywhere) or module disabled
