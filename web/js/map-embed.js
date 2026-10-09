@@ -85,12 +85,23 @@ window.cdaShow = async (d) => {
 };
 
 /** Guasti Enel map (data of /api/outages/map, already scoped by the server for the user). */
+const outageMarkers = new Map();
 window.cdaOutages = async (d) => {
   const map = await ready;
   if (!map || !d) return;
   layer.clearLayers();
   arrow = null;
-  fit(map, drawOutages(layer, d));
+  outageMarkers.clear();
+  fit(map, drawOutages(layer, d, (o, marker) => outageMarkers.set(String(o.id), marker)));
+};
+
+/** One outage of the app's list: its area in view (zones and POP/AP around it), details open. */
+window.cdaFocusOutage = async (id) => {
+  const map = await ready;
+  const m = outageMarkers.get(String(id));
+  if (!map || !m) return;
+  map.setView(m.getLatLng(), Math.max(map.getZoom(), 13));
+  m.openPopup();
 };
 
 /** Phone heading (degrees, true north): rotates the position arrow. */

@@ -1,5 +1,18 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.relocation.BringIntoViewRequester
+import androidx.compose.foundation.relocation.bringIntoViewRequester
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
+import it.cdanet.cpeconfigurator.data.OutageDto
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -49,6 +62,7 @@ private val KIND = mapOf("guasto_mt" to "Guasto media tensione", "guasto_bt" to 
 private fun hm(s: String?) = s?.replace('T', ' ')?.let { "${it.substring(8, 10)}/${it.substring(5, 7)} ${it.substring(11)}" } ?: "—"
 
 /** Guasti Enel: outages in the zones of interest, and notifications on this phone and on Telegram. */
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun OutagesScreen(c: AppContainer) {
     val context = LocalContext.current
@@ -117,9 +131,11 @@ fun OutagesScreen(c: AppContainer) {
             style = MaterialTheme.typography.bodySmall,
         )
         var mapJson by remember(d) { mutableStateOf<String?>(null) }
+        var page by remember { mutableStateOf<android.webkit.WebView?>(null) }
+        val mapInView = remember { BringIntoViewRequester() }
         LaunchedEffect(d) { mapJson = runCatching { c.api.outagesMapJson() }.getOrNull() }
-        SectionCard("Mappa") {
-            EmbeddedMap(c, mapJson?.let { "window.cdaOutages($it)" }, Modifier.fillMaxWidth().height(360.dp))
+        SectionCard("Mappa", Modifier.bringIntoViewRequester(mapInView)) {
+            EmbeddedMap(c, mapJson?.let { "window.cdaOutages($it)" }, Modifier.fillMaxWidth().height(360.dp)) { page = it }
             Text(
                 "Rosso: guasti MT e POP/AP potenzialmente impattati · arancio: guasti BT · grigio: lavori · tratteggio: zone" + if (admin) "" else " · POP/AP come area approssimativa",
                 style = MaterialTheme.typography.bodySmall,
@@ -137,21 +153,54 @@ fun OutagesScreen(c: AppContainer) {
         if (d.active.isEmpty()) {
             SectionCard { Text(if (admin) "Nessun guasto né lavoro nelle zone di interesse." else "Nessun guasto né lavoro nelle tue zone.") }
         }
-        d.active.forEach { o ->
+        if (d.active.isNotEmpty()) {
+            Text("${d.active.size} ${if (d.active.size == 1) "interruzione" else "interruzioni"} · tocca una riga per i dettagli", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            var open by remember { mutableStateOf<Long?>(null) }
             SectionCard {
-                Text(KIND[o.kind] ?: o.cause, fontWeight = FontWeight.SemiBold, color = when (o.kind) { "guasto_mt" -> BadRed; "lavoro" -> MaterialTheme.colorScheme.onSurfaceVariant; else -> WarnAmber })
-                Text("${o.place} (${o.province})", style = MaterialTheme.typography.titleMedium)
-                o.zones.firstOrNull()?.let { z -> Text("${z.name} a ${if (z.distanceM >= 1000) "%.1f km".format(z.distanceM / 1000.0) else "${z.distanceM} m"}", style = MaterialTheme.typography.bodySmall) }
+                d.active.forEachIndexed { i, o ->
+                    if (i > 0) HorizontalDivider()
+                    OutageRow(o, expanded = open == o.id, onToggle = { open = if (open == o.id) null else o.id }, onMap = {
+                        scope.launch { mapInView.bringIntoView() }
+                        page?.evaluateJavascript("window.cdaFocusOutage(${o.id})", null)
+                    }, onNavigate = {
+                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:${o.lat},${o.lon}?q=${o.lat},${o.lon}"))) }
+                    })
+                }
+            }
+        }
+    }
+}
+
+private val SHORT = mapOf("guasto_mt" to "Guasto MT", "guasto_bt" to "Guasto BT", "lavoro" to "Lavoro programmato", "altro" to "Interruzione")
+
+/** One dense row per outage: kind, place, Enel customers, since when, impacted POP/AP; details on tap. */
+@Composable
+private fun OutageRow(o: OutageDto, expanded: Boolean, onToggle: () -> Unit, onMap: () -> Unit, onNavigate: () -> Unit) {
+    val color = when (o.kind) { "guasto_mt" -> BadRed; "lavoro" -> MaterialTheme.colorScheme.onSurfaceVariant; else -> WarnAmber }
+    val small = MaterialTheme.typography.bodySmall
+    Column {
+        Row(Modifier.fillMaxWidth().clickable(onClick = onToggle).padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.size(10.dp).clip(CircleShape).background(color))
+            Column(Modifier.weight(1f).padding(horizontal = 10.dp)) {
+                Text("${o.place} (${o.province})", fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text("${SHORT[o.kind] ?: o.cause} · ${o.customers} clienti · dal ${hm(o.start)}", style = small, maxLines = 1, overflow = TextOverflow.Ellipsis, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+            if (o.impact.isNotEmpty()) Text("${o.impact.size} POP/AP", style = small, color = BadRed, fontWeight = FontWeight.SemiBold)
+        }
+        if (expanded) {
+            Column(Modifier.padding(start = 20.dp, bottom = 4.dp)) {
+                o.zones.firstOrNull()?.let { z -> Text("${z.name} a ${if (z.distanceM >= 1000) "%.1f km".format(z.distanceM / 1000.0) else "${z.distanceM} m"}", style = small) }
+                Text("Ripristino previsto ${hm(o.expectedRestore)}", style = small)
                 if (o.impact.isNotEmpty()) {
-                    Text("Potenzialmente impattati:", color = BadRed, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodySmall)
+                    Text("Potenzialmente impattati:", color = BadRed, fontWeight = FontWeight.SemiBold, style = small)
                     o.impact.take(5).forEach { i ->
-                        Text("• ${if (i.type == "pop") "POP" else "AP"} ${i.name} a ${i.distanceM} m" + (i.stations?.let { " · $it CPE" } ?: ""), color = BadRed, style = MaterialTheme.typography.bodySmall)
+                        Text("• ${if (i.type == "pop") "POP" else "AP"} ${i.name} a ${i.distanceM} m" + (i.stations?.let { " · $it CPE" } ?: ""), color = BadRed, style = small)
                     }
                 }
-                Text("${o.customers} clienti Enel · dal ${hm(o.start)} · ripristino previsto ${hm(o.expectedRestore)}", style = MaterialTheme.typography.bodySmall)
-                TextButton(onClick = {
-                    runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:${o.lat},${o.lon}?q=${o.lat},${o.lon}"))) }
-                }) { Text("Apri sulla mappa") }
+                Row {
+                    TextButton(onClick = onMap) { Text("Sulla mappa") }
+                    TextButton(onClick = onNavigate) { Text("Navigatore") }
+                }
             }
         }
     }
