@@ -1,9 +1,17 @@
 import { api } from '../api.js';
 import { badge, card, fmtDate, h, pageHead, stat } from '../dom.js';
+import { icon } from '../icons.js';
+import { isOn as moduleOn } from '../modules.js';
 import { uispStatusCard } from './uisp-panel.js';
 
 export async function dashboardView() {
-  const [s, profiles, uisp, osm] = await Promise.all([api('/api/admin/status'), api('/api/admin/profiles'), uispStatusCard(), osmStatus()]);
+  const [s, profiles, uisp, osm, net] = await Promise.all([
+    api('/api/admin/status'),
+    api('/api/admin/profiles'),
+    uispStatusCard(),
+    osmStatus(),
+    moduleOn('network_status') ? api('/api/network/status').catch(() => null) : null,
+  ]);
   const missingProfiles = profiles.filter((p) => !p.templates.length).map((p) => p.model);
   const warnings = [];
   if (!s.runtimeSecrets.cpeAdminPassword) warnings.push('CPE_ADMIN_PASSWORD non configurata: il provisioning è bloccato.');
@@ -17,6 +25,7 @@ export async function dashboardView() {
     'div',
     {},
     pageHead('Panoramica', `Server v${s.version}`),
+    todayTiles(s.today, net),
     warnings.length ? h('div', { class: 'notice warn' }, h('b', {}, 'Da completare'), h('ul', { class: 'plain' }, warnings.map((w) => h('li', {}, w)))) : h('div', { class: 'notice good' }, 'Configurazione completa: il provisioning è operativo.'),
     card(
       h('h2', {}, 'Attività ultimi 30 giorni'),
@@ -82,4 +91,24 @@ async function osmStatus() {
     stat('Dati aggiornati al', p.dataUpdated ? fmtDate(p.dataUpdated) : '—'),
     h('div', { class: 'stat' }, h('small', {}, 'Dettagli'), h('a', { href: '#/connectors' }, 'Connettori')),
   );
+}
+
+/** One number that needs attention, with its icon; the whole tile opens the page to act on it. */
+function tile(href, ic, value, label, tone = '') {
+  return h('a', { class: `tile ${tone}`, href }, h('span', { class: 'tile-icon' }, icon(ic)), h('span', { class: 'tile-text' }, h('b', {}, String(value)), h('span', {}, label)));
+}
+
+/** "Oggi": work orders, NOC approvals, open KO reports, the network at a glance. */
+function todayTiles(t, net) {
+  if (!t) return null;
+  const tiles = [
+    moduleOn('work_orders') ? tile('#/work-orders', 'pending_actions', `${t.workOrdersDone}/${t.workOrders}`, 'interventi di oggi fatti', '') : null,
+    moduleOn('work_orders') && t.workOrdersLate ? tile('#/work-orders', 'warning_filled', t.workOrdersLate, 'interventi in ritardo', 'bad') : null,
+    tile('#/jobs', t.nocPending ? 'pending_actions' : 'check_circle', t.nocPending, 'collaudi da approvare (NOC)', t.nocPending ? 'warn' : 'good'),
+    tile('#/jobs', t.koOpen ? 'error_filled' : 'check_circle', t.koOpen, 'KO o rimandi aperti', t.koOpen ? 'warn' : 'good'),
+    tile('#/jobs', 'rocket_launch', t.jobs24h, 'provisioning nelle ultime 24 ore'),
+    net ? tile('#/network', net.summary.down ? 'cloud_off' : 'hub', net.summary.down, 'AP non raggiungibili', net.summary.down ? 'bad' : 'good') : null,
+    net && net.summary.powerOutage ? tile('#/network', 'bolt', net.summary.powerOutage, 'AP con guasto Enel vicino', 'warn') : null,
+  ].filter(Boolean);
+  return card(h('h2', {}, 'Oggi'), h('div', { class: 'tiles' }, tiles));
 }

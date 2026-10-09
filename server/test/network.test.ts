@@ -49,6 +49,10 @@ describe('Stato rete', () => {
     const all = (await call('GET', '/api/network/status')).json();
     assert.ok(all.pops.length >= 2, 'admins: every POP');
     assert.deepEqual(all.pops.find((p: { id: string }) => p.id === 'site-n2').aps[0].cpe, { total: 2, offline: 0 });
+    // admins: positions for the map of the whole network
+    const n2 = all.pops.find((p: { id: string }) => p.id === 'site-n2');
+    assert.equal(typeof n2.lat, 'number');
+    assert.equal(typeof n2.aps[0].lat, 'number');
     await app.close();
   });
 });

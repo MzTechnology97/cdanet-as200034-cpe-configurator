@@ -20,7 +20,7 @@ export const MODULES = [
   { key: 'cpe_health', label: 'Salute CPE', area: 'web + app', description: 'Stato delle CPE dei clienti: gli admin vedono tutte quelle in UISP e le assegnano agli installatori; ogni installatore vede le proprie e quelle assegnate.', default: false },
   { key: 'stats', label: 'Statistiche', area: 'web', description: 'Installazioni, collaudi e qualità per mese, installatore e modello.', default: true },
   { key: 'csv_export', label: 'Export CSV', area: 'web', description: 'Esportazione dello storico provisioning per Excel.', default: true },
-  { key: 'network_tools', label: 'Strumenti di rete', area: 'web + app', description: 'Ping, traceroute, DNS, discovery, SNMP, TVCC, speed test, Wi-Fi analyzer.', default: true },
+  { key: 'network_tools', label: 'Strumenti di rete', area: 'app', description: 'Ping, traceroute, DNS, discovery, SNMP, TVCC, speed test, Wi-Fi analyzer.', default: true },
   { key: 'routeros', label: 'MikroTik · RouterOS', area: 'web + app', description: 'Consultazione in sola lettura di apparati RouterOS.', default: true },
   { key: 'power_outages', label: 'Guasti Enel', area: 'web + app', description: 'Guasti e lavori e-distribuzione nelle zone di interesse e attorno agli AP, con notifiche Telegram e sull’app.', default: false },
   { key: 'network_status', label: 'Stato rete', area: 'web + app', description: 'Stato di POP e AP (raggiungibili, CPE offline, guasti Enel vicini): installatori solo quelli assegnati, senza notifiche.', default: false },

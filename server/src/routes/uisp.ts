@@ -83,13 +83,17 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.get('/api/coverage', mod('coverage'), async (req) => {
     const q = z
-      .object({ lat: z.coerce.number(), lon: z.coerce.number(), limit: z.coerce.number().int().min(1).max(10).default(5) })
+      .object({ lat: z.coerce.number(), lon: z.coerce.number(), limit: z.coerce.number().int().min(1).max(50).default(5), km: z.coerce.number().min(1).max(200).optional() })
       .parse(req.query);
+    // admins: no limits (up to 50 APs, the distance they ask up to 200 km); installers: 10 APs within the configured radius
+    const isAdmin = req.user!.role === 'admin';
+    const limit = isAdmin ? q.limit : Math.min(q.limit, 10);
+    const maxKm = isAdmin ? (q.km ?? ctx.uispSettings.coverageMaxKm) : ctx.uispSettings.coverageMaxKm;
     if (!isValidLatLon(q.lat, q.lon)) throw new HttpError(400, 'invalid_position');
     // Installers check coverage only on the POPs/APs assigned to them by the admin.
     const keys = req.user!.role === 'admin' ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
     const allow = keys ? (a: { id: string; siteId: string | null }) => keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`)) : undefined;
-    const aps = await uisp().nearestAps({ lat: q.lat, lon: q.lon }, q.limit, ctx.uispSettings.coverageMaxKm, allow);
+    const aps = await uisp().nearestAps({ lat: q.lat, lon: q.lon }, limit, maxKm, allow);
     const models = await uisp().apModels(aps.map((a) => a.id)).catch(() => new Map<string, ApModel>());
     const clientsShown = !keys || ctx.outages.config().installerClients;
     const estimateFor = (a: { id: string; distanceM: number; bearing: number }) => {
@@ -104,7 +108,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       return m && m.sector ? { center: m.sector.center, width: m.sector.width, servedM: m.servedM } : null;
     };
     return {
-      maxKm: ctx.uispSettings.coverageMaxKm,
+      maxKm,
       restricted: !!keys,
       assignedCount: keys ? [...keys].filter((k) => !k.startsWith('z')).length : null,
       aps: aps.map(({ lat, lon, siteId: _site, gpsAltitude: _alt, siteHeight: _h, ...a }) => {
