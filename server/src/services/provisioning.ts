@@ -248,12 +248,15 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
       | undefined;
     if (!job) throw new HttpError(404, 'job_not_found');
     if (job.user_id !== user.id && user.role !== 'admin') throw new HttpError(403, 'forbidden');
-    if (job.status === 'success' || job.status === 'failed') {
-      if (job.status === input.result) return { ok: true, duplicate: true };
+    // A failed write can be retried with the same package (new attempt); a success is final.
+    const retry = job.status === 'failed';
+    if (job.status === 'success') {
+      if (input.result === 'success') return { ok: true, duplicate: true };
       throw new HttpError(409, 'job_already_completed');
     }
+    if (retry && input.completedAt && sameAttempt(jobId, input.completedAt)) return { ok: true, duplicate: true };
     db.prepare(
-      'UPDATE provisioning_jobs SET status = ?, completed_at = ?, stages = ?, detected = ?, error = ? WHERE id = ?',
+      `UPDATE provisioning_jobs SET status = ?, completed_at = ?, stages = ?, detected = ?, error = ?, attempts = attempts + ${retry ? 1 : 0} WHERE id = ?`,
     ).run(
       input.result,
       input.completedAt ?? nowIso(),
@@ -262,7 +265,12 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
       sanitizeError(input.error),
       jobId,
     );
-    return { ok: true, duplicate: false };
+    return { ok: true, duplicate: false, ...(retry ? { retry: true } : {}) };
+  }
+
+  /** The offline queue may send the same result twice: same completion time, same attempt. */
+  function sameAttempt(jobId: string, completedAt: string) {
+    return !!db.prepare('SELECT 1 FROM provisioning_jobs WHERE id = ? AND completed_at = ?').get(jobId, completedAt);
   }
 
   function listJobs(
@@ -275,7 +283,11 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
       where.push('j.user_id = ?');
       params.push(user.id);
     }
-    if (filter.status) {
+    if (filter.status === 'ko') {
+      where.push("EXISTS (SELECT 1 FROM install_ko k WHERE k.job_id = j.id AND k.resolved_at IS NULL)");
+    } else if (filter.status === 'review') {
+      where.push("EXISTS (SELECT 1 FROM job_acceptance a WHERE a.job_id = j.id AND a.review = 'pending')");
+    } else if (filter.status) {
       where.push('j.status = ?');
       params.push(filter.status);
     }
@@ -302,17 +314,24 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
                 j.uisp_device_id uispDeviceId, j.uisp_site uispSite, j.uisp_authorized_at uispAuthorizedAt,
                 j.stages, j.detected, j.error, u.username installer, j.replaces_job_id replacesJobId,
                 (SELECT a.verdict FROM job_acceptance a WHERE a.job_id = j.id) acceptance,
-                (SELECT count(*) FROM job_photos p WHERE p.job_id = j.id) photos
+                (SELECT a.review FROM job_acceptance a WHERE a.job_id = j.id) review,
+                (SELECT count(*) FROM job_photos p WHERE p.job_id = j.id) photos, j.attempts,
+                (SELECT count(*) FROM install_ko k WHERE k.job_id = j.id) koCount,
+                (SELECT k.kind || ':' || k.reason FROM install_ko k WHERE k.job_id = j.id AND k.resolved_at IS NULL ORDER BY k.id DESC LIMIT 1) koOpen
          FROM provisioning_jobs j JOIN users u ON u.id = j.user_id
          ${where.length ? `WHERE ${where.join(' AND ')}` : ''}
          ORDER BY j.created_at DESC LIMIT ?`,
       )
       .all(...params, filter.limit) as Array<Record<string, unknown>>;
-    return rows.map((r) => ({
-      ...r,
-      stages: JSON.parse(String(r.stages || '[]')),
-      detected: JSON.parse(String(r.detected || '{}')),
-    }));
+    return rows.map(({ koOpen, ...r }) => {
+      const [kind, reason] = koOpen ? String(koOpen).split(':') : [];
+      return {
+        ...r,
+        stages: JSON.parse(String(r.stages || '[]')),
+        detected: JSON.parse(String(r.detected || '{}')),
+        ko: kind ? { kind, reason } : null,
+      };
+    });
   }
 
   /** Marks stale prepared jobs as expired and applies GDPR retention. */
@@ -325,6 +344,7 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
     db.prepare('DELETE FROM provisioning_jobs WHERE created_at < ?').run(cutoff);
     db.prepare('DELETE FROM audits WHERE created_at < ?').run(cutoff);
     db.prepare('DELETE FROM events WHERE created_at < ?').run(cutoff);
+    db.prepare('DELETE FROM install_ko WHERE created_at < ?').run(cutoff);
     sweepPhotos(db, cfg.photosDir);
     return now;
   }

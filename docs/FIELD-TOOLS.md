@@ -24,6 +24,31 @@ La voce **Installazione CPE** (prima "Provisioning CPE") chiede che intervento f
 - Se la trova, collaudo e foto vanno in quella installazione.
 - Altrimenti (CPE installata prima dell'app) ripuntamento e cambio AP funzionano lo stesso, e il rapporto finale si condivide con il NOC.
 
+### KO, rimandi e ritentativi (v1.32.7)
+
+In ogni passo c'è **Segnala KO**, che c'è anche nell'esito del collaudo quando è "non superato" o serve l'approvazione del NOC. Il tecnico sceglie:
+- **Rimandata**: con la motivazione obbligatoria e, se concordato, il giorno in cui riprovare (domani, fra 2 giorni, fra una settimana);
+- **KO definitivo**: con la motivazione sempre obbligatoria.
+
+Motivi in lista: segnale insufficiente o nessun AP, la CPE non si aggancia, ostacoli, CPE guasta, cliente assente o accesso impossibile, maltempo, materiale mancante, altro. Fase, installazione, MAC, SSID, segnale, segnale atteso, distanza e AP li allega l'app.
+
+La segnalazione **non blocca l'installazione**: dopo l'invio il tecnico sceglie *Riprova ora* o *Chiudi intervento*, e si può riprendere quando si vuole. Ogni tentativo resta registrato (in console e Telegram compare "tentativo N"). Le segnalazioni aperte di una CPE si chiudono da sole quando un tentativo successivo supera il collaudo (anche con riserva), oppure le chiude un amministratore con una nota (**Segna come risolto**).
+
+Anche una **scrittura nella CPE fallita** si può ritentare con lo stesso pacchetto: prima il secondo esito veniva rifiutato dal server, e l'installazione restava "Fallita" anche se il secondo tentativo era riuscito. Lo storico mostra il numero di tentativi.
+
+Console: Storico → **Da seguire** (rimandi e KO aperti, collaudi da approvare), filtri *Rimandate o KO aperte* e *Da approvare (NOC)*, colonna nel CSV, statistiche per motivo. API: `POST /api/installs/ko`, `GET /api/installs/ko`, `POST /api/admin/installs/ko/{id}/resolve`.
+
+### Approvazione del NOC per segnale pessimo (v1.32.7)
+
+Un collaudo con segnale sotto il minimo (−75 dBm) o con un controllo radio rosso resta **in attesa dell'approvazione del NOC**. Sono controlli radio: segnale ricevuto, segnale lato AP, CINR, capacità airMAX, catene, collegamento all'AP. Un problema solo di cavo o PPPoE non la richiede.
+- L'app lo annuncia già nella verifica finale e nel collaudo.
+- Il NOC riceve la notifica in console e sul gruppo Telegram.
+- Nello Storico → job, sezione *Approvazione NOC*, il NOC approva, oppure rifiuta con la nota obbligatoria.
+- L'installatore riceve l'esito nelle Notifiche (e su Telegram, se collegato).
+- Un nuovo collaudo rimette l'installazione in attesa.
+
+API: `POST /api/admin/provisioning/jobs/{id}/review` con `{ decision: approved|rejected, note }`.
+
 ## Come il telefono raggiunge la CPE
 
 L'app prova da sola, in quest'ordine:

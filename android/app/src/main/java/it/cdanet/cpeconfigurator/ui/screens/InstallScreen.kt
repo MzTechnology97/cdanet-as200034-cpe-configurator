@@ -39,6 +39,7 @@ import androidx.compose.ui.unit.dp
 import it.cdanet.cpeconfigurator.core.AppContainer
 import it.cdanet.cpeconfigurator.data.CpeLocation
 import it.cdanet.cpeconfigurator.data.JobDto
+import it.cdanet.cpeconfigurator.data.KoMeasures
 import it.cdanet.cpeconfigurator.field.AirosStatus
 import it.cdanet.cpeconfigurator.field.AlignmentTone
 import it.cdanet.cpeconfigurator.field.CompassTarget
@@ -152,9 +153,24 @@ private fun StepHeader(c: AppContainer, mode: InstallMode, step: InstallStep) {
     val steps = InstallStep.of(mode)
     val current = steps.indexOf(step)
     var leave by remember { mutableStateOf(false) }
+    var ko by remember { mutableStateOf(false) }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(mode.title, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
+        if (c.session.state.collectAsState().value != null) TextButton(onClick = { ko = true }) { Text("Segnala KO", color = BadRed) }
         TextButton(onClick = { leave = true }) { Text("Termina") }
+    }
+    if (ko) {
+        KoDialog(
+            c,
+            installKoContext(c, mode, step),
+            onDismiss = { ko = false },
+            onRetry = { ko = false },
+            onClose = {
+                ko = false
+                if (c.provisioning.state.value.phase != Phase.Applying) c.provisioning.reset()
+                c.install.close()
+            },
+        )
     }
     Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
         steps.forEachIndexed { i, s ->
@@ -182,6 +198,28 @@ private fun StepHeader(c: AppContainer, mode: InstallMode, step: InstallStep) {
             dismissButton = { TextButton(onClick = { leave = false }) { Text("Continua") } },
         )
     }
+}
+
+/** Installation, CPE and last measures known at this step: attached to the KO report by the app. */
+private fun installKoContext(c: AppContainer, mode: InstallMode, step: InstallStep): KoContext {
+    val st = c.install.state.value
+    val prov = c.provisioning.state.value
+    val s = c.field.state.value.status
+    val ap = st.pointing?.aps?.firstOrNull { it.ssid.equals(s?.essid ?: st.expectedSsid, ignoreCase = true) }
+    return KoContext(
+        jobId = st.job?.id ?: prov.pkg?.jobId ?: prov.doneJobId,
+        mode = if (mode == InstallMode.New) "new" else "repoint",
+        step = step.name.lowercase(),
+        mac = s?.macs?.firstOrNull() ?: st.job?.mac ?: c.provisioning.form.value.mac.ifBlank { null },
+        ssid = s?.essid?.takeIf { s.associated } ?: st.expectedSsid,
+        measures = KoMeasures(
+            signal = s?.signal?.takeIf { s.associated },
+            expectedSignal = s?.expectedSignal,
+            distanceM = s?.distanceM ?: ap?.distanceM,
+            apName = s?.apName ?: ap?.name,
+            associated = s?.associated,
+        ),
+    )
 }
 
 @Composable
@@ -638,6 +676,9 @@ private fun FinalStep(c: AppContainer, onAcceptance: () -> Unit) {
             },
             when (v) { Verdict.Ok -> GoodGreen; Verdict.Warn -> WarnAmber; else -> BadRed },
         )
+        nocApprovalReason(s.signal, c.field.thresholds.signalMin, checks.filter { it.verdict == Verdict.Bad }.map { it.title })?.let {
+            Banner("Approvazione NOC necessaria ($it). $NOC_APPROVAL_TEXT", WarnAmber)
+        }
         SectionCard("Radio") {
             LinkSummary(s, c)
             s.cinrRx?.let { KeyValue("CINR", "$it dB") }

@@ -52,6 +52,7 @@ export async function statsView() {
             { label: 'Mese', render: (m) => monthName(m.month) },
             { label: 'Riuscite', key: 'success' },
             { label: 'Fallite', key: 'failed' },
+            { label: 'Rimandate / KO', render: (m) => (m.postponed || m.definitive ? `${m.postponed} / ${m.definitive}` : '—') },
             { label: 'Collaudi (ok / riserva / ko)', render: (m) => (m.acceptances ? `${m.acceptOk} / ${m.acceptWarn} / ${m.acceptBad}` : '—') },
             { label: 'Segnale medio', render: (m) => (m.avgSignal != null ? `${m.avgSignal} dBm` : '—') },
             { label: 'Download medio', render: (m) => (m.avgDownload != null ? `${m.avgDownload} Mbit/s` : '—') },
@@ -78,6 +79,21 @@ export async function statsView() {
             )
           : h('p', { class: 'small muted' }, 'Nessun provisioning nel periodo.'),
       ),
+      d.koReasons?.length
+        ? card(
+            h('h2', {}, 'Rimandi e KO per motivo'),
+            h('p', { class: 'small muted' }, 'Segnalazioni dei tecnici (ogni tentativo conta: una stessa installazione può essere rimandata più volte).'),
+            table(
+              [
+                { label: 'Motivo', key: 'label' },
+                { label: 'Rimandate', key: 'postponed' },
+                { label: 'KO definitivi', key: 'definitive' },
+                { label: 'Poi risolte', render: (r) => `${r.resolved} (${pct(r.resolved, r.postponed + r.definitive)})` },
+              ],
+              d.koReasons,
+            ),
+          )
+        : null,
       card(
         h('h2', {}, 'Per modello'),
         table(

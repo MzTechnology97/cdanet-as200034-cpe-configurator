@@ -12,6 +12,8 @@ import { createSealer, hashPassword } from './crypto.ts';
 import { nowIso, openDatabase, type Db } from './db.ts';
 import { adminRoutes } from './routes/admin.ts';
 import { acceptanceRoutes } from './routes/acceptance.ts';
+import { koRoutes } from './routes/ko.ts';
+import { notificationRoutes } from './routes/notifications.ts';
 import { fieldRoutes } from './routes/field.ts';
 import { provisioningRoutes } from './routes/provisioning.ts';
 import { replaceRoutes } from './routes/replace.ts';
@@ -191,6 +193,8 @@ export async function buildApp(
   provisioningRoutes(app, ctx);
   fieldRoutes(app, ctx);
   acceptanceRoutes(app, ctx);
+  koRoutes(app, ctx);
+  notificationRoutes(app, ctx);
   replaceRoutes(app, ctx);
   statsRoutes(app, ctx);
   outageRoutes(app, ctx);

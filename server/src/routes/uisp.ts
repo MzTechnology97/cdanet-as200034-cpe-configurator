@@ -348,6 +348,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       job.id,
     );
     recordEvent(db, req.user!.id, 'uisp.authorize', `${device.name || device.mac} → ${siteName}`, job.id);
+    ctx.notify.installActivated(job.id, req.user!.username);
     let backup: 'created' | 'failed' | 'disabled' = 'disabled';
     if (ctx.uispSettings.autoBackup) {
       backup = await u

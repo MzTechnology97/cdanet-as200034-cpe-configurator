@@ -74,6 +74,19 @@ fun HistoryScreen(c: AppContainer, onAcceptance: (JobDto) -> Unit, onReplace: (J
                 Text("${j.model}${j.template?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()} · ${j.mac} · ${j.ssid}", style = MaterialTheme.typography.bodySmall)
                 Text(j.createdAt.replace('T', ' ').take(16), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (j.error.isNotBlank()) Text(j.error, style = MaterialTheme.typography.bodySmall, color = BadRed)
+                if (j.attempts > 1) Text("Scrittura riuscita al tentativo ${j.attempts}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                j.ko?.let { k ->
+                    Text(
+                        "${KO_KINDS[k.kind] ?: k.kind} · ${KO_REASONS[k.reason] ?: k.reason}" + if (j.koCount > 1) " (${j.koCount} segnalazioni)" else "",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (k.kind == "definitive") BadRed else WarnAmber,
+                    )
+                }
+                when (j.review) {
+                    "pending" -> Text("In attesa dell'approvazione del NOC (segnale)", style = MaterialTheme.typography.bodySmall, color = WarnAmber)
+                    "approved" -> Text("Approvata dal NOC", style = MaterialTheme.typography.bodySmall, color = GoodGreen)
+                    "rejected" -> Text("Non accettata dal NOC: vedi Notifiche", style = MaterialTheme.typography.bodySmall, color = BadRed)
+                }
                 if (j.status == "success") {
                     val acc = when (j.acceptance) {
                         "ok" -> "Collaudo superato" to GoodGreen

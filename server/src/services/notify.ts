@@ -1,5 +1,7 @@
 import type { Config } from '../config.ts';
 import { nowIso, type Db } from '../db.ts';
+import { KO_KINDS, KO_REASONS, KO_STEPS } from '../routes/ko.ts';
+import { createInbox } from './inbox.ts';
 import { escapeHtml as e, type Telegram } from './telegram.ts';
 import type { Uisp } from './uisp.ts';
 
@@ -19,11 +21,20 @@ export function createNotifier(
   // Module "Notifiche Telegram" off: every notification is dropped here.
   const telegram = { ...rawTelegram, notify: (...a: Parameters<Telegram['notify']>) => (isOn() ? rawTelegram.notify(...a) : Promise.resolve()), summaryHour: () => (isOn() ? rawTelegram.summaryHour() : null) };
   const jobLink = (mac: string) => (cfg.publicUrl ? `\n<a href="${e(cfg.publicUrl)}/#/jobs?q=${encodeURIComponent(mac)}">Apri nello storico</a>` : '');
+  // Notifications page of each user; personal Telegram only with the module on and the bot set
+  const inbox = createInbox(
+    db,
+    (chat, html) => {
+      if (isOn() && rawTelegram.personalAvailable()) void rawTelegram.sendTo(chat, html).catch((err) => log(`telegram personal: ${(err as Error).message}`));
+    },
+    e,
+    jobLink,
+  );
 
   function provisioningResult(jobId: string) {
     const j = db
-      .prepare('SELECT j.status, j.model, j.mac, j.ssid, j.error, j.stages, j.replaces_job_id, u.username FROM provisioning_jobs j JOIN users u ON u.id = j.user_id WHERE j.id = ?')
-      .get(jobId) as { status: string; model: string; mac: string; ssid: string; error: string; stages: string; replaces_job_id: string | null; username: string } | undefined;
+      .prepare('SELECT j.status, j.model, j.mac, j.ssid, j.error, j.stages, j.replaces_job_id, j.attempts, u.username FROM provisioning_jobs j JOIN users u ON u.id = j.user_id WHERE j.id = ?')
+      .get(jobId) as { status: string; model: string; mac: string; ssid: string; error: string; stages: string; replaces_job_id: string | null; attempts: number; username: string } | undefined;
     if (!j) return;
     if (j.status === 'failed') {
       const stages = (() => {
@@ -33,19 +44,88 @@ export function createNotifier(
           return '';
         }
       })();
-      void telegram.notify(
-        'provisioning_failed',
-        `❌ <b>Provisioning fallito</b>\nInstallatore: ${e(j.username)}\nCPE: ${e(j.model)} · ${e(j.mac)}\nSSID: ${e(j.ssid)}` +
-          (stages ? `\nUltima fase: ${e(stages)}` : '') +
-          (j.error ? `\nErrore: ${e(j.error.slice(0, 300))}` : '') +
-          jobLink(j.mac),
-      );
+      const title = `Provisioning fallito${j.attempts > 1 ? ` · tentativo ${j.attempts}` : ''}`;
+      const lines = [`Installatore: ${j.username}`, `CPE: ${j.model} · ${j.mac}`, `SSID: ${j.ssid}`, ...(stages ? [`Ultima fase: ${stages}`] : []), ...(j.error ? [`Errore: ${j.error.slice(0, 300)}`] : [])];
+      void telegram.notify('provisioning_failed', `❌ <b>${e(title)}</b>\n${lines.map(e).join('\n')}` + jobLink(j.mac));
+      inbox.push('noc', { kind: 'provisioning_failed', title, lines, jobId, mac: j.mac });
     } else if (j.status === 'success' && getUisp()) {
       void telegram.notify(
         'uisp_pending',
         `🆕 <b>CPE ${j.replaces_job_id ? 'sostitutiva ' : ''}pronta da accettare in UISP</b>\n${e(j.model)} · ${e(j.mac)} · ${e(j.ssid)}\nInstallatore: ${e(j.username)}` + jobLink(j.mac),
       );
     }
+  }
+
+  /** Postponed or KO installation reported by the technician (same switch as a failed provisioning). */
+  function installKo(id: number) {
+    const k = db
+      .prepare(
+        `SELECT k.kind, k.job_id jobId, k.mode, k.step, k.reason, k.note, k.mac, k.ssid, k.data, u.username, j.device_name deviceName,
+                (SELECT count(*) FROM install_ko o WHERE o.id < k.id AND ((k.job_id IS NOT NULL AND o.job_id = k.job_id) OR (k.mac <> '' AND o.mac = k.mac))) before
+           FROM install_ko k JOIN users u ON u.id = k.user_id LEFT JOIN provisioning_jobs j ON j.id = k.job_id WHERE k.id = ?`,
+      )
+      .get(id) as
+      | { kind: keyof typeof KO_KINDS; jobId: string | null; mode: string; step: keyof typeof KO_STEPS; reason: keyof typeof KO_REASONS; note: string; mac: string; ssid: string; data: string; username: string; deviceName: string | null; before: number }
+      | undefined;
+    if (!k) return;
+    const d = JSON.parse(k.data || '{}') as { signal?: number | null; retryOn?: string };
+    const title = `${k.kind === 'postponed' ? 'Installazione rimandata' : 'Installazione KO'}${k.mode === 'repoint' ? ' (ripuntamento)' : ''}${k.before ? ` · tentativo ${k.before + 1}` : ''}`;
+    const lines = [
+      `Installatore: ${k.username}`,
+      ...(k.deviceName ? [`Cliente: ${k.deviceName}`] : []),
+      ...(k.mac || k.ssid ? [`CPE: ${[k.mac, k.ssid].filter(Boolean).join(' · ')}${d.signal != null ? ` · ${d.signal} dBm` : ''}`] : []),
+      `Fase: ${KO_STEPS[k.step] ?? k.step}`,
+      `Motivo: ${KO_REASONS[k.reason] ?? k.reason}`,
+      ...(d.retryOn ? [`Da riprovare il: ${d.retryOn.split('-').reverse().join('/')}`] : []),
+      `Motivazione: ${k.note.slice(0, 500)}`,
+    ];
+    void telegram.notify('provisioning_failed', `${k.kind === 'postponed' ? '⏸' : '⛔'} <b>${e(title)}</b>\n${lines.map(e).join('\n')}` + (k.mac ? jobLink(k.mac) : ''));
+    inbox.push('noc', { kind: 'install_ko', title, lines, jobId: k.jobId, mac: k.mac || null });
+  }
+
+  type ReviewRow = { jobId: string; userId: number; byId: number; username: string; deviceName: string; pppoeUser: string; mac: string; ssid: string; review: string; reason: string; note: string; signal: number | null };
+  const reviewRow = (jobId: string) =>
+    db
+      .prepare(
+        `SELECT j.id jobId, j.user_id userId, a.user_id byId, u.username, j.device_name deviceName, j.pppoe_user pppoeUser, j.mac, j.ssid,
+                a.review, a.review_reason reason, a.review_note note, json_extract(a.data, '$.radio.signal') signal
+           FROM job_acceptance a JOIN provisioning_jobs j ON j.id = a.job_id JOIN users u ON u.id = a.user_id WHERE a.job_id = ?`,
+      )
+      .get(jobId) as ReviewRow | undefined;
+  const customer = (r: { deviceName: string; pppoeUser: string }) => r.deviceName || r.pppoeUser;
+
+  /** Acceptance test with a poor signal: the NOC has to approve it. */
+  function reviewPending(jobId: string) {
+    const r = reviewRow(jobId);
+    if (!r) return;
+    const title = 'Collaudo da approvare: segnale pessimo';
+    const lines = [`Installatore: ${r.username}`, `Cliente: ${customer(r)}`, `CPE: ${r.mac} · ${r.ssid}${r.signal != null ? ` · ${r.signal} dBm` : ''}`, `Motivo: ${r.reason}`];
+    void telegram.notify('provisioning_failed', `📶 <b>${e(title)}</b>\n${lines.map(e).join('\n')}` + jobLink(r.mac));
+    inbox.push('noc', { kind: 'review_pending', title, lines, jobId, mac: r.mac });
+  }
+
+  /** The NOC's decision, to who installed the CPE and who did the acceptance test. */
+  function reviewDecision(jobId: string, by: string) {
+    const r = reviewRow(jobId);
+    if (!r || (r.review !== 'approved' && r.review !== 'rejected')) return;
+    const ok = r.review === 'approved';
+    const title = ok ? `Installazione accettata dal NOC: ${customer(r)}` : `Installazione non accettata dal NOC: ${customer(r)}`;
+    const lines = [
+      `CPE: ${r.mac} · ${r.ssid}${r.signal != null ? ` · ${r.signal} dBm` : ''}`,
+      `Deciso da: ${by}`,
+      ...(r.note ? [`Nota: ${r.note}`] : []),
+      ...(ok ? [] : ['Ripeti il puntamento (o cambia AP) e un nuovo collaudo, oppure segnala KO.']),
+    ];
+    inbox.push([...new Set([r.userId, r.byId])], { kind: 'review_decision', title: `${ok ? '✅' : '❌'} ${title}`, lines, jobId, mac: r.mac });
+  }
+
+  /** The NOC activated the customer's CPE on the network (no data source named to installers). */
+  function installActivated(jobId: string, by: string) {
+    const j = db.prepare('SELECT user_id userId, device_name deviceName, pppoe_user pppoeUser, mac, ssid FROM provisioning_jobs WHERE id = ?').get(jobId) as
+      | { userId: number; deviceName: string; pppoeUser: string; mac: string; ssid: string }
+      | undefined;
+    if (!j) return;
+    inbox.push([j.userId], { kind: 'install_activated', title: `✅ Installazione attivata dal NOC: ${customer(j)}`, lines: [`CPE: ${j.mac} · ${j.ssid}`, `Attivata da: ${by}`], jobId, mac: j.mac });
   }
 
   function security(text: string) {
@@ -94,13 +174,16 @@ export function createNotifier(
         `SELECT
            SUM(status = 'success') ok, SUM(status = 'failed') ko,
            (SELECT count(*) FROM provisioning_jobs WHERE status = 'success' AND uisp_authorized_at IS NULL AND created_at >= ?) pending,
-           (SELECT count(*) FROM job_acceptance WHERE created_at >= ?) accepted
+           (SELECT count(*) FROM job_acceptance WHERE created_at >= ?) accepted,
+           (SELECT count(*) FROM install_ko WHERE created_at >= ? AND kind = 'postponed') postponed,
+           (SELECT count(*) FROM install_ko WHERE created_at >= ? AND kind = 'definitive') definitive
          FROM provisioning_jobs WHERE created_at >= ?`,
       )
-      .get(new Date(now.getTime() - 7 * 86400_000).toISOString(), since, since) as { ok: number | null; ko: number | null; pending: number; accepted: number };
+      .get(new Date(now.getTime() - 7 * 86400_000).toISOString(), since, since, since, since) as { ok: number | null; ko: number | null; pending: number; accepted: number; postponed: number; definitive: number };
     return (
       `📊 <b>Riepilogo CDA Net CPE</b> (ultime 24 ore)\n` +
       `Installazioni riuscite: ${c.ok ?? 0}\nFallite: ${c.ko ?? 0}\nCollaudi registrati: ${c.accepted}\n` +
+      (c.postponed || c.definitive ? `Rimandate: ${c.postponed} · KO definitivi: ${c.definitive}\n` : '') +
       (getUisp() ? `CPE ancora da accettare in UISP (7 giorni): ${c.pending}\n` : '') +
       `Server: v${e(version)}`
     );
@@ -122,7 +205,12 @@ export function createNotifier(
 
   let timers: NodeJS.Timeout[] = [];
   return {
+    inbox,
     provisioningResult,
+    installKo,
+    reviewPending,
+    reviewDecision,
+    installActivated,
     security,
     adminLogin,
     checkUisp,
@@ -133,6 +221,7 @@ export function createNotifier(
         checkUisp().catch((err) => log(`notify uisp: ${(err as Error).message}`));
         try {
           maybeSummary();
+          inbox.sweep();
         } catch (err) {
           log(`notify summary: ${(err as Error).message}`);
         }

@@ -9,7 +9,10 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material3.Badge
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -51,6 +54,7 @@ import it.cdanet.cpeconfigurator.ui.screens.OutagesScreen
 import it.cdanet.cpeconfigurator.ui.screens.PortScannerScreen
 import it.cdanet.cpeconfigurator.ui.screens.LoginScreen
 import it.cdanet.cpeconfigurator.ui.screens.NetworkScreen
+import it.cdanet.cpeconfigurator.ui.screens.NotificationsScreen
 import it.cdanet.cpeconfigurator.ui.screens.InstallScreen
 import it.cdanet.cpeconfigurator.ui.screens.RemoteScreen
 import it.cdanet.cpeconfigurator.ui.screens.RouterOsScreen
@@ -88,6 +92,7 @@ enum class Screen(val title: String, val scroll: Boolean = true) {
     Remote("Accesso remoto"),
     RouterOs("MikroTik · RouterOS"),
     History("Storico provisioning"),
+    Notifications("Notifiche"),
     Settings("Impostazioni"),
     Guide("Guida installatore", scroll = false),
 }
@@ -101,6 +106,8 @@ fun AppRoot(c: AppContainer) {
     var update by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
     // AR sight opened from the guided installation: it also shows the live CPE signal
     var arWithSignal by remember { mutableStateOf(false) }
+    // unread notifications (bell in the top bar), refreshed with the queues while logged in
+    var unread by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
     val screen = stack.last()
 
@@ -152,8 +159,10 @@ fun AppRoot(c: AppContainer) {
             // Field work often starts offline: retry the queues every 2 minutes while logged in
             // (child of this effect: cancelled on logout or when the session changes).
             launch {
+                runCatching { c.api.unreadNotifications() }.onSuccess { unread = it }
                 while (true) {
                     kotlinx.coroutines.delay(120_000)
+                    runCatching { c.api.unreadNotifications() }.onSuccess { unread = it }
                     if (c.resultQueue.pending.value.isNotEmpty()) runCatching { c.resultQueue.sync() }
                     if (c.acceptanceQueue.pending.value.isNotEmpty()) runCatching { c.acceptanceQueue.sync() }
                 }
@@ -183,6 +192,13 @@ fun AppRoot(c: AppContainer) {
                     }
                 },
                 actions = {
+                    if (session != null && screen != Screen.Notifications) {
+                        IconButton(onClick = { go(Screen.Notifications) }) {
+                            BadgedBox(badge = { if (unread > 0) Badge { Text(if (unread > 99) "99+" else "$unread") } }) {
+                                Icon(Icons.Filled.Notifications, contentDescription = "Notifiche")
+                            }
+                        }
+                    }
                     if (screen != Screen.Settings) {
                         IconButton(onClick = { go(Screen.Settings) }) { Icon(Icons.Filled.Settings, contentDescription = "Impostazioni") }
                     }
@@ -241,6 +257,7 @@ fun AppRoot(c: AppContainer) {
                         onAcceptance = { c.selectedJob.value = it; go(Screen.Acceptance) },
                         onReplace = { c.provisioning.startReplacement(it); go(Screen.Provision) },
                     )
+                    Screen.Notifications -> NotificationsScreen(c, onUnread = { unread = it })
                     // the installer guide of the server (/wiki/): its links outside the guide open in the browser
                     Screen.Guide -> ServerPage(c, "/wiki/", "Guida", modifier = Modifier.fillMaxSize(), insidePrefix = "/wiki/", document = true)
                     Screen.Settings -> SettingsScreen(c, update = update, onUpdate = { update = it }, onLogout = {

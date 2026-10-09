@@ -245,3 +245,16 @@ body.lb-open { overflow: hidden; }
 .lb-prev { left: 10px; }
 .lb-next { right: 10px; }
 .lb-zoom { top: 12px; left: 12px; padding: 8px 14px; font-size: 14px; }
+
+/* Notifications: bell, menu badge, list */
+.bell { position: relative; text-decoration: none; font-size: 1.15rem; padding: 4px 6px; }
+.bell-count { display: inline-block; min-width: 18px; padding: 0 5px; margin-left: 6px; border-radius: 999px; background: var(--bad); color: #fff; font-size: .72rem; font-weight: 700; line-height: 18px; text-align: center; }
+.bell .bell-count { position: absolute; top: -4px; right: -8px; margin: 0; }
+.bell-count[hidden] { display: none; }
+.notif { border-bottom: 1px solid var(--line); padding: 8px 2px; }
+.notif:last-child { border-bottom: 0; }
+.notif.unread { border-left: 3px solid var(--brand); padding-left: 10px; }
+.notif-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.notif-body { white-space: pre-line; margin: 4px 0; }
+.notif .btns { margin-top: 4px; align-items: center; }
+.badges { display: flex; flex-wrap: wrap; gap: 4px; align-items: center; }

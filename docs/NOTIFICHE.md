@@ -1,3 +1,21 @@
+# Notifiche
+
+## Pagina Notifiche (console e app, v1.32.7)
+
+Ogni utente ha la sua pagina **Notifiche**, con la campanella e il numero da leggere: nella console in alto e nel menu, nell'app nella barra in alto e nella schermata principale. Si conservano 90 giorni.
+
+| Notifica | A chi | Quando |
+|---|---|---|
+| Provisioning fallito | NOC (tutti gli amministratori) | l'app registra una scrittura fallita (con "tentativo N" se ritentata) |
+| Installazione KO o rimandata | NOC | il tecnico usa *Segnala KO*: tipo, fase, motivo, motivazione, giorno per riprovare, segnale |
+| Collaudo da approvare | NOC | collaudo con segnale sotto il minimo o un controllo radio rosso |
+| Esito dell'approvazione del NOC | chi ha installato e chi ha fatto il collaudo | il NOC approva o rifiuta (con la nota) |
+| Installazione attivata dal NOC | chi ha installato | la CPE viene accettata in rete dalla console |
+
+Per ogni tipo l'utente sceglie, nella console in **Notifiche → Anche su Telegram**, se riceverlo anche nella sua chat Telegram personale. Di default l'installatore riceve su Telegram l'esito delle sue installazioni. Le notifiche del NOC vanno di default solo nella pagina, perché arrivano già al gruppo del NOC se configurato.
+
+API: `GET /api/notifications`, `GET /api/notifications/count`, `POST /api/notifications/read` (`{ids}` o `{all:true}`), `GET`/`PUT /api/notifications/prefs`.
+
 # Notifiche Telegram
 
 Console → **Connettori → Telegram**, solo per amministratori. Un solo bot serve sia il gruppo del NOC sia le **notifiche personali** di ogni utente.
@@ -35,12 +53,12 @@ Il link apre lo storico già filtrato sul MAC della CPE (`/#/jobs?q=<MAC>`).
 
 | Evento | Quando | Contenuto |
 |---|---|---|
-| Provisioning fallito | l'app registra un esito fallito | installatore, modello e MAC, SSID, ultima fase, errore |
+| Installazioni da seguire (prima "Provisioning fallito") | scrittura fallita; installazione KO o rimandata; collaudo con segnale pessimo da approvare | installatore, CPE, SSID, fase, motivo e motivazione, segnale, tentativo |
 | CPE da accettare in UISP | provisioning riuscito (con UISP configurato) | modello, MAC, SSID, installatore, indicazione se è una sostituzione |
 | UISP giù / di nuovo su | controllo ogni 5 minuti, messaggio solo al cambio di stato | — |
 | Sicurezza | account bloccato per troppi tentativi; admin che accede da un indirizzo mai usato da quell'account; password di un admin cambiata o reimpostata; utente promosso admin | utente, indirizzo IP |
 | Guasti Enel | nuovo guasto o lavoro e-distribuzione in una zona di interesse (o vicino a un AP), e ripristino | tipo (MT/BT/lavoro), località, zona/AP e distanza, clienti, ripristino previsto, mappa |
-| Riepilogo serale | ogni giorno all'ora scelta (ora italiana) | installazioni riuscite e fallite, collaudi registrati, CPE ancora da accettare in UISP, versione del server |
+| Riepilogo serale | ogni giorno all'ora scelta (ora italiana) | installazioni riuscite e fallite, rimandate e KO, collaudi registrati, CPE ancora da accettare in UISP, versione del server |
 
 Ogni provisioning riuscito non genera un messaggio singolo, ma entra nel riepilogo serale.
 

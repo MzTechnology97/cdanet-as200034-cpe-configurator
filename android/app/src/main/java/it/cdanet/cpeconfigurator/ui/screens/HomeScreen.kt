@@ -36,6 +36,7 @@ private data class Tile(
 private val TILES = listOf(
     Tile(Screen.Provision, "Installazione CPE", "Nuova installazione o ripuntamento: configurazione, aggancio all'AP migliore, puntamento AR, collaudo"),
     Tile(Screen.History, "Storico", "I miei provisioning e risultati in attesa di invio", needsLogin = true),
+    Tile(Screen.Notifications, "Notifiche", "Esito delle tue installazioni: approvazioni e attivazioni del NOC", needsLogin = true, admin = "Notifiche" to "NOC: provisioning falliti, installazioni KO o rimandate, collaudi da approvare"),
     Tile(Screen.CpeHealth, "Le mie CPE", "Stato delle CPE che ho installato, rispetto al collaudo", needsLogin = true, module = "cpe_health", admin = "Salute CPE" to "Tutte le CPE dei clienti: offline, segnale, porta LAN, con ricerca e filtri"),
     Tile(Screen.NetStatus, "Stato rete", "POP e AP: raggiungibili, CPE offline, guasti Enel vicini", needsLogin = true, module = "network_status"),
     Tile(Screen.Outages, "Guasti Enel", "Guasti e lavori della rete elettrica nelle tue zone, con notifiche", needsLogin = true, module = "power_outages"),

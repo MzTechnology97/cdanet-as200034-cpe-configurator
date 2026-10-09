@@ -2,6 +2,7 @@ import { api, download } from '../api.js';
 import { isOn } from '../modules.js';
 import { busy, card, field, fmtDate, h, mount, pageHead, statusBadge, table } from '../dom.js';
 import { acceptanceBadge, acceptancePanel } from './acceptance-panel.js';
+import { followUpCard, jobKoPanel, koBadge, reviewBadge, reviewPanel } from './ko-panel.js';
 import { osmLink } from './coverage.js';
 import { uispPanel } from './uisp-panel.js';
 import { nms } from '../terms.js';
@@ -17,6 +18,8 @@ export async function jobsView({ user, params }) {
     h('option', { value: 'failed' }, 'Falliti'),
     h('option', { value: 'prepared' }, 'Preparati / in corso'),
     h('option', { value: 'expired' }, 'Scaduti'),
+    h('option', { value: 'ko' }, 'Rimandate o KO aperte'),
+    h('option', { value: 'review' }, 'Da approvare (NOC)'),
   );
   const from = h('input', { type: 'date' });
   const to = h('input', { type: 'date' });
@@ -42,7 +45,18 @@ export async function jobsView({ user, params }) {
       table(
         [
           { label: 'Data', render: (j) => fmtDate(j.createdAt) },
-          { label: 'Esito', render: (j) => statusBadge(j.status) },
+          {
+            label: 'Esito',
+            render: (j) =>
+              h(
+                'div',
+                { class: 'badges' },
+                statusBadge(j.status),
+                j.attempts > 1 ? h('span', { class: 'small muted' }, ` ${j.attempts} tentativi`) : null,
+                koBadge(j.ko),
+                reviewBadge(j.review),
+              ),
+          },
           { label: 'Cliente', render: (j) => h('div', {}, j.deviceName || '—', h('div', { class: 'small muted' }, j.pppoeUser)) },
           { label: 'CPE', render: (j) => h('div', {}, j.model, j.template ? h('div', { class: 'small muted' }, `Template: ${j.template}`) : null, h('div', { class: 'small muted mono' }, j.mac)) },
           { label: 'SSID', key: 'ssid' },
@@ -87,7 +101,8 @@ export async function jobsView({ user, params }) {
               h('a', { href: osmLink(j.latitude, j.longitude), target: '_blank', rel: 'noopener' }, 'apri su OpenStreetMap'),
             )
           : h('p', { class: 'small muted' }, 'Non registrata.'),
-        j.status === 'success' && isOn('acceptance') ? [h('h3', {}, 'Collaudo'), acceptancePanel(j)] : null,
+        j.status === 'success' && isOn('acceptance') ? [h('h3', {}, 'Collaudo'), acceptancePanel(j), reviewPanel(j, user.role === 'admin', () => refresh())] : null,
+        jobKoPanel(j, user.role === 'admin'),
         j.replacesJobId ? h('p', { class: 'small muted' }, `Sostituisce la CPE del job ${j.replacesJobId}`) : null,
         j.status === 'success' ? [h('h3', {}, nms('UISP', 'Stato in rete')), uispPanel(j, user.role === 'admin')] : null,
         j.stages?.length ? [h('h3', {}, 'Fasi'), h('ol', {}, j.stages.map((s) => h('li', {}, s)))] : null,
@@ -107,11 +122,18 @@ export async function jobsView({ user, params }) {
     search,
     isOn('csv_export') ? exportBtn : null,
   );
-  await load();
+  const followEl = h('div', {});
+  async function refresh() {
+    mount(followEl, await followUpCard(user, (j) => showDetail(j)));
+    await load();
+  }
+  if (params?.get('status') && [...status.options].some((o) => o.value === params.get('status'))) status.value = params.get('status');
+  await refresh();
   return h(
     'div',
     {},
     pageHead('Storico provisioning', user.role === 'admin' ? 'Tutti gli installatori · solo metadati, nessuna password' : 'I tuoi provisioning · solo metadati'),
+    followEl,
     card(form, out),
     detail,
   );

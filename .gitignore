@@ -13,3 +13,9 @@ dist/
 # local development
 .dev/
 server/data/
+
+# Android local builds
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties

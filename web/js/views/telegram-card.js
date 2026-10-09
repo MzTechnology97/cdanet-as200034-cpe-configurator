@@ -2,7 +2,7 @@ import { api } from '../api.js';
 import { badge, busy, card, field, fmtDate, h, mount, toast } from '../dom.js';
 
 const EVENTS = [
-  ['provisioning_failed', 'Provisioning fallito', 'installatore, CPE, fase ed errore: il NOC può aiutare chi è sul tetto'],
+  ['provisioning_failed', 'Installazioni da seguire', 'provisioning fallito, installazione KO o rimandata (con motivo), collaudo con segnale pessimo da approvare'],
   ['uisp_pending', 'CPE da accettare in UISP', 'con il link allo storico per premere "Accetta in UISP"'],
   ['uisp_status', 'UISP giù / di nuovo su', 'solo al cambio di stato, controllo ogni 5 minuti'],
   ['security', 'Sicurezza', 'account bloccato per tentativi, admin da un indirizzo nuovo, password admin cambiate'],

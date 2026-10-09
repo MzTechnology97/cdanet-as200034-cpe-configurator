@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../context.ts';
+import { KO_REASONS } from './ko.ts';
 
 /** Installation statistics for the management: per month and per installer. */
 export function statsRoutes(app: FastifyInstance, ctx: AppContext) {
@@ -34,6 +35,23 @@ export function statsRoutes(app: FastifyInstance, ctx: AppContext) {
       const key = d.toISOString().slice(0, 7);
       return map.get(key) ?? { month: key, jobs: 0, success: 0, failed: 0, acceptances: 0, acceptOk: 0, acceptWarn: 0, acceptBad: 0, avgSignal: null, avgDownload: null, replacements: 0, uispAccepted: 0 };
     });
-    return { from, months: monthsList, installers: byInstaller, models: byModel };
+    // postponed / KO reports by month and reason (attempts, not installations: retries are allowed)
+    const ko = ctx.db
+      .prepare(`SELECT substr(created_at, 1, 7) month, kind, reason, count(*) n, SUM(resolved_at IS NOT NULL) resolved FROM install_ko WHERE created_at >= ? GROUP BY month, kind, reason`)
+      .all(from) as Array<{ month: string; kind: string; reason: string; n: number; resolved: number }>;
+    for (const m of monthsList as Array<Record<string, unknown>>) {
+      m.postponed = ko.filter((k) => k.month === m.month && k.kind === 'postponed').reduce((a, k) => a + k.n, 0);
+      m.definitive = ko.filter((k) => k.month === m.month && k.kind === 'definitive').reduce((a, k) => a + k.n, 0);
+    }
+    const reasons = new Map<string, { reason: string; label: string; postponed: number; definitive: number; resolved: number }>();
+    for (const k of ko) {
+      const r = reasons.get(k.reason) ?? { reason: k.reason, label: KO_REASONS[k.reason as keyof typeof KO_REASONS] ?? k.reason, postponed: 0, definitive: 0, resolved: 0 };
+      if (k.kind === 'postponed') r.postponed += k.n;
+      else r.definitive += k.n;
+      r.resolved += k.resolved;
+      reasons.set(k.reason, r);
+    }
+    const koReasons = [...reasons.values()].sort((a, b) => b.postponed + b.definitive - (a.postponed + a.definitive));
+    return { from, months: monthsList, installers: byInstaller, models: byModel, koReasons };
   });
 }

@@ -12,6 +12,7 @@ import { modulesView } from './views/modules-view.js';
 import { outagesView } from './views/outages.js';
 import { serverSettingsView } from './views/server-settings.js';
 import { networkView } from './views/network.js';
+import { notificationsView, unreadCount } from './views/notifications.js';
 import { loginView } from './views/login.js';
 import { myTemplatesView } from './views/mytemplates.js';
 import { profilesView } from './views/profiles.js';
@@ -26,6 +27,7 @@ import { setAdmin } from './terms.js';
 const ROUTES = [
   { group: 'Operatività' },
   { id: 'dashboard', label: 'Panoramica', view: dashboardView, admin: true },
+  { id: 'notifications', label: 'Notifiche', view: notificationsView },
   { id: 'jobs', label: 'Storico provisioning', view: jobsView },
   { id: 'health', label: 'Salute CPE', installerLabel: 'Le mie CPE', view: healthView, module: 'cpe_health' },
   { id: 'stats', label: 'Statistiche', view: statsView, admin: true, module: 'stats' },
@@ -87,15 +89,30 @@ function renderChrome(user) {
         ? h('div', { class: 'group' }, r.group)
         : r.href
           ? h('a', { href: r.href, target: '_blank', rel: 'noopener' }, r.label)
-          : h('a', { href: `#/${r.id}`, 'data-route': r.id }, user.role !== 'admin' && r.installerLabel ? r.installerLabel : r.label),
+          : h('a', { href: `#/${r.id}`, 'data-route': r.id }, user.role !== 'admin' && r.installerLabel ? r.installerLabel : r.label, r.id === 'notifications' ? h('span', { class: 'bell-count', hidden: true }) : null),
     ),
   );
   mount(
     sessionEl,
+    h('a', { class: 'bell', href: '#/notifications', title: 'Notifiche', 'aria-label': 'Notifiche' }, '🔔', h('span', { class: 'bell-count', hidden: true })),
     h('a', { class: 'session-name', href: '#/account', title: 'Il mio account' }, `${user.username} · ${user.role === 'admin' ? 'Admin' : 'Installatore'}`),
     h('button', { onclick: logout }, 'Esci'),
   );
 }
+
+/** Unread notifications on the bell and in the menu: refreshed every minute while logged in. */
+function showUnread(n) {
+  for (const el of document.querySelectorAll('.bell-count')) {
+    el.hidden = !n;
+    el.textContent = n > 99 ? '99+' : String(n ?? '');
+  }
+}
+window.addEventListener('cda:unread', (e) => showUnread(e.detail));
+async function pollUnread() {
+  if (session.get()?.token && !document.hidden) showUnread(await unreadCount());
+}
+setInterval(pollUnread, 60_000);
+document.addEventListener('visibilitychange', pollUnread);
 
 function logout() {
   session.clear();
@@ -122,6 +139,7 @@ async function route() {
   const id = path || (s.user.role === 'admin' ? 'dashboard' : 'jobs');
   const r = ROUTES.find((x) => x.id === id && x.view && allowed(x, s.user)) ?? ROUTES.find((x) => x.id === 'jobs');
   for (const a of sidebar.querySelectorAll('a')) a.classList.toggle('active', a.dataset.route === r.id);
+  void pollUnread();
   mount(viewEl, h('p', { class: 'muted' }, 'Caricamento…'));
   try {
     const content = await r.view({ user: s.user, params: new URLSearchParams(query) });
