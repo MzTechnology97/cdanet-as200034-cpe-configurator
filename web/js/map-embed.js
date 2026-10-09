@@ -1,4 +1,4 @@
-import { createMap, drawOutages, fit, MAP_COLORS as C, popup, towards } from './map.js';
+import { createMap, drawCoverage, drawOutages, fit, MAP_COLORS as C, popup, towards } from './map.js';
 
 /**
  * Map page embedded in the Android app ("Trova l'AP"). It has no session: the app passes the data
@@ -97,3 +97,24 @@ window.cdaOutages = async (d) => {
 window.cdaHeading = (deg) => {
   if (arrow) arrow.style.transform = `rotate(${Number(deg) || 0}deg)`;
 };
+
+/** Copertura (app): the checked point and the nearest APs, data of /api/coverage as is. */
+const coverageAps = new Map();
+window.cdaCoverage = async (d) => {
+  const map = await ready;
+  if (!map || !d) return;
+  layer.clearLayers();
+  arrow = null;
+  coverageAps.clear();
+  fit(map, drawCoverage(layer, d.lat, d.lon, d.aps ?? [], (a, marker, bounds) => coverageAps.set(a.id, { marker, bounds })));
+};
+
+/** Shows one AP of the coverage list: point and AP in view, AP details open. */
+window.cdaFocus = async (id) => {
+  const map = await ready;
+  const f = coverageAps.get(id);
+  if (!map || !f) return;
+  map.fitBounds(f.bounds.pad(0.25), { maxZoom: 16 });
+  f.marker.openPopup();
+};
+

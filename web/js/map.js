@@ -169,3 +169,37 @@ export function legend(items) {
     }),
   );
 }
+
+const km = (m) => (m < 1000 ? `${m} m` : `${(m / 1000).toFixed(m < 10000 ? 2 : 1)} km`);
+
+/**
+ * Coverage check (console and app): the point and the nearest APs. Admins get the real position
+ * and the area already served by the customers; installers an approximate area and the direction.
+ * [onAp] receives each AP's layer and the bounds to show it (the app focuses an AP from its list).
+ */
+export function drawCoverage(target, la, lo, aps, onAp = null) {
+  const L = window.L;
+  const layers = [L.circleMarker([la, lo], { radius: 7, color: COLORS.point, weight: 2, fillOpacity: 0.9 }).bindPopup(popup('Punto verificato', `${la.toFixed(5)}, ${lo.toFixed(5)}`)).addTo(target)];
+  for (const a of aps) {
+    const info = [a.ssid, `${km(a.distanceM)} · ${a.bearing}° ${a.direction}`, a.stations != null ? `${a.stations} client` : null];
+    const color = a.status === 'active' ? COLORS.ap : COLORS.impacted;
+    let marker;
+    if (a.approx) {
+      marker = L.circle([a.approx.lat, a.approx.lon], { radius: a.approx.radiusM, color, weight: 1, fillOpacity: 0.1 }).bindPopup(popup(a.name, ...info, 'posizione approssimativa')).addTo(target);
+      L.polyline([[la, lo], towards(la, lo, a.bearing, Math.min(a.distanceM, 600))], { color, weight: 3 }).addTo(target);
+    } else {
+      marker = L.circleMarker([a.lat, a.lon], { radius: 6, color, weight: 2, fillOpacity: 0.85 }).bindPopup(popup(a.name, ...info)).addTo(target);
+      L.polyline([[la, lo], [a.lat, a.lon]], { color, weight: 2, dashArray: '6 6' }).addTo(target);
+      // area already served (from the customers' positions): admins only
+      if (a.served?.servedM) {
+        const pts = [[a.lat, a.lon]];
+        for (let i = 0; i <= 12; i++) pts.push(towards(a.lat, a.lon, a.served.center - a.served.width / 2 + (a.served.width * i) / 12, a.served.servedM));
+        L.polygon(pts, { color: COLORS.ap, weight: 1, fillOpacity: 0.08, dashArray: '3 5' }).bindPopup(popup(`${a.name}: area servita`, `settore ${a.served.width}° verso ${a.served.center}°`, `clienti fino a ${km(a.served.servedM)}`)).addTo(target);
+      }
+    }
+    layers.push(marker);
+    onAp?.(a, marker, L.featureGroup([layers[0], marker]).getBounds());
+  }
+  return layers;
+}
+

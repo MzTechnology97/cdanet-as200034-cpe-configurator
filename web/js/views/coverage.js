@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { badge, busy, card, field, h, mount, pageHead, table, toast } from '../dom.js';
-import { createMap, fit, legend, MAP_COLORS as C, popup, towards } from '../map.js';
+import { createMap, drawCoverage, fit, legend, MAP_COLORS as C } from '../map.js';
 import { nms } from '../terms.js';
 
 /**
@@ -57,26 +57,7 @@ function coverageMap(la, lo, aps) {
   (async () => {
     const map = await createMap(el, { center: [la, lo], zoom: 13 });
     if (!map) return;
-    const L = window.L;
-    const layers = [L.circleMarker([la, lo], { radius: 7, color: C.point, weight: 2, fillOpacity: 0.9 }).bindPopup(popup('Punto verificato', `${la.toFixed(5)}, ${lo.toFixed(5)}`)).addTo(map)];
-    for (const a of aps) {
-      const info = [a.ssid, `${km(a.distanceM)} · ${a.bearing}° ${a.direction}`, a.stations != null ? `${a.stations} client` : null];
-      const color = a.status === 'active' ? C.ap : C.impacted;
-      if (a.approx) {
-        layers.push(L.circle([a.approx.lat, a.approx.lon], { radius: a.approx.radiusM, color, weight: 1, fillOpacity: 0.1 }).bindPopup(popup(a.name, ...info, 'posizione approssimativa')).addTo(map));
-        L.polyline([[la, lo], towards(la, lo, a.bearing, Math.min(a.distanceM, 600))], { color, weight: 3 }).addTo(map);
-      } else {
-        layers.push(L.circleMarker([a.lat, a.lon], { radius: 6, color, weight: 2, fillOpacity: 0.85 }).bindPopup(popup(a.name, ...info)).addTo(map));
-        L.polyline([[la, lo], [a.lat, a.lon]], { color, weight: 2, dashArray: '6 6' }).addTo(map);
-        // area already served (from the customers' positions): admins only
-        if (a.served?.servedM) {
-          const pts = [[a.lat, a.lon]];
-          for (let i = 0; i <= 12; i++) pts.push(towards(a.lat, a.lon, a.served.center - a.served.width / 2 + (a.served.width * i) / 12, a.served.servedM));
-          L.polygon(pts, { color: C.ap, weight: 1, fillOpacity: 0.08, dashArray: '3 5' }).bindPopup(popup(`${a.name}: area servita`, `settore ${a.served.width}° verso ${a.served.center}°`, `clienti fino a ${km(a.served.servedM)}`)).addTo(map);
-        }
-      }
-    }
-    fit(map, layers);
+    fit(map, drawCoverage(map, la, lo, aps));
   })().catch((e) => (note.textContent = e.message));
   return h(
     'div',
