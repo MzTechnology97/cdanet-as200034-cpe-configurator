@@ -32,10 +32,13 @@ export const MANAGEMENT_PORTS = { http: 20080, https: 20443 } as const;
 
 export const NODE_RANGE = { min: 2, max: 99 } as const;
 export const DISTRICT_RANGE = { min: 1, max: 99 } as const;
-export const SSID_RX = /^CDA-NET-N(?:[2-9]|[1-9][0-9])-D(?:0[1-9]|[1-9][0-9])$/;
+/** CDA-NET-N{nodo}-D{distretto}, optionally -R{n} for a relay ("rilancio") AP of the district. */
+export const SSID_RX = /^CDA-NET-N(?:[2-9]|[1-9][0-9])-D(?:0[1-9]|[1-9][0-9])(?:-R[1-9][0-9]?)?$/;
+/** Parts of a CDA Net SSID: node, district and relay number (null = main AP of the district). */
+export const SSID_PARTS = /^CDA-NET-N(\d+)-D(\d+)(?:-R(\d+))?$/;
 
-export function ssidFor(node: number, district: number): string {
-  return `CDA-NET-N${node}-D${String(district).padStart(2, '0')}`;
+export function ssidFor(node: number, district: number, relay?: number | null): string {
+  return `CDA-NET-N${node}-D${String(district).padStart(2, '0')}${relay ? `-R${relay}` : ''}`;
 }
 
 export const PPPOE_USER_RX = /^[A-Za-z0-9._-]+@cda-net\.it$/i;

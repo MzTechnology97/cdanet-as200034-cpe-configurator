@@ -130,7 +130,7 @@ check_once() {
 }
 
 # ---- Infrastructure settings requested from the console ------------------------------------
-INFRA_KEYS="APP_LISTEN HTTPS_SITES HTTPS_DEFAULT_SNI AUTOUPDATE UPDATE_INTERVAL UPDATE_WINDOW CDANET_CHANNEL MAP_MODE MAP_REGION MAP_BBOX"
+INFRA_KEYS="APP_LISTEN HTTPS_SITES HTTPS_DEFAULT_SNI AUTOUPDATE UPDATE_INTERVAL UPDATE_WINDOW CDANET_CHANNEL MAP_MODE MAP_REGION MAP_BBOX NOMINATIM_REGION"
 
 valid() {
   case "$1" in
@@ -143,6 +143,7 @@ valid() {
     CDANET_CHANNEL) printf '%s' "$2" | grep -Eq '^[a-z0-9][a-z0-9._-]{0,39}$' ;;
     MAP_MODE) printf '%s' "$2" | grep -Eq '^(local|off)$' ;;
     MAP_REGION) printf '%s' "$2" | grep -Eq '^(sicilia|isole|sud|centro|nord-est|nord-ovest|italia|custom)$' ;;
+    NOMINATIM_REGION) printf '%s' "$2" | grep -Eq '^(sicilia|isole|sud|centro|nord-est|nord-ovest|italia)$' ;;
     MAP_BBOX) printf '%s' "$2" | grep -Eq '^-?[0-9]{1,3}(\.[0-9]+)?,-?[0-9]{1,2}(\.[0-9]+)?,-?[0-9]{1,3}(\.[0-9]+)?,-?[0-9]{1,2}(\.[0-9]+)?$' ;;
     *) return 1 ;;
   esac
@@ -154,6 +155,23 @@ bbox_of() {
     centro) echo 9.60,41.20,14.10,44.50 ;; nord-est) echo 10.30,43.70,13.95,47.10 ;; nord-ovest) echo 6.60,43.75,11.45,46.70 ;;
     italia) echo 6.60,35.45,18.60,47.10 ;; *) echo "" ;;
   esac
+}
+
+# OpenStreetMap extract and its minutely updates for a region (same sources as the installer).
+osm_urls() {
+  case "$1" in
+    sicilia) echo "https://download.openstreetmap.fr/extracts/europe/italy/sicilia-latest.osm.pbf https://download.openstreetmap.fr/replication/europe/italy/sicilia/minute/" ;;
+    italia) echo "https://download.geofabrik.de/europe/italy-latest.osm.pbf https://download.geofabrik.de/europe/italy-updates/" ;;
+    *) echo "https://download.geofabrik.de/europe/italy/$1-latest.osm.pbf https://download.geofabrik.de/europe/italy/$1-updates/" ;;
+  esac
+}
+
+# Local geocoder imported again from scratch (new region or "Reimporta da zero"). Meanwhile the
+# app answers with the public service the installer set as fallback.
+geocoder_reimport() {
+  compose rm -sf nominatim >/dev/null 2>&1 || true
+  docker volume rm "${PROJECT}_nominatim_data" >/dev/null 2>&1 || true
+  compose up -d nominatim >/dev/null 2>&1
 }
 
 # Value in use: .env, otherwise the compose default.
@@ -173,7 +191,7 @@ write_current() {
   mkdir -p "$INFRA"
   t=$(mktemp)
   for k in $INFRA_KEYS; do printf '%s=%s\n' "$k" "$(effective "$k")" >>"$t"; done
-  printf 'AGENT=1\n' >>"$t"
+  printf 'GEOCODER_MODE=%s\nAGENT=1\n' "$(get_env GEOCODER_MODE)" >>"$t"
   cmp -s "$t" "$INFRA/current.env" || { cat "$t" >"$INFRA/current.env"; chmod 0644 "$INFRA/current.env" 2>/dev/null || true; }
   rm -f "$t"
 }
@@ -205,6 +223,20 @@ apply_request() {
   rm -f "$work"
   case "$changed" in *MAP_REGION*) r=$(get_env MAP_REGION); b=$(bbox_of "$r"); [ -n "$b" ] && set_env MAP_BBOX "$b" ;; esac
   case "$changed" in *APP_LISTEN*|*HTTPS_*) compose up -d --no-deps caddy >/dev/null 2>&1 || bad="$bad caddy" ;; esac
+  geo=""
+  case "$changed" in *NOMINATIM_REGION*)
+    # shellcheck disable=SC2046
+    set -- $(osm_urls "$(get_env NOMINATIM_REGION)")
+    set_env NOMINATIM_PBF_URL "$1"
+    set_env NOMINATIM_REPLICATION_URL "$2"
+    geo=1 ;;
+  esac
+  [ "$action" = geocoder_reimport ] && geo=1
+  if [ -n "$geo" ]; then
+    if [ "$(get_env GEOCODER_MODE)" != local ]; then geo=notlocal
+    elif geocoder_reimport; then geo=started
+    else geo=fail; fi
+  fi
   map=""
   case "$changed" in *MAP_REGION*|*MAP_BBOX*|*MAP_MODE*) map=1 ;; esac
   [ "$action" = map_update ] && map=1
@@ -219,10 +251,13 @@ apply_request() {
   write_current
   if [ -n "$bad" ]; then status error "non applicati (valori non validi o servizio non riavviato):$bad${changed:+ · applicati:$changed}"
   elif [ "$map" = fail ]; then status error "download della mappa non riuscito: $(tail -n 1 /tmp/maptiles.log | tr -d '\r')"
+  elif [ "$geo" = fail ]; then status error "riavvio di OpenStreetMap locale non riuscito"
+  elif [ "$geo" = notlocal ]; then status error "OpenStreetMap locale non installato su questo server (si installa con l'installer)"
   else
     m=""
     [ "$map" = ok ] && m=" · mappa aggiornata"
     [ "$map" = removed ] && m=" · mappa locale rimossa"
+    [ "$geo" = started ] && m="$m · import OpenStreetMap avviato (da 20 minuti a qualche ora)"
     status ok "applicato:${changed:- nessuna modifica}$m"
   fi
 }

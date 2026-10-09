@@ -1,12 +1,13 @@
 import { api } from '../api.js';
 import { badge, busy, card, field, fmtDate, h, mount, pageHead, table, toast } from '../dom.js';
 
-const SSID_RX = /^CDA-NET-N(\d+)-D(\d+)$/;
-const ssidOf = (n, d) => `CDA-NET-N${n}-D${String(d).padStart(2, '0')}`;
-/** Natural order: N2 before N11, D02 before D10. */
+/** CDA-NET-N{nodo}-D{distretto}, -R{n} for a relay ("rilancio") AP of the district. */
+const SSID_RX = /^CDA-NET-N(\d+)-D(\d+)(?:-R(\d+))?$/;
+const ssidOf = (n, d, r) => `CDA-NET-N${n}-D${String(d).padStart(2, '0')}${Number(r) ? `-R${r}` : ''}`;
+/** Natural order: N2 before N11, D02 before D10, the district's AP before its relays. */
 const sortKey = (s) => {
   const m = SSID_RX.exec(s);
-  return m ? Number(m[1]) * 1000 + Number(m[2]) : Number.MAX_SAFE_INTEGER;
+  return m ? Number(m[1]) * 100000 + Number(m[2]) * 100 + Number(m[3] ?? 0) : Number.MAX_SAFE_INTEGER;
 };
 
 export async function wirelessView() {
@@ -20,26 +21,29 @@ export async function wirelessView() {
   const district = h('select', {});
   for (let n = 2; n <= 99; n++) node.append(h('option', { value: n }, n));
   for (let d = 1; d <= 99; d++) district.append(h('option', { value: d }, String(d).padStart(2, '0')));
+  const relay = h('select', {}, h('option', { value: 0 }, 'nessuno (AP del distretto)'));
+  for (let r = 1; r <= 9; r++) relay.append(h('option', { value: r }, `R${r}`));
   const ssidPreview = h('input', { readonly: true });
   const psk = h('input', { type: 'password', autocomplete: 'new-password', minlength: 8, maxlength: 63 });
   const showPsk = h('input', { type: 'checkbox' });
   showPsk.onchange = () => (psk.type = showPsk.checked ? 'text' : 'password');
   const state = h('span', {});
   const save = h('button', { class: 'primary', type: 'submit' }, 'Salva chiave');
-  const currentSsid = () => ssidOf(node.value, district.value);
+  const currentSsid = () => ssidOf(node.value, district.value, relay.value);
   const syncForm = () => {
     ssidPreview.value = currentSsid();
     const exists = networks.some((n) => n.ssid === currentSsid());
     save.textContent = exists ? 'Aggiorna chiave' : 'Salva chiave';
     mount(state, exists ? badge('Già configurata: verrà sostituita', 'warn') : badge('Nuova rete', 'good'));
   };
-  node.onchange = district.onchange = syncForm;
+  node.onchange = district.onchange = relay.onchange = syncForm;
 
   function edit(ssid) {
     const m = SSID_RX.exec(ssid);
     if (!m) return;
     node.value = String(Number(m[1]));
     district.value = String(Number(m[2]));
+    relay.value = String(Number(m[3] ?? 0));
     syncForm();
     psk.value = '';
     form.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -64,6 +68,7 @@ export async function wirelessView() {
     },
     field('Nodo', node),
     field('Distretto', district),
+    field('Rilancio', relay),
     field('SSID', ssidPreview),
     field('Chiave WPA2 (8-63 caratteri)', psk),
     save,
