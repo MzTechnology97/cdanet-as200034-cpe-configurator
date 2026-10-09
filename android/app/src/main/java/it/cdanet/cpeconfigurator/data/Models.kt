@@ -129,7 +129,18 @@ data class MyZonesDto(val zones: List<OutageZoneItemDto> = emptyList())
 
 /** Personal Telegram notifications (bot configured by the admin). */
 @Serializable
-data class OutageTelegramDto(val available: Boolean = false, val linked: Boolean = false, val chatHint: String = "", val planned: Boolean = true)
+data class OutageTelegramDto(
+    val available: Boolean = false,
+    val linked: Boolean = false,
+    val chatHint: String = "",
+    val planned: Boolean = true,
+    /** Why not available: "no_bot", "personal_off", "module_off". */
+    val reason: String? = null,
+    /** Admins can turn it on themselves (console → Connettori → Telegram). */
+    val canConfigure: Boolean = false,
+    /** The user receives the Guasti Enel notifications (module on for them). */
+    val outages: Boolean = true,
+)
 
 @Serializable
 data class ApproxDto(val lat: Double, val lon: Double, val radiusM: Int = 1500)

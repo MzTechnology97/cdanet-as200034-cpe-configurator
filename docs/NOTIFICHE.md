@@ -1,8 +1,20 @@
 # Notifiche Telegram
 
-Console → **Connettori → Telegram (notifiche NOC)**, solo per amministratori.
+Console → **Connettori → Telegram**, solo per amministratori. Un solo bot serve sia il gruppo del NOC sia le **notifiche personali** di ogni utente.
 
-## Configurazione
+## Notifiche personali (tutti gli utenti)
+
+Basta il **token del bot**: incollalo in Connettori → Telegram e salva. Il gruppo del NOC non serve. L'opzione "Ogni utente può collegare il proprio Telegram" è attiva di default, e l'amministratore può spegnerla.
+
+Ogni utente, amministratore o installatore, collega il proprio Telegram:
+- dalla console, in **Il mio account → Notifiche Telegram**;
+- dall'app, in **Impostazioni** (o in Guasti Enel): **Collega Telegram**, poi nel bot **Avvia** e **Verifica**. In alternativa si inserisce il proprio ID Telegram.
+
+Oggi arrivano i guasti Enel delle proprie zone e dei POP/AP assegnati, per chi ha il modulo Guasti Enel. Se le notifiche non sono disponibili:
+- l'amministratore vede cosa manca e dove sistemarlo: bot non configurato, notifiche personali spente o modulo Telegram spento;
+- l'installatore vede a chi chiedere.
+
+## Configurazione del gruppo del NOC
 
 1. Su Telegram apri **@BotFather**, comando `/newbot`, e copia il token del bot.
 2. Aggiungi il bot al gruppo del NOC e scrivi un messaggio qualsiasi nel gruppo.

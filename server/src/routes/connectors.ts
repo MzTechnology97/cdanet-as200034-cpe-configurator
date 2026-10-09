@@ -73,11 +73,18 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
         chatId: chatId.or(z.literal('')),
         events: z.array(z.enum(TELEGRAM_EVENTS)).max(TELEGRAM_EVENTS.length),
         summaryHour: z.number().int().min(0).max(23).default(19),
+        personal: z.boolean().optional(),
       })
       .strict()
       .parse(req.body);
     ctx.telegram.save({ ...b, token: b.token || undefined }, req.user!.id);
-    recordEvent(ctx.db, req.user!.id, 'connector.telegram.update', b.chatId || '—', `${b.enabled ? 'attivo' : 'disattivato'} · ${b.events.join(', ')}${b.token ? ' · nuovo token' : ''}`);
+    recordEvent(
+      ctx.db,
+      req.user!.id,
+      'connector.telegram.update',
+      b.chatId || '—',
+      `${b.enabled ? 'NOC attivo' : 'NOC disattivato'} · personali ${b.personal === false ? 'no' : 'sì'} · ${b.events.join(', ')}${b.token ? ' · nuovo token' : ''}`,
+    );
     return ctx.telegram.view();
   });
 
