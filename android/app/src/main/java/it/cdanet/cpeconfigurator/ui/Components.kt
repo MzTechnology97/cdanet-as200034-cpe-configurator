@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -49,33 +50,73 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import it.cdanet.cpeconfigurator.R
 import it.cdanet.cpeconfigurator.tools.ToolResult
+import androidx.annotation.DrawableRes
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 
 @Composable
-fun SectionCard(title: String? = null, modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+fun SectionCard(title: String? = null, modifier: Modifier = Modifier, @DrawableRes icon: Int? = null, content: @Composable ColumnScope.() -> Unit) {
     Card(
         modifier = modifier.fillMaxWidth().padding(vertical = 6.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = MaterialTheme.shapes.large,
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
     ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-            if (title != null) Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+        Column(Modifier.padding(horizontal = 18.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            if (title != null) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (icon != null) {
+                        Box(Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+                            Icon(painterResource(icon), contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
+                        }
+                        Spacer(Modifier.width(10.dp))
+                    }
+                    Text(title, style = MaterialTheme.typography.titleMedium)
+                }
+            }
             content()
         }
     }
 }
 
+enum class NoticeKind { Info, Good, Warn, Bad }
+
+/** Tonal message with a status icon (info, ok, attention, error). */
+@Composable
+fun Notice(text: String, kind: NoticeKind, onDismiss: (() -> Unit)? = null) {
+    val st = StatusPalette
+    val (fg, bg, icon) = when (kind) {
+        NoticeKind.Good -> Triple(st.good, st.goodContainer, R.drawable.ic_check_circle_filled)
+        NoticeKind.Warn -> Triple(st.warn, st.warnContainer, R.drawable.ic_warning_filled)
+        NoticeKind.Bad -> Triple(st.bad, st.badContainer, R.drawable.ic_error_filled)
+        NoticeKind.Info -> Triple(MaterialTheme.colorScheme.onSecondaryContainer, MaterialTheme.colorScheme.secondaryContainer, R.drawable.ic_info_filled)
+    }
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.medium).background(bg).padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Icon(painterResource(icon), contentDescription = null, tint = fg, modifier = Modifier.size(22.dp))
+        Spacer(Modifier.width(12.dp))
+        Text(text, color = if (kind == NoticeKind.Info) fg else MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f).padding(end = 6.dp))
+        if (onDismiss != null) TextButton(onClick = onDismiss) { Text("OK") }
+    }
+}
+
+/** Status message in a given color: rendered as a [Notice] of the matching kind. */
 @Composable
 fun Banner(text: String, color: Color, onDismiss: (() -> Unit)? = null) {
-    Card(
-        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-        colors = CardDefaults.cardColors(containerColor = color.copy(alpha = 0.12f)),
-    ) {
-        Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
-            Text(text, color = color, modifier = Modifier.weight(1f))
-            if (onDismiss != null) TextButton(onClick = onDismiss) { Text("OK") }
-        }
+    val st = StatusPalette
+    val kind = when (color) {
+        st.good -> NoticeKind.Good
+        st.warn -> NoticeKind.Warn
+        st.bad, MaterialTheme.colorScheme.error -> NoticeKind.Bad
+        else -> NoticeKind.Info
     }
+    Notice(text, kind, onDismiss)
 }
 
 @Composable
@@ -84,7 +125,7 @@ fun ErrorBanner(text: String?, onDismiss: (() -> Unit)? = null) {
 }
 
 @Composable
-fun BusyButton(text: String, busy: Boolean, modifier: Modifier = Modifier, enabled: Boolean = true, primary: Boolean = true, onClick: () -> Unit) {
+fun BusyButton(text: String, busy: Boolean, modifier: Modifier = Modifier, enabled: Boolean = true, primary: Boolean = true, tonal: Boolean = false, onClick: () -> Unit) {
     val content: @Composable () -> Unit = {
         if (busy) {
             CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
@@ -93,9 +134,16 @@ fun BusyButton(text: String, busy: Boolean, modifier: Modifier = Modifier, enabl
         Text(text)
     }
     if (primary) {
-        Button(onClick = onClick, enabled = enabled && !busy, modifier = modifier) { content() }
+        Button(onClick = onClick, enabled = enabled && !busy, modifier = modifier.heightIn(min = 48.dp)) { content() }
+    } else if (tonal) {
+        androidx.compose.material3.FilledTonalButton(
+            onClick = onClick,
+            enabled = enabled && !busy,
+            modifier = modifier.heightIn(min = 48.dp),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
+        ) { content() }
     } else {
-        OutlinedButton(onClick = onClick, enabled = enabled && !busy, modifier = modifier) { content() }
+        OutlinedButton(onClick = onClick, enabled = enabled && !busy, modifier = modifier.heightIn(min = 48.dp)) { content() }
     }
 }
 
@@ -112,6 +160,7 @@ fun Field(
     isError: Boolean = false,
     readOnly: Boolean = false,
     trailing: (@Composable () -> Unit)? = null,
+    @DrawableRes leadingIcon: Int? = null,
 ) {
     OutlinedTextField(
         value = value,
@@ -123,6 +172,8 @@ fun Field(
         readOnly = readOnly,
         singleLine = true,
         trailingIcon = trailing,
+        leadingIcon = leadingIcon?.let { { Icon(painterResource(it), contentDescription = null, modifier = Modifier.size(20.dp)) } },
+        shape = MaterialTheme.shapes.medium,
         visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
         keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else keyboardType),
         modifier = modifier.fillMaxWidth(),
@@ -136,7 +187,7 @@ fun <T> Dropdown(label: String, options: List<T>, selected: T, display: (T) -> S
         OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.weight(1f)) {
                 Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                Text(display(selected), style = MaterialTheme.typography.bodyLarge)
+                Text(display(selected), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)
             }
             Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
         }
@@ -229,4 +280,76 @@ private fun DeviceListView(result: ToolResult, onPorts: (suspend (String) -> Str
 @Composable
 fun MonoBlock(text: String) {
     Text(text, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
+}
+
+/** Small status pill: a dot and a short label in the status color. */
+@Composable
+fun StatusChip(text: String, kind: NoticeKind, modifier: Modifier = Modifier) {
+    val st = StatusPalette
+    val (fg, bg) = when (kind) {
+        NoticeKind.Good -> st.good to st.goodContainer
+        NoticeKind.Warn -> st.warn to st.warnContainer
+        NoticeKind.Bad -> st.bad to st.badContainer
+        NoticeKind.Info -> MaterialTheme.colorScheme.onSurfaceVariant to MaterialTheme.colorScheme.surfaceContainerHighest
+    }
+    Row(
+        modifier.clip(RoundedCornerShape(50)).background(bg).padding(horizontal = 10.dp, vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(fg))
+        Spacer(Modifier.width(6.dp))
+        Text(text, color = fg, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+    }
+}
+
+/** Summary line of a list screen with a compact refresh action (spinner while loading). */
+@Composable
+fun ListHeader(summary: String, busy: Boolean, onRefresh: () -> Unit) {
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
+        Text(summary, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+        RefreshButton(busy, onRefresh)
+    }
+}
+
+/** Round tonal refresh button; shows a spinner while loading. */
+@Composable
+fun RefreshButton(busy: Boolean, onRefresh: () -> Unit) {
+    androidx.compose.material3.FilledTonalIconButton(onClick = onRefresh, enabled = !busy) {
+        if (busy) CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp)
+        else Icon(painterResource(R.drawable.ic_refresh), contentDescription = "Aggiorna", modifier = Modifier.size(20.dp))
+    }
+}
+
+/** Friendly empty list: a big tonal icon, a title and an optional hint. */
+@Composable
+fun EmptyState(@DrawableRes icon: Int, title: String, hint: String? = null) {
+    Column(Modifier.fillMaxWidth().padding(vertical = 28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Box(Modifier.size(72.dp).clip(RoundedCornerShape(24.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh), contentAlignment = Alignment.Center) {
+            Icon(painterResource(icon), contentDescription = null, tint = MaterialTheme.colorScheme.outline, modifier = Modifier.size(36.dp))
+        }
+        Text(title, style = MaterialTheme.typography.titleMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        if (hint != null) Text(hint, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    }
+}
+
+/** One line of a check list (diagnosis, verification, acceptance): status icon, title, detail. */
+@Composable
+fun CheckRow(title: String, verdict: it.cdanet.cpeconfigurator.field.Verdict, detail: String) {
+    val st = StatusPalette
+    val (fg, bg, icon) = when (verdict) {
+        it.cdanet.cpeconfigurator.field.Verdict.Ok -> Triple(st.good, st.goodContainer, R.drawable.ic_check_circle_filled)
+        it.cdanet.cpeconfigurator.field.Verdict.Warn -> Triple(st.warn, st.warnContainer, R.drawable.ic_warning_filled)
+        it.cdanet.cpeconfigurator.field.Verdict.Bad -> Triple(st.bad, st.badContainer, R.drawable.ic_error_filled)
+        it.cdanet.cpeconfigurator.field.Verdict.Info -> Triple(MaterialTheme.colorScheme.outline, MaterialTheme.colorScheme.surfaceContainerHigh, R.drawable.ic_info)
+    }
+    Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.Top) {
+        Box(Modifier.size(30.dp).clip(RoundedCornerShape(50)).background(bg), contentAlignment = Alignment.Center) {
+            Icon(painterResource(icon), contentDescription = null, tint = fg, modifier = Modifier.size(18.dp))
+        }
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f).padding(top = 4.dp)) {
+            Text(title, style = MaterialTheme.typography.titleSmall)
+            if (detail.isNotBlank()) Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+    }
 }

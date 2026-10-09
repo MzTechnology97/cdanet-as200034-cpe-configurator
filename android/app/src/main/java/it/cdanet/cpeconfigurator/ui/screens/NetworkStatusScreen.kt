@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.RefreshButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -48,6 +49,7 @@ private fun stateText(s: String) = when (s) {
     else -> "in funzione"
 }
 
+@Composable
 private fun stateColor(s: String): Color = when (s) {
     "down" -> BadRed
     "degraded" -> WarnAmber
@@ -91,12 +93,12 @@ fun NetworkStatusScreen(c: AppContainer) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    listOfNotNull("${s.aps} AP", s.down.takeIf { it > 0 }?.let { "$it giù" }, s.degraded.takeIf { it > 0 }?.let { "$it con molte CPE offline" }, s.powerOutage.takeIf { it > 0 }?.let { "$it guasto Enel" }).joinToString(" · "),
+                    listOfNotNull("${s.aps} AP", s.down.takeIf { it > 0 }?.let { "$it giù" }, s.degraded.takeIf { it > 0 }?.let { "$it con molte CPE offline" }, s.powerOutage.takeIf { it > 0 }?.let { "$it con guasto Enel vicino" }).joinToString(" · "),
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text("Aggiornato ${ts(d.generatedAt)} · ogni minuto", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
-            TextButton(onClick = { scope.launch { load() } }, enabled = !busy) { Text(if (busy) "…" else "Aggiorna") }
+            RefreshButton(busy) { scope.launch { load() } }
         }
         if (d.restricted && d.assignedCount == 0) {
             SectionCard { Text("Nessun POP/AP assegnato al tuo account: chiedi all'amministratore.", color = WarnAmber) }

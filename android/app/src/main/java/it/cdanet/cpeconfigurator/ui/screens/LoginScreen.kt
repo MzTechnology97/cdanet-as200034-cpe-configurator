@@ -1,5 +1,18 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.Icon
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import it.cdanet.cpeconfigurator.ui.CdaOrange
 import it.cdanet.cpeconfigurator.ui.QuickLoginButton
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.layout.Arrangement
@@ -57,24 +70,50 @@ fun LoginScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) ->
     LaunchedEffect(savedBackend) { if (backend.isBlank()) backend = savedBackend }
     LaunchedEffect(savedUser) { if (username.isBlank()) username = savedUser }
 
+    val view = androidx.compose.ui.platform.LocalView.current
+    val dark = androidx.compose.foundation.isSystemInDarkTheme()
+    DisposableEffect(dark) {
+        // white status bar icons over the orange header, back to the theme ones after login
+        val w = (view.context as? android.app.Activity)?.window
+        w?.let { androidx.core.view.WindowCompat.getInsetsController(it, view).isAppearanceLightStatusBars = false }
+        onDispose { w?.let { androidx.core.view.WindowCompat.getInsetsController(it, view).isAppearanceLightStatusBars = !dark } }
+    }
+    Box(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background)) {
+        // brand header behind the form, with the CDA Net symbol as a watermark
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(330.dp)
+                .clip(RoundedCornerShape(bottomStart = 40.dp, bottomEnd = 40.dp))
+                .background(Brush.linearGradient(listOf(CdaOrange, Color(0xFFD9431A), Color(0xFF8E2A0C)))),
+        ) {
+            Icon(
+                painterResource(R.drawable.ic_launcher_foreground),
+                contentDescription = null,
+                tint = Color.White.copy(alpha = 0.12f),
+                modifier = Modifier.size(300.dp).align(Alignment.TopEnd).offset(x = 90.dp, y = (-30).dp),
+            )
+        }
     Column(
         Modifier.fillMaxSize().systemBarsPadding().imePadding().verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
-        Image(
-            painterResource(R.drawable.cda_net_logo),
+        Icon(
+            painterResource(R.drawable.ic_launcher_foreground),
             contentDescription = "CDA Net",
-            modifier = Modifier.fillMaxWidth(0.75f).padding(top = 12.dp),
+            tint = Color.White,
+            modifier = Modifier.padding(top = 8.dp).size(104.dp),
         )
-        Text("CPE Configurator", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold)
-        Text("v${BuildConfig.VERSION_NAME}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("CDA Net", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Bold, color = Color.White)
+        Text("CPE Configurator · v${BuildConfig.VERSION_NAME}", color = Color.White.copy(alpha = 0.85f), style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(18.dp))
 
         UpdateBanner(c, update, onUpdate)
         ErrorBanner(error) { error = null }
 
         mfaToken?.let { token ->
-            SectionCard("Verifica in due passaggi") {
+            SectionCard("Verifica in due passaggi", icon = R.drawable.ic_lock) {
                 Text("Inserisci il codice di 6 cifre dell'app di autenticazione (o un codice di recupero).", style = MaterialTheme.typography.bodySmall)
                 Field("Codice", code, { code = it.trim().take(9) }, keyboardType = KeyboardType.Number)
                 BusyButton("Verifica", busy, Modifier.fillMaxWidth(), enabled = code.length >= 6) {
@@ -98,10 +137,10 @@ fun LoginScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) ->
             }
         }
 
-        if (mfaToken == null) SectionCard("Accesso installatore") {
+        if (mfaToken == null) SectionCard("Accedi", icon = R.drawable.ic_person) {
             QuickLoginButton(c, savedBackend) { error = it }
-            Field("Username", username, { username = it.trim() })
-            Field("Password", password, { password = it }, password = true)
+            Field("Username", username, { username = it.trim() }, leadingIcon = R.drawable.ic_person)
+            Field("Password", password, { password = it }, password = true, leadingIcon = R.drawable.ic_lock)
             BusyButton("Accedi", busy, Modifier.fillMaxWidth(), enabled = username.isNotBlank() && password.isNotBlank()) {
                 scope.launch {
                     busy = true
@@ -123,7 +162,7 @@ fun LoginScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) ->
             }
         }
 
-        SectionCard("Server CDA Net") {
+        SectionCard("Server CDA Net", icon = R.drawable.ic_dns) {
             if (editBackend) {
                 Field("URL server", backend, { backend = it.trim() }, keyboardType = KeyboardType.Uri, placeholder = "https://cpe.cda-net.it")
             } else {
@@ -153,5 +192,6 @@ fun LoginScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) ->
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+    }
     }
 }

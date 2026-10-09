@@ -1,6 +1,26 @@
 package it.cdanet.cpeconfigurator.ui
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.offset
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.runtime.SideEffect
+import androidx.compose.runtime.key
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import it.cdanet.cpeconfigurator.R
+import it.cdanet.cpeconfigurator.ui.screens.screenIcon
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
@@ -9,8 +29,6 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.Notifications
-import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -110,6 +128,7 @@ fun AppRoot(c: AppContainer) {
     var unread by remember { mutableStateOf(0) }
     val scope = rememberCoroutineScope()
     val screen = stack.last()
+    var lastDepth by remember { mutableStateOf(1) }
 
     fun go(s: Screen) {
         stack = stack + s
@@ -185,7 +204,27 @@ fun AppRoot(c: AppContainer) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(if (screen == Screen.CpeHealth && session?.user?.role == "admin") "Salute CPE" else screen.title) },
+                title = {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        if (screen == Screen.Home) {
+                            Icon(painterResource(R.drawable.ic_launcher_foreground), contentDescription = null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(48.dp).offset(x = (-6).dp))
+                            Spacer(Modifier.width(2.dp))
+                            Text("CDA Net", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                        } else {
+                            screenIcon(screen)?.let {
+                                Box(Modifier.size(34.dp).clip(RoundedCornerShape(11.dp)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+                                    Icon(painterResource(it), contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(20.dp))
+                                }
+                                Spacer(Modifier.width(12.dp))
+                            }
+                            Text(
+                                if (screen == Screen.CpeHealth && session?.user?.role == "admin") "Salute CPE" else screen.title,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                            )
+                        }
+                    }
+                },
                 navigationIcon = {
                     if (stack.size > 1) {
                         IconButton(onClick = { back() }) { Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Indietro") }
@@ -195,15 +234,15 @@ fun AppRoot(c: AppContainer) {
                     if (session != null && screen != Screen.Notifications) {
                         IconButton(onClick = { go(Screen.Notifications) }) {
                             BadgedBox(badge = { if (unread > 0) Badge { Text(if (unread > 99) "99+" else "$unread") } }) {
-                                Icon(Icons.Filled.Notifications, contentDescription = "Notifiche")
+                                Icon(painterResource(R.drawable.ic_notifications), contentDescription = "Notifiche")
                             }
                         }
                     }
                     if (screen != Screen.Settings) {
-                        IconButton(onClick = { go(Screen.Settings) }) { Icon(Icons.Filled.Settings, contentDescription = "Impostazioni") }
+                        IconButton(onClick = { go(Screen.Settings) }) { Icon(painterResource(R.drawable.ic_settings), contentDescription = "Impostazioni") }
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface),
+                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer),
             )
         },
     ) { padding ->
@@ -267,14 +306,34 @@ fun AppRoot(c: AppContainer) {
                     })
                 }
             }
-            if (screen.scroll) {
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp)) {
-                    if (screen == Screen.Home) UpdateBanner(c, update) { update = it }
-                    body()
+            // each new screen slides in (forward) or back; only one screen is ever composed, so
+            // field polling, camera and WebViews never run twice during the animation
+            key(screen, stack.size) {
+                ScreenEnter(forward = stack.size >= lastDepth) {
+                    if (screen.scroll) {
+                        Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
+                            if (screen == Screen.Home) UpdateBanner(c, update) { update = it }
+                            body()
+                        }
+                    } else {
+                        body()
+                    }
                 }
-            } else {
-                body()
             }
+            SideEffect { lastDepth = stack.size }
         }
     }
+}
+
+@Composable
+private fun ScreenEnter(forward: Boolean, content: @Composable () -> Unit) {
+    val p = remember { Animatable(0f) }
+    val direction = remember { if (forward) 1 else -1 }
+    LaunchedEffect(Unit) { p.animateTo(1f, tween(280, easing = FastOutSlowInEasing)) }
+    Box(
+        Modifier.fillMaxSize().graphicsLayer {
+            alpha = 0.35f + 0.65f * p.value
+            translationX = (1f - p.value) * direction * 36.dp.toPx()
+        },
+    ) { content() }
 }

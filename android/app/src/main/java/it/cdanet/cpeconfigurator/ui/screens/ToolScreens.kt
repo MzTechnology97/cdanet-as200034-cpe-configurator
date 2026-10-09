@@ -61,9 +61,9 @@ private fun RunnerOutput(r: Runner, onPorts: (suspend (String) -> String)? = nul
 }
 
 @Composable
-private fun ToolButton(r: Runner, label: String, primary: Boolean = false, action: suspend () -> ToolResult) {
+private fun ToolButton(r: Runner, label: String, primary: Boolean = false, modifier: Modifier = Modifier.fillMaxWidth(), action: suspend () -> ToolResult) {
     val scope = rememberCoroutineScope()
-    BusyButton(label, r.busy == label, Modifier.fillMaxWidth(), enabled = r.busy == null, primary = primary) {
+    BusyButton(label, r.busy == label, modifier, enabled = r.busy == null, primary = primary, tonal = !primary) {
         scope.launch {
             r.busy = label
             r.error = null
@@ -107,9 +107,11 @@ fun NetworkScreen(c: AppContainer) {
         }
         SectionCard("Host") {
             Field("Target (IP o nome)", target, { target = it.trim() }, keyboardType = KeyboardType.Uri)
-            ToolButton(r, "Ping") { c.tools.ping(target) }
-            ToolButton(r, "Traceroute") { c.tools.traceroute(target) }
-            ToolButton(r, "DNS lookup") { c.tools.dns(target) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ToolButton(r, "Ping", modifier = Modifier.weight(1f)) { c.tools.ping(target) }
+                ToolButton(r, "Traceroute", modifier = Modifier.weight(1.3f)) { c.tools.traceroute(target) }
+                ToolButton(r, "DNS", modifier = Modifier.weight(1f)) { c.tools.dns(target) }
+            }
         }
         SectionCard("Utility") {
             Field("IPv4/CIDR", cidr, { cidr = it.trim() })
@@ -146,14 +148,18 @@ fun DiscoveryScreen(c: AppContainer) {
             OutlinedButton(onClick = { c.tools.suggestedCidr()?.let { cidr = it } }) { Text("Usa subnet attuale") }
             WifiSwitch(viaWifi) { viaWifi = it }
             ToolButton(r, "Scansiona subnet", primary = true) { c.tools.discover(cidr, viaWifi) }
-            ToolButton(r, "Trova apparati Ubiquiti (CPE, AP)") { c.tools.ubntDiscovery() }
-            ToolButton(r, "Tabella ARP / neighbor") { c.tools.neighbors() }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ToolButton(r, "Apparati Ubiquiti", modifier = Modifier.weight(1f)) { c.tools.ubntDiscovery() }
+                ToolButton(r, "Tabella ARP", modifier = Modifier.weight(1f)) { c.tools.neighbors() }
+            }
         }
         SectionCard("Host") {
             Field("Host", host, { host = it.trim() })
             Field("Porte", ports, { ports = it })
-            ToolButton(r, "Verifica porte") { c.tools.portProbe(host, ports.split(',', ' ', ';').mapNotNull { it.trim().toIntOrNull() }.filter { it in 1..65535 }, viaWifi) }
-            ToolButton(r, "NetBIOS") { c.tools.netbios(host, viaWifi) }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                ToolButton(r, "Verifica porte", modifier = Modifier.weight(1f)) { c.tools.portProbe(host, ports.split(',', ' ', ';').mapNotNull { it.trim().toIntOrNull() }.filter { it in 1..65535 }, viaWifi) }
+                ToolButton(r, "NetBIOS", modifier = Modifier.weight(1f)) { c.tools.netbios(host, viaWifi) }
+            }
         }
         // "Porte" on a found device: the usual ports, shown in its row (the list stays)
         RunnerOutput(r) { h ->

@@ -1,5 +1,24 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
+import it.cdanet.cpeconfigurator.ui.StatusPalette
+import androidx.compose.material3.Icon
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.material3.AssistChip
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import it.cdanet.cpeconfigurator.R
+import it.cdanet.cpeconfigurator.ui.CheckRow
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
@@ -54,6 +73,7 @@ import kotlinx.coroutines.launch
 import it.cdanet.cpeconfigurator.ui.BusyButton
 import it.cdanet.cpeconfigurator.field.SurveyAp
 
+@Composable
 private fun verdictColor(v: Verdict, fallback: Color): Color = when (v) {
     Verdict.Ok -> GoodGreen
     Verdict.Warn -> WarnAmber
@@ -70,22 +90,53 @@ fun FieldConnection(c: AppContainer, mode: FieldMode) {
     var showCreds by remember { mutableStateOf(false) }
     var user by remember { mutableStateOf("ubnt") }
     var pass by remember { mutableStateOf("") }
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        when {
-            st.connecting && st.status == null -> Banner("Ricerca della CPE sulla Wi-Fi collegata…", WarnAmber)
-            st.error != null -> Banner(st.error ?: "", BadRed)
-            st.target != null -> Text("CPE ${st.status?.hostname ?: ""} · ${st.target}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        val connected = st.status != null
+        val dot = when {
+            st.error != null -> BadRed
+            connected && st.running -> GoodGreen
+            else -> WarnAmber
         }
+        Column(
+            Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).background(MaterialTheme.colorScheme.surfaceContainerLow).padding(start = 16.dp, end = 8.dp, top = 10.dp, bottom = 8.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.size(10.dp).clip(CircleShape).background(dot))
+                Spacer(Modifier.width(12.dp))
+                Column(Modifier.weight(1f)) {
+                    Text(
+                        when {
+                            connected -> "CPE ${st.status?.hostname ?: ""}".trim()
+                            st.connecting -> "Ricerca della CPE…"
+                            else -> "CPE non collegata"
+                        },
+                        style = MaterialTheme.typography.titleSmall,
+                    )
+                    st.target?.takeIf { connected }?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+                }
+                if (st.running) TextButton(onClick = { c.field.stop() }) { Text("Pausa") }
+                else TextButton(onClick = { c.field.start(mode, manual.ifBlank { null }) }) { Text("Riprendi") }
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AssistChip(
+                    onClick = { showManual = !showManual },
+                    label = { Text(if (showManual) "Nascondi IP" else "IP manuale") },
+                    leadingIcon = { Icon(painterResource(R.drawable.ic_link), contentDescription = null, modifier = Modifier.size(18.dp)) },
+                )
+                AssistChip(
+                    onClick = { showCreds = !showCreds },
+                    label = { Text("Credenziali diverse") },
+                    leadingIcon = { Icon(painterResource(R.drawable.ic_lock), contentDescription = null, modifier = Modifier.size(18.dp)) },
+                )
+            }
+        }
+        st.error?.let { Banner(it, BadRed) }
         if (st.status == null) {
             Text(
                 "Collega il telefono alla Wi-Fi di management della CPE oppure alla Wi-Fi del router del cliente: l'app prova da sola il gateway, l'IP LAN e l'IP di management della CPE.",
                 style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-        }
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (st.running) OutlinedButton(onClick = { c.field.stop() }) { Text("Pausa") }
-            else OutlinedButton(onClick = { c.field.start(mode, manual.ifBlank { null }) }) { Text("Riprendi") }
-            TextButton(onClick = { showManual = !showManual }) { Text(if (showManual) "Nascondi IP" else "IP manuale") }
         }
         if (showManual) {
             Field("IP della CPE", manual, { manual = it.trim() }, keyboardType = KeyboardType.Uri, placeholder = "es. 192.168.1.254")
@@ -105,8 +156,6 @@ fun FieldConnection(c: AppContainer, mode: FieldMode) {
                     c.field.start(mode, manual.ifBlank { null })
                 }, enabled = user.isNotBlank() && pass.isNotEmpty()) { Text("Collega con queste credenziali") }
             }
-        } else {
-            TextButton(onClick = { showCreds = true }) { Text("Credenziali diverse") }
         }
     }
 }
@@ -221,14 +270,7 @@ fun AlignmentGauge(s: AirosStatus, t: FieldThresholds, peak: Int?, history: List
     val v = FieldDiagnosis.signalVerdict(s.signal, t)
     val color = verdictColor(v, MaterialTheme.colorScheme.onSurface)
     SectionCard {
-        Text(
-            s.signal?.let { "$it dBm" } ?: "—",
-            fontSize = 64.sp,
-            fontWeight = FontWeight.Bold,
-            color = color,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
+        SignalArc(s.signal, s.expectedSignal, peak, t, color, v)
         val expected = s.expectedSignal?.let { e -> s.signal?.let { "atteso $e dBm (${FieldDiagnosis.signed(it - e)} dB)" } }
         Text(
             listOfNotNull(expected, peak?.let { "picco $it dBm" }).joinToString(" · ").ifBlank { if (s.associated) "" else "CPE non agganciata all'AP" },
@@ -248,17 +290,79 @@ fun AlignmentGauge(s: AirosStatus, t: FieldThresholds, peak: Int?, history: List
     }
 }
 
+/**
+ * Signal dial: a 240° arc from -90 to -40 dBm with the good/minimum zones, the live value
+ * (animated), the expected signal as a tick and the peak as a dot. The number sits in the middle.
+ */
+@Composable
+private fun SignalArc(signal: Int?, expected: Int?, peak: Int?, t: FieldThresholds, color: Color, v: Verdict) {
+    val lo = -90f
+    val hi = -40f
+    fun frac(dbm: Int) = ((dbm - lo) / (hi - lo)).coerceIn(0f, 1f)
+    val value by animateFloatAsState(signal?.let { frac(it) } ?: 0f, spring(dampingRatio = 0.8f, stiffness = 120f), label = "signal")
+    val track = MaterialTheme.colorScheme.surfaceContainerHighest
+    val st = StatusPalette
+    val ink = MaterialTheme.colorScheme.onSurface
+    val start = 150f
+    val sweep = 240f
+    // the arc is open at the bottom: the box is shorter than the dial, so no empty band below it
+    Box(Modifier.fillMaxWidth().height(176.dp), contentAlignment = Alignment.TopCenter) {
+      Box(Modifier.size(230.dp), contentAlignment = Alignment.Center) {
+        Canvas(Modifier.matchParentSize()) {
+            val stroke = 22.dp.toPx()
+            val inset = stroke / 2 + 6.dp.toPx()
+            val arcSize = Size(size.width - inset * 2, size.height - inset * 2)
+            val tl = Offset(inset, inset)
+            drawArc(track, start, sweep, false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+            // quality zones as a thin band inside the track
+            val band = Stroke(5.dp.toPx(), cap = StrokeCap.Butt)
+            val zIn = inset + stroke / 2 + 9.dp.toPx()
+            val zSize = Size(size.width - zIn * 2, size.height - zIn * 2)
+            val zTl = Offset(zIn, zIn)
+            val fMin = frac(t.signalMin)
+            val fGood = frac(t.signalGood)
+            drawArc(st.bad.copy(alpha = 0.55f), start, sweep * fMin, false, zTl, zSize, style = band)
+            drawArc(st.warn.copy(alpha = 0.55f), start + sweep * fMin, sweep * (fGood - fMin), false, zTl, zSize, style = band)
+            drawArc(st.good.copy(alpha = 0.55f), start + sweep * fGood, sweep * (1 - fGood), false, zTl, zSize, style = band)
+            if (signal != null) drawArc(color, start, sweep * value.coerceAtLeast(0.01f), false, tl, arcSize, style = Stroke(stroke, cap = StrokeCap.Round))
+            val r = arcSize.width / 2
+            val center = Offset(size.width / 2, size.height / 2)
+            fun at(f: Float, radius: Float): Offset {
+                val a = Math.toRadians((start + sweep * f).toDouble())
+                return Offset(center.x + radius * kotlin.math.cos(a).toFloat(), center.y + radius * kotlin.math.sin(a).toFloat())
+            }
+            expected?.let { e ->
+                val f = frac(e)
+                drawLine(ink, at(f, r - stroke / 2 - 4.dp.toPx()), at(f, r + stroke / 2 + 4.dp.toPx()), strokeWidth = 3.dp.toPx(), cap = StrokeCap.Round)
+            }
+            peak?.let { p -> drawCircle(Color.White, 5.dp.toPx(), at(frac(p), r)); drawCircle(ink, 5.dp.toPx(), at(frac(p), r), style = Stroke(2.dp.toPx())) }
+        }
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+            Text(signal?.toString() ?: "—", fontSize = 58.sp, fontWeight = FontWeight.Bold, color = color, lineHeight = 58.sp)
+            Text("dBm", style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                when (v) { Verdict.Ok -> "ottimo"; Verdict.Warn -> "accettabile"; else -> if (signal == null) "nessun segnale" else "insufficiente" },
+                style = MaterialTheme.typography.labelLarge,
+                color = color,
+            )
+        }
+      }
+    }
+}
+
 /** Last ~90 samples; dashed lines at the good/minimum thresholds. */
 @Composable
 private fun SignalTrend(history: List<Int>, t: FieldThresholds) {
     val line = MaterialTheme.colorScheme.primary
+    val cGoodGreen = GoodGreen
+    val cBadRed = BadRed
     Canvas(Modifier.fillMaxWidth().height(90.dp)) {
         val lo = -90f
         val hi = -35f
         fun y(v: Float) = size.height * (1 - ((v.coerceIn(lo, hi) - lo) / (hi - lo)))
         val dash = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
-        drawLine(GoodGreen, Offset(0f, y(t.signalGood.toFloat())), Offset(size.width, y(t.signalGood.toFloat())), pathEffect = dash)
-        drawLine(BadRed, Offset(0f, y(t.signalMin.toFloat())), Offset(size.width, y(t.signalMin.toFloat())), pathEffect = dash)
+        drawLine(cGoodGreen, Offset(0f, y(t.signalGood.toFloat())), Offset(size.width, y(t.signalGood.toFloat())), pathEffect = dash)
+        drawLine(cBadRed, Offset(0f, y(t.signalMin.toFloat())), Offset(size.width, y(t.signalMin.toFloat())), pathEffect = dash)
         if (history.size >= 2) {
             val step = size.width / (90 - 1)
             val start = size.width - step * (history.size - 1)
@@ -290,12 +394,7 @@ fun DiagnosisScreen(c: AppContainer) {
             verdictColor(summary, GoodGreen),
         )
         SectionCard("${s.hostname ?: "CPE"} · ${s.model ?: ""}") {
-            st.checks.forEach { ch ->
-                Column {
-                    Text("${FieldDiagnosis.mark(ch.verdict)} ${ch.title}", fontWeight = FontWeight.SemiBold, color = verdictColor(ch.verdict, MaterialTheme.colorScheme.onSurface))
-                    Text(ch.detail, style = MaterialTheme.typography.bodySmall)
-                }
-            }
+            st.checks.forEach { ch -> CheckRow(ch.title, ch.verdict, ch.detail) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedButton(onClick = {

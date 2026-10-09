@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.RefreshButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Box
@@ -104,7 +105,7 @@ fun CpeHealthScreen(c: AppContainer, onRepoint: (() -> Unit)? = null) {
             fontWeight = FontWeight.SemiBold,
             modifier = Modifier.weight(1f),
         )
-            TextButton(onClick = { scope.launch { load() } }, enabled = !busy) { Text(if (busy) "…" else "Aggiorna") }
+            RefreshButton(busy) { scope.launch { load() } }
         }
         OutlinedTextField(
             value = query,

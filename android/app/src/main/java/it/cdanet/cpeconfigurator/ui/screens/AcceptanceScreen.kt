@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.CheckRow
 import it.cdanet.cpeconfigurator.ui.WifiRequired
 import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -203,10 +204,7 @@ fun AcceptanceScreen(c: AppContainer) {
         report?.let { r ->
             val color = when (r.verdict) { "ok" -> GoodGreen; "warn" -> WarnAmber; else -> BadRed }
             SectionCard("Esito: ${mapOf("ok" to "superato", "warn" to "con riserva", "bad" to "non superato")[r.verdict]}") {
-                r.checks.forEach { ch ->
-                    Text("${FieldDiagnosis.mark(enumValueOf(ch.verdict.replaceFirstChar { it.uppercase() }))} ${ch.title}", fontWeight = FontWeight.SemiBold, color = if (ch.verdict == "bad") BadRed else if (ch.verdict == "warn") WarnAmber else MaterialTheme.colorScheme.onSurface)
-                    Text(ch.detail, style = MaterialTheme.typography.bodySmall)
-                }
+                r.checks.forEach { ch -> CheckRow(ch.title, enumValueOf(ch.verdict.replaceFirstChar { it.uppercase() }), ch.detail) }
                 Text("Verdetto calcolato dalle soglie del NOC.", style = MaterialTheme.typography.bodySmall, color = color)
                 val noc = nocApprovalReason(r.radio.signal, c.field.thresholds.signalMin, r.checks.filter { it.verdict == "bad" }.map { it.title })
                 if (noc != null) Banner("Approvazione NOC necessaria ($noc). $NOC_APPROVAL_TEXT", WarnAmber)

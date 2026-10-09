@@ -1,5 +1,17 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.CheckRow
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.size
+import androidx.compose.material3.Icon
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
+import it.cdanet.cpeconfigurator.R
 import android.content.Intent
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.horizontalScroll
@@ -154,10 +166,23 @@ private fun StepHeader(c: AppContainer, mode: InstallMode, step: InstallStep) {
     val current = steps.indexOf(step)
     var leave by remember { mutableStateOf(false) }
     var ko by remember { mutableStateOf(false) }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(mode.title, style = MaterialTheme.typography.labelLarge, modifier = Modifier.weight(1f))
-        if (c.session.state.collectAsState().value != null) TextButton(onClick = { ko = true }) { Text("Segnala KO", color = BadRed) }
-        TextButton(onClick = { leave = true }) { Text("Termina") }
+    val progress by animateFloatAsState((current + 1f) / steps.size, tween(450), label = "step")
+    Column(
+        Modifier.fillMaxWidth().padding(top = 4.dp).clip(MaterialTheme.shapes.large).background(MaterialTheme.colorScheme.surfaceContainerLow).padding(start = 16.dp, end = 4.dp, top = 14.dp, bottom = 4.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text("${mode.title.uppercase()} · PASSO ${current + 1} DI ${steps.size}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+        Text(step.title, style = MaterialTheme.typography.titleLarge)
+        LinearProgressIndicator(
+            progress = { progress },
+            modifier = Modifier.fillMaxWidth().padding(end = 12.dp).height(6.dp).clip(RoundedCornerShape(50)),
+            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            drawStopIndicator = {},
+        )
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            if (c.session.state.collectAsState().value != null) TextButton(onClick = { ko = true }) { Text("Segnala KO", color = BadRed) }
+            TextButton(onClick = { leave = true }) { Text("Termina") }
+        }
     }
     if (ko) {
         KoDialog(
@@ -179,6 +204,7 @@ private fun StepHeader(c: AppContainer, mode: InstallMode, step: InstallStep) {
             AssistChip(
                 onClick = { if (canGo) c.install.go(s) },
                 label = { Text("${i + 1} · ${s.title}", fontWeight = if (i == current) FontWeight.Bold else FontWeight.Normal) },
+                leadingIcon = if (i < current) ({ Icon(painterResource(R.drawable.ic_check_circle_filled), contentDescription = "fatto", tint = GoodGreen, modifier = Modifier.size(18.dp)) }) else null,
                 colors = if (i == current) AssistChipDefaults.assistChipColors(containerColor = MaterialTheme.colorScheme.primaryContainer) else AssistChipDefaults.assistChipColors(),
             )
         }
@@ -459,16 +485,7 @@ private fun VerifyStep(c: AppContainer, mode: InstallMode) {
 }
 
 @Composable
-private fun CheckLine(title: String, v: Verdict, detail: String) {
-    Column {
-        Text(
-            "${FieldDiagnosis.mark(v)} $title",
-            fontWeight = FontWeight.SemiBold,
-            color = when (v) { Verdict.Ok -> GoodGreen; Verdict.Warn -> WarnAmber; Verdict.Bad -> BadRed; else -> MaterialTheme.colorScheme.onSurface },
-        )
-        Text(detail, style = MaterialTheme.typography.bodySmall)
-    }
-}
+private fun CheckLine(title: String, v: Verdict, detail: String) = CheckRow(title, v, detail)
 
 // ---- 4 · Aggancio all'AP --------------------------------------------------------------------
 

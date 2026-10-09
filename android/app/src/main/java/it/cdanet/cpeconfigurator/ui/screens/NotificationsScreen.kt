@@ -1,5 +1,8 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.R
+import it.cdanet.cpeconfigurator.ui.EmptyState
+import it.cdanet.cpeconfigurator.ui.ListHeader
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -49,15 +52,13 @@ fun NotificationsScreen(c: AppContainer, onUnread: (Int) -> Unit) {
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         ErrorBanner(error) { error = null }
-        Text(
-            if (unread > 0) "$unread da leggere" else "Nessuna notifica da leggere",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        BusyButton(if (unread > 0) "Segna tutte come lette" else "Aggiorna", busy, Modifier.fillMaxWidth(), primary = false) {
-            scope.launch {
-                if (unread > 0) runCatching { c.api.markNotificationsRead() }
-                load()
+        ListHeader(if (unread > 0) "$unread da leggere" else "Nessuna notifica da leggere", busy) { scope.launch { load() } }
+        if (unread > 0) {
+            BusyButton("Segna tutte come lette", busy, Modifier.fillMaxWidth(), primary = false) {
+                scope.launch {
+                    runCatching { c.api.markNotificationsRead() }
+                    load()
+                }
             }
         }
         items.forEach { n ->
@@ -78,7 +79,7 @@ fun NotificationsScreen(c: AppContainer, onUnread: (Int) -> Unit) {
                 }
             }
         }
-        if (items.isEmpty() && !busy) Text("Nessuna notifica negli ultimi 90 giorni.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (items.isEmpty() && !busy) EmptyState(R.drawable.ic_notifications, "Nessuna notifica", "Qui arrivano gli esiti delle tue installazioni: approvazioni e attivazioni del NOC (ultimi 90 giorni).")
         // the outcome of your installations also reaches Telegram once linked (choices: console web → Notifiche)
         PersonalTelegramCard(c)
     }

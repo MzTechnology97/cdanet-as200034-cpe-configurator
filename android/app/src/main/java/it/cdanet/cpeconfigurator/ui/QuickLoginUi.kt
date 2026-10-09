@@ -121,7 +121,7 @@ fun QuickLoginCard(c: AppContainer) {
     var msg by remember { mutableStateOf<String?>(null) }
     val user = session?.user ?: return
     val mine = saved?.takeIf { it.username == user.username }
-    SectionCard("Accesso rapido (impronta o volto)") {
+    SectionCard("Accesso rapido (impronta o volto)", icon = it.cdanet.cpeconfigurator.R.drawable.ic_fingerprint) {
         msg?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
         when {
             c.quickLogin.capability() == null -> Text("Registra un'impronta o il volto nelle impostazioni di sicurezza del telefono per usarlo.", style = MaterialTheme.typography.bodySmall)
