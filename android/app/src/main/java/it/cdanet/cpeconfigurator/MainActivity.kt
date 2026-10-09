@@ -3,14 +3,15 @@ package it.cdanet.cpeconfigurator
 import android.Manifest
 import android.os.Build
 import android.os.Bundle
-import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.fragment.app.FragmentActivity
 import it.cdanet.cpeconfigurator.ui.AppRoot
 import it.cdanet.cpeconfigurator.ui.CdaTheme
 
-class MainActivity : ComponentActivity() {
+/** FragmentActivity: the biometric prompt of the quick login needs it. */
+class MainActivity : FragmentActivity() {
     private val permissionLauncher = registerForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { }
 
     override fun onCreate(savedInstanceState: Bundle?) {

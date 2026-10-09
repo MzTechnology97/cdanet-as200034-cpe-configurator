@@ -73,6 +73,7 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     // play-services-code-scanner pulls an old fragment; Activity Result APIs need >= 1.3 (lint: InvalidFragmentVersionForActivityResult).
     implementation(libs.androidx.fragment.ktx)
+    implementation(libs.androidx.biometric)
     implementation(libs.androidx.lifecycle.runtime.compose)
     implementation(libs.androidx.lifecycle.viewmodel.compose)
     implementation(platform(libs.compose.bom))

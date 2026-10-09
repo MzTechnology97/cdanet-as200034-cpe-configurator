@@ -422,6 +422,18 @@ data class JobDto(
 @Serializable
 data class WirelessNetworkDto(val ssid: String, val updatedAt: String = "")
 
+/** Key of this phone for the quick (biometric) login: memory only until encrypted in the keystore. */
+@Serializable
+data class DeviceKeyDto(val id: String, val secret: String) {
+    override fun toString(): String = "DeviceKeyDto(id=$id)"
+}
+
+@Serializable
+data class AuthDeviceDto(val id: String, val name: String = "", val createdAt: String = "", val lastUsedAt: String? = null, val active: Boolean = true)
+
+@Serializable
+data class AuthDevicesDto(val devices: List<AuthDeviceDto> = emptyList())
+
 /** WPA2 key of the AP a CPE is moved to (guided installation): memory only, never logged. */
 @Serializable
 data class RelinkDto(val ssid: String, val psk: String, val sshPort: Int = 22) {

@@ -145,6 +145,7 @@ fun AppRoot(c: AppContainer) {
     }
 
     BackHandler(enabled = stack.size > 1) { back() }
+    QuickLoginOffer(c)
 
     Scaffold(
         topBar = {

@@ -55,6 +55,7 @@ export async function accountView() {
     card(h('h2', {}, 'Password'), form),
     totpCard(a),
     myTelegramCard(),
+    quickLoginCard(),
     card(
       h('h2', {}, 'Sessioni'),
       h('p', { class: 'small muted' }, 'Telefono perso o accesso da un PC condiviso? Chiudi tutte le sessioni: servirà un nuovo accesso ovunque.'),
@@ -139,4 +140,45 @@ function totpCard(a) {
     );
   }
   return card(h('h2', {}, 'Verifica in due passaggi'), box);
+}
+
+/** Phones with the fingerprint/face quick login of the app: list and revoke. */
+function quickLoginCard() {
+  const box = h('div', {});
+  async function load() {
+    const { devices } = await api('/api/auth/devices');
+    const rows = devices.map((d) => {
+      const off = h('button', { type: 'button', class: 'danger small' }, 'Revoca');
+      off.onclick = () =>
+        confirm(`Revocare l’accesso rapido di ${d.name}?`) &&
+        busy(off, async () => {
+          await api(`/api/auth/devices/${d.id}`, { method: 'DELETE' });
+          toast('Accesso rapido revocato');
+          await load();
+        });
+      return h(
+        'div',
+        { class: 'setting' },
+        h('b', {}, d.name || 'Telefono'),
+        ' ',
+        badge(d.active ? 'attivo' : 'scaduto', d.active ? 'good' : ''),
+        h('div', { class: 'small muted' }, `Attivato ${fmtDate(d.createdAt)} · ultimo uso ${fmtDate(d.lastUsedAt)}`),
+        off,
+      );
+    });
+    mount(
+      box,
+      card(
+        h('h2', {}, 'Accesso rapido dai telefoni'),
+        h(
+          'p',
+          { class: 'small muted' },
+          'Nell’app CDA Net si entra con impronta o volto (Impostazioni → Accesso rapido). La password non resta sul telefono; "Esci da tutti i dispositivi" o il cambio password revocano anche questi accessi.',
+        ),
+        ...(rows.length ? rows : [h('p', { class: 'small' }, 'Nessun telefono con l’accesso rapido.')]),
+      ),
+    );
+  }
+  load().catch((e) => mount(box, card(h('h2', {}, 'Accesso rapido dai telefoni'), h('div', { class: 'notice bad' }, e.message))));
+  return box;
 }

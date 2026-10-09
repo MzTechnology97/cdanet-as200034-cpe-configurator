@@ -26,6 +26,7 @@ val AppJson = Json {
 
 private val ERRORS = mapOf(
     "invalid_credentials" to "Username o password non corretti",
+    "device_revoked" to "Accesso rapido non più valido su questo telefono: accedi con la password",
     "too_many_attempts" to "Troppi tentativi: riprova tra qualche minuto",
     "unauthorized" to "Sessione scaduta: accedi di nuovo",
     "forbidden" to "Operazione non consentita",
@@ -118,6 +119,21 @@ class ApiClient(
         if (r.mfaRequired) return r.mfaToken ?: throw ApiException(500, "mfa_expired", apiMessage("mfa_expired"))
         session.set(SessionState(r.token!!, r.user!!, r.expiresAt!!))
         return null
+    }
+
+    /** Quick login with the key of this phone (unlocked by fingerprint or face). */
+    suspend fun deviceLogin(id: String, secret: String) {
+        val body = buildJsonObject { put("id", id); put("secret", secret) }
+        val r = AppJson.decodeFromString(LoginResponse.serializer(), request("POST", "/api/auth/device-login", body, auth = false, client = true))
+        session.set(SessionState(r.token, r.user, r.expiresAt))
+    }
+
+    /** Registers this phone for the quick login (after a full login). */
+    suspend fun registerDevice(name: String): DeviceKeyDto =
+        AppJson.decodeFromString(DeviceKeyDto.serializer(), request("POST", "/api/auth/devices", buildJsonObject { put("name", name.take(60)) }, client = true))
+
+    suspend fun removeDevice(id: String) {
+        request("DELETE", "/api/auth/devices/$id")
     }
 
     /** Second step: 6-digit code from the authenticator app or a recovery code. */
