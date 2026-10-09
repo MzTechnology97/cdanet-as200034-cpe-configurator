@@ -102,7 +102,7 @@ fun OutagesScreen(c: AppContainer, section: OutageSection = OutageSection.List) 
         runCatching { c.api.outages() }.onSuccess { data = it; error = null }.onFailure { error = it.message }
         busy = false
     }
-    LaunchedEffect(Unit) { load() }
+    LaunchedEffect(c.refresh.collectAsState().value) { load() }
 
     suspend fun turnOn() {
         runCatching {
@@ -116,6 +116,7 @@ fun OutagesScreen(c: AppContainer, section: OutageSection = OutageSection.List) 
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         ErrorBanner(error) { error = null }
+        if (data == null && busy) it.cdanet.cpeconfigurator.ui.SkeletonRows(3)
         if (section == OutageSection.List) ListHeader(data?.let { d -> if (d.active.isEmpty()) "Nessuna interruzione" else "${d.active.size} ${if (d.active.size == 1) "interruzione" else "interruzioni"}" } ?: "Guasti Enel", busy) { scope.launch { load() } }
         val d = data
         if (d != null && section == OutageSection.List) {

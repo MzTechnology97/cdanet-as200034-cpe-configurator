@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import androidx.compose.runtime.collectAsState
 import it.cdanet.cpeconfigurator.R
 import it.cdanet.cpeconfigurator.ui.EmptyState
 import it.cdanet.cpeconfigurator.ui.ListHeader
@@ -26,7 +27,7 @@ import it.cdanet.cpeconfigurator.ui.ErrorBanner
 import it.cdanet.cpeconfigurator.ui.SectionCard
 import kotlinx.coroutines.launch
 
-private val ICONS = mapOf("provisioning_failed" to "❌", "install_ko" to "⛔", "review_pending" to "📶", "install_activated" to "✅")
+private val ICONS = mapOf("provisioning_failed" to "❌", "install_ko" to "⛔", "review_pending" to "📶", "install_activated" to "✅", "work_order_noc" to "📋")
 
 /**
  * The user's notifications (NOC approvals, activations; for admins also failures, KO and
@@ -48,10 +49,11 @@ fun NotificationsScreen(c: AppContainer, onUnread: (Int) -> Unit) {
             .onFailure { error = it.message }
         busy = false
     }
-    LaunchedEffect(Unit) { load() }
+    LaunchedEffect(c.refresh.collectAsState().value) { load() }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         ErrorBanner(error) { error = null }
+        if (items.isEmpty() && busy) it.cdanet.cpeconfigurator.ui.SkeletonRows(3)
         ListHeader(if (unread > 0) "$unread da leggere" else "Nessuna notifica da leggere", busy) { scope.launch { load() } }
         if (unread > 0) {
             BusyButton("Segna tutte come lette", busy, Modifier.fillMaxWidth(), primary = false) {

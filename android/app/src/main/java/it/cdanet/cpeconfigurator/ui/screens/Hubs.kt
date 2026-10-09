@@ -281,10 +281,11 @@ private fun ToDoPanel(c: AppContainer, onResume: () -> Unit, onAcceptance: (JobD
         runCatching { jobs = c.api.myJobs() }.onFailure { error = it.message }
         busy = false
     }
-    LaunchedEffect(Unit) { load() }
+    LaunchedEffect(c.refresh.collectAsState().value) { load() }
     val items = jobs?.let { toDoItems(it) }.orEmpty()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ErrorBanner(error) { error = null }
+        if (jobs == null && busy) it.cdanet.cpeconfigurator.ui.SkeletonRows(3)
         ListHeader(if (jobs == null) "Da completare" else if (items.isEmpty()) "Tutto in ordine" else "${items.size} da completare", busy) { scope.launch { load() } }
         if (install.mode != null || (prov.pkg != null && prov.phase != Phase.Done)) {
             ToDoRow(

@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui
 
+import androidx.compose.foundation.layout.height
+import androidx.compose.animation.core.animateFloat
 import kotlinx.coroutines.launch
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.mutableStateMapOf
@@ -369,6 +371,31 @@ fun KeepScreenOn() {
             val left = (view.getTag(R.id.keep_screen_on_count) as? Int ?: 1) - 1
             view.setTag(R.id.keep_screen_on_count, left)
             if (left <= 0) view.keepScreenOn = false
+        }
+    }
+}
+
+/** Placeholder rows while a list loads for the first time: grey blocks that softly pulse. */
+@Composable
+fun SkeletonRows(rows: Int = 3) {
+    val t = androidx.compose.animation.core.rememberInfiniteTransition(label = "skeleton")
+    val a by t.animateFloat(
+        initialValue = 0.35f,
+        targetValue = 0.8f,
+        animationSpec = androidx.compose.animation.core.infiniteRepeatable(androidx.compose.animation.core.tween(800), androidx.compose.animation.core.RepeatMode.Reverse),
+        label = "alpha",
+    )
+    val block = MaterialTheme.colorScheme.surfaceContainerHighest.copy(alpha = a)
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        repeat(rows) {
+            Column(
+                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceContainerLow).padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Box(Modifier.fillMaxWidth(0.55f).height(16.dp).clip(RoundedCornerShape(8.dp)).background(block))
+                Box(Modifier.fillMaxWidth(0.85f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(block))
+                Box(Modifier.fillMaxWidth(0.4f).height(12.dp).clip(RoundedCornerShape(6.dp)).background(block))
+            }
         }
     }
 }
