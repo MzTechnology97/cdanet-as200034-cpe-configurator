@@ -46,31 +46,7 @@ import java.time.Duration
 import java.time.Instant
 
 @Composable
-fun ProvisionScreen(c: AppContainer, onOpenCpeWeb: () -> Unit, onLogin: () -> Unit, onAcceptance: () -> Unit = {}) {
-    val state by c.provisioning.state.collectAsState()
-    val session by c.session.state.collectAsState()
-
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        ErrorBanner(state.error) { c.provisioning.clearError() }
-        when (state.phase) {
-            Phase.Form -> if (session == null) {
-                Banner("Per preparare un provisioning accedi al server mentre sei online.", WarnAmber)
-                OutlinedButton(onClick = onLogin) { Text("Accedi") }
-            } else {
-                FormStep(c)
-            }
-            Phase.Prepared, Phase.Applying -> WifiRequired(
-                c,
-                "alla Wi-Fi di management della CPE nuova (es. \"LBE-5AC-Gen2:xxxx\", IP ${state.pkg?.target?.host ?: "192.168.172.1"})",
-                "La configurazione preparata viene scritta sulla CPE in rete locale: Internet non serve.",
-            ) { ApplyStep(c, onOpenCpeWeb) }
-            Phase.Done -> DoneStep(c, onAcceptance)
-        }
-    }
-}
-
-@Composable
-private fun FormStep(c: AppContainer) {
+fun ProvisionFormStep(c: AppContainer) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val form by c.provisioning.form.collectAsState()
@@ -140,10 +116,16 @@ private fun FormStep(c: AppContainer) {
         }) { Text("Scansiona etichetta (barcode/QR)") }
     }
 
-    SectionCard("Posizione CPE e AP vicini") {
-        Text("La posizione viene salvata nello storico e scritta nella CPE.", style = MaterialTheme.typography.bodySmall)
+    SectionCard("Posizione CPE e AP consigliati") {
+        Text("La posizione viene salvata nello storico e scritta nella CPE. Dal GPS del telefono l'app propone gli AP migliori per questa installazione.", style = MaterialTheme.typography.bodySmall)
         LocationPicker(c, form.location, form.locationLabel) { l, label -> c.provisioning.updateForm { it.copy(location = l, locationLabel = label) } }
-        if (c.moduleOn("coverage")) form.location?.let { l ->
+        if (c.moduleOn("compass")) form.location?.let { l ->
+            BestApsBeforeInstall(c, l, form.ssid) { ap ->
+                Regex("""^CDA-NET-N(\d+)-D(\d+)$""").find(ap.ssid)?.let { m ->
+                    c.provisioning.updateForm { it.copy(node = m.groupValues[1].toInt(), district = m.groupValues[2].toInt()) }
+                }
+            }
+        } else if (c.moduleOn("coverage")) form.location?.let { l ->
             NearbyAps(c, l, onPick = { ap -> c.provisioning.updateForm { it.copy(node = ap.node ?: it.node, district = ap.district ?: it.district) } })
         }
     }
@@ -200,7 +182,7 @@ private fun FormStep(c: AppContainer) {
 }
 
 @Composable
-private fun ApplyStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
+fun ProvisionApplyStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val state by c.provisioning.state.collectAsState()
@@ -256,40 +238,4 @@ private fun ApplyStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
     }
 
     TextButton(onClick = { c.provisioning.reset() }, enabled = !applying) { Text("Annulla e cancella il pacchetto") }
-}
-
-@Composable
-private fun DoneStep(c: AppContainer, onAcceptance: () -> Unit) {
-    val state by c.provisioning.state.collectAsState()
-    val pending by c.resultQueue.pending.collectAsState()
-    val ok = state.success == true
-    SectionCard(if (ok) "Configurazione applicata" else "Provisioning non completato") {
-        Banner(
-            if (ok) "La CPE si sta riavviando. Verifica associazione al nodo, PPPoE e management HTTPS 20443."
-            else state.error ?: "Errore sconosciuto",
-            if (ok) GoodGreen else MaterialTheme.colorScheme.error,
-        )
-        state.stages.forEach { Text("✓ $it", style = MaterialTheme.typography.bodyMedium) }
-        Text(
-            if (pending.isEmpty()) "Esito registrato sul server." else "Esito salvato sul telefono: verrà inviato al server quando torni online.",
-            style = MaterialTheme.typography.bodySmall,
-            fontWeight = FontWeight.Medium,
-        )
-    }
-    if (!ok && state.pkg != null) {
-        BusyButton("Riprova con lo stesso pacchetto", false, Modifier.fillMaxWidth(), primary = false) { c.provisioning.retry() }
-    }
-    val pkg = state.pkg
-    if (ok && pkg != null && c.moduleOn("acceptance")) {
-        BusyButton("Collaudo: misure, foto e verbale", false, Modifier.fillMaxWidth()) {
-            val s = pkg.summary
-            c.selectedJob.value = JobDto(
-                id = pkg.jobId, createdAt = "", status = "success", model = s.model, template = s.template,
-                mac = s.mac, serial = s.serial, ssid = s.ssid, pppoeUser = s.pppoeUser, deviceName = s.deviceName,
-            )
-            onAcceptance()
-        }
-        Text("Attendi il riavvio della CPE (1-2 minuti) e ricollegati alla sua Wi-Fi o a quella del router del cliente.", style = MaterialTheme.typography.bodySmall)
-    }
-    BusyButton("Nuovo provisioning", false, Modifier.fillMaxWidth(), primary = !ok) { c.provisioning.reset() }
 }

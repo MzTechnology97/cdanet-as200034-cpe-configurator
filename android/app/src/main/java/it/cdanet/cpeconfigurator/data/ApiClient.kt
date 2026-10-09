@@ -128,6 +128,16 @@ class ApiClient(
         return AppJson.decodeFromString(it.cdanet.cpeconfigurator.field.FieldAccess.serializer(), request("POST", "/api/field/access", body, client = true))
     }
 
+    /** WPA2 key of the CDA Net SSID a CPE is being moved to (Android client only, audited). */
+    suspend fun relink(ssid: String, cpeMac: String?, from: String?): RelinkDto {
+        val body = buildJsonObject { put("ssid", ssid); cpeMac?.let { put("mac", it) }; from?.let { put("from", it.take(64)) } }
+        return AppJson.decodeFromString(RelinkDto.serializer(), request("POST", "/api/field/relink", body, client = true))
+    }
+
+    /** Installation job of an installed CPE, from its MAC addresses. */
+    suspend fun cpeJob(macs: List<String>): JobDto? =
+        AppJson.decodeFromString(CpeJobDto.serializer(), request("GET", "/api/field/cpe?macs=" + java.net.URLEncoder.encode(macs.take(8).joinToString(","), "UTF-8"))).job
+
     suspend fun putAcceptance(jobId: String, report: it.cdanet.cpeconfigurator.field.AcceptanceReport) {
         request("PUT", "/api/provisioning/jobs/$jobId/acceptance", AppJson.encodeToJsonElement(it.cdanet.cpeconfigurator.field.AcceptanceReport.serializer(), report))
     }

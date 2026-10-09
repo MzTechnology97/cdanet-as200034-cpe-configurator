@@ -405,6 +405,16 @@ data class JobDto(
 @Serializable
 data class WirelessNetworkDto(val ssid: String, val updatedAt: String = "")
 
+/** WPA2 key of the AP a CPE is moved to (guided installation): memory only, never logged. */
+@Serializable
+data class RelinkDto(val ssid: String, val psk: String, val sshPort: Int = 22) {
+    override fun toString(): String = "RelinkDto(ssid=$ssid)"
+}
+
+/** Installation job of a CPE found on the roof (null = installed before the app or by someone else). */
+@Serializable
+data class CpeJobDto(val job: JobDto? = null)
+
 @Serializable
 data class RosCommandDto(val command: String, val title: String)
 

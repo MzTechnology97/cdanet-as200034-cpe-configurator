@@ -50,7 +50,7 @@ import it.cdanet.cpeconfigurator.ui.screens.OutagesScreen
 import it.cdanet.cpeconfigurator.ui.screens.PortScannerScreen
 import it.cdanet.cpeconfigurator.ui.screens.LoginScreen
 import it.cdanet.cpeconfigurator.ui.screens.NetworkScreen
-import it.cdanet.cpeconfigurator.ui.screens.ProvisionScreen
+import it.cdanet.cpeconfigurator.ui.screens.InstallScreen
 import it.cdanet.cpeconfigurator.ui.screens.RemoteScreen
 import it.cdanet.cpeconfigurator.ui.screens.RouterOsScreen
 import it.cdanet.cpeconfigurator.ui.screens.SettingsScreen
@@ -62,7 +62,7 @@ import kotlinx.coroutines.launch
 
 enum class Screen(val title: String, val scroll: Boolean = true) {
     Home("CDA Net CPE"),
-    Provision("Provisioning CPE"),
+    Provision("Installazione CPE"),
     CpeWeb("Primo avvio airOS", scroll = false),
     Wifi("Wi-Fi Analyzer"),
     Network("Strumenti di rete"),
@@ -95,6 +95,8 @@ fun AppRoot(c: AppContainer) {
     var offline by remember { mutableStateOf(false) }
     var stack by remember { mutableStateOf(listOf(Screen.Home)) }
     var update by remember { mutableStateOf<UpdateState>(UpdateState.Idle) }
+    // AR sight opened from the guided installation: it also shows the live CPE signal
+    var arWithSignal by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     val screen = stack.last()
 
@@ -165,7 +167,16 @@ fun AppRoot(c: AppContainer) {
             val body: @Composable () -> Unit = {
                 when (screen) {
                     Screen.Home -> HomeScreen(c, offline = session == null, onNavigate = ::go, onLogin = { offline = false })
-                    Screen.Provision -> ProvisionScreen(c, onOpenCpeWeb = { go(Screen.CpeWeb) }, onLogin = { offline = false }, onAcceptance = { go(Screen.Acceptance) })
+                    Screen.Provision -> InstallScreen(
+                        c,
+                        onOpenCpeWeb = { go(Screen.CpeWeb) },
+                        onLogin = { offline = false },
+                        onAim = { t -> c.compassTarget.value = t; arWithSignal = true; go(Screen.ArAim) },
+                        onCompass = { t -> c.compassTarget.value = t; go(Screen.Compass) },
+                        onPointing = { go(Screen.Pointing) },
+                        onAlignment = { go(Screen.Alignment) },
+                        onAcceptance = { go(Screen.Acceptance) },
+                    )
                     Screen.CpeWeb -> WifiRequired(c, "alla Wi-Fi di management della CPE", "Il primo avvio si fa sull'interfaccia web della CPE, raggiungibile solo in rete locale.") { CpeWebScreen(c) }
                     Screen.Wifi -> WifiScreen(c)
                     Screen.Network -> NetworkScreen(c)
@@ -180,10 +191,10 @@ fun AppRoot(c: AppContainer) {
                     Screen.Compass -> CompassScreen(c)
                     Screen.Pointing -> PointingScreen(
                         c,
-                        onAim = { t -> c.compassTarget.value = t; go(Screen.ArAim) },
+                        onAim = { t -> c.compassTarget.value = t; arWithSignal = false; go(Screen.ArAim) },
                         onCompass = { t -> c.compassTarget.value = t; go(Screen.Compass) },
                     )
-                    Screen.ArAim -> ArAimScreen(c)
+                    Screen.ArAim -> ArAimScreen(c, liveSignal = arWithSignal)
                     Screen.CpeHealth -> CpeHealthScreen(c)
                     Screen.IpScanner -> WifiRequired(c, "alla Wi-Fi della rete locale da analizzare", "Lo scanner esamina la subnet della Wi-Fi collegata.") { IpScannerScreen(c, onPortScan = { c.portScanTarget.value = it; go(Screen.PortScanner) }) }
                     Screen.PortScanner -> WifiRequired(c, "alla Wi-Fi della rete locale da analizzare", "Le porte di host privati si verificano dalla stessa rete locale.") { PortScannerScreen(c) }

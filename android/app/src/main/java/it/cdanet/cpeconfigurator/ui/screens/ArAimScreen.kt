@@ -54,6 +54,9 @@ import it.cdanet.cpeconfigurator.field.ArMath
 import it.cdanet.cpeconfigurator.field.ArOrientation
 import it.cdanet.cpeconfigurator.field.CompassTarget
 import it.cdanet.cpeconfigurator.field.FieldDiagnosis
+import it.cdanet.cpeconfigurator.field.AlignmentTone
+import it.cdanet.cpeconfigurator.field.FieldMode
+import it.cdanet.cpeconfigurator.field.Verdict
 import kotlin.math.abs
 import kotlin.math.atan
 import kotlin.math.atan2
@@ -86,7 +89,7 @@ private fun backCameraFov(context: Context): Pair<Double, Double> = runCatching 
  * Portrait only while open (the drawing assumes it).
  */
 @Composable
-fun ArAimScreen(c: AppContainer) {
+fun ArAimScreen(c: AppContainer, liveSignal: Boolean = false) {
     val target by c.compassTarget.collectAsState()
     val t = target ?: run {
         Text("Scegli un AP da \"Trova l'AP\".", Modifier.padding(14.dp))
@@ -114,7 +117,17 @@ fun ArAimScreen(c: AppContainer) {
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
         view.keepScreenOn = true
         orientation.start(t.fromLatitude, t.fromLongitude)
+        // from the guided installation: live signal of the CPE with the alignment beep
+        val tone = if (liveSignal) AlignmentTone() else null
+        if (tone != null) {
+            c.field.onSample = { smp -> tone.beep(smp.signal) }
+            c.field.start(FieldMode.Alignment)
+        }
         onDispose {
+            if (tone != null) {
+                c.field.onSample = null
+                c.field.stop()
+            }
             orientation.stop()
             view.keepScreenOn = false
             if (activity != null && before != null) activity.requestedOrientation = before
@@ -180,6 +193,18 @@ fun ArAimScreen(c: AppContainer) {
             t.distanceM?.let { Text(FieldDiagnosis.formatDistance(it), color = Color.White) }
         }
         Column(Modifier.align(Alignment.BottomStart).fillMaxWidth().padding(12.dp)) {
+            if (liveSignal) {
+                val f by c.field.state.collectAsState()
+                val sig = f.status?.signal
+                val v = FieldDiagnosis.signalVerdict(sig, c.field.thresholds)
+                Text(
+                    sig?.let { "Segnale CPE $it dBm" + (f.peak?.let { p -> " · picco $p" } ?: "") } ?: if (f.status?.associated == false) "CPE non agganciata" else "Lettura del segnale della CPE…",
+                    color = when (v) { Verdict.Ok -> Ok; Verdict.Warn -> Color(0xFFFFC107); else -> Color(0xFFFF6B5E) },
+                    fontSize = 26.sp,
+                    fontWeight = FontWeight.Bold,
+                    modifier = shadow,
+                )
+            }
             if (s != null && s.accuracy <= 1) {
                 Text("Bussola non calibrata: muovi il telefono disegnando un 8", color = Color.White, modifier = Modifier.background(Color(0xCCB42318)).padding(6.dp))
             }

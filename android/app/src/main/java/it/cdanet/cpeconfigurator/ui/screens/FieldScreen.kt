@@ -63,7 +63,7 @@ private fun verdictColor(v: Verdict, fallback: Color): Color = when (v) {
 
 /** Connection header shared by the field tools: how the phone reaches the CPE, manual IP, errors. */
 @Composable
-private fun FieldConnection(c: AppContainer, mode: FieldMode) {
+fun FieldConnection(c: AppContainer, mode: FieldMode) {
     val st by c.field.state.collectAsState()
     var manual by remember { mutableStateOf("") }
     var showManual by remember { mutableStateOf(false) }
@@ -217,7 +217,7 @@ private fun SurveyCard(c: AppContainer, currentAp: String?) {
 }
 
 @Composable
-private fun AlignmentGauge(s: AirosStatus, t: FieldThresholds, peak: Int?, history: List<Int>) {
+fun AlignmentGauge(s: AirosStatus, t: FieldThresholds, peak: Int?, history: List<Int>) {
     val v = FieldDiagnosis.signalVerdict(s.signal, t)
     val color = verdictColor(v, MaterialTheme.colorScheme.onSurface)
     SectionCard {

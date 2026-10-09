@@ -32,6 +32,7 @@ class AppContainer(context: Context) {
     val routerOs = RouterOsClient(api, network)
     val tools = LocalTools(network, api, session)
     val field = FieldController(api, network, scope)
+    val install = it.cdanet.cpeconfigurator.install.InstallController(api, field)
     val acceptanceQueue = it.cdanet.cpeconfigurator.field.AcceptanceQueue(appContext, api, session, resultQueue, scope)
 
     init {

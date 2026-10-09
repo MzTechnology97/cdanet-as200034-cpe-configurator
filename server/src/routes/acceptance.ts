@@ -69,6 +69,7 @@ interface JobRow {
   id: string;
   user_id: number;
   status: string;
+  mac: string;
 }
 
 export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
@@ -80,9 +81,11 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
 
   const loadJob = (req: FastifyRequest) => {
     const id = z.string().uuid().parse((req.params as { id: string }).id);
-    const job = db.prepare('SELECT id, user_id, status FROM provisioning_jobs WHERE id = ?').get(id) as JobRow | undefined;
+    const job = db.prepare('SELECT id, user_id, status, mac FROM provisioning_jobs WHERE id = ?').get(id) as JobRow | undefined;
     if (!job) throw new HttpError(404, 'job_not_found');
-    if (job.user_id !== req.user!.id && req.user!.role !== 'admin') throw new HttpError(403, 'forbidden');
+    // installers: their own installations and the CPEs assigned to them (re-pointing, maintenance)
+    const assigned = () => !!db.prepare('SELECT 1 FROM cpe_assignments WHERE mac = ? AND user_id = ?').get(job.mac, req.user!.id);
+    if (job.user_id !== req.user!.id && req.user!.role !== 'admin' && !assigned()) throw new HttpError(403, 'forbidden');
     return job;
   };
 
