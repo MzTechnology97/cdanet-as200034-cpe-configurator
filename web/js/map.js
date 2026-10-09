@@ -16,17 +16,20 @@ let vendor = null;
  * (empty) tiles, so only the reads tell whether the map really works: header and directories
  * are the first 2-3, the tiles come after.
  */
-const reads = { ok: 0, fail: 0, error: '' };
+const reads = { ok: 0, fail: 0, error: '', other: new Set() };
 if (!window.__cdaFetch) {
   window.__cdaFetch = window.fetch.bind(window);
   window.fetch = async (input, init) => {
-    const isMap = String(input?.url ?? input).includes('/map/basemap');
+    const url = String(input?.url ?? input);
+    const isMap = url.includes('/map/basemap');
     try {
       const r = await window.__cdaFetch(input, init);
       if (isMap) r.ok ? reads.ok++ : (reads.fail++, (reads.error = `HTTP ${r.status}`));
       return r;
     } catch (e) {
       if (isMap) (reads.fail++, (reads.error = e.message));
+      // other failed requests (diagnostics): address without query
+      else if (reads.other.size < 5) reads.other.add(url.split('?')[0].slice(0, 120));
       throw e;
     }
   };
@@ -83,8 +86,9 @@ export async function createMap(el, { center = [37.57, 14.27], zoom = 9, onStatu
       const size = map.getSize();
       // no tile data after header and directories: unreadable here, or outside the downloaded area
       const working = reads.ok - start > 3;
-      onStatus?.(working ? 'basemap_ok' : 'basemap_fallback', `letture ${reads.ok - start} ok, ${reads.fail} fallite${reads.error ? ` (${reads.error})` : ''}, mappa ${size.x}×${size.y}, zoom ${map.getZoom()}`);
-      if (!working && size.x > 0 && size.y > 0) {
+      const other = reads.other.size ? `, altre richieste fallite: ${[...reads.other].join(' ')}` : '';
+      onStatus?.(working ? 'basemap_ok' : 'basemap_fallback', `letture ${reads.ok - start} ok, ${reads.fail} fallite${reads.error ? ` (${reads.error})` : ''}, mappa ${size.x}×${size.y}, zoom ${map.getZoom()}${other}`);
+      if (!working) {
         map.removeLayer(pm);
         publicTiles();
       }
