@@ -211,3 +211,17 @@ body.embed { margin: 0; padding: 0; background: var(--bg); }
 .setting:last-of-type { border-bottom: 0; }
 .setting label { margin-bottom: 4px; }
 button.small { padding: 2px 8px; font-size: .8rem; margin-top: 4px; }
+
+/* Guida amministratore */
+.guide { max-width: 980px; line-height: 1.6; }
+.guide h2 { margin: 34px 0 8px; padding-top: 10px; border-top: 1px solid var(--line); }
+.guide h3 { margin: 22px 0 6px; }
+.guide ol, .guide ul { padding-left: 22px; }
+.guide li { margin: 4px 0; }
+.guide figure { margin: 14px 0; }
+.guide figure img { display: block; width: 100%; min-height: 120px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
+.guide figcaption { color: var(--muted); font-size: 13px; margin-top: 6px; }
+.guide nav ol { columns: 2; column-gap: 28px; }
+@media (max-width: 760px) {
+  .guide nav ol { columns: 1; }
+}

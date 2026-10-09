@@ -1,0 +1,166 @@
+<!-- Guida amministratore: served only by GET /api/admin/guide (admins). Demo data in every image. -->
+<p class="notice">Le schermate vengono dalla console vera con <b>dati dimostrativi</b> (POP Demo Monte, CLIENTE DEMO…, account tecnico.demo). Per il lavoro in campo degli installatori c'è la <a href="/wiki/" target="_blank" rel="noopener">Guida installatore</a>: leggila anche tu, è quello che vedono loro.</p>
+
+<nav class="card">
+  <strong>Indice</strong>
+  <ol>
+    <li><a href="#g-accesso">Accesso e sicurezza dell'account</a></li>
+    <li><a href="#g-panoramica">Panoramica</a></li>
+    <li><a href="#g-preparazione">Preparare il sistema: l'ordine giusto</a></li>
+    <li><a href="#g-uisp">Connettori: UISP, Telegram, OpenStreetMap</a></li>
+    <li><a href="#g-server">Impostazioni server</a></li>
+    <li><a href="#g-wifi">Reti Wi-Fi (WPA2)</a></li>
+    <li><a href="#g-profili">Profili airOS e template</a></li>
+    <li><a href="#g-funzionalita">Funzionalità</a></li>
+    <li><a href="#g-account">Account e POP/AP assegnati</a></li>
+    <li><a href="#g-nuovo-installatore">Un nuovo installatore, dall'account al primo intervento</a></li>
+    <li><a href="#g-storico">Storico, accettazione in UISP e verbali</a></li>
+    <li><a href="#g-salute">Salute CPE e Statistiche</a></li>
+    <li><a href="#g-guasti">Guasti Enel e Stato rete</a></li>
+    <li><a href="#g-aggiornamenti">Aggiornamenti di server e app</a></li>
+    <li><a href="#g-registro">Registro attività e privacy</a></li>
+    <li><a href="#g-problemi">Problemi frequenti</a></li>
+  </ol>
+</nav>
+
+<h2 id="g-accesso">1. Accesso e sicurezza dell'account</h2>
+<p>Il primo amministratore nasce all'installazione del server. Dopo il primo accesso apri <b>Il mio account</b>: cambia la password e attiva la <b>verifica in due passaggi</b> (app di autenticazione). In <b>Account → Sicurezza</b> puoi renderla obbligatoria per tutti gli amministratori: chi non l'ha ancora attivata potrà aprire solo Il mio account finché non la attiva. Per abilitare l'obbligo devi averla già attiva tu.</p>
+<p>Gli installatori possono attivarla quando vogliono. In caso di telefono perso, <b>Esci da tutti i dispositivi</b> chiude tutte le sessioni dell'account; disabilitare un account o reimpostarne la password revoca subito le sue sessioni.</p>
+<figure><img data-guide="admin-account.jpg" alt="Il mio account dell'amministratore"><figcaption>Il mio account: password, verifica in due passaggi, sessioni, Telegram personale.</figcaption></figure>
+
+<h2 id="g-panoramica">2. Panoramica</h2>
+<p>La prima pagina dell'amministratore. Il riquadro giallo <b>Da completare</b> elenca cosa manca perché gli installatori possano lavorare (per esempio modelli senza profilo airOS, nessuna release Android pubblicata). Sotto: attività degli ultimi 30 giorni, stato di UISP, della ricerca indirizzi, del canale dell'app Android e i valori standard scritti nelle CPE.</p>
+<figure><img data-guide="admin-dashboard.jpg" alt="Panoramica"><figcaption>Panoramica: con dati demo mancano i profili di quattro modelli e la release Android.</figcaption></figure>
+
+<h2 id="g-preparazione">3. Preparare il sistema: l'ordine giusto</h2>
+<p>Prima della prima installazione segui quest'ordine. Ogni passo ha la sua sezione qui sotto.</p>
+<ol>
+  <li><b>Connettori → UISP</b>: indirizzo e token, poi <i>Testa connessione</i>. Senza UISP non ci sono AP consigliati, copertura, stato rete né salute CPE.</li>
+  <li><b>Impostazioni server</b>: credenziali delle CPE, chiave di adozione UISP, rete standard, indirizzo pubblico della console.</li>
+  <li><b>Reti Wi-Fi (WPA2)</b>: la chiave di ogni SSID degli AP.</li>
+  <li><b>Profili airOS</b>: almeno un template per ogni modello di CPE che monterete.</li>
+  <li><b>Funzionalità</b>: cosa vedono console e app.</li>
+  <li><b>Account</b>: gli installatori e i POP/AP assegnati a ciascuno.</li>
+  <li><b>Connettori → Telegram</b> (facoltativo): bot per notifiche personali e gruppo del NOC.</li>
+  <li><b>Guasti Enel</b> (facoltativo): quali POP/AP monitorare e le zone di interesse.</li>
+</ol>
+<p>Quando la Panoramica non mostra più voci in <i>Da completare</i>, gli installatori possono partire.</p>
+
+<h2 id="g-uisp">4. Connettori: UISP, Telegram, OpenStreetMap</h2>
+<h3>UISP</h3>
+<p>Inserisci l'<b>indirizzo UISP</b> e un <b>token API</b> di lettura e scrittura (in UISP: Settings → Users → API tokens). Le credenziali restano sul server, cifrate, e non vengono mai mostrate: il campo dice solo se il token è impostato. Opzioni:</p>
+<ul>
+  <li><b>Ignora verifica TLS</b> solo se UISP ha un certificato autofirmato.</li>
+  <li><b>Backup automatico della CPE</b> dopo <i>Accetta in UISP</i> dallo storico.</li>
+  <li><b>Raggio copertura</b>: fino a che distanza un AP compare come vicino (Copertura, AP consigliati).</li>
+  <li><b>Cache dati UISP</b>: ogni quanti secondi rileggere UISP.</li>
+</ul>
+<p>Se la configurazione viene ancora dal file <code>.env</code>, salvando qui quella della console prende il sopravvento.</p>
+<h3>Telegram</h3>
+<p>Un solo bot per tutto: crealo con <b>@BotFather</b> e incolla il <b>token del bot</b>. Poi scegli:</p>
+<ul>
+  <li><b>Notifiche personali degli utenti</b>: ogni utente (amministratori e installatori) collega il proprio Telegram dall'app o da Il mio account e riceve i guasti Enel delle sue zone e dei POP/AP assegnati.</li>
+  <li><b>Gruppo del NOC</b> (facoltativo): chat ID del gruppo (pulsante <i>Trova chat ID</i>) ed eventi da inviare: provisioning fallito, CPE da accettare in UISP, UISP giù/su, sicurezza, guasti Enel, riepilogo serale all'ora scelta.</li>
+</ul>
+<p>Nei messaggi non compaiono mai nome, indirizzo o posizione del cliente. Per avere il link allo storico imposta l'<b>indirizzo pubblico della console</b> in Impostazioni server. <i>Invia messaggio di prova</i> e <i>Anteprima riepilogo</i> verificano la configurazione.</p>
+<h3>OpenStreetMap (ricerca indirizzi)</h3>
+<p>Converte gli indirizzi in coordinate per Copertura e provisioning. Con il servizio locale (Nominatim nello stesso server) gli indirizzi cercati non escono dalla rete; la regione si sceglie in Impostazioni server → Infrastruttura.</p>
+<figure><img data-guide="admin-connectors.jpg" alt="Connettori"><figcaption>Connettori: UISP (token impostato, mai mostrato) e Telegram.</figcaption></figure>
+
+<h2 id="g-server">5. Impostazioni server</h2>
+<p>Parametri modificabili senza entrare nel server; hanno la precedenza sul file <code>.env</code>. Le password non vengono mai mostrate: scrivi solo per cambiarle.</p>
+<ul>
+  <li><b>Credenziali delle CPE</b>: utente e password amministratore scritti in ogni CPE e usati dagli strumenti di campo; <b>chiave di adozione UISP</b> (la "UISP key" <code>wss://…</code>); community e contatto SNMP. Una password nuova vale per le CPE configurate da quel momento.</li>
+  <li><b>Rete standard delle CPE</b>: IP di fabbrica, IP e netmask LAN, DHCP, MTU/MRU PPPoE, watchdog, NTP, porte SSH e discovery.</li>
+  <li><b>Provisioning e app</b>: validità di un provisioning (minuti), versione minima dell'app, <b>app sempre all'ultima versione</b> (aggiornamento obbligatorio), durata delle sessioni, conservazione di storico e registro, indirizzo pubblico della console, RouterOS su indirizzi pubblici.</li>
+  <li><b>Rilasci dell'app Android</b>: repository GitHub dei rilasci, token se privato, ogni quanti minuti cercare APK nuovi.</li>
+  <li><b>Infrastruttura</b>: indirizzo della console e HTTPS (un nome DNS attiva il certificato pubblico automatico), aggiornamenti automatici (intervallo, finestra oraria, canale o versione bloccata), mappe della console (locale Protomaps per regione, oppure OpenStreetMap pubbliche) e ricerca indirizzi locale. Le applica l'agente di aggiornamento del server, che riavvia da solo i servizi interessati.</li>
+</ul>
+<p>Restano solo nel file <code>.env</code>, per sicurezza, i segreti di base (JWT, chiave master) e il geocoder.</p>
+<figure><img data-guide="admin-server.jpg" alt="Impostazioni server"><figcaption>Impostazioni server: credenziali e rete standard delle CPE.</figcaption></figure>
+
+<h2 id="g-wifi">6. Reti Wi-Fi (WPA2)</h2>
+<p>Ogni AP ha un SSID <code>CDA-NET-N&lt;nodo&gt;-D&lt;distretto&gt;</code>, con <code>-R&lt;n&gt;</code> per un AP di rilancio. Scegli nodo, distretto ed eventuale rilancio, scrivi la chiave (8-63 caratteri) e salva. Le chiavi sono cifrate (AES-256-GCM) e non vengono mai mostrate: salvare di nuovo una rete esistente ne sostituisce la chiave.</p>
+<p>Per molte reti usa <b>Importa da CSV</b> (<code>nodo;distretto;wpa2</code> oppure <code>ssid;wpa2</code>): prima del salvataggio vedi un'anteprima e se una riga è errata non viene importato nulla. <i>Scarica CSV di esempio</i> ti dà il formato.</p>
+<p>L'installatore non vede mai le chiavi: l'app le riceve dal server solo dentro il pacchetto di provisioning o per il cambio AP.</p>
+<figure><img data-guide="admin-wireless.jpg" alt="Reti Wi-Fi"><figcaption>Reti Wi-Fi: aggiunta, import CSV, elenco con ricerca.</figcaption></figure>
+
+<h2 id="g-profili">7. Profili airOS e template</h2>
+<p>Per ogni modello supportato (firmware airOS 8.7.4) serve almeno un <b>template</b>: la configurazione che il server completa con i dati del cliente. Un modello senza template ha il provisioning bloccato e l'installatore vede "Nessun template airOS per …".</p>
+<ul>
+  <li><b>Nuovo template</b>: nome, contenuto e <b>board match</b> (espressione che riconosce il modello, es. <code>board\.name=LiteBeam 5AC</code>).</li>
+  <li>Un template può essere per <b>tutti</b> gli installatori o solo per quelli scelti (template personali). Il <b>predefinito</b> viene proposto nell'app.</li>
+  <li><i>Modifica</i>, <i>Duplica</i>, <i>Elimina</i>: le installazioni già fatte non cambiano.</li>
+</ul>
+<figure><img data-guide="admin-profiles.jpg" alt="Profili airOS"><figcaption>Profili airOS: solo LiteBeam 5AC ha un template (Standard CDA Net, per tutti).</figcaption></figure>
+
+<h2 id="g-funzionalita">8. Funzionalità</h2>
+<p>I moduli facoltativi, ognuno con l'indicazione <i>web</i>, <i>app</i> o <i>web + app</i>. Se disattivi un modulo sparisce dalla console e dall'app e il server ne rifiuta le richieste. Esempi: Copertura AP, Puntamento antenna, Diagnosi CPE, Trova l'AP, Collaudo e verbale, Sostituzione CPE, Storico segnale, Confronto con il template, Salute CPE, Guasti Enel, Stato rete, Statistiche, Strumenti di rete, RouterOS.</p>
+<p>Gli installatori non vedono i nomi dei moduli né le fonti dei dati: se una funzione è spenta, semplicemente non c'è.</p>
+<figure><img data-guide="admin-modules.jpg" alt="Funzionalità"><figcaption>Funzionalità: moduli con ambito web, app o entrambi.</figcaption></figure>
+
+<h2 id="g-account">9. Account e POP/AP assegnati</h2>
+<p><b>Nuovo account</b>: username, password iniziale (comunicala a voce o di persona) e ruolo (<i>Installatore</i> o <i>Admin</i>). Nella tabella vedi stato, verifica in due passaggi, ultimo accesso e numero di provisioning; da ogni riga puoi disabilitare l'account o reimpostarne la password.</p>
+<p><b>POP/AP assegnati agli installatori</b>: gli amministratori vedono tutto; ogni installatore, in Copertura, nei Guasti Enel, in Stato rete e nelle notifiche, vede solo i POP e gli AP assegnati qui (le sue zone personali dei guasti restano sue). Con <i>Modifica</i> scegli POP interi o singoli AP. L'opzione in fondo decide se mostrare agli installatori il numero di clienti dei loro POP/AP.</p>
+<figure><img data-guide="admin-users.jpg" alt="Account"><figcaption>Account: tecnico.demo è assegnato al POP Demo Monte.</figcaption></figure>
+
+<h2 id="g-nuovo-installatore">10. Un nuovo installatore, dall'account al primo intervento</h2>
+<ol>
+  <li>Crea l'account con ruolo <i>Installatore</i> e assegnagli i POP/AP della sua zona.</li>
+  <li>Se usa template personali, in Profili airOS rendili visibili anche a lui.</li>
+  <li>Fagli installare l'app: l'APK dell'ultima versione si scarica dall'indirizzo del server seguito da <code>/api/mobile/apk</code>. Dopo, l'app si aggiorna da sola.</li>
+  <li>Indicagli la <a href="/wiki/" target="_blank" rel="noopener">Guida installatore</a> (dall'app: riquadro <i>Guida</i>; dalla console: voce <i>Guida installatore</i>).</li>
+  <li>Dopo il primo intervento controlla lo <b>Storico provisioning</b>: esito, collaudo, accettazione in UISP.</li>
+</ol>
+
+<h2 id="g-storico">11. Storico, accettazione in UISP e verbali</h2>
+<p>Lo storico di tutti gli installatori (solo metadati, nessuna password): cerca per MAC, seriale, utente PPPoE, SSID o cliente, filtra per esito (<i>completati, falliti, preparati/in corso, scaduti</i>) e date, esporta in CSV.</p>
+<ul>
+  <li><b>Collaudo</b>: <i>superato</i>, <i>con riserva</i> o <i>non superato</i>, con misure e foto; <b>Stampa / salva PDF</b> produce il verbale.</li>
+  <li><b>Rete · da accettare</b>: la CPE è apparsa in UISP e aspetta l'adozione. <b>Accetta in UISP</b> la autorizza (e, se attivo, ne fa il backup).</li>
+  <li><b>Fallito</b>: fase ed errore (es. autenticazione SSH rifiutata), utile per aiutare chi è sul tetto.</li>
+</ul>
+<figure><img data-guide="admin-jobs.jpg" alt="Storico provisioning"><figcaption>Storico provisioning di tutti gli installatori.</figcaption></figure>
+
+<h2 id="g-salute">12. Salute CPE e Statistiche</h2>
+<p><b>Salute CPE</b> mostra tutte le CPE dei clienti presenti in UISP: offline, non trovate, segnale debole, <b>segnale calato</b> (almeno 6 dB sotto il collaudo, solo CPE installate con l'app), porta LAN lenta, da accettare, capacità bassa, firmware. Filtri per origine (installate con l'app, solo UISP, assegnate o no) e ricerca.</p>
+<p>Con <b>Assegna CPE agli installatori</b> dai a un installatore anche CPE montate prima dell'app o da altri: compaiono nelle sue <i>Le mie CPE</i>. Suggerimento: filtra per AP e usa <i>Seleziona tutte le filtrate</i>.</p>
+<p><b>Statistiche</b>: installazioni riuscite e fallite per mese, per installatore e per modello, collaudi, segnale medio e velocità media.</p>
+<figure><img data-guide="admin-health.jpg" alt="Salute CPE"><figcaption>Salute CPE: 7 CPE, 2 offline, 1 con segnale calato.</figcaption></figure>
+<figure><img data-guide="admin-stats.jpg" alt="Statistiche"><figcaption>Statistiche per mese, installatore e modello.</figcaption></figure>
+
+<h2 id="g-guasti">13. Guasti Enel e Stato rete</h2>
+<p>Il server controlla ogni 10 minuti la mappa pubblica dei guasti di e-distribuzione e li incrocia con POP e AP importati da UISP (nomi e coordinate si correggono in UISP; un AP senza posizione usa quella del suo POP).</p>
+<ul>
+  <li><b>Monitora</b> tutti i POP/AP di UISP oppure solo quelli selezionati.</li>
+  <li><b>Zone di interesse</b>: zone automatiche attorno a ogni POP/AP monitorato, con il loro raggio, e il raggio entro cui un POP/AP è "potenzialmente impattato".</li>
+  <li><b>Zone condivise</b> per aree senza AP (es. una frazione), notificate a tutti; sotto trovi anche le <b>zone personali</b> degli installatori, notificate solo a loro.</li>
+</ul>
+<p>Le notifiche partono su Telegram (gruppo del NOC e personali) e sul telefono (app → Guasti Enel → "Avvisami dei guasti").</p>
+<p><b>Stato rete</b>: tutti i POP e gli AP, raggiungibili o no, con molte CPE offline (almeno il 30%, probabile problema di settore) e guasto Enel vicino.</p>
+<figure><img data-guide="admin-outages.jpg" alt="Guasti Enel"><figcaption>Guasti Enel: un guasto MT a 556 m dal POP Demo Monte.</figcaption></figure>
+<figure><img data-guide="admin-network.jpg" alt="Stato rete"><figcaption>Stato rete.</figcaption></figure>
+
+<h2 id="g-aggiornamenti">14. Aggiornamenti di server e app</h2>
+<p><b>Server</b>: con gli aggiornamenti automatici attivi l'agente installa le nuove versioni da solo nella finestra oraria scelta; un numero di versione nel canale blocca quella versione. La versione corrente è in Panoramica.</p>
+<p><b>App Android</b>: il server pubblica l'ultimo APK nel canale aggiornamenti (sincronizzato dal repository dei rilasci). Con <i>App sempre all'ultima versione</i> attivo, un'app più vecchia scarica da sola l'aggiornamento e non permette login né uso finché non è installato; in alternativa imposti solo una <i>versione minima</i>.</p>
+
+<h2 id="g-registro">15. Registro attività e privacy</h2>
+<p>Il <b>Registro attività</b> elenca operazioni amministrative, provisioning preparati, collaudi, accessi alle CPE dagli strumenti di campo e modifiche alle zone. Nessun segreto viene registrato. Storico e registro si cancellano dopo i giorni impostati in Impostazioni server.</p>
+<ul>
+  <li>Password PPPoE, chiavi WPA2, token e password delle CPE non vengono mai mostrati né registrati.</li>
+  <li>Gli installatori vedono solo le proprie installazioni, le CPE assegnate e i POP/AP assegnati, come aree approssimative; non vedono fonti dei dati né nomi dei moduli.</li>
+  <li>Nei messaggi Telegram non c'è mai nome, indirizzo o posizione del cliente.</li>
+</ul>
+<figure><img data-guide="admin-events.jpg" alt="Registro attività"><figcaption>Registro attività.</figcaption></figure>
+
+<h2 id="g-problemi">16. Problemi frequenti</h2>
+<ul>
+  <li><b>L'installatore vede "Nessun template airOS per …"</b>: crea il template di quel modello in Profili airOS, o rendilo visibile a lui.</li>
+  <li><b>Nessun AP consigliato o Copertura vuota</b>: UISP non configurato o non raggiungibile (Connettori → Testa connessione), AP senza posizione in UISP, oppure all'installatore non sono assegnati POP/AP in quella zona.</li>
+  <li><b>"Le notifiche Telegram personali non sono ancora attive"</b>: manca il token del bot in Connettori → Telegram, oppure le notifiche personali sono spente.</li>
+  <li><b>App bloccata su "Aggiornamento obbligatorio"</b> e il download non parte: controlla in Panoramica che la release sia pubblicata e in Impostazioni server il repository dei rilasci.</li>
+  <li><b>Mappe vuote</b>: in Impostazioni server → Infrastruttura scegli la regione o le mappe pubbliche e usa <i>Aggiorna la mappa ora</i>.</li>
+  <li><b>CPE "da accettare" da giorni</b>: premi Accetta in UISP dallo storico; se manca la chiave di adozione UISP, impostala in Impostazioni server.</li>
+  <li><b>Provisioning fallito con autenticazione SSH rifiutata</b>: l'installatore non ha completato il primo avvio airOS; con le credenziali CPE cambiate di recente, le CPE vecchie mantengono quelle precedenti.</li>
+</ul>
