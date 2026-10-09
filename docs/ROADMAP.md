@@ -43,6 +43,7 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 | 17 | **Wi-Fi Analyzer stile WiFiman**: spettro, occupazione canali e consigliati, segnale nel tempo, dettagli reti e connessione | analisi Wi-Fi dal campo | ✅ v1.23.0 |
 | 18 | **Topologia di rete**: discovery multi-vendor (MikroTik MNDP, Ubiquiti, Hikvision SADP, Dahua, ONVIF, UPnP/SSDP, mDNS, NetBIOS, Netgear NSDP, TP-Link) + SNMP (community `public` predefinita o manuali) con LLDP/CDP, tabelle MAC e ARP; senza SNMP mappa base dal gateway | mappa reale della LAN del cliente | ✅ v1.24.0 |
 | 4 | Scansione degli AP visibili dalla CPE | scegliere l'AP migliore | ✅ v1.25.0 (da verificare su CPE reale) |
+| 19 | **Impostazioni server dal portale** (credenziali e chiave UISP delle CPE, rete CPE, provisioning, rilasci) al posto del `.env` | niente SSH sul server | ✅ v1.26.0 |
 
 ## Già rilasciato
 

@@ -113,6 +113,18 @@ Se rendi privati la repo o il pacchetto GHCR (consigliato):
 - **APK**: imposta `ANDROID_RELEASE_GITHUB_TOKEN` (fine-grained, Contents: read-only).
 - **Installer via curl**: aggiungi `-H "Authorization: Bearer <token>"`, oppure eseguilo da un checkout.
 
+## Impostazioni dal portale (senza SSH)
+
+Console → **Amministrazione → Impostazioni server** (solo admin): i parametri che prima andavano scritti nel file `.env` si impostano dal web e hanno la precedenza sul `.env` (che resta il valore di partenza, ripristinabile con "Ripristina .env"):
+- **Credenziali delle CPE**: utente e **password amministratore CPE** (`CPE_ADMIN_USERNAME`/`CPE_ADMIN_PASSWORD`), **chiave di adozione UISP** (`UISP_ENROLLMENT`), community e contatto SNMP;
+- **Rete standard delle CPE**: IP di fabbrica e LAN, netmask, DHCP, MTU/MRU PPPoE, watchdog, NTP, porte SSH e discovery;
+- **Provisioning e app**: validità di un provisioning, versione minima dell'app, durata delle sessioni, conservazione dello storico, indirizzo pubblico della console, RouterOS su IP pubblici;
+- **Rilasci dell'app Android**: repository/token GitHub e frequenza di controllo.
+
+I segreti sono cifrati con la chiave master del server e **non vengono mai mostrati** (solo "impostata/non impostata"); nel Registro attività compare quali parametri sono cambiati, mai i valori. Quasi tutto vale subito; durata delle sessioni e rilasci valgono dopo **Riavvia l'app ora** (pulsante nella stessa pagina). La nuova password CPE vale per le CPE configurate da quel momento: quelle già installate mantengono la loro (per quelle gli strumenti di campo permettono di inserirla a mano).
+
+Restano nel `.env` i parametri dell'infrastruttura (indirizzo/HTTPS di Caddy, aggiornamenti automatici, regione di mappe e geocoder) e i segreti di base (`JWT_SECRET`, chiave master).
+
 ## Reti Wi-Fi (chiavi WPA2) in blocco
 
 Nella console, in **Reti Wi-Fi**:

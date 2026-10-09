@@ -32,6 +32,8 @@ import { uispRoutes } from './routes/uisp.ts';
 import { mapRoutes } from './routes/map.ts';
 import { networkRoutes } from './routes/network.ts';
 import { pointingRoutes } from './routes/pointing.ts';
+import { serverSettingsRoutes } from './routes/server-settings.ts';
+import { createServerSettings } from './services/server-settings.ts';
 import { createDem } from './services/dem.ts';
 
 const CSP = [
@@ -70,6 +72,9 @@ export async function buildApp(
   const db = opts.db ?? openDatabase(cfg.dbPath);
   ensureBootstrapAdmin(db, cfg);
   const sealer = createSealer(cfg.masterKey);
+  // values set from the console override .env before anything reads them
+  const serverSettings = createServerSettings(db, cfg, sealer);
+  serverSettings.applyAll();
   const templates = createTemplates(db, sealer);
   const connectors = createConnectors(db, sealer, cfg, { fetchImpl: opts.fetchImpl });
   const uispCfg = connectors.uispSettings();
@@ -91,6 +96,7 @@ export async function buildApp(
     modules,
     oui,
     outages: undefined as unknown as Outages,
+    serverSettings,
     dem: createDem({ dir: cfg.dem.dir, baseUrl: cfg.dem.url, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
     notify: undefined as unknown as Notifier,
     version,
@@ -167,6 +173,7 @@ export async function buildApp(
   mapRoutes(app, ctx);
   networkRoutes(app, ctx);
   pointingRoutes(app, ctx);
+  serverSettingsRoutes(app, ctx);
   adminRoutes(app, ctx);
   toolRoutes(app, ctx);
   uispRoutes(app, ctx);
