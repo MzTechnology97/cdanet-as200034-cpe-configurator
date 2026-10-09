@@ -117,7 +117,10 @@ fun OutagesScreen(c: AppContainer) {
             },
             style = MaterialTheme.typography.bodySmall,
         )
-        val mapJson by produceState<String?>(null, d) { value = runCatching { c.api.outagesMapJson() }.getOrNull() }
+        val mapJson by produceState<String?>(null, d) {
+            val json = runCatching { c.api.outagesMapJson() }.getOrNull()
+            value = json
+        }
         SectionCard("Mappa") {
             EmbeddedMap(c, mapJson?.let { "window.cdaOutages($it)" }, Modifier.fillMaxWidth().height(360.dp))
             Text(
