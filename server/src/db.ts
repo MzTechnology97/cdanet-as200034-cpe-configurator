@@ -226,6 +226,17 @@ const MIGRATIONS: string[] = [
   ALTER TABLE users ADD COLUMN telegram_chat_id TEXT NOT NULL DEFAULT '';
   ALTER TABLE users ADD COLUMN telegram_planned INTEGER NOT NULL DEFAULT 1;
   `,
+  // 13: customer CPEs (from UISP, e.g. installed before the app) assigned to an installer
+  `
+  CREATE TABLE cpe_assignments(
+    mac TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    name TEXT NOT NULL DEFAULT '',
+    assigned_at TEXT NOT NULL,
+    assigned_by INTEGER
+  );
+  CREATE INDEX cpe_assignments_user ON cpe_assignments(user_id);
+  `,
 ];
 
 export function openDatabase(path: string): Db {

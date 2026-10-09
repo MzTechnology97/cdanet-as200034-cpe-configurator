@@ -88,13 +88,38 @@ describe('Salute CPE installate', () => {
     assert.equal(mine.cpes[0].now.signal, -58);
     assert.deepEqual(mine.cpes[0].issues.sort(), ['ethernet', 'pending']);
     assert.ok(!JSON.stringify(mine).match(/rossi\.mario|Secret-Pppoe|pppoe/i), 'no PPPoE data');
+    // admins: every customer CPE in UISP, also those not installed with the app
     const all = (await app.inject({ method: 'GET', url: '/api/cpe-health', headers: H(admin) })).json();
-    assert.equal(all.cpes.length, 2);
+    assert.equal(all.cpes.length, 3);
     assert.equal(all.cpes.find((c: { mac: string }) => c.mac === '11:22:33:44:55:66').issues[0], 'not_in_uisp');
+    const old = all.cpes.find((c: { mac: string }) => c.mac === '22:33:44:55:66:77');
+    assert.equal(old.source, 'uisp');
+    assert.equal(old.deviceName, 'BIANCHI LUCA');
+    assert.equal(old.jobId, null);
+    assert.ok(!all.cpes.some((c: { deviceName: string }) => /AP N|PtP/.test(c.deviceName)), 'APs and PtP links are not customer CPEs');
+    assert.equal(all.totals.fromUisp, 1);
+    assert.ok(all.installers.some((u: { username: string }) => u.username === 'tecnico'));
+    assert.equal((await app.inject({ method: 'GET', url: '/api/cpe-health?scope=app', headers: H(admin) })).json().cpes.length, 2);
     assert.equal((await app.inject({ method: 'GET', url: '/api/cpe-health?installer=altro', headers: H(admin) })).json().cpes.length, 1);
+
+    // assign the old customer to "tecnico": it appears among their CPEs
+    const tid = all.installers.find((u: { username: string }) => u.username === 'tecnico').id;
+    assert.equal((await app.inject({ method: 'PUT', url: '/api/admin/cpe-assignments', headers: H(admin), payload: { macs: ['22-33-44-55-66-77'], userId: tid } })).statusCode, 200);
+    const mine2 = (await app.inject({ method: 'GET', url: '/api/cpe-health', headers: H(tec) })).json();
+    assert.deepEqual(mine2.cpes.map((c: { mac: string }) => c.mac).sort(), ['22:33:44:55:66:77', 'AA:BB:CC:DD:EE:FF']);
+    assert.equal(mine2.cpes.find((c: { mac: string }) => c.mac === '22:33:44:55:66:77').now.signal, -66);
+    assert.equal(mine2.installers, undefined, 'installers list is for admins');
+    assert.equal((await app.inject({ method: 'GET', url: '/api/cpe-health', headers: H(altro) })).json().cpes.length, 1, 'not visible to other installers');
+    const byTec = (await app.inject({ method: 'GET', url: '/api/cpe-health?installer=tecnico', headers: H(admin) })).json();
+    assert.equal(byTec.cpes.length, 2);
+    assert.equal(byTec.cpes.find((c: { mac: string }) => c.mac === '22:33:44:55:66:77').assignedTo.username, 'tecnico');
+    assert.equal((await app.inject({ method: 'PUT', url: '/api/admin/cpe-assignments', headers: H(tec), payload: { macs: ['22:33:44:55:66:77'], userId: tid } })).statusCode, 403);
     const csv = await app.inject({ method: 'GET', url: '/api/cpe-health.csv', headers: H(tec) });
-    assert.match(csv.body, /^﻿Installata il;Cliente/);
-    assert.equal(csv.body.trim().split('\r\n').length, 2);
+    assert.match(csv.body, /^\uFEFFInstallata il;Origine;Cliente/);
+    assert.equal(csv.body.trim().split('\r\n').length, 3);
+    // remove the assignment
+    await app.inject({ method: 'PUT', url: '/api/admin/cpe-assignments', headers: H(admin), payload: { macs: ['22:33:44:55:66:77'], userId: null } });
+    assert.equal((await app.inject({ method: 'GET', url: '/api/cpe-health', headers: H(tec) })).json().cpes.length, 1);
     await app.close();
   });
 });

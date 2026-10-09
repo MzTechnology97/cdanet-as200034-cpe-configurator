@@ -17,7 +17,7 @@ export const MODULES = [
   { key: 'replacement', label: 'Sostituzione CPE', area: 'app', description: 'Nuova CPE con i dati del job sostituito (password PPPoE dal backup UISP).', default: true },
   { key: 'signal_history', label: 'Storico segnale', area: 'web + app', description: 'Andamento del segnale e interruzioni da UISP.', default: true },
   { key: 'config_drift', label: 'Confronto con il template', area: 'web', description: 'Modifiche fatte a mano sulla CPE rispetto alla configurazione CDA Net.', default: true },
-  { key: 'cpe_health', label: 'Salute CPE installate', area: 'web + app', description: 'Stato attuale e nel tempo delle CPE installate con l’app (ogni installatore vede le proprie).', default: false },
+  { key: 'cpe_health', label: 'Salute CPE', area: 'web + app', description: 'Stato delle CPE dei clienti: gli admin vedono tutte quelle in UISP e le assegnano agli installatori; ogni installatore vede le proprie e quelle assegnate.', default: false },
   { key: 'stats', label: 'Statistiche', area: 'web', description: 'Installazioni, collaudi e qualità per mese, installatore e modello.', default: true },
   { key: 'csv_export', label: 'Export CSV', area: 'web', description: 'Esportazione dello storico provisioning per Excel.', default: true },
   { key: 'network_tools', label: 'Strumenti di rete', area: 'web + app', description: 'Ping, traceroute, DNS, discovery, SNMP, TVCC, speed test, Wi-Fi analyzer.', default: true },

@@ -25,7 +25,7 @@ const ROUTES = [
   { group: 'Operatività' },
   { id: 'dashboard', label: 'Panoramica', view: dashboardView, admin: true },
   { id: 'jobs', label: 'Storico provisioning', view: jobsView },
-  { id: 'health', label: 'Salute CPE installate', installerLabel: 'Le mie CPE', view: healthView, module: 'cpe_health' },
+  { id: 'health', label: 'Salute CPE', installerLabel: 'Le mie CPE', view: healthView, module: 'cpe_health' },
   { id: 'stats', label: 'Statistiche', view: statsView, admin: true, module: 'stats' },
   { id: 'outages', label: 'Guasti Enel', view: outagesView, module: 'power_outages' },
   { id: 'network', label: 'Stato rete', view: networkView, module: 'network_status' },

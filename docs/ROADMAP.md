@@ -38,6 +38,7 @@ Stato: ✅ fatto · 🔄 in corso · ⏳ da fare. Ogni voce esce come release co
 | 12 | **Stato rete** (modulo, per account): stato di POP/AP, CPE offline, guasti Enel vicini; installatori solo gli assegnati, senza notifiche — vedi [STATO-RETE.md](STATO-RETE.md) | sapere se un AP/POP della propria zona è giù | ✅ v1.18.0 |
 | 13 | **Trova l'AP** nell'app: mappa con direzione del telefono, lista con azimut/tilt/altitudine, mirino in fotocamera; **segnale stimato** dalle CPE già installate su ogni AP (anche in Copertura) | puntare e scegliere l'AP come con gli strumenti degli operatori 5G | ✅ v1.19.0 |
 | 14 | **Mappa Guasti Enel nell'app** (stessa mappa della console, POP/AP approssimati per gli installatori) | il colpo d'occhio anche sul campo | ✅ v1.20.0 |
+| 15 | **Salute CPE per tutti i clienti** (admin: tutte le CPE in UISP) e **assegnazione delle CPE storiche agli installatori** | manutenzione anche dei clienti installati prima dell'app | ✅ v1.21.0 |
 | 4 | Scansione degli AP visibili dalla CPE | scegliere l'AP migliore | ⏳ (serve una CPE reale per verificare il comando airOS) |
 
 ## Già rilasciato

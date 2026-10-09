@@ -1,11 +1,12 @@
 # Pagine NOC della console
 
-## Salute CPE installate (modulo, spento di default)
+## Salute CPE (modulo, spento di default)
 
-Riguarda **solo le CPE installate con l'app**: per ogni MAC si considera l'ultimo provisioning riuscito non seguito da una sostituzione. Il resto della rete UISP non viene mostrato.
+- **Admin**: menu *Salute CPE*, **tutte le CPE dei clienti presenti in UISP** (stazioni dei clienti; esclusi AP e link PtP), sia quelle installate con l'app sia quelle installate prima o senza app. Filtri per problema, origine (app / solo UISP / assegnate / non assegnate) e ricerca (cliente, MAC, AP, installatore); `?installer=` e `?scope=app` anche via API.
+- **Assegnazione agli installatori**: l'admin seleziona le CPE (anche "tutte le filtrate", es. tutte quelle di un AP) e le assegna a un installatore, o rimuove l'assegnazione. Le CPE assegnate compaiono in *Le mie CPE* dell'installatore (web e app).
+- **Installatori**: menu *Le mie CPE*, le CPE installate da loro con l'app più quelle assegnate.
 
-- **Installatori**: menu *Le mie CPE* (web e app), solo le CPE installate da loro.
-- **Admin**: menu *Salute CPE installate*, tutte; filtrabili per installatore (`?installer=`).
+Per le CPE installate con l'app si considera l'ultimo provisioning riuscito per MAC non seguito da una sostituzione, e lo stato attuale si confronta con il **collaudo**; per le altre (solo UISP) valgono le stesse regole tranne "segnale calato" (non c'è un collaudo).
 
 Per ogni CPE si confronta lo stato attuale in UISP con il **collaudo**:
 
@@ -20,7 +21,7 @@ Per ogni CPE si confronta lo stato attuale in UISP con il **collaudo**:
 | Da accettare | ancora in attesa in UISP |
 | Firmware | diverso dallo standard CDA Net |
 
-Dati esposti: nome del cliente (già visibile nello storico), modello, MAC, SSID, AP, segnale, porta LAN, firmware, data di installazione. **Mai** utente o password PPPoE, chiavi Wi-Fi o configurazione.
+Dati esposti: nome del cliente (come in UISP / nello storico), modello, MAC, SSID, AP, segnale, porta LAN, firmware, data di installazione. **Mai** utente o password PPPoE, chiavi Wi-Fi o configurazione.
 
 Dall'elenco: link allo storico della CPE e, nell'app, lo storico del segnale degli ultimi 7 giorni (se il modulo Storico segnale è attivo). Export CSV con il modulo Export CSV attivo.
 
