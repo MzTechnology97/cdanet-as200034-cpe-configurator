@@ -251,6 +251,50 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX auth_devices_user ON auth_devices(user_id);
   `,
+  // 15: installations reported postponed or KO by the technician (one row per attempt, never
+  // blocking a retry), and the number of write attempts of a package (a failed write can be retried)
+  `
+  CREATE TABLE install_ko(
+    id INTEGER PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id),
+    job_id TEXT REFERENCES provisioning_jobs(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL CHECK(kind IN('postponed','definitive')),
+    mode TEXT NOT NULL CHECK(mode IN('new','repoint')),
+    step TEXT NOT NULL,
+    reason TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    mac TEXT NOT NULL DEFAULT '',
+    ssid TEXT NOT NULL DEFAULT '',
+    data TEXT NOT NULL DEFAULT '{}',
+    resolved_at TEXT,
+    resolved_by INTEGER REFERENCES users(id),
+    resolution TEXT NOT NULL DEFAULT ''
+  );
+  CREATE INDEX install_ko_job ON install_ko(job_id);
+  CREATE INDEX install_ko_mac ON install_ko(mac);
+  CREATE INDEX install_ko_created ON install_ko(created_at);
+  ALTER TABLE provisioning_jobs ADD COLUMN attempts INTEGER NOT NULL DEFAULT 1;
+  -- acceptance tests with a poor signal wait for the NOC's approval
+  ALTER TABLE job_acceptance ADD COLUMN review TEXT CHECK(review IN('pending','approved','rejected'));
+  ALTER TABLE job_acceptance ADD COLUMN review_reason TEXT NOT NULL DEFAULT '';
+  ALTER TABLE job_acceptance ADD COLUMN review_at TEXT;
+  ALTER TABLE job_acceptance ADD COLUMN review_by INTEGER REFERENCES users(id);
+  ALTER TABLE job_acceptance ADD COLUMN review_note TEXT NOT NULL DEFAULT '';
+  -- notifications of each user (the NOC: every admin), also sent on Telegram if the user wants
+  CREATE TABLE notifications(
+    id INTEGER PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    title TEXT NOT NULL,
+    body TEXT NOT NULL DEFAULT '',
+    job_id TEXT,
+    mac TEXT NOT NULL DEFAULT '',
+    read_at TEXT
+  );
+  CREATE INDEX notifications_user ON notifications(user_id, read_at);
+  `,
 ];
 
 export function openDatabase(path: string): Db {

@@ -7,6 +7,8 @@ import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { photoDir } from '../services/photos.ts';
+import { FIELD_THRESHOLDS } from './field.ts';
+import { resolveKoByAcceptance } from './ko.ts';
 
 const MAX_PHOTOS = 8;
 const MAX_PHOTO_BYTES = 3 * 1024 * 1024;
@@ -65,6 +67,17 @@ export const acceptanceSchema = z
   })
   .strict();
 
+/** Radio checks of the app: a red one means a poor link the NOC has to accept. */
+const RADIO_CHECKS = new Set(['Segnale ricevuto', 'Segnale lato AP', 'CINR (qualità)', 'Capacità airMAX', 'Catene (polarizzazioni)', "Collegamento all'AP"]);
+
+/** Why the acceptance test needs the NOC's approval ('' = it does not). */
+export function poorRadio(a: z.infer<typeof acceptanceSchema>): string {
+  const why: string[] = [];
+  if (a.radio.signal != null && a.radio.signal < FIELD_THRESHOLDS.signalMin) why.push(`segnale ${a.radio.signal} dBm (minimo ${FIELD_THRESHOLDS.signalMin})`);
+  for (const c of a.checks) if (c.verdict === 'bad' && RADIO_CHECKS.has(c.title) && !(c.title === 'Segnale ricevuto' && why.length)) why.push(`${c.title}: ${c.detail}`);
+  return why.join(' · ').slice(0, 500);
+}
+
 interface JobRow {
   id: string;
   user_id: number;
@@ -95,10 +108,23 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
   app.get('/api/provisioning/jobs/:id/acceptance', user, async (req) => {
     const job = loadJob(req);
     const row = db
-      .prepare('SELECT a.created_at, a.verdict, a.data, u.username FROM job_acceptance a JOIN users u ON u.id = a.user_id WHERE a.job_id = ?')
-      .get(job.id) as { created_at: string; verdict: string; data: string; username: string } | undefined;
+      .prepare(
+        `SELECT a.created_at, a.verdict, a.data, u.username, a.review, a.review_reason, a.review_at, a.review_note, r.username reviewer
+           FROM job_acceptance a JOIN users u ON u.id = a.user_id LEFT JOIN users r ON r.id = a.review_by WHERE a.job_id = ?`,
+      )
+      .get(job.id) as
+      | { created_at: string; verdict: string; data: string; username: string; review: string | null; review_reason: string; review_at: string | null; review_note: string; reviewer: string | null }
+      | undefined;
     return {
-      acceptance: row ? { createdAt: row.created_at, verdict: row.verdict, by: row.username, ...JSON.parse(row.data) } : null,
+      acceptance: row
+        ? {
+            createdAt: row.created_at,
+            verdict: row.verdict,
+            by: row.username,
+            ...JSON.parse(row.data),
+            review: row.review ? { state: row.review, reason: row.review_reason, at: row.review_at, by: row.reviewer, note: row.review_note } : null,
+          }
+        : null,
       photos: photos(job.id),
     };
   });
@@ -108,11 +134,33 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
     if (job.status !== 'success') throw new HttpError(409, 'job_not_completed');
     const a = acceptanceSchema.parse(req.body);
     const { verdict: v, ...data } = a;
+    // a new test replaces the previous decision: poor radio waits again for the NOC
+    const reason = poorRadio(a);
     db.prepare(
-      `INSERT INTO job_acceptance(job_id, created_at, user_id, verdict, data) VALUES(?,?,?,?,?)
-       ON CONFLICT(job_id) DO UPDATE SET created_at = excluded.created_at, user_id = excluded.user_id, verdict = excluded.verdict, data = excluded.data`,
-    ).run(job.id, nowIso(), req.user!.id, v, JSON.stringify(data));
-    recordEvent(db, req.user!.id, 'job.acceptance', job.id, `esito ${v}${a.radio.signal != null ? ` · ${a.radio.signal} dBm` : ''}`);
+      `INSERT INTO job_acceptance(job_id, created_at, user_id, verdict, data, review, review_reason, review_at, review_by, review_note) VALUES(?,?,?,?,?,?,?,NULL,NULL,'')
+       ON CONFLICT(job_id) DO UPDATE SET created_at = excluded.created_at, user_id = excluded.user_id, verdict = excluded.verdict, data = excluded.data,
+         review = excluded.review, review_reason = excluded.review_reason, review_at = NULL, review_by = NULL, review_note = ''`,
+    ).run(job.id, nowIso(), req.user!.id, v, JSON.stringify(data), reason ? 'pending' : null, reason);
+    recordEvent(db, req.user!.id, 'job.acceptance', job.id, `esito ${v}${a.radio.signal != null ? ` · ${a.radio.signal} dBm` : ''}${reason ? ' · da approvare dal NOC' : ''}`);
+    if (reason) ctx.notify.reviewPending(job.id);
+    // a passed test after a postponed or KO attempt closes those reports (with poor radio: once approved)
+    const resolved = v === 'bad' || reason ? 0 : resolveKoByAcceptance(db, job, req.user!.id);
+    return { ok: true, review: reason ? 'pending' : null, reviewReason: reason, resolvedKo: resolved };
+  });
+
+  /** Decision of the NOC on an acceptance test with poor radio; the installer is told. */
+  app.post('/api/admin/provisioning/jobs/:id/review', { preHandler: [ctx.auth.requireAdmin] }, async (req) => {
+    const job = loadJob(req);
+    const b = z
+      .object({ decision: z.enum(['approved', 'rejected']), note: z.string().trim().max(500).default('') })
+      .strict()
+      .refine((x) => x.decision === 'approved' || x.note.length >= 3, { message: 'Scrivi il motivo del rifiuto', path: ['note'] })
+      .parse(req.body);
+    const r = db.prepare("UPDATE job_acceptance SET review = ?, review_at = ?, review_by = ?, review_note = ? WHERE job_id = ? AND review IS NOT NULL").run(b.decision, nowIso(), req.user!.id, b.note, job.id);
+    if (!r.changes) throw new HttpError(409, 'review_not_required');
+    recordEvent(db, req.user!.id, b.decision === 'approved' ? 'job.review_approved' : 'job.review_rejected', job.id, b.note);
+    if (b.decision === 'approved') resolveKoByAcceptance(db, job, req.user!.id);
+    ctx.notify.reviewDecision(job.id, req.user!.username);
     return { ok: true };
   });
 
