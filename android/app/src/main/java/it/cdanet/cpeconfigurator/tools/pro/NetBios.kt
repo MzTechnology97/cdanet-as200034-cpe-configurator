@@ -19,7 +19,7 @@ object NetBios {
         val count = buf[56].toInt() and 0xff
         val names = (0 until count).mapNotNull { i ->
             val off = 57 + i * 18
-            if (off + 15 > len) null else String(buf, off, 15, Charsets.US_ASCII).trim().ifBlank { null }
+            if (off + 15 > len) null else String(buf, off, 15, Charsets.US_ASCII).trim { it <= ' ' }.ifBlank { null }
         }.distinct()
         // The unit ID (MAC) follows the name table; all zeros on Samba.
         val macOff = 57 + count * 18
