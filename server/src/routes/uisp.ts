@@ -4,7 +4,10 @@ import { z } from 'zod';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
+import { toCsv } from '../domain/csv.ts';
 import { configDrift } from '../domain/drift.ts';
+import { networkHealth } from '../domain/health.ts';
+import { FIELD_THRESHOLDS } from './field.ts';
 import { isValidLatLon } from '../domain/geo.ts';
 import { TARGET_FIRMWARE } from '../domain/policy.ts';
 import type { UispDevice } from '../services/uisp.ts';
@@ -108,6 +111,22 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!device) throw new HttpError(409, 'uisp_device_not_found');
     const [stats, outages] = await Promise.all([uisp().statistics(device.id, range), uisp().outages(device.id, range).catch(() => null)]);
     return { device: { id: device.id, name: device.name }, ...stats, outages };
+  });
+
+  // ---- Network health (NOC) -----------------------------------------------------------------
+  const health = async () => {
+    const t = { ...FIELD_THRESHOLDS, targetFirmware: TARGET_FIRMWARE };
+    return { generatedAt: nowIso(), thresholds: t, ...networkHealth(await uisp().allDevices(), t) };
+  };
+  app.get('/api/admin/network/health', admin, async () => health());
+
+  app.get('/api/admin/network/health.csv', admin, async (req, reply) => {
+    const h = await health();
+    const label: Record<string, string> = { offline: 'offline', pending: 'da accettare', weak_signal: 'segnale debole', ethernet: 'porta LAN', low_capacity: 'capacità bassa', firmware: 'firmware' };
+    const rows = h.cpes.map((c) => [c.name, c.mac, c.model, c.status, c.signal, c.ethMbps ? `${c.ethMbps}${c.ethHalfDuplex ? ' half' : ''}` : '', c.dlCapacityMbps, c.firmware, c.apName, c.siteName, c.lastSeen, c.issues.map((i) => label[i] ?? i).join(', ')]);
+    recordEvent(db, req.user!.id, 'network.export', `${rows.length} CPE`, '');
+    reply.header('Content-Type', 'text/csv; charset=utf-8').header('Content-Disposition', `attachment; filename="salute-rete-${h.generatedAt.slice(0, 10)}.csv"`);
+    return '\uFEFF' + toCsv([['CPE', 'MAC', 'Modello', 'Stato', 'Segnale dBm', 'Porta LAN', 'Capacità Mbit/s', 'Firmware', 'AP', 'Site', 'Ultimo contatto', 'Problemi'], ...rows]);
   });
 
   // ---- Admin actions ------------------------------------------------------------------------

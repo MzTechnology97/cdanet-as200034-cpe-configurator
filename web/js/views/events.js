@@ -16,6 +16,7 @@ const LABELS = {
   'uisp.authorize': 'CPE accettata in UISP',
   'uisp.backup': 'Backup UISP richiesto',
   'account.password': 'Password personale cambiata',
+  'network.export': 'Export CSV salute rete',
   'jobs.export': 'Export CSV dello storico',
   'connector.telegram.update': 'Notifiche Telegram modificate',
   'connector.telegram.reset': 'Notifiche Telegram rimosse',

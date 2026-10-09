@@ -83,6 +83,6 @@ export function provisioningRoutes(app: FastifyInstance, ctx: AppContext) {
     recordEvent(ctx.db, req.user!.id, 'jobs.export', `${rows.length} righe`, [q.status, q.q, q.from, q.to].filter(Boolean).join(' · '));
     const name = `storico-provisioning-${new Date().toISOString().slice(0, 10)}.csv`;
     reply.header('Content-Type', 'text/csv; charset=utf-8').header('Content-Disposition', `attachment; filename="${name}"`);
-    return '﻿' + toCsv([header, ...lines]);
+    return '\uFEFF' + toCsv([header, ...lines]);
   });
 }
