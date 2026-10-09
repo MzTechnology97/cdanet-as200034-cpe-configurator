@@ -56,7 +56,7 @@ object DeviceCheck {
     fun verify(rb: Readback, checks: ChecksDto) {
         if (!firmwareMatches(rb.firmware, checks.firmware)) {
             throw IllegalStateException(
-                "Firmware rilevato ${rb.firmware ?: "sconosciuto"}: è richiesto ${checks.firmware}. Scrittura bloccata, eseguire prima la normalizzazione firmware.",
+                "Firmware rilevato ${rb.firmware ?: "sconosciuto"}: è richiesto ${checks.firmware}. Scrittura bloccata: aggiorna prima la CPE da CPE collegata → Firmware.",
             )
         }
         if (checks.boardMatch.isBlank()) throw IllegalStateException("Profilo senza board match: scrittura bloccata")

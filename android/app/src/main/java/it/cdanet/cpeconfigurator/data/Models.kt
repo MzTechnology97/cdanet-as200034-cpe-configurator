@@ -557,3 +557,18 @@ data class LosDto(
     val raiseCpeM: Double = 0.0,
     val chart: List<LosPointDto> = emptyList(),
 )
+
+/** An airOS image of the target version the server offers for the field upgrade. */
+@Serializable
+data class FirmwareImageDto(
+    val id: Int,
+    val platform: String,
+    val version: String,
+    val build: String = "",
+    val size: Long = 0,
+    val sha256: String,
+    val md5: String,
+)
+
+@Serializable
+data class FirmwareListDto(val target: String = "", val items: List<FirmwareImageDto> = emptyList())

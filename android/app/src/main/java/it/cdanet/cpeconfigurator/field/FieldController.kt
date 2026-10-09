@@ -168,6 +168,37 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
         }
     }
 
+    /**
+     * SSH on the CPE the phone is on, with the credentials that opened its web UI (field tools
+     * stop meanwhile). [block] gets a way to open sessions: also after a reboot of the CPE.
+     */
+    suspend fun <T> withCpeSsh(block: suspend (open: suspend () -> it.cdanet.cpeconfigurator.ssh.SshConnection) -> T): T = withContext(Dispatchers.IO) {
+        val c = client ?: connect(null).also { client = it }
+        val cr = working ?: throw IllegalStateException("Credenziali della CPE non disponibili: ricollegati alla CPE")
+        val host = c.baseUrl.substringAfter("://").substringBefore('/').substringBefore(':')
+        val ports = listOfNotNull(access?.sshPort, 22).distinct()
+        stop()
+        try {
+            block {
+                // the Wi-Fi may be a new network after a reboot: bind to the current one each time
+                network.onWifi {
+                    var last: Exception? = null
+                    for (p in ports) {
+                        try {
+                            return@onWifi it.cdanet.cpeconfigurator.ssh.SshConnection.connect(host, p, cr.username, cr.password)
+                        } catch (e: java.io.IOException) {
+                            if (e.message.orEmpty().startsWith("Autenticazione")) throw e
+                            last = e
+                        }
+                    }
+                    throw last ?: java.io.IOException("SSH non raggiungibile su $host")
+                }
+            }
+        } finally {
+            client = null
+        }
+    }
+
     /** Gateway of the current Wi-Fi first (CPE in router mode or its management Wi-Fi), then the configured IPs. */
     private suspend fun connect(manualHost: String?): AirosClient = withContext(Dispatchers.IO) {
         val a = access

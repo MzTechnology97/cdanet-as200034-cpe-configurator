@@ -23,6 +23,7 @@ import { usersView } from './views/users.js';
 import { wirelessView } from './views/wireless.js';
 import { adminGuideView } from './views/guide.js';
 import { workOrdersView } from './views/work-orders.js';
+import { firmwareView } from './views/firmware.js';
 import { setAdmin } from './terms.js';
 
 const ROUTES = [
@@ -43,6 +44,7 @@ const ROUTES = [
   { id: 'users', label: 'Account', view: usersView, admin: true },
   { id: 'wireless', label: 'Reti Wi-Fi (WPA2)', view: wirelessView, admin: true },
   { id: 'profiles', label: 'Profili airOS', view: profilesView, admin: true },
+  { id: 'firmware', label: 'Firmware airOS', view: firmwareView, admin: true, module: 'firmware_upgrade' },
   { id: 'connectors', label: 'Connettori', view: connectorsView, admin: true },
   { id: 'server', label: 'Impostazioni server', view: serverSettingsView, admin: true },
   { id: 'modules', label: 'Funzionalità', view: (ctx) => modulesView({ ...ctx, onChange: () => renderChrome(session.get()?.user) }), admin: true },

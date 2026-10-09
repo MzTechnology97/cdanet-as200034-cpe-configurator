@@ -75,6 +75,7 @@ fun cpeTabTitles(m: Map<String, Boolean>) = buildList {
         add("AP visibili")
     }
     if (m["acceptance"] != false) add("Collaudo")
+    if (m["firmware_upgrade"] != false) add("Firmware")
 }
 
 /** One tab of an area: title, icon and whether its content scrolls inside the tab. */
@@ -196,6 +197,7 @@ fun CpeHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit, onAcceptance
             "Diagnosi" -> HubTab(t, R.drawable.ic_troubleshoot) { WifiRequired(c, CPE_WIFI_HUB, "La diagnosi interroga la CPE in rete locale.") { DiagnosisScreen(c) } }
             "Puntamento" -> HubTab(t, R.drawable.ic_signal_cellular_alt) { WifiRequired(c, CPE_WIFI_HUB, "Il segnale si legge direttamente dalla CPE.") { AlignmentScreen(c) } }
             "AP visibili" -> HubTab(t, R.drawable.ic_cell_tower) { CpeApsPanel(c) }
+            "Firmware" -> HubTab(t, R.drawable.ic_system_update) { FirmwareScreen(c) }
             else -> HubTab(t, R.drawable.ic_check_circle) {
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Notice("Il collaudo misura la CPE collegata, prova Internet dal lato cliente e raccoglie le foto.", NoticeKind.Info)

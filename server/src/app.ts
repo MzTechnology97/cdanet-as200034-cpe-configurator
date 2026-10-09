@@ -40,6 +40,7 @@ import { serverSettingsRoutes } from './routes/server-settings.ts';
 import { infraRoutes } from './routes/infra.ts';
 import { guideRoutes } from './routes/guide.ts';
 import { workOrderRoutes } from './routes/work-orders.ts';
+import { firmwareRoutes } from './routes/firmware.ts';
 import { createServerSettings } from './services/server-settings.ts';
 import { createDem } from './services/dem.ts';
 
@@ -206,6 +207,7 @@ export async function buildApp(
   infraRoutes(app, ctx);
   guideRoutes(app, ctx);
   workOrderRoutes(app, ctx);
+  firmwareRoutes(app, ctx);
   adminRoutes(app, ctx);
   toolRoutes(app, ctx);
   uispRoutes(app, ctx);

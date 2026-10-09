@@ -32,6 +32,7 @@ class AppContainer(context: Context) {
     val routerOs = RouterOsClient(api, network)
     val tools = LocalTools(network, api, session)
     val field = FieldController(api, network, scope)
+    val firmware = it.cdanet.cpeconfigurator.firmware.FirmwareStore(appContext)
     val pointingCache = it.cdanet.cpeconfigurator.data.PointingCache(appContext)
     val install = it.cdanet.cpeconfigurator.install.InstallController(api, field, pointingCache, session)
     val quickLogin = it.cdanet.cpeconfigurator.security.QuickLogin(appContext)

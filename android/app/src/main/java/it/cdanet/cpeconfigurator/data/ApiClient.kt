@@ -64,6 +64,7 @@ private val ERRORS = mapOf(
     "job_not_completed" to "Esito del provisioning non ancora registrato sul server",
     "too_many_photos" to "Troppe foto per questo job (massimo 8)",
     "photo_not_jpeg" to "La foto deve essere in formato JPEG",
+    "firmware_not_found" to "Firmware non più disponibile sul server: aggiorna l'elenco",
     "mfa_expired" to "Tempo scaduto: ripeti l'accesso",
     "invalid_code" to "Codice non valido",
     "wrong_current_password" to "Password attuale non corretta",
@@ -265,6 +266,46 @@ class ApiClient(
 
     suspend fun lineOfSight(lat: Double, lon: Double, apId: String, height: Double?): LosDto =
         AppJson.decodeFromString(LosDto.serializer(), request("GET", "/api/pointing/profile?lat=$lat&lon=$lon&apId=${java.net.URLEncoder.encode(apId, "UTF-8")}" + (height?.let { "&height=$it" } ?: "")))
+
+    suspend fun firmwareList(): FirmwareListDto = AppJson.decodeFromString(FirmwareListDto.serializer(), request("GET", "/api/firmware"))
+
+    /** Streams a firmware image into [dest]; [onBytes] gets the bytes received so far. */
+    suspend fun firmwareDownload(id: Int, dest: java.io.File, onBytes: (Long) -> Unit) = withContext(Dispatchers.IO) {
+        val b = Request.Builder().url((base() + "/api/firmware/$id/file").toHttpUrl())
+        session.token?.let { b.header("Authorization", "Bearer $it") }
+        TestTls.wrap(http).newCall(b.build()).execute().use { r ->
+            if (!r.isSuccessful) {
+                if (r.code == 401) session.clear()
+                throw ApiException(r.code, "HTTP ${r.code}", if (r.code == 404) apiMessage("firmware_not_found") else "Download del firmware non riuscito (HTTP ${r.code})")
+            }
+            val input = r.body?.byteStream() ?: throw java.io.IOException("Risposta vuota")
+            dest.outputStream().use { out ->
+                val buf = ByteArray(64 * 1024)
+                var done = 0L
+                while (true) {
+                    val n = input.read(buf)
+                    if (n < 0) break
+                    out.write(buf, 0, n)
+                    done += n
+                    onBytes(done)
+                }
+            }
+        }
+    }
+
+    suspend fun firmwareReport(mac: String?, from: String, to: String, ok: Boolean, message: String?) {
+        request(
+            "POST",
+            "/api/firmware/report",
+            buildJsonObject {
+                mac?.let { put("mac", it) }
+                put("from", from.take(80))
+                put("to", to.take(80))
+                put("ok", ok)
+                message?.let { put("message", it.take(300)) }
+            },
+        )
+    }
 
     suspend fun pointing(lat: Double, lon: Double, height: Double?): PointingDto =
         AppJson.decodeFromString(PointingDto.serializer(), request("GET", "/api/pointing?lat=$lat&lon=$lon" + (height?.let { "&height=$it" } ?: "")))
