@@ -167,6 +167,19 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
 
         SectionCard("Esiti in coda") {
             Text("${pending.size} esiti di provisioning in attesa di invio.")
+            val acc by c.acceptanceQueue.pending.collectAsState()
+            if (acc.isNotEmpty()) {
+                Text("${acc.size} collaudi in coda (${acc.sumOf { it.photos.size }} foto).")
+                acc.forEach { Text("• ${it.label}${if (it.report != null) " · misure" else ""}${if (it.photos.isNotEmpty()) " · ${it.photos.size} foto" else ""}", style = MaterialTheme.typography.bodySmall) }
+                BusyButton("Invia collaudi ora", busy, Modifier.fillMaxWidth(), enabled = session != null) {
+                    scope.launch {
+                        busy = true
+                        val n = runCatching { c.acceptanceQueue.sync() }.getOrDefault(0)
+                        msg = "Collaudi inviati: $n"
+                        busy = false
+                    }
+                }
+            }
             pending.forEach { Text("• ${it.label} · ${it.result.result}", style = MaterialTheme.typography.bodySmall) }
             if (pending.isNotEmpty()) {
                 BusyButton("Invia ora", busy, Modifier.fillMaxWidth(), enabled = session != null) {

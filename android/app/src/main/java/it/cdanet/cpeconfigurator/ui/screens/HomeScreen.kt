@@ -56,6 +56,10 @@ fun HomeScreen(c: AppContainer, offline: Boolean, onNavigate: (Screen) -> Unit, 
         if (prov.pkg != null && prov.phase != Phase.Done) {
             Banner("Provisioning preparato per ${prov.pkg?.summary?.deviceName}: apri Provisioning CPE per completarlo.", WarnAmber)
         }
+        val acc by c.acceptanceQueue.pending.collectAsState()
+        if (acc.isNotEmpty()) {
+            Banner("${acc.size} collaudi in attesa di invio (foto comprese): partiranno appena c'è rete.", WarnAmber)
+        }
         if (pending.isNotEmpty()) {
             Banner("${pending.size} esiti in attesa di invio al server (verranno inviati quando torni online e connesso).", WarnAmber)
         }

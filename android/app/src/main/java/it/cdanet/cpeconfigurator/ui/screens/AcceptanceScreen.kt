@@ -205,23 +205,27 @@ fun AcceptanceScreen(c: AppContainer) {
             }
         }
 
-        BusyButton("Invia collaudo e foto", sending, Modifier.fillMaxWidth(), enabled = report != null) {
-            val r = report ?: return@BusyButton
+        val queued by c.acceptanceQueue.pending.collectAsState()
+        if (queued.any { it.jobId == j.id }) {
+            Banner("Collaudo salvato sul telefono: verrà inviato appena c'è rete (anche chiudendo questa schermata).", WarnAmber)
+        }
+        BusyButton("Salva e invia collaudo", sending, Modifier.fillMaxWidth(), enabled = report != null || photos.isNotEmpty()) {
             scope.launch {
                 sending = true
                 error = null
                 try {
-                    runCatching { c.resultQueue.sync() } // the provisioning result must be on the server first
-                    c.api.putAcceptance(j.id, r)
-                    var sent = 0
-                    for (p in photos.toList()) {
-                        c.api.uploadPhoto(j.id, p.jpeg, p.caption)
-                        photos.remove(p)
-                        sent++
+                    // Always through the on-device queue: nothing is lost if the roof has no signal.
+                    val n = photos.size
+                    c.acceptanceQueue.enqueue(j.id, j.deviceName.ifBlank { j.mac }, report, photos.map { it.jpeg to it.caption })
+                    photos.clear()
+                    c.acceptanceQueue.sync()
+                    done = if (c.acceptanceQueue.isPending(j.id)) {
+                        "Senza rete: collaudo${if (n > 0) " e $n foto" else ""} in coda sul telefono, invio automatico appena torna la connessione."
+                    } else {
+                        "Collaudo registrato${if (n > 0) " con $n foto" else ""}: il verbale si stampa dalla console web (Storico → job)."
                     }
-                    done = "Collaudo registrato${if (sent > 0) " con $sent foto" else ""}: il verbale si stampa dalla console web (Storico → job)."
                 } catch (e: Exception) {
-                    error = "${e.message}. Le foto non inviate restano qui: riprova quando c'è rete."
+                    error = e.message
                 } finally {
                     sending = false
                 }
