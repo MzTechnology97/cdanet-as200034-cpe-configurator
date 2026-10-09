@@ -73,6 +73,7 @@ private val PALETTE = listOf(
 
 private fun colorOf(ssid: String) = PALETTE[abs(ssid.hashCode()) % PALETTE.size]
 
+@Composable
 private fun qualityColor(rssi: Int) = when {
     rssi >= -67 -> GoodGreen
     rssi >= -75 -> WarnAmber
@@ -221,6 +222,7 @@ private fun Spectrum(aps: List<WifiAp>, band: WifiBand) {
     val widthDp = ((to - from) * dpPerMhz).dp
     if (aps.isEmpty()) Text("Nessuna rete in questa banda.", style = MaterialTheme.typography.bodySmall)
     Box(Modifier.fillMaxWidth().horizontalScroll(rememberScrollState())) {
+        val cWarnAmber = WarnAmber
         Canvas(Modifier.width(widthDp).height(280.dp)) {
             val top = 8.dp.toPx()
             val bottom = size.height - 26.dp.toPx()
@@ -234,7 +236,7 @@ private fun Spectrum(aps: List<WifiAp>, band: WifiBand) {
             for (ch in labels) {
                 val cx = x(WifiMath.freqOf(band, ch))
                 drawLine(grid, Offset(cx, bottom), Offset(cx, bottom + 4.dp.toPx()), strokeWidth = 1f)
-                drawText(measurer, "$ch", Offset(cx - 6.dp.toPx(), bottom + 6.dp.toPx()), TextStyle(color = if (WifiMath.isDfs(band, ch)) WarnAmber else ink, fontSize = 10.sp))
+                drawText(measurer, "$ch", Offset(cx - 6.dp.toPx(), bottom + 6.dp.toPx()), TextStyle(color = if (WifiMath.isDfs(band, ch)) cWarnAmber else ink, fontSize = 10.sp))
             }
             for (a in aps.sortedBy { it.rssi }) {
                 val col = colorOf(a.ssid)

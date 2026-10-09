@@ -1,5 +1,17 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.EmptyState
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.Icon
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.res.painterResource
+import it.cdanet.cpeconfigurator.R
+import it.cdanet.cpeconfigurator.ui.ListHeader
+import it.cdanet.cpeconfigurator.ui.NoticeKind
+import it.cdanet.cpeconfigurator.ui.StatusChip
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -30,10 +42,10 @@ import it.cdanet.cpeconfigurator.ui.WarnAmber
 import kotlinx.coroutines.launch
 
 private fun statusLabel(s: String) = when (s) {
-    "success" -> "Completato" to GoodGreen
-    "failed" -> "Fallito" to BadRed
-    "prepared" -> "Preparato" to WarnAmber
-    else -> "Scaduto" to WarnAmber
+    "success" -> "Completato" to NoticeKind.Good
+    "failed" -> "Fallito" to NoticeKind.Bad
+    "prepared" -> "Preparato" to NoticeKind.Warn
+    else -> "Scaduto" to NoticeKind.Info
 }
 
 @Composable
@@ -65,14 +77,18 @@ fun HistoryScreen(c: AppContainer, onAcceptance: (JobDto) -> Unit, onReplace: (J
                 pending.forEach { Text("• ${it.label} · ${if (it.result.result == "success") "completato" else "fallito"}") }
             }
         }
-        BusyButton("Aggiorna", busy, Modifier.fillMaxWidth(), primary = false) { scope.launch { load() } }
+        ListHeader(if (jobs.isEmpty()) "Provisioning" else "${jobs.size} provisioning", busy) { scope.launch { load() } }
         jobs.forEach { j ->
-            val (label, color) = statusLabel(j.status)
+            val (label, kind) = statusLabel(j.status)
             SectionCard {
-                Text(label, color = color, fontWeight = FontWeight.SemiBold)
-                Text(j.deviceName.ifBlank { j.pppoeUser }, style = MaterialTheme.typography.titleMedium)
+                Row(verticalAlignment = Alignment.Top) {
+                    Column(Modifier.weight(1f)) {
+                        Text(j.deviceName.ifBlank { j.pppoeUser }, style = MaterialTheme.typography.titleMedium)
+                        Text(j.createdAt.replace('T', ' ').take(16), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    StatusChip(label, kind)
+                }
                 Text("${j.model}${j.template?.takeIf { it.isNotBlank() }?.let { " · $it" }.orEmpty()} · ${j.mac} · ${j.ssid}", style = MaterialTheme.typography.bodySmall)
-                Text(j.createdAt.replace('T', ' ').take(16), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (j.error.isNotBlank()) Text(j.error, style = MaterialTheme.typography.bodySmall, color = BadRed)
                 if (j.attempts > 1) Text("Scrittura riuscita al tentativo ${j.attempts}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 j.ko?.let { k ->
@@ -89,24 +105,28 @@ fun HistoryScreen(c: AppContainer, onAcceptance: (JobDto) -> Unit, onReplace: (J
                 }
                 if (j.status == "success") {
                     val acc = when (j.acceptance) {
-                        "ok" -> "Collaudo superato" to GoodGreen
-                        "warn" -> "Collaudo con riserva" to WarnAmber
-                        "bad" -> "Collaudo non superato" to BadRed
-                        else -> "Collaudo da fare" to MaterialTheme.colorScheme.onSurfaceVariant
+                        "ok" -> "Collaudo superato" to NoticeKind.Good
+                        "warn" -> "Collaudo con riserva" to NoticeKind.Warn
+                        "bad" -> "Collaudo non superato" to NoticeKind.Bad
+                        else -> "Collaudo da fare" to NoticeKind.Info
                     }
-                    Text(acc.first + if (j.photos > 0) " · ${j.photos} foto" else "", color = acc.second, style = MaterialTheme.typography.bodySmall)
+                    StatusChip(acc.first + if (j.photos > 0) " · ${j.photos} foto" else "", acc.second)
                     if (c.moduleOn("signal_history")) {
                         var showHistory by remember(j.id) { mutableStateOf(false) }
                         if (showHistory) SignalHistory(c, j)
                         TextButton(onClick = { showHistory = !showHistory }) { Text(if (showHistory) "Nascondi storico segnale" else "Storico segnale (7 giorni)") }
                     }
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        if (c.moduleOn("acceptance")) OutlinedButton(onClick = { onAcceptance(j) }) { Text(if (j.acceptance == null) "Collaudo" else "Collaudo / foto") }
+                        if (c.moduleOn("acceptance")) FilledTonalButton(onClick = { onAcceptance(j) }) {
+                            Icon(painterResource(R.drawable.ic_photo_camera), contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text(if (j.acceptance == null) "Collaudo" else "Collaudo e foto")
+                        }
                         if (c.moduleOn("replacement")) OutlinedButton(onClick = { onReplace(j) }) { Text("Sostituisci CPE") }
                     }
                 }
             }
         }
-        if (jobs.isEmpty() && !busy) Text("Nessun provisioning registrato.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (jobs.isEmpty() && !busy) EmptyState(R.drawable.ic_history, "Nessun provisioning", "Le installazioni che fai con l'app compaiono qui, con esito e collaudo.")
     }
 }

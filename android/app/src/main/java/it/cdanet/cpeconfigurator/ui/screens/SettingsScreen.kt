@@ -48,16 +48,16 @@ fun UpdateBanner(c: AppContainer, state: UpdateState, onState: (UpdateState) -> 
         scope.launch { startUpdate(c, info, onState) }
     }
     when (state) {
-        is UpdateState.Available -> SectionCard("Aggiornamento disponibile") {
+        is UpdateState.Available -> SectionCard("Aggiornamento disponibile", icon = it.cdanet.cpeconfigurator.R.drawable.ic_rocket_launch) {
             Text("Versione ${state.info.versionName}${if (state.info.mandatory) " (obbligatorio)" else ""}")
             BusyButton("Scarica e installa", busy = false, modifier = Modifier.fillMaxWidth()) { install(state.info) }
         }
         is UpdateState.Downloading -> Banner("Download ${state.info.versionName} e verifica SHA-256…", WarnAmber)
-        is UpdateState.ReadyToInstall -> SectionCard("Aggiornamento pronto") {
+        is UpdateState.ReadyToInstall -> SectionCard("Aggiornamento pronto", icon = it.cdanet.cpeconfigurator.R.drawable.ic_rocket_launch) {
             Text("Conferma l'installazione nella schermata di Android.")
             OutlinedButton(onClick = { install(state.info) }) { Text("Riprova") }
         }
-        is UpdateState.PermissionRequired -> SectionCard("Autorizzazione richiesta") {
+        is UpdateState.PermissionRequired -> SectionCard("Autorizzazione richiesta", icon = it.cdanet.cpeconfigurator.R.drawable.ic_lock) {
             Text("Consenti a CDA Net di installare app (\"Installa app sconosciute\"), poi torna qui.")
             OutlinedButton(onClick = { scope.launch { onState(runCatching { c.updater.check() }.getOrNull()?.let { UpdateState.Available(it) } ?: UpdateState.UpToDate) } }) {
                 Text("Ho autorizzato, riprova")
@@ -77,7 +77,7 @@ private fun PasswordCard(c: AppContainer, onDone: (String) -> Unit, onError: (St
     var busy by remember { mutableStateOf(false) }
     val tooShort = next.isNotEmpty() && next.length < 12
     val mismatch = again.isNotEmpty() && again != next
-    SectionCard("Cambia password") {
+    SectionCard("Cambia password", icon = it.cdanet.cpeconfigurator.R.drawable.ic_lock) {
         Field("Password attuale", current, { current = it }, password = true)
         Field("Nuova password", next, { next = it }, password = true, isError = tooShort, supporting = "Almeno 12 caratteri")
         Field("Ripeti la nuova password", again, { again = it }, password = true, isError = mismatch, supporting = if (mismatch) "Le password non coincidono" else null)
@@ -121,8 +121,8 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
         msg?.let { Banner(it, GoodGreen) { msg = null } }
         UpdateBanner(c, update, onUpdate)
 
-        SectionCard("Account") {
-            KeyValue("Utente", session?.user?.let { "${it.username} (${it.role})" } ?: "non connesso")
+        SectionCard("Account", icon = it.cdanet.cpeconfigurator.R.drawable.ic_person) {
+            KeyValue("Utente", session?.user?.let { "${it.username} (${if (it.role == "admin") "amministratore" else "installatore"})" } ?: "non connesso")
             KeyValue("Sessione fino a", session?.expiresAt?.replace('T', ' ')?.take(16) ?: "—")
             OutlinedButton(onClick = onLogout) { Text(if (session != null) "Esci" else "Torna al login") }
         }
@@ -131,7 +131,7 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
             PasswordCard(c, onDone = { msg = it }, onError = { error = it })
             QuickLoginCard(c)
             PersonalTelegramCard(c)
-            SectionCard("Sessioni") {
+            SectionCard("Sessioni", icon = it.cdanet.cpeconfigurator.R.drawable.ic_logout) {
                 Text("Telefono perso o accesso da un dispositivo condiviso? Chiudi tutte le sessioni dell'account, anche questa.", style = MaterialTheme.typography.bodySmall)
                 OutlinedButton(onClick = {
                     scope.launch {
@@ -141,7 +141,7 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
             }
         }
 
-        SectionCard("Server") {
+        SectionCard("Server", icon = it.cdanet.cpeconfigurator.R.drawable.ic_dns) {
             Field("URL server", backend, { backend = it.trim() }, keyboardType = KeyboardType.Uri)
             val insecure by c.settings.insecureTls.collectAsState(initial = false)
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -171,7 +171,7 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
             }
         }
 
-        SectionCard("Esiti in coda") {
+        SectionCard("Esiti in coda", icon = it.cdanet.cpeconfigurator.R.drawable.ic_cloud_off) {
             Text("${pending.size} esiti di provisioning in attesa di invio.")
             val acc by c.acceptanceQueue.pending.collectAsState()
             if (acc.isNotEmpty()) {
@@ -199,7 +199,7 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
             }
         }
 
-        SectionCard("App") {
+        SectionCard("App", icon = it.cdanet.cpeconfigurator.R.drawable.ic_info) {
             KeyValue("Versione", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
             OutlinedButton(onClick = {
                 scope.launch {

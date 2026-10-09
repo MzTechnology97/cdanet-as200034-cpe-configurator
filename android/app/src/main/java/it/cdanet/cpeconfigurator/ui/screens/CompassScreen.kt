@@ -119,6 +119,7 @@ private fun CompassDial(heading: Double, target: Double, reliable: Boolean) {
     val ink = MaterialTheme.colorScheme.onSurface
     val muted = MaterialTheme.colorScheme.outline
     val needle = if (reliable) GoodGreen else BadRed
+    val cBadRed = BadRed
     Canvas(Modifier.fillMaxWidth().aspectRatio(1f)) {
         val cx = size.width / 2
         val cy = size.height / 2
@@ -127,7 +128,7 @@ private fun CompassDial(heading: Double, target: Double, reliable: Boolean) {
         rotate(-heading.toFloat(), Offset(cx, cy)) {
             for (deg in 0 until 360 step 30) {
                 rotate(deg.toFloat(), Offset(cx, cy)) {
-                    drawLine(if (deg == 0) BadRed else ink, Offset(cx, cy - rad), Offset(cx, cy - rad + if (deg % 90 == 0) 40f else 20f), strokeWidth = if (deg == 0) 8f else 4f)
+                    drawLine(if (deg == 0) cBadRed else ink, Offset(cx, cy - rad), Offset(cx, cy - rad + if (deg % 90 == 0) 40f else 20f), strokeWidth = if (deg == 0) 8f else 4f)
                 }
             }
             rotate(target.toFloat(), Offset(cx, cy)) {

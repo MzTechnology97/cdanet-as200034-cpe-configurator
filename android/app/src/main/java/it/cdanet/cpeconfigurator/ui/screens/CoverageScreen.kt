@@ -83,7 +83,7 @@ fun LocationPicker(c: AppContainer, current: CpeLocation?, label: String, onLoca
             }
         }
     }
-    Field("Oppure indirizzo (via, civico, CAP, comune)", address, { address = it }, placeholder = "Via Roma 12, 94100 Enna")
+    Field("Oppure indirizzo", address, { address = it }, placeholder = "Via Roma 12, 94100 Enna", leadingIcon = it.cdanet.cpeconfigurator.R.drawable.ic_map)
     BusyButton("Cerca indirizzo", busy == "addr", Modifier.fillMaxWidth(), enabled = busy == null && address.trim().length >= 3, primary = false) {
         scope.launch {
             busy = "addr"

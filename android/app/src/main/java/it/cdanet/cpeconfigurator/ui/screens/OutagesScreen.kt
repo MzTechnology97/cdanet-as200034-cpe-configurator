@@ -1,5 +1,8 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.R
+import it.cdanet.cpeconfigurator.ui.EmptyState
+import it.cdanet.cpeconfigurator.ui.ListHeader
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -93,7 +96,58 @@ fun OutagesScreen(c: AppContainer) {
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         ErrorBanner(error) { error = null }
-        SectionCard("Notifiche sul telefono") {
+        ListHeader(data?.let { d -> if (d.active.isEmpty()) "Nessuna interruzione" else "${d.active.size} ${if (d.active.size == 1) "interruzione" else "interruzioni"}" } ?: "Guasti Enel", busy) { scope.launch { load() } }
+        val d = data
+        if (d != null) {
+            val at = d.lastRun?.at ?: d.generatedAt
+            Text(
+                when {
+                    at == null -> "In attesa del primo aggiornamento"
+                    admin -> "Ultimo controllo del server: ${at.replace('T', ' ').take(16)} · fonte e-distribuzione"
+                    else -> "Aggiornato: ${at.replace('T', ' ').take(16)}"
+                },
+                style = MaterialTheme.typography.bodySmall,
+            )
+            var mapJson by remember(d) { mutableStateOf<String?>(null) }
+            var page by remember { mutableStateOf<android.webkit.WebView?>(null) }
+            val mapInView = remember { BringIntoViewRequester() }
+            LaunchedEffect(d) { mapJson = runCatching { c.api.outagesMapJson() }.getOrNull() }
+            SectionCard("Mappa", Modifier.bringIntoViewRequester(mapInView), icon = it.cdanet.cpeconfigurator.R.drawable.ic_map) {
+                EmbeddedMap(c, mapJson?.let { "window.cdaOutages($it)" }, Modifier.fillMaxWidth().height(360.dp)) { page = it }
+                Text(
+                    "Rosso: guasti MT e POP/AP potenzialmente impattati · arancio: guasti BT · grigio: lavori · tratteggio: zone" + if (admin) "" else " · POP/AP come area approssimativa",
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
+            if (!d.scope.all) {
+                SectionCard("POP/AP assegnati a te", icon = it.cdanet.cpeconfigurator.R.drawable.ic_cell_tower) {
+                    if (d.scope.assigned.isEmpty()) {
+                        Text("Nessuno: vedi i guasti nelle tue zone, senza i POP/AP potenzialmente impattati.", style = MaterialTheme.typography.bodySmall)
+                    } else {
+                        Text(d.scope.assigned.joinToString(" · ") { itemLabel(it) }, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+            if (d.active.isEmpty()) {
+                EmptyState(R.drawable.ic_bolt, "Nessuna interruzione", if (admin) "Nessun guasto né lavoro nelle zone di interesse." else "Nessun guasto né lavoro nelle tue zone.")
+            }
+            if (d.active.isNotEmpty()) {
+                Text("Tocca una riga per i dettagli", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                var open by remember { mutableStateOf<Long?>(null) }
+                SectionCard {
+                    d.active.forEachIndexed { i, o ->
+                        if (i > 0) HorizontalDivider()
+                        OutageRow(o, expanded = open == o.id, onToggle = { open = if (open == o.id) null else o.id }, onMap = {
+                            scope.launch { mapInView.bringIntoView() }
+                            page?.evaluateJavascript("window.cdaFocusOutage(${o.id})", null)
+                        }, onNavigate = {
+                            runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:${o.lat},${o.lon}?q=${o.lat},${o.lon}"))) }
+                        })
+                    }
+                }
+            }        }
+        // settings after the outages: what the technician looks for first is the map and the list
+        SectionCard("Notifiche sul telefono", icon = it.cdanet.cpeconfigurator.R.drawable.ic_notifications) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(if (admin) "Avvisami dei guasti nelle zone CDA Net" else "Avvisami dei guasti nelle mie zone", modifier = Modifier.weight(1f))
                 Switch(checked = alerts, onCheckedChange = { on ->
@@ -117,57 +171,9 @@ fun OutagesScreen(c: AppContainer) {
             Text("Controllo ogni 15 minuti anche ad app chiusa, con un accesso in sola lettura ai guasti (revocato se cambi password o esci da tutti i dispositivi).", style = MaterialTheme.typography.bodySmall)
         }
         PersonalTelegramCard(c)
-        BusyButton("Aggiorna", busy, Modifier.fillMaxWidth(), primary = false) { scope.launch { load() } }
         if (!admin) MyZones(c) { scope.launch { load() } }
         if (admin) ZoneEditor(c, personal = false) { scope.launch { load() } }
-        val d = data ?: return@Column
-        val at = d.lastRun?.at ?: d.generatedAt
-        Text(
-            when {
-                at == null -> "In attesa del primo aggiornamento"
-                admin -> "Ultimo controllo del server: ${at.replace('T', ' ').take(16)} · fonte e-distribuzione"
-                else -> "Aggiornato: ${at.replace('T', ' ').take(16)}"
-            },
-            style = MaterialTheme.typography.bodySmall,
-        )
-        var mapJson by remember(d) { mutableStateOf<String?>(null) }
-        var page by remember { mutableStateOf<android.webkit.WebView?>(null) }
-        val mapInView = remember { BringIntoViewRequester() }
-        LaunchedEffect(d) { mapJson = runCatching { c.api.outagesMapJson() }.getOrNull() }
-        SectionCard("Mappa", Modifier.bringIntoViewRequester(mapInView)) {
-            EmbeddedMap(c, mapJson?.let { "window.cdaOutages($it)" }, Modifier.fillMaxWidth().height(360.dp)) { page = it }
-            Text(
-                "Rosso: guasti MT e POP/AP potenzialmente impattati · arancio: guasti BT · grigio: lavori · tratteggio: zone" + if (admin) "" else " · POP/AP come area approssimativa",
-                style = MaterialTheme.typography.bodySmall,
-            )
-        }
-        if (!d.scope.all) {
-            SectionCard("POP/AP assegnati a te") {
-                if (d.scope.assigned.isEmpty()) {
-                    Text("Nessuno: vedi i guasti nelle tue zone, senza i POP/AP potenzialmente impattati.", style = MaterialTheme.typography.bodySmall)
-                } else {
-                    Text(d.scope.assigned.joinToString(" · ") { itemLabel(it) }, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-        }
-        if (d.active.isEmpty()) {
-            SectionCard { Text(if (admin) "Nessun guasto né lavoro nelle zone di interesse." else "Nessun guasto né lavoro nelle tue zone.") }
-        }
-        if (d.active.isNotEmpty()) {
-            Text("${d.active.size} ${if (d.active.size == 1) "interruzione" else "interruzioni"} · tocca una riga per i dettagli", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-            var open by remember { mutableStateOf<Long?>(null) }
-            SectionCard {
-                d.active.forEachIndexed { i, o ->
-                    if (i > 0) HorizontalDivider()
-                    OutageRow(o, expanded = open == o.id, onToggle = { open = if (open == o.id) null else o.id }, onMap = {
-                        scope.launch { mapInView.bringIntoView() }
-                        page?.evaluateJavascript("window.cdaFocusOutage(${o.id})", null)
-                    }, onNavigate = {
-                        runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:${o.lat},${o.lon}?q=${o.lat},${o.lon}"))) }
-                    })
-                }
-            }
-        }
+
     }
 }
 
@@ -233,7 +239,7 @@ fun PersonalTelegramCard(c: AppContainer) {
     }
     val s = t ?: return
     val what = if (s.outages) "i guasti Enel nelle tue zone e sui POP/AP assegnati" else "le notifiche che ti riguardano"
-    SectionCard("Notifiche su Telegram") {
+    SectionCard("Notifiche su Telegram", icon = it.cdanet.cpeconfigurator.R.drawable.ic_notifications) {
         msg?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         when {
             !s.available -> Text(
@@ -295,7 +301,7 @@ private fun MyZones(c: AppContainer, onChanged: () -> Unit) {
         runCatching { c.api.myOutageZones() }.onSuccess { zones = it }.onFailure { msg = it.message }
     }
     LaunchedEffect(Unit) { reload() }
-    SectionCard("Le mie zone di interesse") {
+    SectionCard("Le mie zone di interesse", icon = it.cdanet.cpeconfigurator.R.drawable.ic_my_location) {
         msg?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
         if (zones.isEmpty()) Text("Nessuna zona: aggiungine una qui sotto (massimo 20).", style = MaterialTheme.typography.bodySmall)
         zones.forEach { z ->

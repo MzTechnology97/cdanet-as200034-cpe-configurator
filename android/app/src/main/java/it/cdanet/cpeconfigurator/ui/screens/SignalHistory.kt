@@ -62,6 +62,8 @@ fun SignalHistory(c: AppContainer, job: JobDto) {
 private fun SeriesChart(signal: SeriesDto, remote: SeriesDto) {
     val line = MaterialTheme.colorScheme.primary
     val muted = MaterialTheme.colorScheme.outline
+    val cGoodGreen = GoodGreen
+    val cBadRed = BadRed
     Canvas(Modifier.fillMaxWidth().height(110.dp)) {
         val pts = signal.points.mapNotNull { p -> if (p.size >= 2) p[0] to p[1] else null }
         val rpts = remote.points.mapNotNull { p -> if (p.size >= 2) p[0] to p[1] else null }
@@ -74,8 +76,8 @@ private fun SeriesChart(signal: SeriesDto, remote: SeriesDto) {
         fun x(t: Double) = ((t - t0) / (t1 - t0) * size.width).toFloat()
         fun y(v: Double) = ((hi - v) / (hi - lo) * size.height).toFloat()
         val dash = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
-        drawLine(GoodGreen, Offset(0f, y(-65.0)), Offset(size.width, y(-65.0)), pathEffect = dash)
-        drawLine(BadRed, Offset(0f, y(-75.0)), Offset(size.width, y(-75.0)), pathEffect = dash)
+        drawLine(cGoodGreen, Offset(0f, y(-65.0)), Offset(size.width, y(-65.0)), pathEffect = dash)
+        drawLine(cBadRed, Offset(0f, y(-75.0)), Offset(size.width, y(-75.0)), pathEffect = dash)
         rpts.zipWithNext().forEach { (a, b) -> drawLine(muted, Offset(x(a.first), y(a.second)), Offset(x(b.first), y(b.second)), strokeWidth = 2f) }
         pts.zipWithNext().forEach { (a, b) -> drawLine(line, Offset(x(a.first), y(a.second)), Offset(x(b.first), y(b.second)), strokeWidth = 4f) }
     }
