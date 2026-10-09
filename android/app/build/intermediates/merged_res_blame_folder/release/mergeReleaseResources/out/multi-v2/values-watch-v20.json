@@ -1,0 +1,20 @@
+{
+    "logs": [
+        {
+            "outputFile": "it.cdanet.cpeconfigurator.app-mergeReleaseResources-71:/values-watch-v20/values-watch-v20.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\alfio\\.gradle\\caches\\8.11.1\\transforms\\4683e09bb6ce83b30a504f9f1df9562f\\transformed\\appcompat-1.2.0\\res\\values-watch-v20\\values-watch-v20.xml",
+                    "from": {
+                        "startLines": "2,5,8",
+                        "startColumns": "4,4,4",
+                        "startOffsets": "55,214,385",
+                        "endLines": "4,7,10",
+                        "endColumns": "12,12,12",
+                        "endOffsets": "209,380,553"
+                    }
+                }
+            ]
+        }
+    ]
+}

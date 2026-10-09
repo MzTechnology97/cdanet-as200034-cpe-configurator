@@ -1,0 +1,22 @@
+[
+    {
+        "merged": "it.cdanet.cpeconfigurator.app-release-73:/xml_network_security_config.xml.flat",
+        "source": "it.cdanet.cpeconfigurator.app-main-74:/xml/network_security_config.xml"
+    },
+    {
+        "merged": "it.cdanet.cpeconfigurator.app-release-73:/drawable_ic_launcher_foreground.xml.flat",
+        "source": "it.cdanet.cpeconfigurator.app-main-74:/drawable/ic_launcher_foreground.xml"
+    },
+    {
+        "merged": "it.cdanet.cpeconfigurator.app-release-73:/mipmap-anydpi-v26_ic_launcher.xml.flat",
+        "source": "it.cdanet.cpeconfigurator.app-main-74:/mipmap-anydpi-v26/ic_launcher.xml"
+    },
+    {
+        "merged": "it.cdanet.cpeconfigurator.app-release-73:/xml_file_paths.xml.flat",
+        "source": "it.cdanet.cpeconfigurator.app-main-74:/xml/file_paths.xml"
+    },
+    {
+        "merged": "it.cdanet.cpeconfigurator.app-release-73:/drawable_cda_net_logo.xml.flat",
+        "source": "it.cdanet.cpeconfigurator.app-main-74:/drawable/cda_net_logo.xml"
+    }
+]

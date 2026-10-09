@@ -1,0 +1,19 @@
+{
+    "logs": [
+        {
+            "outputFile": "it.cdanet.cpeconfigurator.app-mergeReleaseResources-71:/values-v30/values-v30.xml",
+            "map": [
+                {
+                    "source": "C:\\Users\\alfio\\.gradle\\caches\\8.11.1\\transforms\\d5db0786a79371e5ca32eccf9da7a27f\\transformed\\material3-release\\res\\values-v30\\values-v30.xml",
+                    "from": {
+                        "startLines": "2",
+                        "startColumns": "4",
+                        "startOffsets": "55",
+                        "endColumns": "72",
+                        "endOffsets": "123"
+                    }
+                }
+            ]
+        }
+    ]
+}

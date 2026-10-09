@@ -419,7 +419,48 @@ data class JobDto(
     val acceptance: String? = null,
     val photos: Int = 0,
     val replacesJobId: String? = null,
+    /** Write attempts of the package (a failed write can be retried). */
+    val attempts: Int = 1,
+    /** NOC approval of an acceptance test with poor radio: pending, approved, rejected. */
+    val review: String? = null,
+    /** Latest open "postponed"/"KO" report of the installation. */
+    val ko: KoOpenDto? = null,
+    val koCount: Int = 0,
 )
+
+@Serializable
+data class KoOpenDto(val kind: String, val reason: String)
+
+/** Measures attached to a KO report (what the app saw at that moment). */
+@Serializable
+data class KoMeasures(val signal: Int? = null, val expectedSignal: Int? = null, val distanceM: Int? = null, val apName: String? = null, val associated: Boolean? = null)
+
+/** Installation postponed or definitive KO, reported from any step: never blocks a retry. */
+@Serializable
+data class KoRequest(
+    val kind: String,
+    val jobId: String? = null,
+    val mode: String,
+    val step: String,
+    val reason: String,
+    val note: String,
+    val retryOn: String? = null,
+    val mac: String? = null,
+    val ssid: String? = null,
+    val measures: KoMeasures = KoMeasures(),
+)
+
+@Serializable
+data class KoCreatedDto(val id: Long)
+
+@Serializable
+data class NotificationDto(val id: Long, val createdAt: String, val kind: String, val title: String, val body: String = "", val jobId: String? = null, val mac: String = "", val readAt: String? = null)
+
+@Serializable
+data class NotificationsDto(val unread: Int = 0, val items: List<NotificationDto> = emptyList())
+
+@Serializable
+data class UnreadDto(val unread: Int = 0)
 
 @Serializable
 data class WirelessNetworkDto(val ssid: String, val updatedAt: String = "")

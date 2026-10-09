@@ -1,0 +1,684 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<incidents format="6" by="lint 8.7.3" type="incidents">
+
+    <incident
+        id="ExifInterface"
+        severity="warning"
+        message="Avoid using `android.media.ExifInterface`; use `androidx.exifinterface.media.ExifInterface` instead">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/field/PhotoCapture.kt"
+            line="7"
+            column="8"
+            startOffset="179"
+            endLine="7"
+            endColumn="35"
+            endOffset="206"/>
+    </incident>
+
+    <incident
+        id="VectorRaster"
+        severity="warning"
+        message="Limit vector icons sizes to 200×200 to keep icon drawing fast; see https://developer.android.com/studio/write/vector-asset-studio#when for more">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}/drawable/cda_net_logo.xml"
+            line="4"
+            column="20"
+            startOffset="193"
+            endLine="4"
+            endColumn="25"
+            endOffset="198"/>
+    </incident>
+
+    <incident
+        id="AndroidGradlePluginVersion"
+        severity="warning"
+        message="A newer version of com.android.application than 8.7.3 is available: 9.4.1">
+        <fix-replace
+            description="Change to 9.4.1"
+            family="Update versions"
+            oldString="8.7.3"
+            replacement="9.4.1"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="2"
+            column="7"
+            startOffset="17"
+            endLine="2"
+            endColumn="14"
+            endOffset="24"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.core:core-ktx than 1.15.0 is available: 1.19.1">
+        <fix-replace
+            description="Change to 1.19.1"
+            family="Update versions"
+            oldString="1.15.0"
+            replacement="1.19.1"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="4"
+            column="11"
+            startOffset="53"
+            endLine="4"
+            endColumn="19"
+            endOffset="61"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.activity:activity-compose than 1.9.3 is available: 1.13.0">
+        <fix-replace
+            description="Change to 1.13.0"
+            family="Update versions"
+            oldString="1.9.3"
+            replacement="1.13.0"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="5"
+            column="19"
+            startOffset="80"
+            endLine="5"
+            endColumn="26"
+            endOffset="87"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.fragment:fragment-ktx than 1.8.5 is available: 1.9.1">
+        <fix-replace
+            description="Change to 1.9.1"
+            family="Update versions"
+            oldString="1.8.5"
+            replacement="1.9.1"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="6"
+            column="12"
+            startOffset="99"
+            endLine="6"
+            endColumn="19"
+            endOffset="106"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.7 is available: 2.11.0">
+        <fix-replace
+            description="Change to 2.11.0"
+            family="Update versions"
+            oldString="2.8.7"
+            replacement="2.11.0"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="8"
+            column="13"
+            startOffset="139"
+            endLine="8"
+            endColumn="20"
+            endOffset="146"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.7 is available: 2.11.0">
+        <fix-replace
+            description="Change to 2.11.0"
+            family="Update versions"
+            oldString="2.8.7"
+            replacement="2.11.0"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="8"
+            column="13"
+            startOffset="139"
+            endLine="8"
+            endColumn="20"
+            endOffset="146"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.compose:compose-bom than 2024.12.01 is available: 2026.09.00">
+        <fix-replace
+            description="Change to 2026.09.00"
+            family="Update versions"
+            oldString="2024.12.01"
+            replacement="2026.09.00"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="9"
+            column="14"
+            startOffset="160"
+            endLine="9"
+            endColumn="26"
+            endOffset="172"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.work:work-runtime-ktx than 2.9.1 is available: 2.12.0">
+        <fix-replace
+            description="Change to 2.12.0"
+            family="Update versions"
+            oldString="2.9.1"
+            replacement="2.12.0"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="11"
+            column="8"
+            startOffset="201"
+            endLine="11"
+            endColumn="15"
+            endOffset="208"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: 1.2.1">
+        <fix-replace
+            description="Change to 1.2.1"
+            family="Update versions"
+            oldString="1.1.1"
+            replacement="1.2.1"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="14"
+            column="13"
+            startOffset="263"
+            endLine="14"
+            endColumn="20"
+            endOffset="270"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.media3:media3-exoplayer than 1.5.0 is available: 1.11.1">
+        <fix-replace
+            description="Change to 1.11.1"
+            family="Update versions"
+            oldString="1.5.0"
+            replacement="1.11.1"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="16"
+            column="10"
+            startOffset="296"
+            endLine="16"
+            endColumn="17"
+            endOffset="303"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.media3:media3-exoplayer-rtsp than 1.5.0 is available: 1.11.1">
+        <fix-replace
+            description="Change to 1.11.1"
+            family="Update versions"
+            oldString="1.5.0"
+            replacement="1.11.1"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="16"
+            column="10"
+            startOffset="296"
+            endLine="16"
+            endColumn="17"
+            endOffset="303"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.media3:media3-ui than 1.5.0 is available: 1.11.1">
+        <fix-replace
+            description="Change to 1.11.1"
+            family="Update versions"
+            oldString="1.5.0"
+            replacement="1.11.1"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="16"
+            column="10"
+            startOffset="296"
+            endLine="16"
+            endColumn="17"
+            endOffset="303"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of com.google.android.gms:play-services-location than 21.3.0 is available: 21.4.0">
+        <fix-replace
+            description="Change to 21.4.0"
+            family="Update versions"
+            oldString="21.3.0"
+            replacement="21.4.0"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="18"
+            column="16"
+            startOffset="342"
+            endLine="18"
+            endColumn="24"
+            endOffset="350"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.camera:camera-camera2 than 1.4.1 is available: 1.6.2">
+        <fix-replace
+            description="Change to 1.6.2"
+            family="Update versions"
+            oldString="1.4.1"
+            replacement="1.6.2"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="20"
+            column="11"
+            startOffset="379"
+            endLine="20"
+            endColumn="18"
+            endOffset="386"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.camera:camera-core than 1.4.1 is available: 1.6.2">
+        <fix-replace
+            description="Change to 1.6.2"
+            family="Update versions"
+            oldString="1.4.1"
+            replacement="1.6.2"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="20"
+            column="11"
+            startOffset="379"
+            endLine="20"
+            endColumn="18"
+            endOffset="386"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.camera:camera-lifecycle than 1.4.1 is available: 1.6.2">
+        <fix-replace
+            description="Change to 1.6.2"
+            family="Update versions"
+            oldString="1.4.1"
+            replacement="1.6.2"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="20"
+            column="11"
+            startOffset="379"
+            endLine="20"
+            endColumn="18"
+            endOffset="386"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.camera:camera-view than 1.4.1 is available: 1.6.2">
+        <fix-replace
+            description="Change to 1.6.2"
+            family="Update versions"
+            oldString="1.4.1"
+            replacement="1.6.2"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="20"
+            column="11"
+            startOffset="379"
+            endLine="20"
+            endColumn="18"
+            endOffset="386"/>
+    </incident>
+
+    <incident
+        id="SourceLockedOrientationActivity"
+        severity="warning"
+        message="You should not lock orientation of your activities, so that you can support a good user experience for any device or orientation">
+        <fix-replace
+            description="Set the orientation to SCREEN_ORIENTATION_UNSPECIFIED"
+            oldString="SCREEN_ORIENTATION_PORTRAIT"
+            replacement="SCREEN_ORIENTATION_UNSPECIFIED"
+            priority="0"/>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/screens/ArAimScreen.kt"
+            line="117"
+            column="9"
+            startOffset="5329"
+            endLine="117"
+            endColumn="82"
+            endOffset="5402"/>
+    </incident>
+
+    <incident
+        id="ModifierParameter"
+        severity="warning"
+        message="Modifier parameter should be the first optional parameter">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/Components.kt"
+            line="55"
+            column="40"
+            startOffset="2393"
+            endLine="55"
+            endColumn="48"
+            endOffset="2401"/>
+    </incident>
+
+    <incident
+        id="ModifierParameter"
+        severity="warning"
+        message="Modifier parameter should be the first optional parameter">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/EmbeddedMap.kt"
+            line="50"
+            column="5"
+            startOffset="1998"
+            endLine="50"
+            endColumn="13"
+            endOffset="2006"/>
+    </incident>
+
+    <incident
+        id="SwitchIntDef"
+        severity="warning"
+        message="Don&apos;t use a constant here; expected one of: `ScanResult.CHANNEL_WIDTH_160MHZ`, `ScanResult.CHANNEL_WIDTH_20MHZ`, `ScanResult.CHANNEL_WIDTH_320MHZ`, `ScanResult.CHANNEL_WIDTH_40MHZ`, `ScanResult.CHANNEL_WIDTH_80MHZ`, `ScanResult.CHANNEL_WIDTH_80MHZ_PLUS_MHZ`">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/tools/LocalTools.kt"
+            line="87"
+            column="95"
+            startOffset="4245"
+            endLine="87"
+            endColumn="96"
+            endOffset="4246"/>
+    </incident>
+
+    <incident
+        id="DiscouragedApi"
+        severity="warning"
+        message="Should not restrict activity to fixed orientation. This may not be suitable for different form factors, causing the app to be letterboxed.">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*manifest*0}"
+            line="63"
+            column="13"
+            startOffset="2886"
+            endLine="63"
+            endColumn="56"
+            endOffset="2929"/>
+    </incident>
+
+    <incident
+        id="AcceptsUserCertificates"
+        severity="warning"
+        message="The Network Security Configuration allows the use of user certificates in the release version of your app">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}/xml/network_security_config.xml"
+            line="12"
+            column="13"
+            startOffset="546"
+            endLine="12"
+            endColumn="40"
+            endOffset="573"/>
+    </incident>
+
+    <incident
+        id="InsecureBaseConfiguration"
+        severity="warning"
+        message="Insecure Base Configuration">
+        <fix-replace
+            description="Replace with false"
+            replacement="false"
+            priority="0">
+            <range
+                file="${:app*release*MAIN*sourceProvider*0*resDir*0}/xml/network_security_config.xml"
+                startOffset="347"
+                endOffset="351"/>
+        </fix-replace>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}/xml/network_security_config.xml"
+            line="8"
+            column="45"
+            startOffset="347"
+            endLine="8"
+            endColumn="49"
+            endOffset="351"/>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="Unnecessary; SDK_INT is always >= 26">
+        <fix-data conditional="true"/>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/outages/OutageAlerts.kt"
+            line="82"
+            column="13"
+            startOffset="3078"
+            endLine="82"
+            endColumn="40"
+            endOffset="3105"/>
+    </incident>
+
+    <incident
+        id="ObsoleteSdkInt"
+        severity="warning"
+        message="This folder configuration (`v26`) is unnecessary; `minSdkVersion` is 26. Merge all the resources in this folder into `mipmap-anydpi`.">
+        <fix-data file="${:app*release*MAIN*sourceProvider*0*resDir*0}/mipmap-anydpi-v26" folderName="mipmap-anydpi" requiresApi="26"/>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}/mipmap-anydpi-v26"/>
+    </incident>
+
+    <incident
+        id="VectorPath"
+        severity="warning"
+        message="Very long vector path (2972 characters), which is bad for performance. Considering reducing precision, removing minor details or rasterizing vector.">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*resDir*0}/drawable/cda_net_logo.xml"
+            line="21"
+            column="29"
+            startOffset="2369"
+            endLine="21"
+            endColumn="3001"
+            endOffset="5341"/>
+    </incident>
+
+    <incident
+        id="AutoboxingStateCreation"
+        severity="informational"
+        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`">
+        <fix-replace
+            description="Replace with mutableIntStateOf"
+            replacement="androidx.compose.runtime.mutableIntStateOf"
+            shortenNames="true"
+            priority="0">
+            <range
+                file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/AppRoot.kt"
+                startOffset="5054"
+                endOffset="5068"/>
+        </fix-replace>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/AppRoot.kt"
+            line="110"
+            column="30"
+            startOffset="5054"
+            endLine="110"
+            endColumn="44"
+            endOffset="5068"/>
+    </incident>
+
+    <incident
+        id="AutoboxingStateCreation"
+        severity="informational"
+        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`">
+        <fix-replace
+            description="Replace with mutableIntStateOf"
+            replacement="androidx.compose.runtime.mutableIntStateOf"
+            shortenNames="true"
+            priority="0">
+            <range
+                file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/AppRoot.kt"
+                startOffset="5713"
+                endOffset="5727"/>
+        </fix-replace>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/AppRoot.kt"
+            line="126"
+            column="31"
+            startOffset="5713"
+            endLine="126"
+            endColumn="45"
+            endOffset="5727"/>
+    </incident>
+
+    <incident
+        id="AutoboxingStateCreation"
+        severity="informational"
+        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`">
+        <fix-replace
+            description="Replace with mutableIntStateOf"
+            replacement="androidx.compose.runtime.mutableIntStateOf"
+            shortenNames="true"
+            priority="0">
+            <range
+                file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/screens/CpeHealthScreen.kt"
+                startOffset="3315"
+                endOffset="3329"/>
+        </fix-replace>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/screens/CpeHealthScreen.kt"
+            line="75"
+            column="29"
+            startOffset="3315"
+            endLine="75"
+            endColumn="43"
+            endOffset="3329"/>
+    </incident>
+
+    <incident
+        id="AutoboxingStateCreation"
+        severity="informational"
+        message="Prefer `mutableIntStateOf` instead of `mutableStateOf`">
+        <fix-replace
+            description="Replace with mutableIntStateOf"
+            replacement="androidx.compose.runtime.mutableIntStateOf"
+            shortenNames="true"
+            priority="0">
+            <range
+                file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/screens/NotificationsScreen.kt"
+                startOffset="1608"
+                endOffset="1622"/>
+        </fix-replace>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/screens/NotificationsScreen.kt"
+            line="36"
+            column="30"
+            startOffset="1608"
+            endLine="36"
+            endColumn="44"
+            endOffset="1622"/>
+    </incident>
+
+    <incident
+        id="AutoboxingStateCreation"
+        severity="informational"
+        message="Prefer `mutableLongStateOf` instead of `mutableStateOf`">
+        <fix-replace
+            description="Replace with mutableLongStateOf"
+            replacement="androidx.compose.runtime.mutableLongStateOf"
+            shortenNames="true"
+            priority="0">
+            <range
+                file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/screens/WifiAnalyzerScreen.kt"
+                startOffset="5534"
+                endOffset="5548"/>
+        </fix-replace>
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/screens/WifiAnalyzerScreen.kt"
+            line="120"
+            column="32"
+            startOffset="5534"
+            endLine="120"
+            endColumn="46"
+            endOffset="5548"/>
+    </incident>
+
+    <incident
+        id="SetTextI18n"
+        severity="warning"
+        message="String literal in `setText` can not be translated. Use Android resources instead.">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/tools/RtspPlayerActivity.kt"
+            line="40"
+            column="21"
+            startOffset="1674"
+            endLine="40"
+            endColumn="27"
+            endOffset="1680"/>
+    </incident>
+
+    <incident
+        id="SetTextI18n"
+        severity="warning"
+        message="Do not concatenate text displayed with `setText`. Use resource string with placeholders.">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/tools/RtspPlayerActivity.kt"
+            line="54"
+            column="31"
+            startOffset="2424"
+            endLine="54"
+            endColumn="70"
+            endOffset="2463"/>
+    </incident>
+
+    <incident
+        id="SetTextI18n"
+        severity="warning"
+        message="String literal in `setText` can not be translated. Use Android resources instead.">
+        <location
+            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/tools/RtspPlayerActivity.kt"
+            line="54"
+            column="32"
+            startOffset="2425"
+            endLine="54"
+            endColumn="47"
+            endOffset="2440"/>
+    </incident>
+
+</incidents>

@@ -169,6 +169,15 @@
   <figure><img src="img/app-esito.jpg" alt="Esito del collaudo" loading="lazy"><figcaption>Esito: superato, con il dettaglio dei controlli.</figcaption></figure>
 </div>
 <p>Con <b>Fine intervento</b> hai finito. Il verbale di collaudo si stampa dalla <a href="#console">console web</a>.</p>
+<h3 id="noc">Segnale pessimo: serve l'approvazione del NOC</h3>
+<p>Se il segnale è sotto il minimo (−75 dBm) o un controllo radio è rosso (segnale, CINR, capacità, catene, collegamento), l'app lo dice già nella verifica finale. Il collaudo si salva come sempre, ma l'installazione resta <i>in attesa dell'approvazione del NOC</i>. Il NOC la approva o la rifiuta con una nota: l'esito ti arriva nelle <a href="#notifiche">Notifiche</a> (e su Telegram, se collegato). Se è rifiutata, ripunta o cambia AP e rifai il collaudo.</p>
+<h3 id="ko">Se non si riesce: Segnala KO</h3>
+<p>In ogni passo, in alto, c'è <b>Segnala KO</b> (anche nell'esito del collaudo). Scegli:</p>
+<ul>
+  <li><b>Rimandata</b>: si riprova un altro giorno (maltempo, cliente assente, materiale mancante…). Scrivi la motivazione e, se concordato, quando riprovare.</li>
+  <li><b>KO definitivo</b>: l'installazione non si può fare (nessun AP visibile, ostacoli…). La motivazione è sempre obbligatoria.</li>
+</ul>
+<p>Scegli il motivo dalla lista e scrivi la motivazione. Fase, SSID, segnale e MAC li allega l'app da sola. Il NOC viene avvisato subito. <b>Non blocca nulla</b>: dopo l'invio puoi <b>Riprovare ora</b> (altro AP, nuovo puntamento) o <b>Chiudere l'intervento</b> e riprendere un altro giorno. Quando un tentativo successivo supera il collaudo, la segnalazione si chiude da sola. Anche una scrittura nella CPE fallita si può ritentare con lo stesso pacchetto.</p>
 
 <h2 id="ripuntamento">5. Ripuntamento, cambio AP, sostituzione</h2>
 <p><b>CPE già installata: ripuntamento o cambio AP</b> salta configurazione e scrittura: ti colleghi alla Wi-Fi della CPE o del router del cliente, l'app trova la CPE e riparti da <a href="#passo3">Verifica della CPE</a>. Se la CPE era stata installata con l'app, collaudo e foto finali si aggiungono a quell'installazione; altrimenti il collaudo si può condividere ma non salvare sul server.</p>
@@ -177,7 +186,9 @@
 
 <h2 id="dopo">6. Dopo l'installazione</h2>
 <h3>Storico</h3>
-<p>Tutti i tuoi provisioning, con esito (<i>Preparato</i>, <i>Completato</i>, <i>Fallito</i> con il motivo) e collaudo. Da qui apri <b>Storico segnale (7 giorni)</b>, <b>Collaudo / foto</b> e <b>Sostituisci CPE</b>.</p>
+<p>Tutti i tuoi provisioning, con esito (<i>Preparato</i>, <i>Completato</i>, <i>Fallito</i> con il motivo), collaudo, eventuali rimandi o KO e approvazione del NOC. Da qui apri <b>Storico segnale (7 giorni)</b>, <b>Collaudo / foto</b> e <b>Sostituisci CPE</b>.</p>
+<h3 id="notifiche">Notifiche</h3>
+<p>La campanella in alto (e la voce <b>Notifiche</b> nella schermata principale) mostra l'esito delle tue installazioni: approvazione o rifiuto del NOC con la sua nota, e l'attivazione della CPE in rete. Tocca una notifica per segnarla come letta. Per riceverle anche su Telegram collega il tuo Telegram (in Notifiche o in Impostazioni). Nella console web, in <b>Notifiche</b>, scegli quali ricevere anche lì.</p>
 <h3>Le mie CPE</h3>
 <p>Lo stato attuale delle CPE che hai installato, confrontato con il collaudo: <i>offline</i>, <i>segnale debole</i>, <i>segnale calato</i> (almeno 6 dB in meno rispetto al collaudo), porta LAN lenta. Puoi cercare per cliente, MAC, AP o SSID e filtrare. Tocca una CPE per i dettagli, lo storico di 7 giorni e il ripuntamento.</p>
 <div class="shots">

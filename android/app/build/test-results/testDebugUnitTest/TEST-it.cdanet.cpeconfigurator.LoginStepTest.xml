@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="it.cdanet.cpeconfigurator.LoginStepTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-10-09T17:44:15" hostname="ALFIO" time="0.009">
+  <properties/>
+  <testcase name="decodesBothLoginResponses" classname="it.cdanet.cpeconfigurator.LoginStepTest" time="0.009"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

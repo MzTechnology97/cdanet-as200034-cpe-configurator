@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<incidents format="6" by="lint 8.7.3" type="partial_results">
+    <map id="NotificationPermission">
+        <entry
+            name="source"
+            boolean="true"/>
+    </map>
+    <map id="UnsafeImplicitIntentLaunch">
+            <map id="actionsSent">
+                    <map id="android.intent.action.VIEW (used to start an activity)">
+                        <location id="0"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/Components.kt"
+                            line="214"
+                            column="80"
+                            startOffset="10004"
+                            endLine="214"
+                            endColumn="133"
+                            endOffset="10057"/>
+                        <location id="1"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/EmbeddedMap.kt"
+                            line="130"
+                            column="57"
+                            startOffset="6636"
+                            endLine="130"
+                            endColumn="99"
+                            endOffset="6678"/>
+                        <location id="10"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/update/AppUpdater.kt"
+                            line="110"
+                            column="13"
+                            startOffset="4660"
+                            endLine="110"
+                            endColumn="39"
+                            endOffset="4686"/>
+                        <location id="2"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/EmbeddedMap.kt"
+                            line="130"
+                            column="57"
+                            startOffset="6636"
+                            endLine="130"
+                            endColumn="99"
+                            endOffset="6678"/>
+                        <location id="3"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/screens/CoverageScreen.kt"
+                            line="68"
+                            column="49"
+                            startOffset="3184"
+                            endLine="68"
+                            endColumn="80"
+                            endOffset="3215"/>
+                        <location id="4"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/screens/OutagesScreen.kt"
+                            line="166"
+                            column="61"
+                            startOffset="8832"
+                            endLine="166"
+                            endColumn="143"
+                            endOffset="8914"/>
+                        <location id="5"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/screens/OutagesScreen.kt"
+                            line="269"
+                            column="73"
+                            startOffset="15042"
+                            endLine="269"
+                            endColumn="117"
+                            endOffset="15086"/>
+                        <location id="6"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/screens/OutagesScreen.kt"
+                            line="277"
+                            column="80"
+                            startOffset="15552"
+                            endLine="277"
+                            endColumn="124"
+                            endOffset="15596"/>
+                        <location id="7"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/screens/ProToolsScreens.kt"
+                            line="251"
+                            column="73"
+                            startOffset="15694"
+                            endLine="251"
+                            endColumn="115"
+                            endOffset="15736"/>
+                        <location id="8"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/screens/ToolScreens.kt"
+                            line="247"
+                            column="65"
+                            startOffset="12073"
+                            endLine="247"
+                            endColumn="177"
+                            endOffset="12185"/>
+                        <location id="9"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/screens/ToolScreens.kt"
+                            line="318"
+                            column="35"
+                            startOffset="16388"
+                            endLine="318"
+                            endColumn="77"
+                            endOffset="16430"/>
+                    </map>
+                    <map id="android.settings.APPLICATION_DETAILS_SETTINGS (used to start an activity)">
+                        <location id="0"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/screens/SettingsScreen.kt"
+                            line="216"
+                            column="39"
+                            startOffset="10627"
+                            endLine="216"
+                            endColumn="143"
+                            endOffset="10731"/>
+                    </map>
+                    <map id="android.settings.MANAGE_UNKNOWN_APP_SOURCES (used to start an activity)">
+                        <location id="0"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/update/AppUpdater.kt"
+                            line="69"
+                            column="13"
+                            startOffset="2710"
+                            endLine="69"
+                            endColumn="115"
+                            endOffset="2812"/>
+                    </map>
+                    <map id="android.settings.WIFI_SETTINGS (used to start an activity)">
+                        <location id="0"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/screens/ProvisionScreen.kt"
+                            line="221"
+                            column="101"
+                            startOffset="12243"
+                            endLine="221"
+                            endColumn="145"
+                            endOffset="12287"/>
+                    </map>
+                    <map id="android.settings.panel.action.WIFI (used to start an activity)">
+                        <location id="0"
+                            file="${:app*release*MAIN*sourceProvider*0*javaDir*0}/it/cdanet/cpeconfigurator/ui/screens/ProvisionScreen.kt"
+                            line="221"
+                            column="54"
+                            startOffset="12196"
+                            endLine="221"
+                            endColumn="95"
+                            endOffset="12237"/>
+                    </map>
+            </map>
+    </map>
+    <map id="UnsafeIntentLaunch">
+            <map id="unprotected">
+                <entry
+                    name="it.cdanet.cpeconfigurator.MainActivity"
+                    boolean="true"/>
+            </map>
+    </map>
+    <map id="UnusedResources">
+        <entry
+            name="model"
+            string="color[launcher_background(U),cda_orange(U),window_dark(U)],drawable[cda_net_logo(U),ic_launcher_foreground(U)],mipmap[ic_launcher(U)],string[app_name(U)],style[Theme_CdaNet(U)],xml[network_security_config(U),file_paths(U)];5^0^4,7^1^2;;;"/>
+    </map>
+
+</incidents>

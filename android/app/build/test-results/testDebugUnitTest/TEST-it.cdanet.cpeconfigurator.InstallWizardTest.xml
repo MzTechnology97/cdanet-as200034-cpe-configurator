@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="it.cdanet.cpeconfigurator.InstallWizardTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-10-09T17:44:15" hostname="ALFIO" time="0.015">
+  <properties/>
+  <testcase name="statusReadsModulationAndCpeMacs" classname="it.cdanet.cpeconfigurator.InstallWizardTest" time="0.002"/>
+  <testcase name="beforeInstallByExpectedSignalThenDistance" classname="it.cdanet.cpeconfigurator.InstallWizardTest" time="0.005"/>
+  <testcase name="surveyChoiceOnlyCdaNetAndCloserApWhenSignalsAreEquivalent" classname="it.cdanet.cpeconfigurator.InstallWizardTest" time="0.001"/>
+  <testcase name="apWithoutKeyIsNeverRecommendedAndSmallGainsDoNotMoveTheCpe" classname="it.cdanet.cpeconfigurator.InstallWizardTest" time="0.001"/>
+  <testcase name="relinkRefusesLineBreaks" classname="it.cdanet.cpeconfigurator.InstallWizardTest" time="0.001"/>
+  <testcase name="repointingSkipsTheConfiguration" classname="it.cdanet.cpeconfigurator.InstallWizardTest" time="0.001"/>
+  <testcase name="relinkRewritesSsidKeyAndReleasesTheApLock" classname="it.cdanet.cpeconfigurator.InstallWizardTest" time="0.003"/>
+  <testcase name="relinkReportsAnUnknownConfig" classname="it.cdanet.cpeconfigurator.InstallWizardTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

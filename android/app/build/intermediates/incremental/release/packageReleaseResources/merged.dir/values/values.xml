@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="cda_orange">#F15A2C</color>
+    <color name="launcher_background">#FFFFFF</color>
+    <color name="window_dark">#111317</color>
+    <string name="app_name">CDA Net CPE</string>
+    <style name="Theme.CdaNet" parent="android:Theme.Material.Light.NoActionBar">
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowBackground">@android:color/white</item>
+        <item name="android:colorAccent">@color/cda_orange</item>
+    </style>
+</resources>

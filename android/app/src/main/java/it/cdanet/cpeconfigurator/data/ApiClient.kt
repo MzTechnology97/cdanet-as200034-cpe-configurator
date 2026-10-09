@@ -170,6 +170,19 @@ class ApiClient(
     suspend fun cpeJob(macs: List<String>): JobDto? =
         AppJson.decodeFromString(CpeJobDto.serializer(), request("GET", "/api/field/cpe?macs=" + java.net.URLEncoder.encode(macs.take(8).joinToString(","), "UTF-8"))).job
 
+    /** Installation postponed or KO (reason always written by the technician). */
+    suspend fun reportKo(req: KoRequest): Long =
+        AppJson.decodeFromString(KoCreatedDto.serializer(), request("POST", "/api/installs/ko", AppJson.encodeToJsonElement(KoRequest.serializer(), req))).id
+
+    suspend fun notifications(): NotificationsDto = AppJson.decodeFromString(NotificationsDto.serializer(), request("GET", "/api/notifications?limit=100"))
+
+    suspend fun unreadNotifications(): Int = AppJson.decodeFromString(UnreadDto.serializer(), request("GET", "/api/notifications/count")).unread
+
+    suspend fun markNotificationsRead(ids: List<Long>? = null) {
+        val body = if (ids == null) buildJsonObject { put("all", true) } else buildJsonObject { put("ids", kotlinx.serialization.json.JsonArray(ids.map { kotlinx.serialization.json.JsonPrimitive(it) })) }
+        request("POST", "/api/notifications/read", body)
+    }
+
     suspend fun putAcceptance(jobId: String, report: it.cdanet.cpeconfigurator.field.AcceptanceReport) {
         request("PUT", "/api/provisioning/jobs/$jobId/acceptance", AppJson.encodeToJsonElement(it.cdanet.cpeconfigurator.field.AcceptanceReport.serializer(), report))
     }

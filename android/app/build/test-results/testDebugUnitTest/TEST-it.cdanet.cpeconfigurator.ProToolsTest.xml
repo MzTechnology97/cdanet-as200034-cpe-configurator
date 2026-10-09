@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="it.cdanet.cpeconfigurator.ProToolsTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-10-09T17:44:16" hostname="ALFIO" time="0.013">
+  <properties/>
+  <testcase name="dnsWireRoundTrip" classname="it.cdanet.cpeconfigurator.ProToolsTest" time="0.003"/>
+  <testcase name="netbiosAndWol" classname="it.cdanet.cpeconfigurator.ProToolsTest" time="0.002"/>
+  <testcase name="deviceGuess" classname="it.cdanet.cpeconfigurator.ProToolsTest" time="0.001"/>
+  <testcase name="pingStats" classname="it.cdanet.cpeconfigurator.ProToolsTest" time="0.001"/>
+  <testcase name="portSpecs" classname="it.cdanet.cpeconfigurator.ProToolsTest" time="0.006"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

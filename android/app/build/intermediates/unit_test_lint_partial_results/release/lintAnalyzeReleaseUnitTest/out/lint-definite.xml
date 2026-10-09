@@ -1,0 +1,344 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<incidents format="6" by="lint 8.7.3" type="incidents">
+
+    <incident
+        id="AndroidGradlePluginVersion"
+        severity="warning"
+        message="A newer version of com.android.application than 8.7.3 is available: 9.4.1">
+        <fix-replace
+            description="Change to 9.4.1"
+            family="Update versions"
+            oldString="8.7.3"
+            replacement="9.4.1"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="2"
+            column="7"
+            startOffset="17"
+            endLine="2"
+            endColumn="14"
+            endOffset="24"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.core:core-ktx than 1.15.0 is available: 1.19.1">
+        <fix-replace
+            description="Change to 1.19.1"
+            family="Update versions"
+            oldString="1.15.0"
+            replacement="1.19.1"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="4"
+            column="11"
+            startOffset="53"
+            endLine="4"
+            endColumn="19"
+            endOffset="61"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.activity:activity-compose than 1.9.3 is available: 1.13.0">
+        <fix-replace
+            description="Change to 1.13.0"
+            family="Update versions"
+            oldString="1.9.3"
+            replacement="1.13.0"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="5"
+            column="19"
+            startOffset="80"
+            endLine="5"
+            endColumn="26"
+            endOffset="87"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.fragment:fragment-ktx than 1.8.5 is available: 1.9.1">
+        <fix-replace
+            description="Change to 1.9.1"
+            family="Update versions"
+            oldString="1.8.5"
+            replacement="1.9.1"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="6"
+            column="12"
+            startOffset="99"
+            endLine="6"
+            endColumn="19"
+            endOffset="106"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.lifecycle:lifecycle-runtime-compose than 2.8.7 is available: 2.11.0">
+        <fix-replace
+            description="Change to 2.11.0"
+            family="Update versions"
+            oldString="2.8.7"
+            replacement="2.11.0"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="8"
+            column="13"
+            startOffset="139"
+            endLine="8"
+            endColumn="20"
+            endOffset="146"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.lifecycle:lifecycle-viewmodel-compose than 2.8.7 is available: 2.11.0">
+        <fix-replace
+            description="Change to 2.11.0"
+            family="Update versions"
+            oldString="2.8.7"
+            replacement="2.11.0"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="8"
+            column="13"
+            startOffset="139"
+            endLine="8"
+            endColumn="20"
+            endOffset="146"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.compose:compose-bom than 2024.12.01 is available: 2026.09.00">
+        <fix-replace
+            description="Change to 2026.09.00"
+            family="Update versions"
+            oldString="2024.12.01"
+            replacement="2026.09.00"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="9"
+            column="14"
+            startOffset="160"
+            endLine="9"
+            endColumn="26"
+            endOffset="172"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.work:work-runtime-ktx than 2.9.1 is available: 2.12.0">
+        <fix-replace
+            description="Change to 2.12.0"
+            family="Update versions"
+            oldString="2.9.1"
+            replacement="2.12.0"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="11"
+            column="8"
+            startOffset="201"
+            endLine="11"
+            endColumn="15"
+            endOffset="208"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.datastore:datastore-preferences than 1.1.1 is available: 1.2.1">
+        <fix-replace
+            description="Change to 1.2.1"
+            family="Update versions"
+            oldString="1.1.1"
+            replacement="1.2.1"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="14"
+            column="13"
+            startOffset="263"
+            endLine="14"
+            endColumn="20"
+            endOffset="270"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.media3:media3-exoplayer than 1.5.0 is available: 1.11.1">
+        <fix-replace
+            description="Change to 1.11.1"
+            family="Update versions"
+            oldString="1.5.0"
+            replacement="1.11.1"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="16"
+            column="10"
+            startOffset="296"
+            endLine="16"
+            endColumn="17"
+            endOffset="303"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.media3:media3-exoplayer-rtsp than 1.5.0 is available: 1.11.1">
+        <fix-replace
+            description="Change to 1.11.1"
+            family="Update versions"
+            oldString="1.5.0"
+            replacement="1.11.1"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="16"
+            column="10"
+            startOffset="296"
+            endLine="16"
+            endColumn="17"
+            endOffset="303"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.media3:media3-ui than 1.5.0 is available: 1.11.1">
+        <fix-replace
+            description="Change to 1.11.1"
+            family="Update versions"
+            oldString="1.5.0"
+            replacement="1.11.1"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="16"
+            column="10"
+            startOffset="296"
+            endLine="16"
+            endColumn="17"
+            endOffset="303"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of com.google.android.gms:play-services-location than 21.3.0 is available: 21.4.0">
+        <fix-replace
+            description="Change to 21.4.0"
+            family="Update versions"
+            oldString="21.3.0"
+            replacement="21.4.0"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="18"
+            column="16"
+            startOffset="342"
+            endLine="18"
+            endColumn="24"
+            endOffset="350"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.camera:camera-camera2 than 1.4.1 is available: 1.6.2">
+        <fix-replace
+            description="Change to 1.6.2"
+            family="Update versions"
+            oldString="1.4.1"
+            replacement="1.6.2"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="20"
+            column="11"
+            startOffset="379"
+            endLine="20"
+            endColumn="18"
+            endOffset="386"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.camera:camera-core than 1.4.1 is available: 1.6.2">
+        <fix-replace
+            description="Change to 1.6.2"
+            family="Update versions"
+            oldString="1.4.1"
+            replacement="1.6.2"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="20"
+            column="11"
+            startOffset="379"
+            endLine="20"
+            endColumn="18"
+            endOffset="386"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.camera:camera-lifecycle than 1.4.1 is available: 1.6.2">
+        <fix-replace
+            description="Change to 1.6.2"
+            family="Update versions"
+            oldString="1.4.1"
+            replacement="1.6.2"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="20"
+            column="11"
+            startOffset="379"
+            endLine="20"
+            endColumn="18"
+            endOffset="386"/>
+    </incident>
+
+    <incident
+        id="GradleDependency"
+        severity="warning"
+        message="A newer version of androidx.camera:camera-view than 1.4.1 is available: 1.6.2">
+        <fix-replace
+            description="Change to 1.6.2"
+            family="Update versions"
+            oldString="1.4.1"
+            replacement="1.6.2"
+            priority="0"/>
+        <location
+            file="$HOME/Documents/cdanet-as200034-cpe-configurator/android/gradle/libs.versions.toml"
+            line="20"
+            column="11"
+            startOffset="379"
+            endLine="20"
+            endColumn="18"
+            endOffset="386"/>
+    </incident>
+
+</incidents>

@@ -34,6 +34,7 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import it.cdanet.cpeconfigurator.core.AppContainer
+import it.cdanet.cpeconfigurator.data.KoMeasures
 import it.cdanet.cpeconfigurator.field.Acceptance
 import it.cdanet.cpeconfigurator.field.AcceptanceReport
 import it.cdanet.cpeconfigurator.field.AirosStatus
@@ -85,6 +86,7 @@ fun AcceptanceScreen(c: AppContainer) {
     var done by remember { mutableStateOf<String?>(null) }
     var shot by remember { mutableStateOf<Pair<File, String>?>(null) }
     var ready by remember { mutableStateOf<Boolean?>(null) }
+    var ko by remember { mutableStateOf(false) }
 
     DisposableEffect(Unit) {
         view.keepScreenOn = true
@@ -206,6 +208,27 @@ fun AcceptanceScreen(c: AppContainer) {
                     Text(ch.detail, style = MaterialTheme.typography.bodySmall)
                 }
                 Text("Verdetto calcolato dalle soglie del NOC.", style = MaterialTheme.typography.bodySmall, color = color)
+                val noc = nocApprovalReason(r.radio.signal, c.field.thresholds.signalMin, r.checks.filter { it.verdict == "bad" }.map { it.title })
+                if (noc != null) Banner("Approvazione NOC necessaria ($noc). $NOC_APPROVAL_TEXT", WarnAmber)
+                if (noc != null || r.verdict == "bad") {
+                    OutlinedButton(onClick = { ko = true }, modifier = Modifier.fillMaxWidth()) { Text("Segnala KO o rimanda l'installazione", color = BadRed) }
+                }
+            }
+            if (ko) {
+                KoDialog(
+                    c,
+                    KoContext(
+                        jobId = j.id,
+                        mode = "new",
+                        step = "final",
+                        mac = j.mac,
+                        ssid = r.cpe.essid ?: j.ssid,
+                        measures = KoMeasures(signal = r.radio.signal, expectedSignal = r.radio.expectedSignal, distanceM = r.cpe.distanceM, apName = r.cpe.apName, associated = true),
+                    ),
+                    onDismiss = { ko = false },
+                    onRetry = { ko = false },
+                    onClose = { ko = false },
+                )
             }
         }
 
@@ -226,7 +249,8 @@ fun AcceptanceScreen(c: AppContainer) {
                     done = if (c.acceptanceQueue.isPending(j.id)) {
                         "Senza rete: collaudo${if (n > 0) " e $n foto" else ""} in coda sul telefono, invio automatico appena torna la connessione."
                     } else {
-                        "Collaudo registrato${if (n > 0) " con $n foto" else ""}: il verbale si stampa dalla console web (Storico → job)."
+                        "Collaudo registrato${if (n > 0) " con $n foto" else ""}: il verbale si stampa dalla console web (Storico → job)." +
+                            if (report?.let { r -> nocApprovalReason(r.radio.signal, c.field.thresholds.signalMin, r.checks.filter { it.verdict == "bad" }.map { it.title }) } != null) " In attesa dell'approvazione del NOC: l'esito arriva nelle Notifiche." else ""
                     }
                 } catch (e: Exception) {
                     error = e.message

@@ -1,0 +1,954 @@
+-- Merging decision tree log ---
+provider#androidx.core.content.FileProvider
+INJECTED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:66:9-74:20
+	android:grantUriPermissions
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:70:13-47
+	android:authorities
+		INJECTED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:68:13-64
+	android:exported
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:69:13-37
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:67:13-62
+manifest
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:2:1-76:12
+INJECTED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:2:1-76:12
+INJECTED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:2:1-76:12
+INJECTED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:2:1-76:12
+MERGED from [androidx.biometric:biometric:1.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\85da2ef9c11ce95de64c617b09ee6b16\transformed\biometric-1.1.0\AndroidManifest.xml:17:1-29:12
+MERGED from [androidx.camera:camera-video:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\19e8f19c3b98859723af11540bd34ed3\transformed\camera-video-1.4.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.camera:camera-lifecycle:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\2af3b1aac0ae9b6f7276121a25b46ba7\transformed\camera-lifecycle-1.4.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.camera:camera-camera2:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1c88741e0be7191a1f9b37b4fa733c9a\transformed\camera-camera2-1.4.1\AndroidManifest.xml:17:1-36:12
+MERGED from [androidx.camera:camera-core:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\49874f4d8c95ae68e351dfb4f9d677da\transformed\camera-core-1.4.1\AndroidManifest.xml:17:1-36:12
+MERGED from [androidx.camera:camera-view:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e4714d4a4111548b8da70a2b66e0a136\transformed\camera-view-1.4.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.appcompat:appcompat:1.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4683e09bb6ce83b30a504f9f1df9562f\transformed\appcompat-1.2.0\AndroidManifest.xml:17:1-24:12
+MERGED from [com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\515af4dd030e4fb2ba6ac0386d1a50c2\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:2:1-23:12
+MERGED from [com.google.android.gms:play-services-location:21.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4e8646b963abe64d6d4ae642da3795e6\transformed\play-services-location-21.3.0\AndroidManifest.xml:2:1-8:12
+MERGED from [com.google.mlkit:barcode-scanning-common:17.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\f73053c06615ff424cb1f09974ea3245\transformed\barcode-scanning-common-17.0.0\AndroidManifest.xml:2:1-7:12
+MERGED from [com.google.mlkit:vision-common:17.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\b70e19f1a13a80903f3418bea7f9d574\transformed\vision-common-17.0.0\AndroidManifest.xml:2:1-18:12
+MERGED from [com.google.mlkit:common:18.9.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\fd1911fde102947c1a0a6f63a3f06075\transformed\common-18.9.0\AndroidManifest.xml:2:1-26:12
+MERGED from [com.google.android.gms:play-services-base:18.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4989521e05e129c3b241f328e58d0128\transformed\play-services-base-18.5.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.work:work-runtime-ktx:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1baa8e1c922a0b230aad564f39ebb1b5\transformed\work-runtime-ktx-2.9.1\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:17:1-145:12
+MERGED from [androidx.activity:activity:1.9.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\2cf1667e5a9a08459a6b8cb0751abade\transformed\activity-1.9.3\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.compose.material3:material3-android:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d5db0786a79371e5ca32eccf9da7a27f\transformed\material3-release\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.activity:activity-compose:1.9.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\2ab072455f3c18cf916c43abadb150b1\transformed\activity-compose-1.9.3\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.loader:loader:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\14e8d69326121e72cfc727803f40d979\transformed\loader-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.media3:media3-ui:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\80ca1a52217d2abaf61f9478efbab8ee\transformed\media3-ui-1.5.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.media3:media3-extractor:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8f9b0114cbdde708abec78a0e095d0ec\transformed\media3-extractor-1.5.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.media3:media3-container:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\74de8e14a54170f2506d91087abb43de\transformed\media3-container-1.5.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.media3:media3-datasource:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1dbdef1ec9682b1ad972561953893623\transformed\media3-datasource-1.5.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.media3:media3-decoder:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\ccaa6b42a103bcdcf8abb3dc132f7a1e\transformed\media3-decoder-1.5.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.media3:media3-database:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\f68119e6fe0f7693a9dcc53481e90709\transformed\media3-database-1.5.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.media3:media3-common:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\5083f61e5db85ca4695e21f00d189b69\transformed\media3-common-1.5.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.media3:media3-exoplayer-rtsp:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8acd85c4b28d592d361a1c7c9429a5f9\transformed\media3-exoplayer-rtsp-1.5.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.media3:media3-exoplayer:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\6fe9a9ec296ab0f8eb938b9b74354f8e\transformed\media3-exoplayer-1.5.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.media:media:1.7.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\450adaf24f941a535153e7a918aa1964\transformed\media-1.7.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.recyclerview:recyclerview:1.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\f62e5b668f7572506921e34875addfe8\transformed\recyclerview-1.3.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.viewpager:viewpager:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\2dfdd2cfe2ff3bec39a1de102ed42f8f\transformed\viewpager-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.appcompat:appcompat-resources:1.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\f267b194d017afe0e5baf6b2f7fbbd0f\transformed\appcompat-resources-1.2.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d761def17c8f202f4b6ef3576c14d82d\transformed\drawerlayout-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.customview:customview:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\9f138eb30236fd3652d10f72444c2022\transformed\customview-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3ad88d17aebecb1f12e47fe80279c814\transformed\vectordrawable-animated-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\409edf59a3cb223f6b082a177d47f043\transformed\vectordrawable-1.1.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.autofill:autofill:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\5db973d8d0b52cc628da578bd66969e3\transformed\autofill-1.0.0\AndroidManifest.xml:17:1-24:12
+MERGED from [androidx.compose.animation:animation-core-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4718b2ca31bfaf5dfa6e4844482009ee\transformed\animation-core-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.material:material-ripple-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\659a2274e11eacdc5f302b9a524cda5c\transformed\material-ripple-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.animation:animation-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\9a2bccae2284a30d6a310b97b94bc021\transformed\animation-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.foundation:foundation-layout-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\b1d82c3b9b77ea31d52cb78a74e2a060\transformed\foundation-layout-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.foundation:foundation-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\65e5ba863e9a2eea46d40f8136aba384\transformed\foundation-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-unit-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\5df808be137efc8e4282a3066cef82c3\transformed\ui-unit-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-graphics-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\874226f5f308b634e18e9f93d29afba2\transformed\ui-graphics-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-geometry-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\74a8701d77716bc84876941fda5e3f8e\transformed\ui-geometry-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-util-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\5906d3ed14e236a6d0d3c5da3b2d365a\transformed\ui-util-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-tooling-preview-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0dba43f249f81a59873a693fdea5718e\transformed\ui-tooling-preview-release\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.compose.ui:ui-text-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\6e4b5654968078cd8c5cb1abd423e162\transformed\ui-text-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.emoji2:emoji2:1.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d02ba42a90d462540905550273ec5711\transformed\emoji2-1.3.0\AndroidManifest.xml:17:1-35:12
+MERGED from [androidx.graphics:graphics-path:1.0.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\43a25417233297230eb389dad35a4dbe\transformed\graphics-path-1.0.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.core:core:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3c81162d1824251f3742ba5c37504a26\transformed\core-1.15.0\AndroidManifest.xml:17:1-30:12
+MERGED from [androidx.savedstate:savedstate-ktx:1.2.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\97fbf15e0de592fc83bc815fe53a26cc\transformed\savedstate-ktx-1.2.1\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\7ee1c93afd399877cafefe18a9056c04\transformed\savedstate-1.2.1\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-process:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\558446ec72a1ab2fb53bffac490e940e\transformed\lifecycle-process-2.8.7\AndroidManifest.xml:17:1-35:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\7c2fa9f49ea8cbaa32d98a47124d864b\transformed\lifecycle-viewmodel-2.8.7\AndroidManifest.xml:2:1-5:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-android:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\940929aa70057861b2d1c7488bc72477\transformed\lifecycle-viewmodel-release\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-runtime-ktx-android:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\cfff2e35382cd28ad2f252d662e3fe75\transformed\lifecycle-runtime-ktx-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-runtime-android:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\6819de6aac451b2e793045b7175da723\transformed\lifecycle-runtime-release\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-service:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\bddabec2cef879deabbcdbe485d79a97\transformed\lifecycle-service-2.8.7\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\db7dd99861998642e2554c43da2ac5b6\transformed\lifecycle-viewmodel-savedstate-2.8.7\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\ede4785ed4370a5baee28d1accf71c5d\transformed\lifecycle-livedata-core-ktx-2.8.7\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\72e2206aa576b7ce17bf107be9fc2bd6\transformed\lifecycle-livedata-core-2.8.7\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e854c336ee50601093dfb656c5aa750f\transformed\lifecycle-livedata-2.8.7\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.lifecycle:lifecycle-runtime-compose-android:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\f2a3a6b17c87c025ac095d0187f60b55\transformed\lifecycle-runtime-compose-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-compose-android:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\05a8a1ccc6e9a40a31029aad5f9a5e1e\transformed\lifecycle-viewmodel-compose-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.material:material-icons-core-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\81deba4ed34017184475261fe19dd2a3\transformed\material-icons-core-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.ui:ui-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\40de61f388d65dee0ce522ec2a7701a2\transformed\ui-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.activity:activity-ktx:1.9.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\bcaaca26a8a861a537b84e810857fc96\transformed\activity-ktx-1.9.3\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\7c8ed08ae2808cbf2f663dd3939e3d3e\transformed\lifecycle-viewmodel-ktx-2.8.7\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.runtime:runtime-saveable-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4cda6e0eadb75027714940e681d03172\transformed\runtime-saveable-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.compose.runtime:runtime-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0623009f8ccf99b56143d5ab302206e8\transformed\runtime-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.room:room-ktx:2.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\59d6ece0ffef2004028546b81b9da05d\transformed\room-ktx-2.5.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.datastore:datastore-core-android:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\988d8947035020cdfc7a239a476b0ae0\transformed\datastore-core-release\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.datastore:datastore-android:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\52ab93624cd0ec3ba790da89a763a948\transformed\datastore-release\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.datastore:datastore-preferences-android:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\ce56f07c089daeeae4a93d2a5589f13d\transformed\datastore-preferences-release\AndroidManifest.xml:17:1-22:12
+MERGED from [com.google.android.gms:play-services-tasks:18.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a26134fa85582cfeea0e863bb177b9e6\transformed\play-services-tasks-18.2.0\AndroidManifest.xml:2:1-5:12
+MERGED from [com.google.android.gms:play-services-basement:18.4.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\9482b014a6e99995cc5569bf95b2c850\transformed\play-services-basement-18.4.0\AndroidManifest.xml:2:1-9:12
+MERGED from [androidx.fragment:fragment:1.8.5] C:\Users\alfio\.gradle\caches\8.11.1\transforms\36da5f0ffd7a54a65e9a6fa510beeeca\transformed\fragment-1.8.5\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.fragment:fragment-ktx:1.8.5] C:\Users\alfio\.gradle\caches\8.11.1\transforms\30b8f1e086c81d9f490101b5a1c277b2\transformed\fragment-ktx-1.8.5\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.customview:customview-poolingcontainer:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\f4575e822aa1293e87e5f4d0aac0a10e\transformed\customview-poolingcontainer-1.0.0\AndroidManifest.xml:17:1-23:12
+MERGED from [androidx.core:core-ktx:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\2390e4fe0512a196816e74673937dd19\transformed\core-ktx-1.15.0\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.room:room-runtime:2.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4fc600dfbe51b9af5e97fb36615808e5\transformed\room-runtime-2.5.0\AndroidManifest.xml:17:1-31:12
+MERGED from [androidx.annotation:annotation-experimental:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\56fefa68edcac08fe1c708154c43781b\transformed\annotation-experimental-1.4.1\AndroidManifest.xml:2:1-7:12
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:17:1-55:12
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\de346e15c96e956f43fb62de99f6a482\transformed\startup-runtime-1.1.1\AndroidManifest.xml:17:1-33:12
+MERGED from [androidx.tracing:tracing:1.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e6d6b1cacdbd14ed95468fe6ca6d0cc3\transformed\tracing-1.2.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.tracing:tracing-ktx:1.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\dedd364ac28ea8a22060c4874813c44f\transformed\tracing-ktx-1.2.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.exifinterface:exifinterface:1.3.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0986e8835074ccab1d05f7c9d1c00b43\transformed\exifinterface-1.3.6\AndroidManifest.xml:17:1-24:12
+MERGED from [com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a3b12e6b12de2f2583a8a69d5b9d8596\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:15:1-38:12
+MERGED from [com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e024df5066c308c8923687dfb64c118c\transformed\transport-runtime-2.2.6\AndroidManifest.xml:15:1-41:12
+MERGED from [com.google.android.datatransport:transport-api:2.2.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\5b618d2e2aa64e1806ce6bb37d07676e\transformed\transport-api-2.2.1\AndroidManifest.xml:15:1-22:12
+MERGED from [com.google.firebase:firebase-components:16.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\16963f706bc3d1726eb9e7cfb73391a3\transformed\firebase-components-16.1.0\AndroidManifest.xml:15:1-23:12
+MERGED from [com.google.firebase:firebase-encoders-json:17.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1c81827b86e12c64da9ac2b0675060f3\transformed\firebase-encoders-json-17.1.0\AndroidManifest.xml:15:1-23:12
+MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d8962757a82e5f33426272fd42ef248e\transformed\interpolator-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8c2c295a04a7f351af328b7e514cbca5\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:17:1-27:12
+MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a8fb895c364bd84f42aa0add2426fbf8\transformed\cursoradapter-1.0.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.sqlite:sqlite-framework:2.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\438a499fc1196fa12427ff76a916c64c\transformed\sqlite-framework-2.3.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\cf2fe0079319e5821dc76b96b6b35023\transformed\core-runtime-2.2.0\AndroidManifest.xml:17:1-22:12
+MERGED from [androidx.sqlite:sqlite:2.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\7d82421f7890a372ea89906fb6d544a6\transformed\sqlite-2.3.0\AndroidManifest.xml:17:1-22:12
+MERGED from [com.google.android.odml:image:1.0.0-beta1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\62faff10d05d42e8bdcbd975e70f0eb8\transformed\image-1.0.0-beta1\AndroidManifest.xml:2:1-9:12
+	package
+		INJECTED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml
+	android:versionName
+		INJECTED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml
+	xmlns:tools
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:3:5-51
+	android:versionCode
+		INJECTED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml
+	xmlns:android
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:2:11-69
+uses-permission#android.permission.INTERNET
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:5:5-67
+MERGED from [com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a3b12e6b12de2f2583a8a69d5b9d8596\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:26:5-67
+MERGED from [com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a3b12e6b12de2f2583a8a69d5b9d8596\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:26:5-67
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:5:22-64
+uses-permission#android.permission.ACCESS_NETWORK_STATE
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:6:5-79
+MERGED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:24:5-79
+MERGED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:24:5-79
+MERGED from [androidx.media3:media3-common:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\5083f61e5db85ca4695e21f00d189b69\transformed\media3-common-1.5.0\AndroidManifest.xml:22:5-79
+MERGED from [androidx.media3:media3-common:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\5083f61e5db85ca4695e21f00d189b69\transformed\media3-common-1.5.0\AndroidManifest.xml:22:5-79
+MERGED from [androidx.media3:media3-exoplayer:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\6fe9a9ec296ab0f8eb938b9b74354f8e\transformed\media3-exoplayer-1.5.0\AndroidManifest.xml:22:5-79
+MERGED from [androidx.media3:media3-exoplayer:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\6fe9a9ec296ab0f8eb938b9b74354f8e\transformed\media3-exoplayer-1.5.0\AndroidManifest.xml:22:5-79
+MERGED from [com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a3b12e6b12de2f2583a8a69d5b9d8596\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:25:5-79
+MERGED from [com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a3b12e6b12de2f2583a8a69d5b9d8596\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:25:5-79
+MERGED from [com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e024df5066c308c8923687dfb64c118c\transformed\transport-runtime-2.2.6\AndroidManifest.xml:22:5-79
+MERGED from [com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e024df5066c308c8923687dfb64c118c\transformed\transport-runtime-2.2.6\AndroidManifest.xml:22:5-79
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:6:22-76
+uses-permission#android.permission.ACCESS_WIFI_STATE
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:7:5-76
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:7:22-73
+uses-permission#android.permission.CHANGE_WIFI_STATE
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:8:5-76
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:8:22-73
+uses-permission#android.permission.CHANGE_WIFI_MULTICAST_STATE
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:9:5-86
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:9:22-83
+uses-permission#android.permission.ACCESS_COARSE_LOCATION
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:10:5-81
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:10:22-78
+uses-permission#android.permission.ACCESS_FINE_LOCATION
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:11:5-79
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:11:22-76
+uses-permission#android.permission.NEARBY_WIFI_DEVICES
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:12:5-15:32
+	android:usesPermissionFlags
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:14:9-55
+	tools:targetApi
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:15:9-29
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:13:9-62
+uses-permission#android.permission.REQUEST_INSTALL_PACKAGES
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:16:5-83
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:16:22-80
+uses-permission#android.permission.POST_NOTIFICATIONS
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:18:5-77
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:18:22-74
+uses-permission#android.permission.CAMERA
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:20:5-65
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:20:22-62
+uses-feature#android.hardware.camera
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:21:5-85
+	android:required
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:21:58-82
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:21:19-57
+queries
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:23:5-36:15
+intent#action:name:android.intent.action.VIEW+data:scheme:ssh
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:24:9-27:18
+action#android.intent.action.VIEW
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:25:13-65
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:25:21-62
+data
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:26:13-42
+	android:scheme
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:26:19-39
+intent#action:name:android.intent.action.VIEW+data:scheme:rdp
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:28:9-31:18
+intent#action:name:android.intent.action.VIEW+data:scheme:https
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:32:9-35:18
+application
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:38:5-75:19
+INJECTED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:38:5-75:19
+MERGED from [androidx.camera:camera-camera2:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1c88741e0be7191a1f9b37b4fa733c9a\transformed\camera-camera2-1.4.1\AndroidManifest.xml:23:5-34:19
+MERGED from [androidx.camera:camera-camera2:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1c88741e0be7191a1f9b37b4fa733c9a\transformed\camera-camera2-1.4.1\AndroidManifest.xml:23:5-34:19
+MERGED from [androidx.camera:camera-core:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\49874f4d8c95ae68e351dfb4f9d677da\transformed\camera-core-1.4.1\AndroidManifest.xml:23:5-34:19
+MERGED from [androidx.camera:camera-core:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\49874f4d8c95ae68e351dfb4f9d677da\transformed\camera-core-1.4.1\AndroidManifest.xml:23:5-34:19
+MERGED from [com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\515af4dd030e4fb2ba6ac0386d1a50c2\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:8:5-21:19
+MERGED from [com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\515af4dd030e4fb2ba6ac0386d1a50c2\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:8:5-21:19
+MERGED from [com.google.android.gms:play-services-location:21.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4e8646b963abe64d6d4ae642da3795e6\transformed\play-services-location-21.3.0\AndroidManifest.xml:6:5-20
+MERGED from [com.google.android.gms:play-services-location:21.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4e8646b963abe64d6d4ae642da3795e6\transformed\play-services-location-21.3.0\AndroidManifest.xml:6:5-20
+MERGED from [com.google.mlkit:vision-common:17.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\b70e19f1a13a80903f3418bea7f9d574\transformed\vision-common-17.0.0\AndroidManifest.xml:8:5-16:19
+MERGED from [com.google.mlkit:vision-common:17.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\b70e19f1a13a80903f3418bea7f9d574\transformed\vision-common-17.0.0\AndroidManifest.xml:8:5-16:19
+MERGED from [com.google.mlkit:common:18.9.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\fd1911fde102947c1a0a6f63a3f06075\transformed\common-18.9.0\AndroidManifest.xml:8:5-24:19
+MERGED from [com.google.mlkit:common:18.9.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\fd1911fde102947c1a0a6f63a3f06075\transformed\common-18.9.0\AndroidManifest.xml:8:5-24:19
+MERGED from [com.google.android.gms:play-services-base:18.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4989521e05e129c3b241f328e58d0128\transformed\play-services-base-18.5.0\AndroidManifest.xml:4:5-6:19
+MERGED from [com.google.android.gms:play-services-base:18.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4989521e05e129c3b241f328e58d0128\transformed\play-services-base-18.5.0\AndroidManifest.xml:4:5-6:19
+MERGED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:28:5-143:19
+MERGED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:28:5-143:19
+MERGED from [androidx.emoji2:emoji2:1.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d02ba42a90d462540905550273ec5711\transformed\emoji2-1.3.0\AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.emoji2:emoji2:1.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d02ba42a90d462540905550273ec5711\transformed\emoji2-1.3.0\AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.core:core:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3c81162d1824251f3742ba5c37504a26\transformed\core-1.15.0\AndroidManifest.xml:28:5-89
+MERGED from [androidx.core:core:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3c81162d1824251f3742ba5c37504a26\transformed\core-1.15.0\AndroidManifest.xml:28:5-89
+MERGED from [androidx.lifecycle:lifecycle-process:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\558446ec72a1ab2fb53bffac490e940e\transformed\lifecycle-process-2.8.7\AndroidManifest.xml:23:5-33:19
+MERGED from [androidx.lifecycle:lifecycle-process:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\558446ec72a1ab2fb53bffac490e940e\transformed\lifecycle-process-2.8.7\AndroidManifest.xml:23:5-33:19
+MERGED from [com.google.android.gms:play-services-tasks:18.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a26134fa85582cfeea0e863bb177b9e6\transformed\play-services-tasks-18.2.0\AndroidManifest.xml:4:5-20
+MERGED from [com.google.android.gms:play-services-tasks:18.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a26134fa85582cfeea0e863bb177b9e6\transformed\play-services-tasks-18.2.0\AndroidManifest.xml:4:5-20
+MERGED from [com.google.android.gms:play-services-basement:18.4.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\9482b014a6e99995cc5569bf95b2c850\transformed\play-services-basement-18.4.0\AndroidManifest.xml:5:5-7:19
+MERGED from [com.google.android.gms:play-services-basement:18.4.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\9482b014a6e99995cc5569bf95b2c850\transformed\play-services-basement-18.4.0\AndroidManifest.xml:5:5-7:19
+MERGED from [androidx.room:room-runtime:2.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4fc600dfbe51b9af5e97fb36615808e5\transformed\room-runtime-2.5.0\AndroidManifest.xml:23:5-29:19
+MERGED from [androidx.room:room-runtime:2.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4fc600dfbe51b9af5e97fb36615808e5\transformed\room-runtime-2.5.0\AndroidManifest.xml:23:5-29:19
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:23:5-53:19
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:23:5-53:19
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\de346e15c96e956f43fb62de99f6a482\transformed\startup-runtime-1.1.1\AndroidManifest.xml:25:5-31:19
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\de346e15c96e956f43fb62de99f6a482\transformed\startup-runtime-1.1.1\AndroidManifest.xml:25:5-31:19
+MERGED from [com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a3b12e6b12de2f2583a8a69d5b9d8596\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:28:5-36:19
+MERGED from [com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a3b12e6b12de2f2583a8a69d5b9d8596\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:28:5-36:19
+MERGED from [com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e024df5066c308c8923687dfb64c118c\transformed\transport-runtime-2.2.6\AndroidManifest.xml:25:5-39:19
+MERGED from [com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e024df5066c308c8923687dfb64c118c\transformed\transport-runtime-2.2.6\AndroidManifest.xml:25:5-39:19
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8c2c295a04a7f351af328b7e514cbca5\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:24:5-25:19
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8c2c295a04a7f351af328b7e514cbca5\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:24:5-25:19
+MERGED from [com.google.android.odml:image:1.0.0-beta1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\62faff10d05d42e8bdcbd975e70f0eb8\transformed\image-1.0.0-beta1\AndroidManifest.xml:7:5-20
+MERGED from [com.google.android.odml:image:1.0.0-beta1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\62faff10d05d42e8bdcbd975e70f0eb8\transformed\image-1.0.0-beta1\AndroidManifest.xml:7:5-20
+	android:extractNativeLibs
+		INJECTED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml
+	android:appComponentFactory
+		ADDED from [androidx.core:core:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3c81162d1824251f3742ba5c37504a26\transformed\core-1.15.0\AndroidManifest.xml:28:18-86
+	android:supportsRtl
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:44:9-36
+	android:label
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:42:9-41
+	tools:targetApi
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:46:9-29
+	android:icon
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:41:9-43
+	android:allowBackup
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:40:9-36
+	android:theme
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:45:9-44
+	android:networkSecurityConfig
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:43:9-69
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:39:9-39
+activity#it.cdanet.cpeconfigurator.MainActivity
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:48:9-57:20
+	android:windowSoftInputMode
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:52:13-55
+	android:exported
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:51:13-36
+	android:configChanges
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:50:13-113
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:49:13-41
+intent-filter#action:name:android.intent.action.MAIN+category:name:android.intent.category.LAUNCHER
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:53:13-56:29
+action#android.intent.action.MAIN
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:54:17-69
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:54:25-66
+category#android.intent.category.LAUNCHER
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:55:17-77
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:55:27-74
+activity#it.cdanet.cpeconfigurator.tools.RtspPlayerActivity
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:59:9-64:51
+	android:screenOrientation
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:63:13-56
+	android:exported
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:62:13-37
+	android:configChanges
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:61:13-106
+	android:theme
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:64:13-48
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:60:13-53
+meta-data#android.support.FILE_PROVIDER_PATHS
+ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:71:13-73:54
+	android:resource
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:73:17-51
+	android:name
+		ADDED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml:72:17-67
+uses-sdk
+INJECTED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml reason: use-sdk injection requested
+INJECTED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml
+INJECTED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml
+MERGED from [androidx.biometric:biometric:1.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\85da2ef9c11ce95de64c617b09ee6b16\transformed\biometric-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.biometric:biometric:1.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\85da2ef9c11ce95de64c617b09ee6b16\transformed\biometric-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.camera:camera-video:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\19e8f19c3b98859723af11540bd34ed3\transformed\camera-video-1.4.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.camera:camera-video:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\19e8f19c3b98859723af11540bd34ed3\transformed\camera-video-1.4.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.camera:camera-lifecycle:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\2af3b1aac0ae9b6f7276121a25b46ba7\transformed\camera-lifecycle-1.4.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.camera:camera-lifecycle:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\2af3b1aac0ae9b6f7276121a25b46ba7\transformed\camera-lifecycle-1.4.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.camera:camera-camera2:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1c88741e0be7191a1f9b37b4fa733c9a\transformed\camera-camera2-1.4.1\AndroidManifest.xml:21:5-44
+MERGED from [androidx.camera:camera-camera2:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1c88741e0be7191a1f9b37b4fa733c9a\transformed\camera-camera2-1.4.1\AndroidManifest.xml:21:5-44
+MERGED from [androidx.camera:camera-core:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\49874f4d8c95ae68e351dfb4f9d677da\transformed\camera-core-1.4.1\AndroidManifest.xml:21:5-44
+MERGED from [androidx.camera:camera-core:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\49874f4d8c95ae68e351dfb4f9d677da\transformed\camera-core-1.4.1\AndroidManifest.xml:21:5-44
+MERGED from [androidx.camera:camera-view:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e4714d4a4111548b8da70a2b66e0a136\transformed\camera-view-1.4.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.camera:camera-view:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e4714d4a4111548b8da70a2b66e0a136\transformed\camera-view-1.4.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.appcompat:appcompat:1.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4683e09bb6ce83b30a504f9f1df9562f\transformed\appcompat-1.2.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.appcompat:appcompat:1.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4683e09bb6ce83b30a504f9f1df9562f\transformed\appcompat-1.2.0\AndroidManifest.xml:20:5-22:41
+MERGED from [com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\515af4dd030e4fb2ba6ac0386d1a50c2\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:6:5-44
+MERGED from [com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\515af4dd030e4fb2ba6ac0386d1a50c2\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:6:5-44
+MERGED from [com.google.android.gms:play-services-location:21.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4e8646b963abe64d6d4ae642da3795e6\transformed\play-services-location-21.3.0\AndroidManifest.xml:4:5-44
+MERGED from [com.google.android.gms:play-services-location:21.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4e8646b963abe64d6d4ae642da3795e6\transformed\play-services-location-21.3.0\AndroidManifest.xml:4:5-44
+MERGED from [com.google.mlkit:barcode-scanning-common:17.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\f73053c06615ff424cb1f09974ea3245\transformed\barcode-scanning-common-17.0.0\AndroidManifest.xml:5:5-44
+MERGED from [com.google.mlkit:barcode-scanning-common:17.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\f73053c06615ff424cb1f09974ea3245\transformed\barcode-scanning-common-17.0.0\AndroidManifest.xml:5:5-44
+MERGED from [com.google.mlkit:vision-common:17.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\b70e19f1a13a80903f3418bea7f9d574\transformed\vision-common-17.0.0\AndroidManifest.xml:6:5-44
+MERGED from [com.google.mlkit:vision-common:17.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\b70e19f1a13a80903f3418bea7f9d574\transformed\vision-common-17.0.0\AndroidManifest.xml:6:5-44
+MERGED from [com.google.mlkit:common:18.9.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\fd1911fde102947c1a0a6f63a3f06075\transformed\common-18.9.0\AndroidManifest.xml:6:5-44
+MERGED from [com.google.mlkit:common:18.9.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\fd1911fde102947c1a0a6f63a3f06075\transformed\common-18.9.0\AndroidManifest.xml:6:5-44
+MERGED from [com.google.android.gms:play-services-base:18.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4989521e05e129c3b241f328e58d0128\transformed\play-services-base-18.5.0\AndroidManifest.xml:3:5-44
+MERGED from [com.google.android.gms:play-services-base:18.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4989521e05e129c3b241f328e58d0128\transformed\play-services-base-18.5.0\AndroidManifest.xml:3:5-44
+MERGED from [androidx.work:work-runtime-ktx:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1baa8e1c922a0b230aad564f39ebb1b5\transformed\work-runtime-ktx-2.9.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.work:work-runtime-ktx:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1baa8e1c922a0b230aad564f39ebb1b5\transformed\work-runtime-ktx-2.9.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:21:5-44
+MERGED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:21:5-44
+MERGED from [androidx.activity:activity:1.9.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\2cf1667e5a9a08459a6b8cb0751abade\transformed\activity-1.9.3\AndroidManifest.xml:20:5-44
+MERGED from [androidx.activity:activity:1.9.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\2cf1667e5a9a08459a6b8cb0751abade\transformed\activity-1.9.3\AndroidManifest.xml:20:5-44
+MERGED from [androidx.compose.material3:material3-android:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d5db0786a79371e5ca32eccf9da7a27f\transformed\material3-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.compose.material3:material3-android:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d5db0786a79371e5ca32eccf9da7a27f\transformed\material3-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.activity:activity-compose:1.9.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\2ab072455f3c18cf916c43abadb150b1\transformed\activity-compose-1.9.3\AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity-compose:1.9.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\2ab072455f3c18cf916c43abadb150b1\transformed\activity-compose-1.9.3\AndroidManifest.xml:5:5-44
+MERGED from [androidx.loader:loader:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\14e8d69326121e72cfc727803f40d979\transformed\loader-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.loader:loader:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\14e8d69326121e72cfc727803f40d979\transformed\loader-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-ui:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\80ca1a52217d2abaf61f9478efbab8ee\transformed\media3-ui-1.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-ui:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\80ca1a52217d2abaf61f9478efbab8ee\transformed\media3-ui-1.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-extractor:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8f9b0114cbdde708abec78a0e095d0ec\transformed\media3-extractor-1.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-extractor:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8f9b0114cbdde708abec78a0e095d0ec\transformed\media3-extractor-1.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-container:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\74de8e14a54170f2506d91087abb43de\transformed\media3-container-1.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-container:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\74de8e14a54170f2506d91087abb43de\transformed\media3-container-1.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-datasource:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1dbdef1ec9682b1ad972561953893623\transformed\media3-datasource-1.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-datasource:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1dbdef1ec9682b1ad972561953893623\transformed\media3-datasource-1.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-decoder:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\ccaa6b42a103bcdcf8abb3dc132f7a1e\transformed\media3-decoder-1.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-decoder:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\ccaa6b42a103bcdcf8abb3dc132f7a1e\transformed\media3-decoder-1.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-database:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\f68119e6fe0f7693a9dcc53481e90709\transformed\media3-database-1.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-database:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\f68119e6fe0f7693a9dcc53481e90709\transformed\media3-database-1.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-common:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\5083f61e5db85ca4695e21f00d189b69\transformed\media3-common-1.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-common:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\5083f61e5db85ca4695e21f00d189b69\transformed\media3-common-1.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-exoplayer-rtsp:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8acd85c4b28d592d361a1c7c9429a5f9\transformed\media3-exoplayer-rtsp-1.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-exoplayer-rtsp:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8acd85c4b28d592d361a1c7c9429a5f9\transformed\media3-exoplayer-rtsp-1.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-exoplayer:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\6fe9a9ec296ab0f8eb938b9b74354f8e\transformed\media3-exoplayer-1.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media3:media3-exoplayer:1.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\6fe9a9ec296ab0f8eb938b9b74354f8e\transformed\media3-exoplayer-1.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.media:media:1.7.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\450adaf24f941a535153e7a918aa1964\transformed\media-1.7.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.media:media:1.7.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\450adaf24f941a535153e7a918aa1964\transformed\media-1.7.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.recyclerview:recyclerview:1.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\f62e5b668f7572506921e34875addfe8\transformed\recyclerview-1.3.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.recyclerview:recyclerview:1.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\f62e5b668f7572506921e34875addfe8\transformed\recyclerview-1.3.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.viewpager:viewpager:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\2dfdd2cfe2ff3bec39a1de102ed42f8f\transformed\viewpager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.viewpager:viewpager:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\2dfdd2cfe2ff3bec39a1de102ed42f8f\transformed\viewpager-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.appcompat:appcompat-resources:1.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\f267b194d017afe0e5baf6b2f7fbbd0f\transformed\appcompat-resources-1.2.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.appcompat:appcompat-resources:1.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\f267b194d017afe0e5baf6b2f7fbbd0f\transformed\appcompat-resources-1.2.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d761def17c8f202f4b6ef3576c14d82d\transformed\drawerlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.drawerlayout:drawerlayout:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d761def17c8f202f4b6ef3576c14d82d\transformed\drawerlayout-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.customview:customview:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\9f138eb30236fd3652d10f72444c2022\transformed\customview-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.customview:customview:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\9f138eb30236fd3652d10f72444c2022\transformed\customview-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3ad88d17aebecb1f12e47fe80279c814\transformed\vectordrawable-animated-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable-animated:1.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3ad88d17aebecb1f12e47fe80279c814\transformed\vectordrawable-animated-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\409edf59a3cb223f6b082a177d47f043\transformed\vectordrawable-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.vectordrawable:vectordrawable:1.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\409edf59a3cb223f6b082a177d47f043\transformed\vectordrawable-1.1.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.autofill:autofill:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\5db973d8d0b52cc628da578bd66969e3\transformed\autofill-1.0.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.autofill:autofill:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\5db973d8d0b52cc628da578bd66969e3\transformed\autofill-1.0.0\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.compose.animation:animation-core-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4718b2ca31bfaf5dfa6e4844482009ee\transformed\animation-core-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.animation:animation-core-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4718b2ca31bfaf5dfa6e4844482009ee\transformed\animation-core-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.material:material-ripple-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\659a2274e11eacdc5f302b9a524cda5c\transformed\material-ripple-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.material:material-ripple-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\659a2274e11eacdc5f302b9a524cda5c\transformed\material-ripple-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.animation:animation-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\9a2bccae2284a30d6a310b97b94bc021\transformed\animation-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.animation:animation-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\9a2bccae2284a30d6a310b97b94bc021\transformed\animation-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.foundation:foundation-layout-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\b1d82c3b9b77ea31d52cb78a74e2a060\transformed\foundation-layout-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.foundation:foundation-layout-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\b1d82c3b9b77ea31d52cb78a74e2a060\transformed\foundation-layout-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.foundation:foundation-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\65e5ba863e9a2eea46d40f8136aba384\transformed\foundation-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.foundation:foundation-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\65e5ba863e9a2eea46d40f8136aba384\transformed\foundation-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-unit-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\5df808be137efc8e4282a3066cef82c3\transformed\ui-unit-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-unit-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\5df808be137efc8e4282a3066cef82c3\transformed\ui-unit-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-graphics-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\874226f5f308b634e18e9f93d29afba2\transformed\ui-graphics-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-graphics-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\874226f5f308b634e18e9f93d29afba2\transformed\ui-graphics-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-geometry-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\74a8701d77716bc84876941fda5e3f8e\transformed\ui-geometry-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-geometry-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\74a8701d77716bc84876941fda5e3f8e\transformed\ui-geometry-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-util-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\5906d3ed14e236a6d0d3c5da3b2d365a\transformed\ui-util-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-util-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\5906d3ed14e236a6d0d3c5da3b2d365a\transformed\ui-util-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-tooling-preview-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0dba43f249f81a59873a693fdea5718e\transformed\ui-tooling-preview-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.compose.ui:ui-tooling-preview-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0dba43f249f81a59873a693fdea5718e\transformed\ui-tooling-preview-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.compose.ui:ui-text-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\6e4b5654968078cd8c5cb1abd423e162\transformed\ui-text-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-text-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\6e4b5654968078cd8c5cb1abd423e162\transformed\ui-text-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.emoji2:emoji2:1.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d02ba42a90d462540905550273ec5711\transformed\emoji2-1.3.0\AndroidManifest.xml:21:5-44
+MERGED from [androidx.emoji2:emoji2:1.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d02ba42a90d462540905550273ec5711\transformed\emoji2-1.3.0\AndroidManifest.xml:21:5-44
+MERGED from [androidx.graphics:graphics-path:1.0.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\43a25417233297230eb389dad35a4dbe\transformed\graphics-path-1.0.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.graphics:graphics-path:1.0.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\43a25417233297230eb389dad35a4dbe\transformed\graphics-path-1.0.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3c81162d1824251f3742ba5c37504a26\transformed\core-1.15.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.core:core:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3c81162d1824251f3742ba5c37504a26\transformed\core-1.15.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate-ktx:1.2.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\97fbf15e0de592fc83bc815fe53a26cc\transformed\savedstate-ktx-1.2.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate-ktx:1.2.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\97fbf15e0de592fc83bc815fe53a26cc\transformed\savedstate-ktx-1.2.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\7ee1c93afd399877cafefe18a9056c04\transformed\savedstate-1.2.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.savedstate:savedstate:1.2.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\7ee1c93afd399877cafefe18a9056c04\transformed\savedstate-1.2.1\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-process:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\558446ec72a1ab2fb53bffac490e940e\transformed\lifecycle-process-2.8.7\AndroidManifest.xml:21:5-44
+MERGED from [androidx.lifecycle:lifecycle-process:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\558446ec72a1ab2fb53bffac490e940e\transformed\lifecycle-process-2.8.7\AndroidManifest.xml:21:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\7c2fa9f49ea8cbaa32d98a47124d864b\transformed\lifecycle-viewmodel-2.8.7\AndroidManifest.xml:4:5-43
+MERGED from [androidx.lifecycle:lifecycle-viewmodel:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\7c2fa9f49ea8cbaa32d98a47124d864b\transformed\lifecycle-viewmodel-2.8.7\AndroidManifest.xml:4:5-43
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-android:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\940929aa70057861b2d1c7488bc72477\transformed\lifecycle-viewmodel-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-android:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\940929aa70057861b2d1c7488bc72477\transformed\lifecycle-viewmodel-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-ktx-android:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\cfff2e35382cd28ad2f252d662e3fe75\transformed\lifecycle-runtime-ktx-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-ktx-android:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\cfff2e35382cd28ad2f252d662e3fe75\transformed\lifecycle-runtime-ktx-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-android:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\6819de6aac451b2e793045b7175da723\transformed\lifecycle-runtime-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-android:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\6819de6aac451b2e793045b7175da723\transformed\lifecycle-runtime-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-service:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\bddabec2cef879deabbcdbe485d79a97\transformed\lifecycle-service-2.8.7\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-service:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\bddabec2cef879deabbcdbe485d79a97\transformed\lifecycle-service-2.8.7\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\db7dd99861998642e2554c43da2ac5b6\transformed\lifecycle-viewmodel-savedstate-2.8.7\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-savedstate:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\db7dd99861998642e2554c43da2ac5b6\transformed\lifecycle-viewmodel-savedstate-2.8.7\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\ede4785ed4370a5baee28d1accf71c5d\transformed\lifecycle-livedata-core-ktx-2.8.7\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core-ktx:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\ede4785ed4370a5baee28d1accf71c5d\transformed\lifecycle-livedata-core-ktx-2.8.7\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\72e2206aa576b7ce17bf107be9fc2bd6\transformed\lifecycle-livedata-core-2.8.7\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata-core:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\72e2206aa576b7ce17bf107be9fc2bd6\transformed\lifecycle-livedata-core-2.8.7\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e854c336ee50601093dfb656c5aa750f\transformed\lifecycle-livedata-2.8.7\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-livedata:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e854c336ee50601093dfb656c5aa750f\transformed\lifecycle-livedata-2.8.7\AndroidManifest.xml:20:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-compose-android:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\f2a3a6b17c87c025ac095d0187f60b55\transformed\lifecycle-runtime-compose-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-runtime-compose-android:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\f2a3a6b17c87c025ac095d0187f60b55\transformed\lifecycle-runtime-compose-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-compose-android:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\05a8a1ccc6e9a40a31029aad5f9a5e1e\transformed\lifecycle-viewmodel-compose-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-compose-android:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\05a8a1ccc6e9a40a31029aad5f9a5e1e\transformed\lifecycle-viewmodel-compose-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.material:material-icons-core-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\81deba4ed34017184475261fe19dd2a3\transformed\material-icons-core-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.material:material-icons-core-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\81deba4ed34017184475261fe19dd2a3\transformed\material-icons-core-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\40de61f388d65dee0ce522ec2a7701a2\transformed\ui-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.ui:ui-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\40de61f388d65dee0ce522ec2a7701a2\transformed\ui-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity-ktx:1.9.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\bcaaca26a8a861a537b84e810857fc96\transformed\activity-ktx-1.9.3\AndroidManifest.xml:5:5-44
+MERGED from [androidx.activity:activity-ktx:1.9.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\bcaaca26a8a861a537b84e810857fc96\transformed\activity-ktx-1.9.3\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\7c8ed08ae2808cbf2f663dd3939e3d3e\transformed\lifecycle-viewmodel-ktx-2.8.7\AndroidManifest.xml:5:5-44
+MERGED from [androidx.lifecycle:lifecycle-viewmodel-ktx:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\7c8ed08ae2808cbf2f663dd3939e3d3e\transformed\lifecycle-viewmodel-ktx-2.8.7\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.runtime:runtime-saveable-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4cda6e0eadb75027714940e681d03172\transformed\runtime-saveable-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.runtime:runtime-saveable-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4cda6e0eadb75027714940e681d03172\transformed\runtime-saveable-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.runtime:runtime-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0623009f8ccf99b56143d5ab302206e8\transformed\runtime-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.compose.runtime:runtime-android:1.7.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0623009f8ccf99b56143d5ab302206e8\transformed\runtime-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.room:room-ktx:2.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\59d6ece0ffef2004028546b81b9da05d\transformed\room-ktx-2.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.room:room-ktx:2.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\59d6ece0ffef2004028546b81b9da05d\transformed\room-ktx-2.5.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.datastore:datastore-core-android:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\988d8947035020cdfc7a239a476b0ae0\transformed\datastore-core-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.datastore:datastore-core-android:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\988d8947035020cdfc7a239a476b0ae0\transformed\datastore-core-release\AndroidManifest.xml:5:5-44
+MERGED from [androidx.datastore:datastore-android:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\52ab93624cd0ec3ba790da89a763a948\transformed\datastore-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.datastore:datastore-android:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\52ab93624cd0ec3ba790da89a763a948\transformed\datastore-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.datastore:datastore-preferences-android:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\ce56f07c089daeeae4a93d2a5589f13d\transformed\datastore-preferences-release\AndroidManifest.xml:20:5-44
+MERGED from [androidx.datastore:datastore-preferences-android:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\ce56f07c089daeeae4a93d2a5589f13d\transformed\datastore-preferences-release\AndroidManifest.xml:20:5-44
+MERGED from [com.google.android.gms:play-services-tasks:18.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a26134fa85582cfeea0e863bb177b9e6\transformed\play-services-tasks-18.2.0\AndroidManifest.xml:3:5-44
+MERGED from [com.google.android.gms:play-services-tasks:18.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a26134fa85582cfeea0e863bb177b9e6\transformed\play-services-tasks-18.2.0\AndroidManifest.xml:3:5-44
+MERGED from [com.google.android.gms:play-services-basement:18.4.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\9482b014a6e99995cc5569bf95b2c850\transformed\play-services-basement-18.4.0\AndroidManifest.xml:3:5-44
+MERGED from [com.google.android.gms:play-services-basement:18.4.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\9482b014a6e99995cc5569bf95b2c850\transformed\play-services-basement-18.4.0\AndroidManifest.xml:3:5-44
+MERGED from [androidx.fragment:fragment:1.8.5] C:\Users\alfio\.gradle\caches\8.11.1\transforms\36da5f0ffd7a54a65e9a6fa510beeeca\transformed\fragment-1.8.5\AndroidManifest.xml:5:5-44
+MERGED from [androidx.fragment:fragment:1.8.5] C:\Users\alfio\.gradle\caches\8.11.1\transforms\36da5f0ffd7a54a65e9a6fa510beeeca\transformed\fragment-1.8.5\AndroidManifest.xml:5:5-44
+MERGED from [androidx.fragment:fragment-ktx:1.8.5] C:\Users\alfio\.gradle\caches\8.11.1\transforms\30b8f1e086c81d9f490101b5a1c277b2\transformed\fragment-ktx-1.8.5\AndroidManifest.xml:5:5-44
+MERGED from [androidx.fragment:fragment-ktx:1.8.5] C:\Users\alfio\.gradle\caches\8.11.1\transforms\30b8f1e086c81d9f490101b5a1c277b2\transformed\fragment-ktx-1.8.5\AndroidManifest.xml:5:5-44
+MERGED from [androidx.customview:customview-poolingcontainer:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\f4575e822aa1293e87e5f4d0aac0a10e\transformed\customview-poolingcontainer-1.0.0\AndroidManifest.xml:20:5-21:38
+MERGED from [androidx.customview:customview-poolingcontainer:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\f4575e822aa1293e87e5f4d0aac0a10e\transformed\customview-poolingcontainer-1.0.0\AndroidManifest.xml:20:5-21:38
+MERGED from [androidx.core:core-ktx:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\2390e4fe0512a196816e74673937dd19\transformed\core-ktx-1.15.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.core:core-ktx:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\2390e4fe0512a196816e74673937dd19\transformed\core-ktx-1.15.0\AndroidManifest.xml:5:5-44
+MERGED from [androidx.room:room-runtime:2.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4fc600dfbe51b9af5e97fb36615808e5\transformed\room-runtime-2.5.0\AndroidManifest.xml:21:5-44
+MERGED from [androidx.room:room-runtime:2.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4fc600dfbe51b9af5e97fb36615808e5\transformed\room-runtime-2.5.0\AndroidManifest.xml:21:5-44
+MERGED from [androidx.annotation:annotation-experimental:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\56fefa68edcac08fe1c708154c43781b\transformed\annotation-experimental-1.4.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.annotation:annotation-experimental:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\56fefa68edcac08fe1c708154c43781b\transformed\annotation-experimental-1.4.1\AndroidManifest.xml:5:5-44
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:21:5-44
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:21:5-44
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\de346e15c96e956f43fb62de99f6a482\transformed\startup-runtime-1.1.1\AndroidManifest.xml:21:5-23:41
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\de346e15c96e956f43fb62de99f6a482\transformed\startup-runtime-1.1.1\AndroidManifest.xml:21:5-23:41
+MERGED from [androidx.tracing:tracing:1.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e6d6b1cacdbd14ed95468fe6ca6d0cc3\transformed\tracing-1.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.tracing:tracing:1.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e6d6b1cacdbd14ed95468fe6ca6d0cc3\transformed\tracing-1.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.tracing:tracing-ktx:1.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\dedd364ac28ea8a22060c4874813c44f\transformed\tracing-ktx-1.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.tracing:tracing-ktx:1.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\dedd364ac28ea8a22060c4874813c44f\transformed\tracing-ktx-1.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.exifinterface:exifinterface:1.3.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0986e8835074ccab1d05f7c9d1c00b43\transformed\exifinterface-1.3.6\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.exifinterface:exifinterface:1.3.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0986e8835074ccab1d05f7c9d1c00b43\transformed\exifinterface-1.3.6\AndroidManifest.xml:20:5-22:41
+MERGED from [com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a3b12e6b12de2f2583a8a69d5b9d8596\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:19:5-21:41
+MERGED from [com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a3b12e6b12de2f2583a8a69d5b9d8596\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:19:5-21:41
+MERGED from [com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e024df5066c308c8923687dfb64c118c\transformed\transport-runtime-2.2.6\AndroidManifest.xml:18:5-20:41
+MERGED from [com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e024df5066c308c8923687dfb64c118c\transformed\transport-runtime-2.2.6\AndroidManifest.xml:18:5-20:41
+MERGED from [com.google.android.datatransport:transport-api:2.2.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\5b618d2e2aa64e1806ce6bb37d07676e\transformed\transport-api-2.2.1\AndroidManifest.xml:18:5-20:41
+MERGED from [com.google.android.datatransport:transport-api:2.2.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\5b618d2e2aa64e1806ce6bb37d07676e\transformed\transport-api-2.2.1\AndroidManifest.xml:18:5-20:41
+MERGED from [com.google.firebase:firebase-components:16.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\16963f706bc3d1726eb9e7cfb73391a3\transformed\firebase-components-16.1.0\AndroidManifest.xml:19:5-21:41
+MERGED from [com.google.firebase:firebase-components:16.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\16963f706bc3d1726eb9e7cfb73391a3\transformed\firebase-components-16.1.0\AndroidManifest.xml:19:5-21:41
+MERGED from [com.google.firebase:firebase-encoders-json:17.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1c81827b86e12c64da9ac2b0675060f3\transformed\firebase-encoders-json-17.1.0\AndroidManifest.xml:19:5-21:41
+MERGED from [com.google.firebase:firebase-encoders-json:17.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1c81827b86e12c64da9ac2b0675060f3\transformed\firebase-encoders-json-17.1.0\AndroidManifest.xml:19:5-21:41
+MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d8962757a82e5f33426272fd42ef248e\transformed\interpolator-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.interpolator:interpolator:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d8962757a82e5f33426272fd42ef248e\transformed\interpolator-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8c2c295a04a7f351af328b7e514cbca5\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.versionedparcelable:versionedparcelable:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8c2c295a04a7f351af328b7e514cbca5\transformed\versionedparcelable-1.1.1\AndroidManifest.xml:20:5-22:41
+MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a8fb895c364bd84f42aa0add2426fbf8\transformed\cursoradapter-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.cursoradapter:cursoradapter:1.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a8fb895c364bd84f42aa0add2426fbf8\transformed\cursoradapter-1.0.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.sqlite:sqlite-framework:2.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\438a499fc1196fa12427ff76a916c64c\transformed\sqlite-framework-2.3.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.sqlite:sqlite-framework:2.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\438a499fc1196fa12427ff76a916c64c\transformed\sqlite-framework-2.3.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\cf2fe0079319e5821dc76b96b6b35023\transformed\core-runtime-2.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.arch.core:core-runtime:2.2.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\cf2fe0079319e5821dc76b96b6b35023\transformed\core-runtime-2.2.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.sqlite:sqlite:2.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\7d82421f7890a372ea89906fb6d544a6\transformed\sqlite-2.3.0\AndroidManifest.xml:20:5-44
+MERGED from [androidx.sqlite:sqlite:2.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\7d82421f7890a372ea89906fb6d544a6\transformed\sqlite-2.3.0\AndroidManifest.xml:20:5-44
+MERGED from [com.google.android.odml:image:1.0.0-beta1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\62faff10d05d42e8bdcbd975e70f0eb8\transformed\image-1.0.0-beta1\AndroidManifest.xml:5:5-44
+MERGED from [com.google.android.odml:image:1.0.0-beta1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\62faff10d05d42e8bdcbd975e70f0eb8\transformed\image-1.0.0-beta1\AndroidManifest.xml:5:5-44
+	android:targetSdkVersion
+		INJECTED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml
+	android:minSdkVersion
+		INJECTED from C:\Users\alfio\Documents\cdanet-as200034-cpe-configurator\android\app\src\main\AndroidManifest.xml
+uses-permission#android.permission.USE_BIOMETRIC
+ADDED from [androidx.biometric:biometric:1.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\85da2ef9c11ce95de64c617b09ee6b16\transformed\biometric-1.1.0\AndroidManifest.xml:24:5-72
+	android:name
+		ADDED from [androidx.biometric:biometric:1.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\85da2ef9c11ce95de64c617b09ee6b16\transformed\biometric-1.1.0\AndroidManifest.xml:24:22-69
+uses-permission#android.permission.USE_FINGERPRINT
+ADDED from [androidx.biometric:biometric:1.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\85da2ef9c11ce95de64c617b09ee6b16\transformed\biometric-1.1.0\AndroidManifest.xml:27:5-74
+	android:name
+		ADDED from [androidx.biometric:biometric:1.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\85da2ef9c11ce95de64c617b09ee6b16\transformed\biometric-1.1.0\AndroidManifest.xml:27:22-71
+service#androidx.camera.core.impl.MetadataHolderService
+ADDED from [androidx.camera:camera-camera2:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1c88741e0be7191a1f9b37b4fa733c9a\transformed\camera-camera2-1.4.1\AndroidManifest.xml:24:9-33:19
+MERGED from [androidx.camera:camera-core:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\49874f4d8c95ae68e351dfb4f9d677da\transformed\camera-core-1.4.1\AndroidManifest.xml:29:9-33:78
+MERGED from [androidx.camera:camera-core:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\49874f4d8c95ae68e351dfb4f9d677da\transformed\camera-core-1.4.1\AndroidManifest.xml:29:9-33:78
+	tools:node
+		ADDED from [androidx.camera:camera-camera2:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1c88741e0be7191a1f9b37b4fa733c9a\transformed\camera-camera2-1.4.1\AndroidManifest.xml:29:13-31
+	android:enabled
+		ADDED from [androidx.camera:camera-camera2:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1c88741e0be7191a1f9b37b4fa733c9a\transformed\camera-camera2-1.4.1\AndroidManifest.xml:26:13-36
+	android:exported
+		ADDED from [androidx.camera:camera-camera2:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1c88741e0be7191a1f9b37b4fa733c9a\transformed\camera-camera2-1.4.1\AndroidManifest.xml:27:13-37
+	tools:ignore
+		ADDED from [androidx.camera:camera-camera2:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1c88741e0be7191a1f9b37b4fa733c9a\transformed\camera-camera2-1.4.1\AndroidManifest.xml:28:13-75
+	android:name
+		ADDED from [androidx.camera:camera-camera2:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1c88741e0be7191a1f9b37b4fa733c9a\transformed\camera-camera2-1.4.1\AndroidManifest.xml:25:13-75
+meta-data#androidx.camera.core.impl.MetadataHolderService.DEFAULT_CONFIG_PROVIDER
+ADDED from [androidx.camera:camera-camera2:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1c88741e0be7191a1f9b37b4fa733c9a\transformed\camera-camera2-1.4.1\AndroidManifest.xml:30:13-32:89
+	android:value
+		ADDED from [androidx.camera:camera-camera2:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1c88741e0be7191a1f9b37b4fa733c9a\transformed\camera-camera2-1.4.1\AndroidManifest.xml:32:17-86
+	android:name
+		ADDED from [androidx.camera:camera-camera2:1.4.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\1c88741e0be7191a1f9b37b4fa733c9a\transformed\camera-camera2-1.4.1\AndroidManifest.xml:31:17-103
+activity#com.google.mlkit.vision.codescanner.internal.GmsBarcodeScanningDelegateActivity
+ADDED from [com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\515af4dd030e4fb2ba6ac0386d1a50c2\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:15:9-20:20
+	android:screenOrientation
+		ADDED from [com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\515af4dd030e4fb2ba6ac0386d1a50c2\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:18:13-49
+	android:exported
+		ADDED from [com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\515af4dd030e4fb2ba6ac0386d1a50c2\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:17:13-37
+	tools:ignore
+		ADDED from [com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\515af4dd030e4fb2ba6ac0386d1a50c2\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:19:13-42
+	android:name
+		ADDED from [com.google.android.gms:play-services-code-scanner:16.1.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\515af4dd030e4fb2ba6ac0386d1a50c2\transformed\play-services-code-scanner-16.1.0\AndroidManifest.xml:16:13-107
+service#com.google.mlkit.common.internal.MlKitComponentDiscoveryService
+ADDED from [com.google.mlkit:vision-common:17.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\b70e19f1a13a80903f3418bea7f9d574\transformed\vision-common-17.0.0\AndroidManifest.xml:9:9-15:19
+MERGED from [com.google.mlkit:common:18.9.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\fd1911fde102947c1a0a6f63a3f06075\transformed\common-18.9.0\AndroidManifest.xml:15:9-23:19
+MERGED from [com.google.mlkit:common:18.9.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\fd1911fde102947c1a0a6f63a3f06075\transformed\common-18.9.0\AndroidManifest.xml:15:9-23:19
+	android:exported
+		ADDED from [com.google.mlkit:vision-common:17.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\b70e19f1a13a80903f3418bea7f9d574\transformed\vision-common-17.0.0\AndroidManifest.xml:11:13-37
+	tools:targetApi
+		ADDED from [com.google.mlkit:common:18.9.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\fd1911fde102947c1a0a6f63a3f06075\transformed\common-18.9.0\AndroidManifest.xml:19:13-32
+	android:directBootAware
+		ADDED from [com.google.mlkit:common:18.9.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\fd1911fde102947c1a0a6f63a3f06075\transformed\common-18.9.0\AndroidManifest.xml:17:13-43
+	android:name
+		ADDED from [com.google.mlkit:vision-common:17.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\b70e19f1a13a80903f3418bea7f9d574\transformed\vision-common-17.0.0\AndroidManifest.xml:10:13-91
+meta-data#com.google.firebase.components:com.google.mlkit.vision.common.internal.VisionCommonRegistrar
+ADDED from [com.google.mlkit:vision-common:17.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\b70e19f1a13a80903f3418bea7f9d574\transformed\vision-common-17.0.0\AndroidManifest.xml:12:13-14:85
+	android:value
+		ADDED from [com.google.mlkit:vision-common:17.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\b70e19f1a13a80903f3418bea7f9d574\transformed\vision-common-17.0.0\AndroidManifest.xml:14:17-82
+	android:name
+		ADDED from [com.google.mlkit:vision-common:17.0.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\b70e19f1a13a80903f3418bea7f9d574\transformed\vision-common-17.0.0\AndroidManifest.xml:13:17-124
+provider#com.google.mlkit.common.internal.MlKitInitProvider
+ADDED from [com.google.mlkit:common:18.9.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\fd1911fde102947c1a0a6f63a3f06075\transformed\common-18.9.0\AndroidManifest.xml:9:9-13:38
+	android:authorities
+		ADDED from [com.google.mlkit:common:18.9.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\fd1911fde102947c1a0a6f63a3f06075\transformed\common-18.9.0\AndroidManifest.xml:11:13-69
+	android:exported
+		ADDED from [com.google.mlkit:common:18.9.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\fd1911fde102947c1a0a6f63a3f06075\transformed\common-18.9.0\AndroidManifest.xml:12:13-37
+	android:initOrder
+		ADDED from [com.google.mlkit:common:18.9.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\fd1911fde102947c1a0a6f63a3f06075\transformed\common-18.9.0\AndroidManifest.xml:13:13-35
+	android:name
+		ADDED from [com.google.mlkit:common:18.9.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\fd1911fde102947c1a0a6f63a3f06075\transformed\common-18.9.0\AndroidManifest.xml:10:13-78
+meta-data#com.google.firebase.components:com.google.mlkit.common.internal.CommonComponentRegistrar
+ADDED from [com.google.mlkit:common:18.9.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\fd1911fde102947c1a0a6f63a3f06075\transformed\common-18.9.0\AndroidManifest.xml:20:13-22:85
+	android:value
+		ADDED from [com.google.mlkit:common:18.9.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\fd1911fde102947c1a0a6f63a3f06075\transformed\common-18.9.0\AndroidManifest.xml:22:17-82
+	android:name
+		ADDED from [com.google.mlkit:common:18.9.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\fd1911fde102947c1a0a6f63a3f06075\transformed\common-18.9.0\AndroidManifest.xml:21:17-120
+activity#com.google.android.gms.common.api.GoogleApiActivity
+ADDED from [com.google.android.gms:play-services-base:18.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4989521e05e129c3b241f328e58d0128\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:9-173
+	android:exported
+		ADDED from [com.google.android.gms:play-services-base:18.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4989521e05e129c3b241f328e58d0128\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:146-170
+	android:theme
+		ADDED from [com.google.android.gms:play-services-base:18.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4989521e05e129c3b241f328e58d0128\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:86-145
+	android:name
+		ADDED from [com.google.android.gms:play-services-base:18.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4989521e05e129c3b241f328e58d0128\transformed\play-services-base-18.5.0\AndroidManifest.xml:5:19-85
+uses-permission#android.permission.WAKE_LOCK
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:23:5-68
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:23:22-65
+uses-permission#android.permission.RECEIVE_BOOT_COMPLETED
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:25:5-81
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:25:22-78
+uses-permission#android.permission.FOREGROUND_SERVICE
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:26:5-77
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:26:22-74
+provider#androidx.startup.InitializationProvider
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:29:9-37:20
+MERGED from [androidx.emoji2:emoji2:1.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d02ba42a90d462540905550273ec5711\transformed\emoji2-1.3.0\AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.emoji2:emoji2:1.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d02ba42a90d462540905550273ec5711\transformed\emoji2-1.3.0\AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.lifecycle:lifecycle-process:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\558446ec72a1ab2fb53bffac490e940e\transformed\lifecycle-process-2.8.7\AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.lifecycle:lifecycle-process:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\558446ec72a1ab2fb53bffac490e940e\transformed\lifecycle-process-2.8.7\AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:24:9-32:20
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\de346e15c96e956f43fb62de99f6a482\transformed\startup-runtime-1.1.1\AndroidManifest.xml:26:9-30:34
+MERGED from [androidx.startup:startup-runtime:1.1.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\de346e15c96e956f43fb62de99f6a482\transformed\startup-runtime-1.1.1\AndroidManifest.xml:26:9-30:34
+	tools:node
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:33:13-31
+	android:authorities
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:31:13-68
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:32:13-37
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:30:13-67
+meta-data#androidx.work.WorkManagerInitializer
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:34:13-36:52
+	android:value
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:36:17-49
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:35:17-68
+service#androidx.work.impl.background.systemalarm.SystemAlarmService
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:39:9-45:35
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:42:13-72
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:43:13-37
+	tools:ignore
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:44:13-60
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:45:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:41:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:40:13-88
+service#androidx.work.impl.background.systemjob.SystemJobService
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:46:9-52:35
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:49:13-70
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:50:13-36
+	android:permission
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:51:13-69
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:52:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:48:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:47:13-84
+service#androidx.work.impl.foreground.SystemForegroundService
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:53:9-59:35
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:56:13-77
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:57:13-37
+	tools:ignore
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:58:13-60
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:59:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:55:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:54:13-81
+receiver#androidx.work.impl.utils.ForceStopRunnable$BroadcastReceiver
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:61:9-66:35
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:64:13-35
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:65:13-37
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:66:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:63:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:62:13-88
+receiver#androidx.work.impl.background.systemalarm.ConstraintProxy$BatteryChargingProxy
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:67:9-77:20
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:70:13-36
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:71:13-37
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:72:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:69:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:68:13-106
+intent-filter#action:name:android.intent.action.ACTION_POWER_CONNECTED+action:name:android.intent.action.ACTION_POWER_DISCONNECTED
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:73:13-76:29
+action#android.intent.action.ACTION_POWER_CONNECTED
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:74:17-87
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:74:25-84
+action#android.intent.action.ACTION_POWER_DISCONNECTED
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:75:17-90
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:75:25-87
+receiver#androidx.work.impl.background.systemalarm.ConstraintProxy$BatteryNotLowProxy
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:78:9-88:20
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:81:13-36
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:82:13-37
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:83:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:80:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:79:13-104
+intent-filter#action:name:android.intent.action.BATTERY_LOW+action:name:android.intent.action.BATTERY_OKAY
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:84:13-87:29
+action#android.intent.action.BATTERY_OKAY
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:85:17-77
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:85:25-74
+action#android.intent.action.BATTERY_LOW
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:86:17-76
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:86:25-73
+receiver#androidx.work.impl.background.systemalarm.ConstraintProxy$StorageNotLowProxy
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:89:9-99:20
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:92:13-36
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:93:13-37
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:94:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:91:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:90:13-104
+intent-filter#action:name:android.intent.action.DEVICE_STORAGE_LOW+action:name:android.intent.action.DEVICE_STORAGE_OK
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:95:13-98:29
+action#android.intent.action.DEVICE_STORAGE_LOW
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:96:17-83
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:96:25-80
+action#android.intent.action.DEVICE_STORAGE_OK
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:97:17-82
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:97:25-79
+receiver#androidx.work.impl.background.systemalarm.ConstraintProxy$NetworkStateProxy
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:100:9-109:20
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:103:13-36
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:104:13-37
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:105:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:102:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:101:13-103
+intent-filter#action:name:android.net.conn.CONNECTIVITY_CHANGE
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:106:13-108:29
+action#android.net.conn.CONNECTIVITY_CHANGE
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:107:17-79
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:107:25-76
+receiver#androidx.work.impl.background.systemalarm.RescheduleReceiver
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:110:9-121:20
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:113:13-36
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:114:13-37
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:115:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:112:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:111:13-88
+intent-filter#action:name:android.intent.action.BOOT_COMPLETED+action:name:android.intent.action.TIMEZONE_CHANGED+action:name:android.intent.action.TIME_SET
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:116:13-120:29
+action#android.intent.action.BOOT_COMPLETED
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:117:17-79
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:117:25-76
+action#android.intent.action.TIME_SET
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:118:17-73
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:118:25-70
+action#android.intent.action.TIMEZONE_CHANGED
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:119:17-81
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:119:25-78
+receiver#androidx.work.impl.background.systemalarm.ConstraintProxyUpdateReceiver
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:122:9-131:20
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:125:13-72
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:126:13-37
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:127:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:124:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:123:13-99
+intent-filter#action:name:androidx.work.impl.background.systemalarm.UpdateProxies
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:128:13-130:29
+action#androidx.work.impl.background.systemalarm.UpdateProxies
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:129:17-98
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:129:25-95
+receiver#androidx.work.impl.diagnostics.DiagnosticsReceiver
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:132:9-142:20
+	android:enabled
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:135:13-35
+	android:exported
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:136:13-36
+	android:permission
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:137:13-57
+	tools:targetApi
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:138:13-32
+	android:directBootAware
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:134:13-44
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:133:13-78
+intent-filter#action:name:androidx.work.diagnostics.REQUEST_DIAGNOSTICS
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:139:13-141:29
+action#androidx.work.diagnostics.REQUEST_DIAGNOSTICS
+ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:140:17-88
+	android:name
+		ADDED from [androidx.work:work-runtime:2.9.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\0b199bb55cc9bca88a88572b40eb9f71\transformed\work-runtime-2.9.1\AndroidManifest.xml:140:25-85
+meta-data#androidx.emoji2.text.EmojiCompatInitializer
+ADDED from [androidx.emoji2:emoji2:1.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d02ba42a90d462540905550273ec5711\transformed\emoji2-1.3.0\AndroidManifest.xml:29:13-31:52
+	android:value
+		ADDED from [androidx.emoji2:emoji2:1.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d02ba42a90d462540905550273ec5711\transformed\emoji2-1.3.0\AndroidManifest.xml:31:17-49
+	android:name
+		ADDED from [androidx.emoji2:emoji2:1.3.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\d02ba42a90d462540905550273ec5711\transformed\emoji2-1.3.0\AndroidManifest.xml:30:17-75
+permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3c81162d1824251f3742ba5c37504a26\transformed\core-1.15.0\AndroidManifest.xml:22:5-24:47
+	android:protectionLevel
+		ADDED from [androidx.core:core:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3c81162d1824251f3742ba5c37504a26\transformed\core-1.15.0\AndroidManifest.xml:24:9-44
+	android:name
+		ADDED from [androidx.core:core:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3c81162d1824251f3742ba5c37504a26\transformed\core-1.15.0\AndroidManifest.xml:23:9-81
+permission#it.cdanet.cpeconfigurator.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3c81162d1824251f3742ba5c37504a26\transformed\core-1.15.0\AndroidManifest.xml:22:5-24:47
+	android:protectionLevel
+		ADDED from [androidx.core:core:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3c81162d1824251f3742ba5c37504a26\transformed\core-1.15.0\AndroidManifest.xml:24:9-44
+	android:name
+		ADDED from [androidx.core:core:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3c81162d1824251f3742ba5c37504a26\transformed\core-1.15.0\AndroidManifest.xml:23:9-81
+uses-permission#${applicationId}.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3c81162d1824251f3742ba5c37504a26\transformed\core-1.15.0\AndroidManifest.xml:26:5-97
+	android:name
+		ADDED from [androidx.core:core:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3c81162d1824251f3742ba5c37504a26\transformed\core-1.15.0\AndroidManifest.xml:26:22-94
+uses-permission#it.cdanet.cpeconfigurator.DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION
+ADDED from [androidx.core:core:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3c81162d1824251f3742ba5c37504a26\transformed\core-1.15.0\AndroidManifest.xml:26:5-97
+	android:name
+		ADDED from [androidx.core:core:1.15.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\3c81162d1824251f3742ba5c37504a26\transformed\core-1.15.0\AndroidManifest.xml:26:22-94
+meta-data#androidx.lifecycle.ProcessLifecycleInitializer
+ADDED from [androidx.lifecycle:lifecycle-process:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\558446ec72a1ab2fb53bffac490e940e\transformed\lifecycle-process-2.8.7\AndroidManifest.xml:29:13-31:52
+	android:value
+		ADDED from [androidx.lifecycle:lifecycle-process:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\558446ec72a1ab2fb53bffac490e940e\transformed\lifecycle-process-2.8.7\AndroidManifest.xml:31:17-49
+	android:name
+		ADDED from [androidx.lifecycle:lifecycle-process:2.8.7] C:\Users\alfio\.gradle\caches\8.11.1\transforms\558446ec72a1ab2fb53bffac490e940e\transformed\lifecycle-process-2.8.7\AndroidManifest.xml:30:17-78
+meta-data#com.google.android.gms.version
+ADDED from [com.google.android.gms:play-services-basement:18.4.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\9482b014a6e99995cc5569bf95b2c850\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:9-122
+	android:value
+		ADDED from [com.google.android.gms:play-services-basement:18.4.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\9482b014a6e99995cc5569bf95b2c850\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:66-119
+	android:name
+		ADDED from [com.google.android.gms:play-services-basement:18.4.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\9482b014a6e99995cc5569bf95b2c850\transformed\play-services-basement-18.4.0\AndroidManifest.xml:6:20-65
+service#androidx.room.MultiInstanceInvalidationService
+ADDED from [androidx.room:room-runtime:2.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4fc600dfbe51b9af5e97fb36615808e5\transformed\room-runtime-2.5.0\AndroidManifest.xml:24:9-28:63
+	android:exported
+		ADDED from [androidx.room:room-runtime:2.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4fc600dfbe51b9af5e97fb36615808e5\transformed\room-runtime-2.5.0\AndroidManifest.xml:27:13-37
+	tools:ignore
+		ADDED from [androidx.room:room-runtime:2.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4fc600dfbe51b9af5e97fb36615808e5\transformed\room-runtime-2.5.0\AndroidManifest.xml:28:13-60
+	android:directBootAware
+		ADDED from [androidx.room:room-runtime:2.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4fc600dfbe51b9af5e97fb36615808e5\transformed\room-runtime-2.5.0\AndroidManifest.xml:26:13-43
+	android:name
+		ADDED from [androidx.room:room-runtime:2.5.0] C:\Users\alfio\.gradle\caches\8.11.1\transforms\4fc600dfbe51b9af5e97fb36615808e5\transformed\room-runtime-2.5.0\AndroidManifest.xml:25:13-74
+meta-data#androidx.profileinstaller.ProfileInstallerInitializer
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:29:13-31:52
+	android:value
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:31:17-49
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:30:17-85
+receiver#androidx.profileinstaller.ProfileInstallReceiver
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:34:9-52:20
+	android:enabled
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:37:13-35
+	android:exported
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:38:13-36
+	android:permission
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:39:13-57
+	android:directBootAware
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:36:13-44
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:35:13-76
+intent-filter#action:name:androidx.profileinstaller.action.INSTALL_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:40:13-42:29
+action#androidx.profileinstaller.action.INSTALL_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:41:17-91
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:41:25-88
+intent-filter#action:name:androidx.profileinstaller.action.SKIP_FILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:43:13-45:29
+action#androidx.profileinstaller.action.SKIP_FILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:44:17-85
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:44:25-82
+intent-filter#action:name:androidx.profileinstaller.action.SAVE_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:46:13-48:29
+action#androidx.profileinstaller.action.SAVE_PROFILE
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:47:17-88
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:47:25-85
+intent-filter#action:name:androidx.profileinstaller.action.BENCHMARK_OPERATION
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:49:13-51:29
+action#androidx.profileinstaller.action.BENCHMARK_OPERATION
+ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:50:17-95
+	android:name
+		ADDED from [androidx.profileinstaller:profileinstaller:1.3.1] C:\Users\alfio\.gradle\caches\8.11.1\transforms\8d0f13d0dc57b200cb4aabc3aa31103f\transformed\profileinstaller-1.3.1\AndroidManifest.xml:50:25-92
+service#com.google.android.datatransport.runtime.backends.TransportBackendDiscovery
+ADDED from [com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a3b12e6b12de2f2583a8a69d5b9d8596\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:29:9-35:19
+MERGED from [com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e024df5066c308c8923687dfb64c118c\transformed\transport-runtime-2.2.6\AndroidManifest.xml:36:9-38:40
+MERGED from [com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e024df5066c308c8923687dfb64c118c\transformed\transport-runtime-2.2.6\AndroidManifest.xml:36:9-38:40
+	android:exported
+		ADDED from [com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a3b12e6b12de2f2583a8a69d5b9d8596\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:31:13-37
+	android:name
+		ADDED from [com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a3b12e6b12de2f2583a8a69d5b9d8596\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:30:13-103
+meta-data#backend:com.google.android.datatransport.cct.CctBackendFactory
+ADDED from [com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a3b12e6b12de2f2583a8a69d5b9d8596\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:32:13-34:39
+	android:value
+		ADDED from [com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a3b12e6b12de2f2583a8a69d5b9d8596\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:34:17-36
+	android:name
+		ADDED from [com.google.android.datatransport:transport-backend-cct:2.3.3] C:\Users\alfio\.gradle\caches\8.11.1\transforms\a3b12e6b12de2f2583a8a69d5b9d8596\transformed\transport-backend-cct-2.3.3\AndroidManifest.xml:33:17-94
+service#com.google.android.datatransport.runtime.scheduling.jobscheduling.JobInfoSchedulerService
+ADDED from [com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e024df5066c308c8923687dfb64c118c\transformed\transport-runtime-2.2.6\AndroidManifest.xml:26:9-30:19
+	android:exported
+		ADDED from [com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e024df5066c308c8923687dfb64c118c\transformed\transport-runtime-2.2.6\AndroidManifest.xml:28:13-37
+	android:permission
+		ADDED from [com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e024df5066c308c8923687dfb64c118c\transformed\transport-runtime-2.2.6\AndroidManifest.xml:29:13-69
+	android:name
+		ADDED from [com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e024df5066c308c8923687dfb64c118c\transformed\transport-runtime-2.2.6\AndroidManifest.xml:27:13-117
+receiver#com.google.android.datatransport.runtime.scheduling.jobscheduling.AlarmManagerSchedulerBroadcastReceiver
+ADDED from [com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e024df5066c308c8923687dfb64c118c\transformed\transport-runtime-2.2.6\AndroidManifest.xml:32:9-34:40
+	android:exported
+		ADDED from [com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e024df5066c308c8923687dfb64c118c\transformed\transport-runtime-2.2.6\AndroidManifest.xml:34:13-37
+	android:name
+		ADDED from [com.google.android.datatransport:transport-runtime:2.2.6] C:\Users\alfio\.gradle\caches\8.11.1\transforms\e024df5066c308c8923687dfb64c118c\transformed\transport-runtime-2.2.6\AndroidManifest.xml:33:13-132
