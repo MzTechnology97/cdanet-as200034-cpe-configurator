@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.install
 
+import it.cdanet.cpeconfigurator.data.PointingCache
 import it.cdanet.cpeconfigurator.data.ApiClient
 import it.cdanet.cpeconfigurator.data.CpeLocation
 import it.cdanet.cpeconfigurator.data.JobDto
@@ -40,6 +41,8 @@ data class InstallState(
     val position: CpeLocation? = null,
     val pointing: PointingDto? = null,
     val pointingError: String? = null,
+    /** Set when [pointing] comes from the phone's cache (no network): what and from where. */
+    val pointingSaved: String? = null,
     /** CPE site survey of the "Aggancio" step. */
     val survey: List<SurveyAp>? = null,
     val surveyError: String? = null,
@@ -57,7 +60,12 @@ data class InstallState(
  * the screen so the wizard survives opening the AR sight, the compass or the acceptance test.
  * Secrets (WPA2 key of a new AP) never live here: they go straight from the server to the CPE.
  */
-class InstallController(private val api: ApiClient, private val field: FieldController) {
+class InstallController(
+    private val api: ApiClient,
+    private val field: FieldController,
+    private val cache: it.cdanet.cpeconfigurator.data.PointingCache,
+    private val session: it.cdanet.cpeconfigurator.data.Session,
+) {
     private val _state = MutableStateFlow(InstallState())
     val state: StateFlow<InstallState> = _state.asStateFlow()
 
@@ -82,10 +90,22 @@ class InstallController(private val api: ApiClient, private val field: FieldCont
 
     /** Nearby APs from the phone position (module "compass": UISP, DEM tilt, expected signal). */
     suspend fun locate(location: CpeLocation) {
-        _state.update { it.copy(position = location, pointingError = null) }
+        _state.update { it.copy(position = location, pointingError = null, pointingSaved = null) }
+        val user = session.state.value?.user?.id
         runCatching { api.pointing(location.latitude, location.longitude, null) }
-            .onSuccess { p -> _state.update { it.copy(pointing = p) } }
-            .onFailure { e -> _state.update { it.copy(pointingError = e.message) } }
+            .onSuccess { p ->
+                user?.let { cache.put(it, p) }
+                _state.update { it.copy(pointing = p) }
+            }
+            .onFailure { e ->
+                // no network on the roof: the APs saved for this place (or downloaded with the work order)
+                val saved = cache.near(user, location.latitude, location.longitude)
+                if (saved != null) {
+                    _state.update { it.copy(pointing = saved.first.data, pointingSaved = PointingCache.describe(saved.first, saved.second)) }
+                } else {
+                    _state.update { it.copy(pointingError = e.message) }
+                }
+            }
     }
 
     /** Repointing: the job of the CPE, so the new acceptance test and photos go with it. */

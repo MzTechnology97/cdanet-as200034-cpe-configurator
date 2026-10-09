@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.NoticeKind
+import it.cdanet.cpeconfigurator.ui.Notice
 import it.cdanet.cpeconfigurator.ui.CheckRow
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
@@ -278,6 +280,7 @@ fun BestApsBeforeInstall(c: AppContainer, location: CpeLocation, selectedSsid: S
         if (configured == null) configured = runCatching { c.api.wirelessNetworks() }.getOrNull()
     }
     ErrorBanner(st.pointingError)
+    st.pointingSaved?.let { Notice(it, NoticeKind.Warn) }
     val p = st.pointing
     if (p == null) {
         if (st.pointingError == null) Text("Ricerca degli AP migliori…", color = MaterialTheme.colorScheme.onSurfaceVariant)

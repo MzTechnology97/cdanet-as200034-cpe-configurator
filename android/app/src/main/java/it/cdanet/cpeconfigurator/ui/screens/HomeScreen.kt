@@ -379,6 +379,13 @@ private fun WorkOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
     var note by remember { mutableStateOf("") }
     suspend fun load() {
         orders = runCatching { c.api.workOrders().items }.getOrNull()
+        // the APs around each address go on the phone now, for the roofs without mobile signal
+        val user = c.session.state.value?.user?.id
+        if (user != null && c.moduleOn("compass")) {
+            val places = orders.orEmpty().filter { it.status != "done" && it.status != "cancelled" && it.lat != null && it.lon != null }
+                .map { Triple(it.customer, it.lat!!, it.lon!!) }
+            c.scope.launch { c.pointingCache.prefetch(c.api, user, places) }
+        }
     }
     LaunchedEffect(Unit) { load() }
     val list = orders?.filter { it.status != "done" && it.status != "cancelled" } ?: return
