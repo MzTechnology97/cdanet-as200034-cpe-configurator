@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.WifiRequired
 import android.content.Intent
 import android.os.Build
 import android.provider.Settings as AndroidSettings
@@ -58,7 +59,11 @@ fun ProvisionScreen(c: AppContainer, onOpenCpeWeb: () -> Unit, onLogin: () -> Un
             } else {
                 FormStep(c)
             }
-            Phase.Prepared, Phase.Applying -> ApplyStep(c, onOpenCpeWeb)
+            Phase.Prepared, Phase.Applying -> WifiRequired(
+                c,
+                "alla Wi-Fi di management della CPE nuova (es. \"LBE-5AC-Gen2:xxxx\", IP ${state.pkg?.target?.host ?: "192.168.172.1"})",
+                "La configurazione preparata viene scritta sulla CPE in rete locale: Internet non serve.",
+            ) { ApplyStep(c, onOpenCpeWeb) }
             Phase.Done -> DoneStep(c, onAcceptance)
         }
     }

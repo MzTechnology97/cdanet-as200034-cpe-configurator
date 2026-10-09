@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.WifiRequired
 import android.graphics.Bitmap
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -139,6 +140,7 @@ fun AcceptanceScreen(c: AppContainer) {
             KeyValue("SSID", j.ssid)
         }
 
+        WifiRequired(c, "alla Wi-Fi della CPE (management, es. \"LBE-5AC-Gen2:xxxx\") oppure a quella del router del cliente", "Misure e test Internet richiedono la rete locale; foto e note funzionano comunque.") {
         SectionCard("1 · Misure radio") {
             Text("${Acceptance.SAMPLES} letture in ${Acceptance.SAMPLES} secondi dalla CPE: il segnale viene mediato.", style = MaterialTheme.typography.bodySmall)
             if (measuring) {
@@ -172,6 +174,8 @@ fun AcceptanceScreen(c: AppContainer) {
                     testingInternet = false
                 }
             }
+        }
+
         }
 
         SectionCard("3 · Foto (${photos.size}/8)") {

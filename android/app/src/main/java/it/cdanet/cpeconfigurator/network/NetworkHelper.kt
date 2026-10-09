@@ -38,6 +38,25 @@ class NetworkHelper(context: Context) {
     private val wifi = context.applicationContext.getSystemService(WifiManager::class.java)
     private val bindMutex = Mutex()
 
+    /** True while the phone is connected to a Wi-Fi network (with or without Internet). */
+    private val _wifiConnected = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val wifiConnected: kotlinx.coroutines.flow.StateFlow<Boolean> = _wifiConnected
+
+    init {
+        _wifiConnected.value = wifiNetwork() != null
+        runCatching {
+            cm.registerNetworkCallback(
+                android.net.NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(),
+                object : ConnectivityManager.NetworkCallback() {
+                    override fun onAvailable(network: Network) { _wifiConnected.value = true }
+                    override fun onLost(network: Network) { _wifiConnected.value = wifiNetwork() != null }
+                },
+            )
+        }
+    }
+
+    val wifiEnabled: Boolean get() = runCatching { wifi.isWifiEnabled }.getOrDefault(false)
+
     fun wifiNetwork(): Network? = cm.allNetworksCompat().firstOrNull {
         cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
     }

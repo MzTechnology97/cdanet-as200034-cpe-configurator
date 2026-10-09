@@ -194,6 +194,14 @@ class ApiClient(
 
     suspend fun routerOsCatalog(): RosCatalogDto = AppJson.decodeFromString(RosCatalogDto.serializer(), request("GET", "/api/routeros/catalog"))
 
+    /** Vendors of many MACs at once (IEEE registries on the server); null = unknown. */
+    suspend fun macVendors(macs: List<String>): Map<String, String?> {
+        if (macs.isEmpty()) return emptyMap()
+        val body = buildJsonObject { put("macs", kotlinx.serialization.json.JsonArray(macs.distinct().take(1024).map { kotlinx.serialization.json.JsonPrimitive(it) })) }
+        val o = AppJson.parseToJsonElement(request("POST", "/api/tools/mac-vendors", body)) as JsonObject
+        return o.mapValues { (_, v) -> (v as? kotlinx.serialization.json.JsonPrimitive)?.takeIf { it.isString }?.content }
+    }
+
     suspend fun macVendor(mac: String): String {
         val r = request("POST", "/api/tools/mac-vendor", buildJsonObject { put("mac", mac) })
         return (AppJson.parseToJsonElement(r) as JsonObject)["vendor"]?.toString()?.trim('"') ?: "—"

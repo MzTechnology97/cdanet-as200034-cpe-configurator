@@ -93,6 +93,8 @@ export interface Config {
   trustProxy: string;
   dbPath: string;
   photosDir: string;
+  /** IEEE OUI registries cache (MAC vendors). */
+  ouiDir: string;
   staticDir: string;
   masterKey: Buffer;
   jwtSecret: Uint8Array;
@@ -162,6 +164,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     logLevel: e.LOG_LEVEL,
     trustProxy: e.TRUST_PROXY,
     dbPath: e.DB_PATH,
+    ouiDir: e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-oui-${process.pid}`) : join(dirname(e.DB_PATH), 'oui'),
     photosDir: e.PHOTOS_DIR || (e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-photos-${process.pid}`) : join(dirname(e.DB_PATH), 'photos')),
     staticDir: resolve(e.STATIC_DIR),
     masterKey: masterKey ?? loadMasterKey(e.SECRETS_KEY_FILE),

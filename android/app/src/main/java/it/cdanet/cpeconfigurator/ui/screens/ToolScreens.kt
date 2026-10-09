@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.wifiPanelIntent
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
@@ -88,7 +89,14 @@ private fun WifiSwitch(value: Boolean, onChange: (Boolean) -> Unit) {
 @Composable
 fun WifiScreen(c: AppContainer) {
     val r = rememberRunner()
+    val context = LocalContext.current
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (!c.network.wifiEnabled) {
+            SectionCard("Wi-Fi spento") {
+                Text("Per analizzare le reti il Wi-Fi del telefono deve essere acceso (non serve collegarsi).")
+                OutlinedButton(onClick = { runCatching { context.startActivity(wifiPanelIntent()) } }) { Text("Accendi il Wi-Fi") }
+            }
+        }
         SectionCard("Wi-Fi") {
             ToolButton(r, "Scansione reti", primary = true) { c.tools.wifiScan() }
             ToolButton(r, "Connessione attuale") { c.tools.connection() }

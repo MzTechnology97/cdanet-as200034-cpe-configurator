@@ -36,6 +36,9 @@ class AppContainer(context: Context) {
     val modules = kotlinx.coroutines.flow.MutableStateFlow<Map<String, Boolean>>(emptyMap())
     fun moduleOn(key: String): Boolean = modules.value[key] != false
 
+    /** Host chosen in the IP scanner for the port scanner. */
+    val portScanTarget = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+
     /** AP selected in Copertura for the compass. */
     val compassTarget = kotlinx.coroutines.flow.MutableStateFlow<it.cdanet.cpeconfigurator.field.CompassTarget?>(null)
 

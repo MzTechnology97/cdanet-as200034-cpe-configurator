@@ -256,12 +256,7 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
     /** Vendor of each MAC (server lookup, best effort: skipped when offline). */
     private suspend fun vendorsOf(macs: List<String>): Map<String, String> {
         if (session.token == null) return emptyMap()
-        val out = mutableMapOf<String, String>()
-        for (mac in macs.distinct().take(40)) {
-            val v = runCatching { api.macVendor(mac) }.getOrNull() ?: break
-            if (v.isNotBlank() && v != "—" && v != "null") out[mac] = v
-        }
-        return out
+        return runCatching { api.macVendors(macs).filterValues { it != null }.mapValues { it.value!! } }.getOrDefault(emptyMap())
     }
 
     suspend fun portProbe(host: String, ports: List<Int>, viaWifi: Boolean): ToolResult {
