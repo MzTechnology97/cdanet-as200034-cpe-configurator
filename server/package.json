@@ -1,7 +1,7 @@
 {
   "name": "cdanet-cpe-server",
   "private": true,
-  "version": "1.32.8",
+  "version": "1.32.9",
   "description": "CDA Net AS200034 CPE Configurator - control plane (API + Admin/NOC web)",
   "type": "module",
   "engines": {

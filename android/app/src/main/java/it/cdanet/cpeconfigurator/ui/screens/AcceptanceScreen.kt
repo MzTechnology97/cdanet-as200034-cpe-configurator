@@ -207,7 +207,7 @@ fun AcceptanceScreen(c: AppContainer) {
                 r.checks.forEach { ch -> CheckRow(ch.title, enumValueOf(ch.verdict.replaceFirstChar { it.uppercase() }), ch.detail) }
                 Text("Verdetto calcolato dalle soglie del NOC.", style = MaterialTheme.typography.bodySmall, color = color)
                 val noc = nocApprovalReason(r.radio.signal, c.field.thresholds.signalMin, r.checks.filter { it.verdict == "bad" }.map { it.title })
-                if (noc != null) Banner("Approvazione NOC necessaria ($noc). $NOC_APPROVAL_TEXT", WarnAmber)
+                if (noc != null) Banner("Approvazione NOC necessaria: $noc. $NOC_APPROVAL_TEXT", WarnAmber)
                 if (noc != null || r.verdict == "bad") {
                     OutlinedButton(onClick = { ko = true }, modifier = Modifier.fillMaxWidth()) { Text("Segnala KO o rimanda l'installazione", color = BadRed) }
                 }
