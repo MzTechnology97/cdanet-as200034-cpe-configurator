@@ -30,6 +30,7 @@ import { createConnectors } from './services/connectors.ts';
 import { connectorRoutes } from './routes/connectors.ts';
 import { uispRoutes } from './routes/uisp.ts';
 import { mapRoutes } from './routes/map.ts';
+import { networkRoutes } from './routes/network.ts';
 
 const CSP = [
   "default-src 'self'",
@@ -161,6 +162,7 @@ export async function buildApp(
   statsRoutes(app, ctx);
   outageRoutes(app, ctx);
   mapRoutes(app, ctx);
+  networkRoutes(app, ctx);
   adminRoutes(app, ctx);
   toolRoutes(app, ctx);
   uispRoutes(app, ctx);

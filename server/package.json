@@ -1,7 +1,7 @@
 {
   "name": "cdanet-cpe-server",
   "private": true,
-  "version": "1.17.0",
+  "version": "1.18.0",
   "description": "CDA Net AS200034 CPE Configurator - control plane (API + Admin/NOC web)",
   "type": "module",
   "engines": {
@@ -18,7 +18,7 @@
     "@fastify/static": "^10.1.5",
     "fastify": "^5.6.0",
     "jose": "^6.1.0",
-    "ssh2": "^1.17.0",
+    "ssh2": "^1.18.0",
     "undici": "^7.30.0",
     "zod": "^4.1.0"
   },

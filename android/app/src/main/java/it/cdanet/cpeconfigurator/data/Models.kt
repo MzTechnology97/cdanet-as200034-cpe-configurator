@@ -132,6 +132,38 @@ data class MyZonesDto(val zones: List<OutageZoneItemDto> = emptyList())
 data class OutageTelegramDto(val available: Boolean = false, val linked: Boolean = false, val chatHint: String = "", val planned: Boolean = true)
 
 @Serializable
+data class NetCpeDto(val total: Int = 0, val offline: Int = 0)
+
+@Serializable
+data class NetApDto(
+    val id: String = "",
+    val name: String = "",
+    val ssid: String? = null,
+    val state: String = "ok",
+    val lastSeen: String? = null,
+    val cpe: NetCpeDto? = null,
+    val cpeOffline: String? = null,
+    val powerOutage: Boolean = false,
+)
+
+@Serializable
+data class NetPopDto(val id: String = "", val name: String = "", val state: String = "ok", val powerOutage: Boolean = false, val aps: List<NetApDto> = emptyList())
+
+@Serializable
+data class NetSummaryDto(val aps: Int = 0, val down: Int = 0, val degraded: Int = 0, val powerOutage: Int = 0)
+
+/** "Stato rete": state of the POPs/APs the user may see. */
+@Serializable
+data class NetworkStatusDto(
+    val generatedAt: String? = null,
+    val restricted: Boolean = false,
+    val assignedCount: Int? = null,
+    val summary: NetSummaryDto = NetSummaryDto(),
+    val pops: List<NetPopDto> = emptyList(),
+    val apsWithoutPop: List<NetApDto> = emptyList(),
+)
+
+@Serializable
 data class TelegramLinkDto(val bot: String = "", val code: String = "", val url: String = "", val expiresInMin: Int = 15)
 
 @Serializable

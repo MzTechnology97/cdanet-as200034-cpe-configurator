@@ -187,6 +187,8 @@ class ApiClient(
         request("DELETE", "/api/outages/zones/${id.removePrefix("z")}")
     }
 
+    suspend fun networkStatus(): NetworkStatusDto = AppJson.decodeFromString(NetworkStatusDto.serializer(), request("GET", "/api/network/status"))
+
     suspend fun outageTelegram(): OutageTelegramDto = AppJson.decodeFromString(OutageTelegramDto.serializer(), request("GET", "/api/outages/telegram"))
 
     suspend fun outageTelegramLink(): TelegramLinkDto = AppJson.decodeFromString(TelegramLinkDto.serializer(), request("POST", "/api/outages/telegram/link"))
