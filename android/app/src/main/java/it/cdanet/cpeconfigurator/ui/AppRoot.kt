@@ -99,7 +99,17 @@ fun AppRoot(c: AppContainer) {
     LaunchedEffect(session) {
         if (session != null) {
             c.resultQueue.syncInBackground()
+            c.acceptanceQueue.syncInBackground()
             scope.launch { c.routerOs.refreshCatalog() }
+            // Field work often starts offline: retry the queues every 2 minutes while logged in
+            // (child of this effect: cancelled on logout or when the session changes).
+            launch {
+                while (true) {
+                    kotlinx.coroutines.delay(120_000)
+                    if (c.resultQueue.pending.value.isNotEmpty()) runCatching { c.resultQueue.sync() }
+                    if (c.acceptanceQueue.pending.value.isNotEmpty()) runCatching { c.acceptanceQueue.sync() }
+                }
+            }
             // CPE credentials for alignment/diagnosis, so they also work later without Internet.
             scope.launch { c.field.prefetch() }
         } else {

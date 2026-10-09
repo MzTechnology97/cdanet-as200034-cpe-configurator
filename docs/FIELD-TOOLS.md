@@ -117,3 +117,11 @@ API usate: `GET /devices/{id}/statistics` (`interval`, `start`, `period`) e `GET
   - 5 GHz: tra 36 e 48, senza DFS né attese radar.
 
   Le reti vicine pesano in base al segnale.
+
+### Collaudo senza rete
+
+Misure, note e foto vengono **sempre** salvate prima nella memoria privata dell'app e poi inviate da una coda:
+- se c'è rete partono subito;
+- altrimenti restano sul telefono e vengono ritentate dopo il login e ogni 2 minuti, oppure a mano da Impostazioni → *Invia collaudi ora*. Prima viene sempre inviato l'esito del provisioning.
+
+La Home e le Impostazioni mostrano quanti collaudi e foto sono in attesa. Le foto inviate vengono cancellate dal telefono.
