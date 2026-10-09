@@ -36,7 +36,7 @@ export function myTelegramCard({ title = 'Notifiche Telegram', appHint = false }
           await api('/api/account/telegram', { method: 'DELETE' });
           await load();
         });
-      mount(box, card(h('h2', {}, title), h('div', { class: 'notice good' }, `Telegram collegato (chat ${t.chatHint}): ricevi qui ${what}.`), t.outages ? h('label', { class: 'check' }, planned, 'Anche i lavori programmati') : null, h('div', { class: 'btns' }, off), app));
+      mount(box, card(h('h2', {}, title), h('div', { class: 'notice good' }, `Telegram collegato (chat ${t.chatHint}): ricevi qui ${what}.`), t.outages ? h('label', { class: 'check' }, planned, 'Anche i lavori programmati sui POP/AP assegnati (le aree di interesse hanno le loro regole)') : null, h('div', { class: 'btns' }, off), app));
       return;
     }
     const linkBtn = h('button', { type: 'button', class: 'primary' }, 'Collega Telegram');

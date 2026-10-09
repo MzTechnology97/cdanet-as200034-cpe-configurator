@@ -90,8 +90,8 @@ class OutageAlertsTest {
             it.cdanet.cpeconfigurator.outages.FeedOutage(2, "lavoro"),
             it.cdanet.cpeconfigurator.outages.FeedOutage(3, "guasto_bt"),
         )
-        val fresh = it.cdanet.cpeconfigurator.outages.OutageAlerts.newOnes(feed, setOf("3"), includePlanned = false)
-        org.junit.Assert.assertEquals(listOf(1L), fresh.map { it.id })
-        org.junit.Assert.assertEquals(2, it.cdanet.cpeconfigurator.outages.OutageAlerts.newOnes(feed, setOf("3"), includePlanned = true).size)
+        // the server filters by the rules of each area: the phone only drops what it already notified
+        val fresh = it.cdanet.cpeconfigurator.outages.OutageAlerts.newOnes(feed, setOf("3"))
+        org.junit.Assert.assertEquals(listOf(1L, 2L), fresh.map { it.id })
     }
 }

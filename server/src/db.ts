@@ -295,6 +295,15 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX notifications_user ON notifications(user_id, read_at);
   `,
+  // 16: rules of each area of interest: paused (no notifications) and which outages it notifies.
+  // Personal zones keep the owner's previous "planned works" choice.
+  `
+  ALTER TABLE outage_zones ADD COLUMN paused INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE outage_zones ADD COLUMN notify_mt INTEGER NOT NULL DEFAULT 1;
+  ALTER TABLE outage_zones ADD COLUMN notify_bt INTEGER NOT NULL DEFAULT 1;
+  ALTER TABLE outage_zones ADD COLUMN notify_planned INTEGER NOT NULL DEFAULT 0;
+  UPDATE outage_zones SET notify_planned = COALESCE((SELECT telegram_planned FROM users WHERE users.id = outage_zones.owner_id), 0) WHERE owner_id IS NOT NULL;
+  `,
 ];
 
 export function openDatabase(path: string): Db {

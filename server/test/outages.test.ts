@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { buildApp } from '../src/app.ts';
 import { openDatabase } from '../src/db.ts';
 import { parseReverse } from '../src/services/geocode.ts';
-import { impactOf, mapFeature, parseEnelDate, scopeOutage, zoneBoxes, zonesOf } from '../src/services/outages.ts';
+import { impactOf, mapFeature, parseEnelDate, scopeOutage, zoneBoxes, zoneNotifies, zonesOf } from '../src/services/outages.ts';
 import { fakeUisp } from './fake-uisp.ts';
 import { ADMIN, testConfig } from './helpers.ts';
 
@@ -50,6 +50,17 @@ describe('Guasti Enel (e-distribuzione)', () => {
     assert.deepEqual(scopeOutage(o, new Set(['ap:a1']))!.impact.map((i) => i.name), ['AP N2']);
     assert.deepEqual(scopeOutage(o, new Set(['z3']))!.impact, []);
     assert.equal(scopeOutage(o, new Set(['ap:a2'])), null);
+  });
+
+  it('applies the rules of each area of interest', () => {
+    const z = { paused: false, notifyMt: true, notifyBt: false, notifyPlanned: true };
+    assert.equal(zoneNotifies(z, 'guasto_mt'), true);
+    assert.equal(zoneNotifies(z, 'guasto_bt'), false);
+    assert.equal(zoneNotifies(z, 'lavoro'), true);
+    assert.equal(zoneNotifies(z, 'altro'), true);
+    assert.equal(zoneNotifies({ ...z, paused: true }, 'guasto_mt'), false, 'paused: nothing');
+    assert.equal(zoneNotifies({}, 'lavoro'), false, 'planned works only when asked');
+    assert.equal(zoneNotifies({}, 'guasto_bt'), true);
   });
 
   it('queries far-apart zones separately', () => {
@@ -224,6 +235,29 @@ describe('Guasti Enel (e-distribuzione)', () => {
     assert.deepEqual(mineNow.active.find((o: { id: number }) => o.id === 10).impact, [], 'POP/AP only when assigned');
     assert.ok(direct.some((m) => m.chat === '777' && m.text.includes('FUORI ZONA')), 'personal Telegram');
     assert.ok(!sent.some((t) => t.includes('FUORI ZONA')), 'not on the group');
+
+    // each area has its own rules: they filter notifications (app feed), never what the list shows
+    const zones0 = (await call('GET', '/api/outages/zones', undefined, T)).json();
+    assert.equal(zones0.max, 20);
+    const byName = (n: string) => zones0.zones.find((x: { name: string }) => x.name === n);
+    assert.equal(byName('Casa mia').activeCount, 1);
+    assert.equal(byName('Vicino AP').activeCount, 1);
+    assert.deepEqual([byName('Casa mia').notifyMt, byName('Casa mia').notifyBt, byName('Casa mia').paused], [true, true, false]);
+    const tDev = (await call('POST', '/api/outages/device-token', undefined, T)).json().token;
+    const feedOf = async () => (await app.inject({ method: 'GET', url: '/api/outages/feed', headers: { authorization: `Bearer ${tDev}` } })).json().active.map((o: { id: number }) => o.id).sort();
+    assert.deepEqual(await feedOf(), [10, 12]);
+    const put = (id: number, b: object, h = T) => call('PUT', `/api/outages/zones/${id}`, b, h);
+    assert.equal((await put(z1, { notifyBt: false })).json().zone.notifyBt, false);
+    assert.deepEqual(await feedOf(), [10], 'BT faults off for Casa mia');
+    assert.deepEqual((await mine()).active.map((o: { id: number }) => o.id).sort(), [10, 12], 'still listed');
+    await put(z2, { paused: true, radiusKm: 1.5, name: 'Vicino AP (pausa)' });
+    assert.deepEqual(await feedOf(), [], 'paused area');
+    assert.equal((await call('GET', '/api/outages/zones', undefined, T)).json().zones.find((x: { id: string }) => x.id === `z${z2}`).radiusKm, 1.5);
+    assert.equal((await put(z1, { radiusKm: 99 })).statusCode, 400);
+    assert.equal((await put(Number(cfg.zones[0].id.slice(1)), { paused: true })).statusCode, 404, 'not their zone');
+    await put(z1, { notifyBt: true });
+    await put(z2, { paused: false });
+    assert.deepEqual(await feedOf(), [10, 12]);
 
     // planned works off; the fault ends -> restoration message
     await call('PUT', '/api/admin/outages/config', { includePlanned: false });

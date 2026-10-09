@@ -13,7 +13,7 @@ const osm = (o) => `https://www.openstreetmap.org/?mlat=${o.lat}&mlon=${o.lon}#m
  * New area of interest: GPS of the device (with the address filled in), address search or typed
  * coordinates (with "address from coordinates"). [post] stores it (shared zone or personal zone).
  */
-function zoneForm({ post, onDone }) {
+function zoneForm({ post, onDone, rules = false }) {
   const name = h('input', { placeholder: 'es. Centro Enna, casa, frazione' });
   const street = h('input', { placeholder: 'Via Roma' });
   const number = h('input', { placeholder: '12', inputmode: 'numeric' });
@@ -24,6 +24,10 @@ function zoneForm({ post, onDone }) {
   const lon = h('input', { placeholder: '14.2790', inputmode: 'decimal' });
   const zr = h('input', { type: 'number', min: 0.2, max: 50, step: 0.5, value: 2 });
   const where = h('p', { class: 'small muted' });
+  // personal zones: which outages to be notified about (planned works off by default)
+  const mt = h('input', { type: 'checkbox', checked: true });
+  const bt = h('input', { type: 'checkbox', checked: true });
+  const planned = h('input', { type: 'checkbox' });
   const fillAddress = async (la, lo) => {
     const r = await api(`/api/geocode/reverse?lat=${la}&lon=${lo}`).catch(() => null);
     if (!r) return;
@@ -66,7 +70,7 @@ function zoneForm({ post, onDone }) {
       const la = Number(lat.value.replace(',', '.'));
       const lo = Number(lon.value.replace(',', '.'));
       if (!lat.value || !lon.value || !Number.isFinite(la) || !Number.isFinite(lo)) throw new Error('Coordinate mancanti: usa il GPS, cerca l’indirizzo o inseriscile a mano');
-      await post({ name: name.value.trim(), lat: la, lon: lo, radiusKm: Number(zr.value) || 2 });
+      await post({ name: name.value.trim(), lat: la, lon: lo, radiusKm: Number(zr.value) || 2, ...(rules ? { notifyMt: mt.checked, notifyBt: bt.checked, notifyPlanned: planned.checked } : {}) });
       toast('Zona aggiunta: entra nel prossimo controllo (entro 10 minuti)');
       await onDone();
     });
@@ -79,6 +83,9 @@ function zoneForm({ post, onDone }) {
     h('div', { class: 'row' }, field('Via', street), field('Civico', number), field('Città', city), field('Provincia', prov), field('CAP', cap)),
     h('div', { class: 'btns' }, find),
     h('div', { class: 'row' }, field('Latitudine', lat), field('Longitudine', lon)),
+    rules
+      ? h('div', { class: 'btns' }, h('span', { class: 'small muted' }, 'Avvisami di:'), h('label', {}, mt, ' guasti media tensione'), h('label', {}, bt, ' guasti bassa tensione'), h('label', {}, planned, ' lavori programmati'))
+      : null,
     h('div', { class: 'btns' }, fromCoords, add),
     where,
   );
@@ -102,6 +109,46 @@ const zonesTable = (zones, del, owner = false) =>
     ],
     zones,
   );
+
+/**
+ * The user's own areas of interest, each with its rules: active or paused, and which outages notify
+ * (app and personal Telegram). Changes are saved at once.
+ */
+const myZonesTable = (zones, onChange, del) => {
+  const save = async (z, patch, el) => {
+    el.disabled = true;
+    try {
+      await api(`/api/outages/zones/${z.id.slice(1)}`, { method: 'PUT', body: patch });
+      await onChange();
+    } catch (e) {
+      toast(e.message, 'bad');
+      el.disabled = false;
+    }
+  };
+  const check = (z, key, label) => {
+    const c = h('input', { type: 'checkbox', checked: z[key], disabled: z.paused });
+    c.onchange = () => save(z, { [key]: c.checked }, c);
+    return h('label', { class: 'small' }, c, ` ${label}`);
+  };
+  return table(
+    [
+      { label: 'Zona', render: (z) => h('div', {}, h('strong', {}, z.name), h('div', { class: 'small muted' }, h('a', { href: osm(z), target: '_blank', rel: 'noopener' }, `${z.lat.toFixed(4)}, ${z.lon.toFixed(4)}`), ` · ${z.radiusKm} km`)) },
+      { label: 'Ora', render: (z) => (z.activeCount ? badge(`${z.activeCount} ${z.activeCount === 1 ? 'interruzione' : 'interruzioni'}`, 'warn') : badge('nessuna', 'good')) },
+      { label: 'Avvisi', render: (z) => h('div', { class: 'btns' }, check(z, 'notifyMt', 'MT'), check(z, 'notifyBt', 'BT'), check(z, 'notifyPlanned', 'lavori')) },
+      {
+        label: '',
+        render: (z) => {
+          const p = h('button', { type: 'button' }, z.paused ? 'Riattiva' : 'Metti in pausa');
+          p.onclick = () => save(z, { paused: !z.paused }, p);
+          const b = h('button', { type: 'button', class: 'danger' }, 'Elimina');
+          b.onclick = () => confirm(`Eliminare la zona ${z.name}?`) && busy(b, () => del(z));
+          return h('div', { class: 'btns' }, z.paused ? badge('in pausa', 'warn') : null, p, b);
+        },
+      },
+    ],
+    zones,
+  );
+};
 
 /** Map of outages, zones and POPs/APs (installers: only assigned POPs/APs, as an approximate area). */
 function outagesMap(admin) {
@@ -203,19 +250,23 @@ export async function outagesView({ user }) {
 
   /** Installer: own areas of interest. */
   async function loadMine() {
-    const { zones } = await api('/api/outages/zones');
+    const { zones, max } = await api('/api/outages/zones');
     mount(
       myBox,
       card(
-        h('h2', {}, 'Le mie zone di interesse'),
-        h('p', { class: 'small muted' }, 'Ricevi i guasti e i lavori nelle tue zone (massimo 20). I POP/AP potenzialmente impattati li vedi solo per quelli che ti ha assegnato l’amministratore.'),
+        h('h2', {}, 'Le mie aree di interesse'),
+        h(
+          'p',
+          { class: 'small muted' },
+          `Luoghi che vuoi seguire, anche fuori dai POP/AP che ti sono assegnati (massimo ${max ?? 20}). Per ognuna scegli quali avvisi ricevere sul telefono e su Telegram, oppure mettila in pausa: i guasti restano comunque visibili qui. I POP/AP potenzialmente impattati li vedi solo per quelli assegnati.`,
+        ),
         zones.length
-          ? zonesTable(zones, async (z) => {
+          ? myZonesTable(zones, loadMine, async (z) => {
               await api(`/api/outages/zones/${z.id.slice(1)}`, { method: 'DELETE' });
               await loadMine();
             })
-          : h('p', { class: 'small muted' }, 'Nessuna zona: aggiungine una qui sotto.'),
-        zoneForm({ post: (body) => api('/api/outages/zones', { method: 'POST', body }), onDone: loadMine }),
+          : h('p', { class: 'small muted' }, 'Nessuna area: aggiungine una qui sotto.'),
+        zoneForm({ post: (body) => api('/api/outages/zones', { method: 'POST', body }), onDone: loadMine, rules: true }),
       ),
     );
   }
