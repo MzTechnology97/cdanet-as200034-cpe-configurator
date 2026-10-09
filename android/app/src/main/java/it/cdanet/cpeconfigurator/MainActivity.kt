@@ -31,4 +31,21 @@ class MainActivity : FragmentActivity() {
             }
         }
     }
+
+    override fun onStop() {
+        super.onStop()
+        val c = (application as CdaApplication).container
+        c.backgroundSince = System.currentTimeMillis()
+    }
+
+    override fun onStart() {
+        super.onStart()
+        // "Sblocco a ogni apertura": back after more than a minute away, fingerprint or face again
+        val c = (application as CdaApplication).container
+        val since = c.backgroundSince
+        val s = c.quickLogin.saved()
+        if (since > 0 && System.currentTimeMillis() - since > 60_000 && c.quickLogin.lockAtOpen() && s != null && !s.persistent && c.session.token != null) {
+            c.locked.value = true
+        }
+    }
 }

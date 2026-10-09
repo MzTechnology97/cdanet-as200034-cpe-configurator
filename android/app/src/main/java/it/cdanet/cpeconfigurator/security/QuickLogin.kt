@@ -32,7 +32,20 @@ class QuickLoginCancelled(message: String) : Exception(message)
  *   still never leaves the keystore.
  */
 class QuickLogin(private val context: Context) {
-    data class Saved(val backend: String, val username: String, val deviceId: String, val iv: String, val data: String, val strong: Boolean)
+    /**
+     * The key of this phone. [persistent]: encrypted with a keystore key that needs no prompt (the
+     * app opens already signed in); otherwise unlocked by fingerprint or face.
+     */
+    data class Saved(
+        val backend: String,
+        val username: String,
+        val deviceId: String,
+        val iv: String,
+        val data: String,
+        val strong: Boolean,
+        val persistent: Boolean = false,
+        val expiresAt: String? = null,
+    )
 
     private val prefs = context.getSharedPreferences("quick_login", Context.MODE_PRIVATE)
 
@@ -45,8 +58,52 @@ class QuickLogin(private val context: Context) {
             iv = prefs.getString("iv", "").orEmpty(),
             data = prefs.getString("data", "").orEmpty(),
             strong = prefs.getBoolean("strong", true),
+            persistent = prefs.getBoolean("persistent", false),
+            expiresAt = prefs.getString("expiresAt", null),
         )
     }
+
+    /** Settings option: fingerprint or face at every opening of the app (off = stay signed in). */
+    fun lockAtOpen(): Boolean = prefs.getBoolean(LOCK_AT_OPEN, false)
+
+    fun setLockAtOpen(on: Boolean) = prefs.edit().putBoolean(LOCK_AT_OPEN, on).apply()
+
+    fun setExpiry(expiresAt: String?) {
+        if (expiresAt != null) prefs.edit().putString("expiresAt", expiresAt).apply()
+    }
+
+    private fun persistentKey(): SecretKey {
+        val ks = KeyStore.getInstance(KEYSTORE).apply { load(null) }
+        (ks.getKey(ALIAS_PERSISTENT, null) as? SecretKey)?.let { return it }
+        val spec = KeyGenParameterSpec.Builder(ALIAS_PERSISTENT, KeyProperties.PURPOSE_ENCRYPT or KeyProperties.PURPOSE_DECRYPT)
+            .setBlockModes(KeyProperties.BLOCK_MODE_GCM)
+            .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
+            .setKeySize(256)
+            .build()
+        return KeyGenerator.getInstance(KeyProperties.KEY_ALGORITHM_AES, KEYSTORE).apply { init(spec) }.generateKey()
+    }
+
+    /** Persistent login: the key is kept encrypted by the keystore (gone with a reinstall), no prompt. */
+    fun savePersistent(backend: String, username: String, deviceId: String, secret: String, expiresAt: String?) {
+        val cipher = Cipher.getInstance(TRANSFORMATION).apply { init(Cipher.ENCRYPT_MODE, persistentKey()) }
+        val data = cipher.doFinal(secret.toByteArray(Charsets.UTF_8))
+        prefs.edit()
+            .putString("backend", backend)
+            .putString("username", username)
+            .putString("deviceId", deviceId)
+            .putString("iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
+            .putString("data", Base64.encodeToString(data, Base64.NO_WRAP))
+            .putBoolean("strong", false)
+            .putBoolean("persistent", true)
+            .apply { if (expiresAt != null) putString("expiresAt", expiresAt) else remove("expiresAt") }
+            .apply()
+    }
+
+    /** The key of a persistent login, null when the keystore lost it (then: login with the password). */
+    fun persistentSecret(s: Saved): String? = runCatching {
+        val cipher = Cipher.getInstance(TRANSFORMATION).apply { init(Cipher.DECRYPT_MODE, persistentKey(), GCMParameterSpec(128, Base64.decode(s.iv, Base64.NO_WRAP))) }
+        String(cipher.doFinal(Base64.decode(s.data, Base64.NO_WRAP)), Charsets.UTF_8)
+    }.getOrNull()
 
     /** The user answered "Non ora": not asked again after each login (Settings can still turn it on). */
     fun declined(username: String): Boolean = prefs.getBoolean("declined_$username", false)
@@ -54,7 +111,7 @@ class QuickLogin(private val context: Context) {
     fun decline(username: String) = prefs.edit().putBoolean("declined_$username", true).apply()
 
     fun clear() {
-        val declined = prefs.all.filterKeys { it.startsWith("declined_") }
+        val declined = prefs.all.filterKeys { it.startsWith("declined_") || it == LOCK_AT_OPEN }
         val editor = prefs.edit().clear()
         declined.forEach { (k, v) -> if (v is Boolean) editor.putBoolean(k, v) }
         editor.apply()
@@ -62,6 +119,7 @@ class QuickLogin(private val context: Context) {
             val ks = KeyStore.getInstance(KEYSTORE).apply { load(null) }
             ks.deleteEntry(ALIAS_STRONG)
             ks.deleteEntry(ALIAS_WEAK)
+            ks.deleteEntry(ALIAS_PERSISTENT)
         }
     }
 
@@ -104,7 +162,7 @@ class QuickLogin(private val context: Context) {
         null
     }
 
-    fun save(backend: String, username: String, deviceId: String, secret: String, cipher: Cipher, strong: Boolean) {
+    fun save(backend: String, username: String, deviceId: String, secret: String, cipher: Cipher, strong: Boolean, expiresAt: String? = null) {
         val data = cipher.doFinal(secret.toByteArray(Charsets.UTF_8))
         prefs.edit()
             .putString("backend", backend)
@@ -113,6 +171,8 @@ class QuickLogin(private val context: Context) {
             .putString("iv", Base64.encodeToString(cipher.iv, Base64.NO_WRAP))
             .putString("data", Base64.encodeToString(data, Base64.NO_WRAP))
             .putBoolean("strong", strong)
+            .putBoolean("persistent", false)
+            .apply { if (expiresAt != null) putString("expiresAt", expiresAt) else remove("expiresAt") }
             .apply()
     }
 
@@ -148,6 +208,8 @@ class QuickLogin(private val context: Context) {
         private const val KEYSTORE = "AndroidKeyStore"
         private const val ALIAS_STRONG = "cdanet_quick_login_strong"
         private const val ALIAS_WEAK = "cdanet_quick_login"
+        private const val ALIAS_PERSISTENT = "cdanet_persistent_login"
+        private const val LOCK_AT_OPEN = "lock_at_open"
         private const val TRANSFORMATION = "AES/GCM/NoPadding"
     }
 }

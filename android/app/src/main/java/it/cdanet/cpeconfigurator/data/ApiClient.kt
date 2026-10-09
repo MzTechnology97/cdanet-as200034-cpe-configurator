@@ -64,6 +64,8 @@ private val ERRORS = mapOf(
     "job_not_completed" to "Esito del provisioning non ancora registrato sul server",
     "too_many_photos" to "Troppe foto per questo job (massimo 8)",
     "photo_not_jpeg" to "La foto deve essere in formato JPEG",
+    "device_revoked" to "Accesso del telefono revocato (password cambiata, account disattivato o uscita da tutti i dispositivi): accedi con la password",
+    "device_expired" to "Sessione scaduta: accedi di nuovo con la password",
     "firmware_not_found" to "Firmware non più disponibile sul server: aggiorna l'elenco",
     "mfa_expired" to "Tempo scaduto: ripeti l'accesso",
     "invalid_code" to "Codice non valido",
@@ -132,16 +134,20 @@ class ApiClient(
         return null
     }
 
-    /** Quick login with the key of this phone (unlocked by fingerprint or face). */
-    suspend fun deviceLogin(id: String, secret: String) {
+    /** Login with the key of this phone (persistent, or unlocked by fingerprint or face); returns its new expiry. */
+    suspend fun deviceLogin(id: String, secret: String): String? {
         val body = buildJsonObject { put("id", id); put("secret", secret) }
         val r = AppJson.decodeFromString(LoginResponse.serializer(), request("POST", "/api/auth/device-login", body, auth = false, client = true))
         session.set(SessionState(r.token, r.user, r.expiresAt))
+        return r.deviceExpiresAt
     }
 
     /** Registers this phone for the quick login (after a full login). */
-    suspend fun registerDevice(name: String): DeviceKeyDto =
-        AppJson.decodeFromString(DeviceKeyDto.serializer(), request("POST", "/api/auth/devices", buildJsonObject { put("name", name.take(60)) }, client = true))
+    suspend fun registerDevice(name: String, persistent: Boolean = false): DeviceKeyDto =
+        AppJson.decodeFromString(
+            DeviceKeyDto.serializer(),
+            request("POST", "/api/auth/devices", buildJsonObject { put("name", name.take(60)); if (persistent) put("persistent", true) }, client = true),
+        )
 
     suspend fun removeDevice(id: String) {
         request("DELETE", "/api/auth/devices/$id")

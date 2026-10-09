@@ -349,6 +349,12 @@ const MIGRATIONS: string[] = [
     md5 TEXT NOT NULL
   );
   `,
+  // 19: phone keys of the persistent login expire (sliding, with a hard cap); NULL = older
+  // biometric keys, valid until revoked as before
+  `
+  ALTER TABLE auth_devices ADD COLUMN expires_at TEXT;
+  ALTER TABLE auth_devices ADD COLUMN persistent INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function openDatabase(path: string): Db {

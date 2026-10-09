@@ -123,7 +123,7 @@ fun LoginScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) ->
                         try {
                             c.api.loginTotp(token, code)
                             c.settings.setLastUsername(username)
-                            c.offerQuickLogin.value = true
+                            it.cdanet.cpeconfigurator.ui.afterPasswordLogin(c)
                         } catch (e: Exception) {
                             error = e.message ?: e.toString()
                             if ((e as? it.cdanet.cpeconfigurator.data.ApiException)?.code == "mfa_expired") mfaToken = null
@@ -150,7 +150,7 @@ fun LoginScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) ->
                         mfaToken = c.api.login(username, password)
                         if (mfaToken == null) {
                             c.settings.setLastUsername(username)
-                            c.offerQuickLogin.value = true
+                            it.cdanet.cpeconfigurator.ui.afterPasswordLogin(c)
                         }
                     } catch (e: Exception) {
                         error = e.message ?: e.toString()
