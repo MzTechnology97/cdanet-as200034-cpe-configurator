@@ -297,8 +297,7 @@ setup_https() {
     if command -v ip >/dev/null 2>&1; then
       ips=$(ip -4 -o addr show scope global 2>/dev/null | awk '$2 !~ /^(docker|br-|veth)/ {split($4, a, "/"); print a[1]}' || true)
     else
-      ips=$(hostname -I 2>/dev/null | tr ' ' '
-' | grep -E '^[0-9.]+$' | head -1 || true)
+      ips=$(hostname -I 2>/dev/null | tr ' ' '\n' | grep -E '^[0-9.]+$' | head -1 || true)
     fi
     sites=$(for i in $ips; do printf 'https://%s ' "$i"; done)
     sites=${sites% }
