@@ -124,18 +124,26 @@ fun ProvisionFormStep(c: AppContainer) {
             GmsBarcodeScanning.getClient(context).startScan()
                 .addOnSuccessListener { b -> b.rawValue?.let { raw -> c.provisioning.updateForm { Validation.applyScan(it, raw) } } }
         }) { Text("Scansiona etichetta (barcode/QR)") }
-        // on the CPE's Wi-Fi the CPE itself tells MAC and model (Ubiquiti discovery): nothing to type
+        Text("Scansiona sempre l'etichetta della CPE: prima di scrivere la configurazione l'app controlla che il MAC sia proprio quello della CPE collegata.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        // MAC and serial come only from the label: the MAC announced on the network can be the
+        // wireless one, while the label (and UISP) carry the LAN one. The CPE only tells its model.
         var reading by remember { mutableStateOf(false) }
         var readMsg by remember { mutableStateOf<String?>(null) }
-        BusyButton("Leggi MAC e modello dalla CPE", reading, primary = false, tonal = true) {
+        BusyButton("Rileva il modello dalla CPE", reading, primary = false, tonal = true) {
             scope.launch {
                 reading = true
                 readMsg = runCatching {
                     val found = it.cdanet.cpeconfigurator.tools.UbntDiscovery.discover(c.network)
-                    val d = found.firstOrNull { it.mac != null } ?: error("Nessuna CPE Ubiquiti risponde: collegati alla sua Wi-Fi di management")
-                    val model = Validation.modelFromDiscovery(d.model, d.fullModel)
-                    c.provisioning.updateForm { f -> f.copy(mac = d.mac!!.replace(":", ""), model = model ?: f.model) }
-                    "Letti dalla CPE: ${d.mac}" + (model?.let { " · $it" } ?: " · modello ${d.fullModel ?: d.model ?: "sconosciuto"} non supportato") + (if (found.size > 1) " (${found.size} CPE trovate: controlla)" else "")
+                    when {
+                        found.isEmpty() -> "Nessuna CPE Ubiquiti risponde: collegati alla sua Wi-Fi di management"
+                        found.size > 1 -> "Rispondono ${found.size} CPE: scegli il modello a mano"
+                        else -> {
+                            val d = found.first()
+                            val model = Validation.modelFromDiscovery(d.model, d.fullModel)
+                            if (model != null) c.provisioning.updateForm { f -> f.copy(model = model) }
+                            model?.let { "Modello rilevato: $it" } ?: "Modello ${d.fullModel ?: d.model ?: "sconosciuto"} non supportato"
+                        }
+                    }
                 }.getOrElse { it.message }
                 reading = false
             }
