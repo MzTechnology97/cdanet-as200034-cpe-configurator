@@ -68,7 +68,9 @@ fun LocationPicker(c: AppContainer, current: CpeLocation?, label: String, onLoca
             busy = "gps"
             error = null
             try {
-                onLocation(gps.current(), "Posizione GPS del telefono")
+                val l = gps.current()
+                val rev = runCatching { c.api.reverseGeocode(l.latitude, l.longitude) }.getOrNull()
+                onLocation(l, rev?.label?.takeIf { it.isNotBlank() }?.let { "GPS · $it" } ?: "Posizione GPS del telefono")
             } catch (e: Exception) {
                 error = e.message
             } finally {

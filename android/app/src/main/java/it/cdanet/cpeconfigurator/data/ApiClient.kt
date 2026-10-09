@@ -167,6 +167,14 @@ class ApiClient(
     suspend fun outageDeviceToken(): String =
         ((AppJson.parseToJsonElement(request("POST", "/api/outages/device-token")) as JsonObject)["token"] as kotlinx.serialization.json.JsonPrimitive).content
 
+    suspend fun reverseGeocode(lat: Double, lon: Double): ReverseGeocodeDto =
+        AppJson.decodeFromString(ReverseGeocodeDto.serializer(), request("GET", "/api/geocode/reverse?lat=$lat&lon=$lon"))
+
+    /** Admin: new area of interest for power outages. */
+    suspend fun createOutageZone(name: String, lat: Double, lon: Double, radiusKm: Double) {
+        request("POST", "/api/admin/outages/zones", buildJsonObject { put("name", name); put("lat", lat); put("lon", lon); put("radiusKm", radiusKm) })
+    }
+
     suspend fun cpeHealth(): CpeHealthDto = AppJson.decodeFromString(CpeHealthDto.serializer(), request("GET", "/api/cpe-health"))
 
     suspend fun signalHistory(jobId: String, range: String): SignalHistoryDto =

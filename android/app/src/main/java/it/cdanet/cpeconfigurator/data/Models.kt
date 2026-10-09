@@ -90,6 +90,12 @@ data class MetaDto(
 data class OutageZoneDto(val name: String = "", val distanceM: Int = 0)
 
 @Serializable
+data class OutageImpactDto(val type: String = "", val name: String = "", val distanceM: Int = 0, val stations: Int? = null)
+
+@Serializable
+data class ReverseGeocodeDto(val label: String = "", val street: String = "", val houseNumber: String = "", val city: String = "", val province: String = "", val postcode: String = "")
+
+@Serializable
 data class OutageDto(
     val id: Long,
     val kind: String,
@@ -102,13 +108,21 @@ data class OutageDto(
     val lat: Double,
     val lon: Double,
     val zones: List<OutageZoneDto> = emptyList(),
+    val impact: List<OutageImpactDto> = emptyList(),
 )
 
 @Serializable
 data class OutageRunDto(val at: String? = null, val ok: Boolean = true, val error: String? = null)
 
 @Serializable
-data class OutagesDto(val active: List<OutageDto> = emptyList(), val lastRun: OutageRunDto? = null)
+data class OutageItemDto(val key: String = "", val name: String = "")
+
+/** What the user may see: admins everything, installers only the POPs/APs/zones assigned by the admin. */
+@Serializable
+data class OutageScopeDto(val all: Boolean = true, val assigned: List<OutageItemDto> = emptyList())
+
+@Serializable
+data class OutagesDto(val active: List<OutageDto> = emptyList(), val lastRun: OutageRunDto? = null, val generatedAt: String? = null, val scope: OutageScopeDto = OutageScopeDto())
 
 @Serializable
 data class CpeNowDto(

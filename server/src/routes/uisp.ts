@@ -75,6 +75,12 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     return ctx.geocoder.search(q);
   });
 
+  app.get('/api/geocode/reverse', user, async (req) => {
+    const { lat, lon } = z.object({ lat: z.coerce.number(), lon: z.coerce.number() }).parse(req.query);
+    if (!isValidLatLon(lat, lon)) throw new HttpError(400, 'invalid_position');
+    return (await ctx.geocoder.reverse(lat, lon)) ?? { label: '', street: '', houseNumber: '', city: '', province: '', postcode: '' };
+  });
+
   app.get('/api/coverage', mod('coverage'), async (req) => {
     const q = z
       .object({ lat: z.coerce.number(), lon: z.coerce.number(), limit: z.coerce.number().int().min(1).max(10).default(5) })
