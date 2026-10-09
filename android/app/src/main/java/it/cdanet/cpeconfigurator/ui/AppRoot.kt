@@ -89,6 +89,7 @@ enum class Screen(val title: String, val scroll: Boolean = true) {
     RouterOs("MikroTik · RouterOS"),
     History("Storico provisioning"),
     Settings("Impostazioni"),
+    Guide("Guida installatore", scroll = false),
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -240,6 +241,8 @@ fun AppRoot(c: AppContainer) {
                         onAcceptance = { c.selectedJob.value = it; go(Screen.Acceptance) },
                         onReplace = { c.provisioning.startReplacement(it); go(Screen.Provision) },
                     )
+                    // the installer guide of the server (/wiki/): its links outside the guide open in the browser
+                    Screen.Guide -> ServerPage(c, "/wiki/", "Guida", modifier = Modifier.fillMaxSize(), insidePrefix = "/wiki/")
                     Screen.Settings -> SettingsScreen(c, update = update, onUpdate = { update = it }, onLogout = {
                         c.session.clear()
                         offline = false

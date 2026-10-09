@@ -32,12 +32,28 @@ import it.cdanet.cpeconfigurator.network.TestTls
  * session: [script] (JavaScript, e.g. `window.cdaOutages({...})`) passes it the data the app
  * already received, and is re-run whenever it changes. [onReady] gets the page for live updates.
  */
+@Composable
+fun EmbeddedMap(c: AppContainer, script: String?, modifier: Modifier = Modifier, onReady: (WebView) -> Unit = {}) =
+    ServerPage(c, "/map-embed.html", "Mappa", script, modifier, onReady = onReady)
+
+/**
+ * A public page of our server (no session) in a WebView: [path] is loaded and links stay inside
+ * only while they start with [insidePrefix] (default: the whole server); anything else opens outside.
+ */
 @SuppressLint("SetJavaScriptEnabled", "ClickableViewAccessibility")
 @Composable
-fun EmbeddedMap(c: AppContainer, script: String?, modifier: Modifier = Modifier, onReady: (WebView) -> Unit = {}) {
+fun ServerPage(
+    c: AppContainer,
+    path: String,
+    label: String,
+    script: String? = null,
+    modifier: Modifier = Modifier,
+    insidePrefix: String = "/",
+    onReady: (WebView) -> Unit = {},
+) {
     val baseUrl by produceState<String?>(null) { value = c.api.base().trimEnd('/') }
     val base = baseUrl ?: run {
-        Text("Caricamento mappa…", modifier.padding(14.dp))
+        Text("Caricamento ${label.lowercase()}…", modifier.padding(14.dp))
         return
     }
     val background = androidx.compose.material3.MaterialTheme.colorScheme.background.toArgb()
@@ -45,7 +61,7 @@ fun EmbeddedMap(c: AppContainer, script: String?, modifier: Modifier = Modifier,
     var loaded by remember { mutableStateOf(false) }
     var failure by remember { mutableStateOf<String?>(null) }
     failure?.let {
-        Text("Mappa non disponibile: $it", modifier.padding(14.dp), color = androidx.compose.material3.MaterialTheme.colorScheme.error)
+        Text("$label non disponibile: $it", modifier.padding(14.dp), color = androidx.compose.material3.MaterialTheme.colorScheme.error)
         return
     }
     DisposableEffect(Unit) { onDispose { page?.destroy() } }
@@ -107,15 +123,15 @@ fun EmbeddedMap(c: AppContainer, script: String?, modifier: Modifier = Modifier,
                         if (TestTls.enabled && error.url.startsWith(base)) handler.proceed() else handler.cancel()
                     }
 
-                    // only our map page inside the app; anything else opens outside
+                    // only our page inside the app; anything else opens outside
                     override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                         val url = request.url.toString()
-                        if (url.startsWith(base)) return false
+                        if (url.startsWith(base + insidePrefix)) return false
                         runCatching { ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
                         return true
                     }
                 }
-                loadUrl("$base/map-embed.html")
+                loadUrl(base + path)
                 page = this
             }
         },

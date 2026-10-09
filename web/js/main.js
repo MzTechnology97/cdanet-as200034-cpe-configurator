@@ -20,6 +20,7 @@ import { statsView } from './views/stats.js';
 import { toolsView } from './views/tools.js';
 import { usersView } from './views/users.js';
 import { wirelessView } from './views/wireless.js';
+import { adminGuideView } from './views/guide.js';
 import { setAdmin } from './terms.js';
 
 const ROUTES = [
@@ -42,8 +43,11 @@ const ROUTES = [
   { id: 'server', label: 'Impostazioni server', view: serverSettingsView, admin: true },
   { id: 'modules', label: 'Funzionalità', view: (ctx) => modulesView({ ...ctx, onChange: () => renderChrome(session.get()?.user) }), admin: true },
   { id: 'events', label: 'Registro attività', view: eventsView, admin: true },
+  { id: 'admin-guide', label: 'Guida amministratore', view: adminGuideView, admin: true },
   { group: 'Profilo' },
   { id: 'account', label: 'Il mio account', view: accountView },
+  // static page, also opened by the app: same guide for installers and admins
+  { id: 'guide', label: 'Guida installatore', href: '/wiki/' },
 ];
 
 const viewEl = document.getElementById('view');
@@ -79,7 +83,11 @@ function renderChrome(user) {
   mount(
     sidebar,
     ROUTES.filter((r) => allowed(r, user)).map((r) =>
-      r.group ? h('div', { class: 'group' }, r.group) : h('a', { href: `#/${r.id}`, 'data-route': r.id }, user.role !== 'admin' && r.installerLabel ? r.installerLabel : r.label),
+      r.group
+        ? h('div', { class: 'group' }, r.group)
+        : r.href
+          ? h('a', { href: r.href, target: '_blank', rel: 'noopener' }, r.label)
+          : h('a', { href: `#/${r.id}`, 'data-route': r.id }, user.role !== 'admin' && r.installerLabel ? r.installerLabel : r.label),
     ),
   );
   mount(
@@ -112,7 +120,7 @@ async function route() {
   // #/route?key=value — the query part is handed to the view (e.g. #/profiles?user=5).
   const [path, query = ''] = location.hash.replace(/^#\//, '').split('?');
   const id = path || (s.user.role === 'admin' ? 'dashboard' : 'jobs');
-  const r = ROUTES.find((x) => x.id === id && allowed(x, s.user)) ?? ROUTES.find((x) => x.id === 'jobs');
+  const r = ROUTES.find((x) => x.id === id && x.view && allowed(x, s.user)) ?? ROUTES.find((x) => x.id === 'jobs');
   for (const a of sidebar.querySelectorAll('a')) a.classList.toggle('active', a.dataset.route === r.id);
   mount(viewEl, h('p', { class: 'muted' }, 'Caricamento…'));
   try {
