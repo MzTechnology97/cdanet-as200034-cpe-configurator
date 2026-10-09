@@ -192,6 +192,11 @@ button.link { background: none; border: none; color: var(--brand); padding: 4px 
 .pick-aps { padding-left: 26px; }
 .pick label.check { padding: 2px 0; flex-wrap: wrap; }
 .pick .small.muted { margin-left: 4px; }
+.ssid-pick { max-height: 340px; padding: 4px 10px; }
+.ssid-pick .pick-pop { display: flex; gap: 10px; align-items: baseline; padding: 4px 0; }
+.ssid-pick .pick-pop > b { min-width: 38px; }
+.ssid-pick .chips { margin: 0; gap: 4px 6px; }
+.ssid-pick label.check { padding: 1px 8px 1px 4px; border: 1px solid var(--line); border-radius: 999px; font-family: ui-monospace, Consolas, monospace; font-size: .78rem; gap: 4px; }
 
 /* Maps (Leaflet + Protomaps) */
 .map { height: 420px; border-radius: 10px; border: 1px solid var(--line); margin: 8px 0; z-index: 0; }

@@ -1,17 +1,18 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { HttpError } from '../auth.ts';
+import { HttpError, createLoginLimiter } from '../auth.ts';
 import type { AppContext } from '../context.ts';
-import { hashPassword, sha256Hex } from '../crypto.ts';
+import { hashPassword, sha256Hex, verifyPassword } from '../crypto.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { autoTemplate } from '../domain/autotemplate.ts';
-import { parseWirelessCsv } from '../domain/wireless-csv.ts';
+import { parseWirelessCsv, wirelessCsv } from '../domain/wireless-csv.ts';
 import { BOARD_MATCH_SUGGESTIONS, SSID_RX, SUPPORTED_MODELS, TARGET_FIRMWARE } from '../domain/policy.ts';
 import { PLACEHOLDERS, inspectTemplate } from '../domain/systemcfg.ts';
 import { validateBoardMatch } from '../services/templates.ts';
 import { loadLatestRelease } from '../services/releases.ts';
 import { escapeHtml } from '../services/telegram.ts';
 import { isModuleKey, type ModuleKey } from '../services/modules.ts';
+import { isAp, isPtp } from '../services/uisp.ts';
 
 const username = z.string().trim().min(3).max(80).regex(/^[A-Za-z0-9._-]+$/);
 const password = z.string().min(12).max(200);
@@ -193,6 +194,122 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
       recordEvent(db, actor(req), 'wireless.import', `${rows.length} righe`, `${created.length} nuove, ${updated.length} aggiornate, ${unchanged.length} invariate`);
     }
     return { ok, dryRun: b.dryRun || !ok, rows: rows.length, created, updated, unchanged, errors: errors.slice(0, 200), errorCount: errors.length };
+  });
+
+  /**
+   * SSIDs of the customer APs in UISP (relays included, PtP links excluded), split into the ones
+   * still without a key here (the list to work on) and the ones already imported.
+   */
+  async function uispSsids() {
+    if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
+    const valid = new Map<string, string[]>();
+    const skipped = new Map<string, string[]>();
+    for (const d of await ctx.uisp.allDevices()) {
+      if (!isAp(d) || !d.ssid || isPtp(d)) continue;
+      const into = SSID_RX.test(d.ssid) ? valid : skipped;
+      into.set(d.ssid, [...(into.get(d.ssid) ?? []), d.name]);
+    }
+    const stored = new Map(
+      (db.prepare('SELECT ssid, wpa2_ciphertext FROM wireless_secrets').all() as Array<{ ssid: string; wpa2_ciphertext: string }>).map((r) => [r.ssid, r.wpa2_ciphertext]),
+    );
+    const byName = (a: { ssid: string }, b: { ssid: string }) => a.ssid.localeCompare(b.ssid, 'it', { numeric: true });
+    const all = [...valid].map(([ssid, aps]) => ({ ssid, aps: aps.sort() })).sort(byName);
+    return {
+      pending: all.filter((s) => !stored.has(s.ssid)),
+      imported: all.filter((s) => stored.has(s.ssid)).map((s) => s.ssid),
+      // SSIDs that look like customer APs but are not in the provisioning format (e.g. a district by name)
+      skipped: [...skipped].map(([ssid, aps]) => ({ ssid, aps })).sort(byName),
+      stored,
+    };
+  }
+
+  app.get('/api/admin/wireless-networks/uisp', admin, async (_req, reply) => {
+    reply.header('Cache-Control', 'no-store');
+    const { pending, imported, skipped } = await uispSsids();
+    return { pending, imported: imported.length, skipped };
+  });
+
+  /**
+   * The shared WPA2 key on the SSIDs found in UISP and not yet imported (all, or the chosen ones);
+   * with scope 'all' it also replaces the key of the UISP networks already imported. Preview with
+   * dryRun; the key never reaches the activity log.
+   */
+  app.post('/api/admin/wireless-networks/uisp-import', admin, async (req) => {
+    const b = z
+      .object({
+        wpa2Password: z.string().min(8).max(63).regex(/^[\x20-\x7e]+$/),
+        ssids: z.array(z.string().regex(SSID_RX)).max(10_000).optional(),
+        scope: z.enum(['new', 'all']).default('new'),
+        dryRun: z.boolean().default(true),
+      })
+      .strict()
+      .parse(req.body);
+    const { pending, imported, stored } = await uispSsids();
+    const chosen = b.ssids ? new Set(b.ssids) : null;
+    const created = pending.map((s) => s.ssid).filter((s) => !chosen || chosen.has(s));
+    const updated: string[] = [];
+    const unchanged: string[] = [];
+    // only replacing keys needs to open the stored ones
+    if (b.scope === 'all') {
+      for (const ssid of imported) {
+        let same = false;
+        try {
+          same = sealer.open(stored.get(ssid)!) === b.wpa2Password;
+        } catch {
+          /* unreadable: replaced */
+        }
+        (same ? unchanged : updated).push(ssid);
+      }
+    }
+    const kept = b.scope === 'all' ? [] : imported;
+    if (!b.dryRun && created.length + updated.length > 0) {
+      const upsert = db.prepare(
+        `INSERT INTO wireless_secrets(ssid, wpa2_ciphertext, updated_at) VALUES(?,?,?)
+         ON CONFLICT(ssid) DO UPDATE SET wpa2_ciphertext = excluded.wpa2_ciphertext, updated_at = excluded.updated_at`,
+      );
+      const now = nowIso();
+      db.exec('BEGIN');
+      try {
+        for (const s of [...created, ...updated]) upsert.run(s, sealer.seal(b.wpa2Password), now);
+        db.exec('COMMIT');
+      } catch (e) {
+        db.exec('ROLLBACK');
+        throw e;
+      }
+      recordEvent(db, actor(req), 'wireless.uisp_import', `${created.length + updated.length} SSID da UISP`, `${created.length} nuove, ${updated.length} aggiornate, ${unchanged.length} invariate`);
+    }
+    return { dryRun: b.dryRun, pending: pending.length, created, updated, unchanged, kept };
+  });
+
+  /**
+   * The networks with their WPA2 keys in clear, as a CSV the import reads back. Asks again for the
+   * admin's own password; the export is logged and announced on the security channel.
+   */
+  const exportLimiter = createLoginLimiter(5);
+  app.post('/api/admin/wireless-networks/export', admin, async (req, reply) => {
+    const b = z
+      .object({ password: z.string().min(1).max(200), ssids: z.array(z.string().regex(SSID_RX)).max(10_000).optional() })
+      .strict()
+      .parse(req.body);
+    const me = db.prepare('SELECT username, password_hash FROM users WHERE id = ?').get(req.user!.id) as { username: string; password_hash: string };
+    if (exportLimiter.blocked(req.ip, me.username)) throw new HttpError(429, 'too_many_attempts');
+    if (!verifyPassword(b.password, me.password_hash)) {
+      exportLimiter.fail(req.ip, me.username);
+      throw new HttpError(403, 'wrong_current_password');
+    }
+    exportLimiter.clear(req.ip, me.username);
+    const chosen = b.ssids ? new Set(b.ssids) : null;
+    const rows = (db.prepare('SELECT ssid, wpa2_ciphertext FROM wireless_secrets').all() as Array<{ ssid: string; wpa2_ciphertext: string }>)
+      .filter((r) => !chosen || chosen.has(r.ssid))
+      .map((r) => ({ ssid: r.ssid, wpa2: sealer.open(r.wpa2_ciphertext) }))
+      .sort((a, c) => a.ssid.localeCompare(c.ssid, 'it', { numeric: true }));
+    recordEvent(db, actor(req), 'wireless.export', `${rows.length} reti`, 'chiavi WPA2 in chiaro');
+    ctx.notify.security(`Chiavi WPA2 di <b>${rows.length}</b> reti Wi-Fi esportate in chiaro da ${escapeHtml(me.username)}`);
+    reply
+      .header('Cache-Control', 'no-store')
+      .header('Content-Type', 'text/csv; charset=utf-8')
+      .header('Content-Disposition', `attachment; filename="reti-wifi-${nowIso().slice(0, 10)}.csv"`);
+    return wirelessCsv(rows);
   });
 
   app.post('/api/admin/wireless-networks/bulk-delete', admin, async (req) => {
