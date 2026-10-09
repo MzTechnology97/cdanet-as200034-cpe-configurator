@@ -1,4 +1,5 @@
 import { api, session } from '../api.js';
+import { openAttestation } from './privacy.js';
 import { badge, busy, card, field, fmtDate, h, mount, pageHead, stat, toast } from '../dom.js';
 import { myTelegramCard } from './my-telegram.js';
 
@@ -56,6 +57,7 @@ export async function accountView() {
     totpCard(a),
     myTelegramCard(),
     quickLoginCard(),
+    privacyCard(),
     card(
       h('h2', {}, 'Sessioni'),
       h('p', { class: 'small muted' }, 'Telefono perso o accesso da un PC condiviso? Chiudi tutte le sessioni: servirà un nuovo accesso ovunque.'),
@@ -182,5 +184,27 @@ function quickLoginCard() {
     );
   }
   load().catch((e) => mount(box, card(h('h2', {}, 'Telefoni collegati'), h('div', { class: 'notice bad' }, e.message))));
+  return box;
+}
+
+/** The privacy notice this user accepted, with the attestation to download. */
+function privacyCard() {
+  const box = h('div', {});
+  api('/api/privacy')
+    .then((p) => {
+      if (!p.notice && !p.acceptanceId) return;
+      const dl = h('button', { type: 'button' }, 'Scarica attestazione');
+      dl.onclick = () => openAttestation(p.acceptanceId);
+      mount(
+        box,
+        card(
+          h('h2', {}, 'Informativa privacy'),
+          p.acceptanceId
+            ? [h('p', { class: 'small' }, `Accettata il ${fmtDate(p.acceptedAt)} (versione ${p.version}).`), h('div', { class: 'btns' }, dl)]
+            : h('div', { class: 'notice warn' }, 'Non ancora accettata: la trovi al prossimo accesso dall’app.'),
+        ),
+      );
+    })
+    .catch(() => {});
   return box;
 }

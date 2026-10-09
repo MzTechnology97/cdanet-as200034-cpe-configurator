@@ -20,6 +20,7 @@
     <li><a href="#g-salute">Salute CPE e Statistiche</a></li>
     <li><a href="#g-guasti">Guasti Enel e Stato rete</a></li>
     <li><a href="#g-aggiornamenti">Aggiornamenti di server e app</a></li>
+    <li><a href="#g-privacy">Informativa privacy degli utenti</a></li>
     <li><a href="#g-registro">Registro attività e privacy</a></li>
     <li><a href="#g-problemi">Problemi frequenti</a></li>
   </ol>
@@ -101,6 +102,8 @@
 <p>I moduli facoltativi, ognuno con l'indicazione <i>web</i>, <i>app</i> o <i>web + app</i>. Se disattivi un modulo sparisce dalla console e dall'app e il server ne rifiuta le richieste. Esempi: Copertura AP, Puntamento antenna, Diagnosi CPE, Trova l'AP, Collaudo e verbale, Sostituzione CPE, Storico segnale, Confronto con il template, Salute CPE, Guasti Enel, Stato rete, Statistiche, Strumenti di rete, RouterOS, Agenda interventi, Aggiornamento firmware.</p>
 <h3 id="g-interventi">Agenda interventi</h3>
 <p>In <b>Interventi</b> l'ufficio pianifica la giornata di ogni installatore: giorno, fascia oraria, tipo (nuova installazione, ripuntamento, guasto, sopralluogo), cliente, indirizzo o coordinate, contatto, modello, note e i dati PPPoE del cliente. La password PPPoE viene cifrata sul server e non arriva mai al telefono: l'installatore tocca <b>Inizia</b> e il provisioning la usa da solo. Lo stato si aggiorna dal campo (<i>in corso</i>, <i>rimandato</i> con il motivo, <i>fatto</i> quando il provisioning riesce); gli interventi non chiusi dei giorni passati risultano <i>in ritardo</i>.</p>
+<p><b>Avvisi.</b> L'installatore riceve una notifica (app, anche chiusa, e Telegram se collegato) quando gli assegni un intervento o ne cambi giorno, orario o assegnatario, e i promemoria 24 h, 2 h, 1 h e 30 minuti prima dell'orario. L'orario è il primo indicato nella fascia (es. <i>09:00-11:00</i>); senza orario vale le 08:00. Se 30 minuti dopo l'intervento non risulta iniziato, l'installatore e il NOC ricevono <i>in ritardo</i>; se il giorno passa senza esito, <i>intervento mancato</i>. Un intervento rimandato con il motivo non genera avvisi.</p>
+<p><b>Posizione.</b> Se inserisci un indirizzo senza coordinate, il server lo geocodifica. Al collaudo di un intervento avviato dall'app, l'installatore deve essere entro <b>500 m</b>: altrimenti il collaudo è bloccato e il NOC riceve <i>Posizione non corrispondente</i> con la distanza.</p>
 <h3 id="g-firmware">Firmware airOS</h3>
 <p>Il provisioning scrive solo su CPE con il firmware richiesto (8.7.4). Con il modulo <b>Aggiornamento firmware</b> attivo (spento di default), in <b>Firmware airOS</b> carichi il file <code>.bin</code> ufficiale Ubiquiti di ogni piattaforma usata dalle CPE (XC, WA, 2XC…): piattaforma e versione si leggono dal file, che viene rifiutato se non è un firmware airOS. L'installatore scarica sul telefono i firmware della versione richiesta e, dalla Wi-Fi della CPE, la aggiorna: l'app controlla piattaforma, integrità (SHA-256 e MD5) e memoria libera prima di scrivere. Download ed esiti finiscono nel Registro attività.</p>
 <div class="notice warn">Prova l'aggiornamento su una CPE di laboratorio per ogni piattaforma prima di attivare il modulo per gli installatori.</div>
@@ -153,6 +156,10 @@
 <h2 id="g-aggiornamenti">14. Aggiornamenti di server e app</h2>
 <p><b>Server</b>: con gli aggiornamenti automatici attivi l'agente installa le nuove versioni da solo nella finestra oraria scelta; un numero di versione nel canale blocca quella versione. La versione corrente è in Panoramica.</p>
 <p><b>App Android</b>: il server pubblica l'ultimo APK nel canale aggiornamenti (sincronizzato dal repository dei rilasci). Con <i>App sempre all'ultima versione</i> attivo, un'app più vecchia scarica da sola l'aggiornamento e non permette login né uso finché non è installato; in alternativa imposti solo una <i>versione minima</i>.</p>
+
+<h2 id="g-privacy">Informativa privacy degli utenti</h2>
+<p>In <b>Informativa privacy</b> inserisci i dati del titolare (ragione sociale, sede, email, eventuale DPO, mesi di conservazione del registro). Da quel momento ogni utente, al primo accesso dall'app, legge e accetta l'informativa. L'accettazione diventa un'<b>attestazione</b> scaricabile con utente, data e ora, IP, telefono, versione dell'app e impronta SHA-256 del testo. Ogni modifica dei dati crea un testo nuovo, da accettare di nuovo; le attestazioni già firmate restano come erano. Nella stessa pagina vedi chi deve ancora accettare.</p>
+<div class="notice warn">Il testo è una base preparata su GDPR, D.Lgs. 196/2003 e art. 4 dello Statuto dei lavoratori: fallo verificare dal consulente privacy o dal DPO prima dell'uso. In particolare, per i dipendenti valuta se serve l'accordo sindacale o l'autorizzazione dell'Ispettorato per l'uso della posizione.</div>
 
 <h2 id="g-registro">15. Registro attività e privacy</h2>
 <p>Il <b>Registro attività</b> elenca operazioni amministrative, provisioning preparati, collaudi, accessi alle CPE dagli strumenti di campo e modifiche alle zone. Nessun segreto viene registrato. Storico e registro si cancellano dopo i giorni impostati in Impostazioni server.</p>

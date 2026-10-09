@@ -171,12 +171,12 @@ describe('Installazioni KO, rimandate, ritentativi e approvazione NOC', () => {
     // read state and Telegram choices
     assert.equal((await call('POST', '/api/notifications/read', { all: true }, T)).json().unread, 0);
     const prefs = (await call('GET', '/api/notifications/prefs', undefined, T)).json();
-    assert.deepEqual(prefs.kinds.map((k: { kind: string }) => k.kind), ['review_decision', 'install_activated']);
+    assert.deepEqual(prefs.kinds.map((k: { kind: string }) => k.kind), ['review_decision', 'install_activated', 'work_order_assigned', 'work_order_reminder', 'work_order_late']);
     assert.deepEqual([prefs.telegram.available, prefs.telegram.linked], [true, true]);
     // an installer cannot subscribe to the NOC's kinds
     assert.deepEqual((await call('PUT', '/api/notifications/prefs', { telegram: ['install_ko', 'install_activated'] }, T)).json().telegram, ['install_activated']);
     const adminPrefs = (await call('GET', '/api/notifications/prefs')).json();
-    assert.equal(adminPrefs.kinds.length, 5);
+    assert.equal(adminPrefs.kinds.length, 9);
     assert.equal(adminPrefs.kinds.find((k: { kind: string }) => k.kind === 'install_ko').telegram, false);
     await app.close();
   });

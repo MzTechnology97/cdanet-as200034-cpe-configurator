@@ -6,6 +6,8 @@ import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.buildJsonObject
+import kotlinx.serialization.json.jsonPrimitive
+import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.put
 import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.MediaType.Companion.toMediaType
@@ -66,6 +68,8 @@ private val ERRORS = mapOf(
     "photo_not_jpeg" to "La foto deve essere in formato JPEG",
     "device_revoked" to "Accesso del telefono revocato (password cambiata, account disattivato o uscita da tutti i dispositivi): accedi con la password",
     "device_expired" to "Sessione scaduta: accedi di nuovo con la password",
+    "privacy_changed" to "L'informativa è cambiata nel frattempo: rileggila",
+    "privacy_not_configured" to "Informativa non ancora disponibile",
     "firmware_not_found" to "Firmware non più disponibile sul server: aggiorna l'elenco",
     "mfa_expired" to "Tempo scaduto: ripeti l'accesso",
     "invalid_code" to "Codice non valido",
@@ -272,6 +276,22 @@ class ApiClient(
 
     suspend fun lineOfSight(lat: Double, lon: Double, apId: String, height: Double?): LosDto =
         AppJson.decodeFromString(LosDto.serializer(), request("GET", "/api/pointing/profile?lat=$lat&lon=$lon&apId=${java.net.URLEncoder.encode(apId, "UTF-8")}" + (height?.let { "&height=$it" } ?: "")))
+
+    suspend fun privacy(): PrivacyDto = AppJson.decodeFromString(PrivacyDto.serializer(), request("GET", "/api/privacy"))
+
+    suspend fun acceptPrivacy(sha256: String, device: String) {
+        request("POST", "/api/privacy/accept", buildJsonObject { put("sha256", sha256); put("device", device.take(120)) }, client = true)
+    }
+
+    /** Read-only token of the background worker (notifications and the next work orders). */
+    suspend fun notificationsDeviceToken(): String =
+        AppJson.parseToJsonElement(request("POST", "/api/notifications/device-token")).jsonObject["token"]!!.jsonPrimitive.content
+
+    suspend fun checkWorkOrderPosition(id: Long, lat: Double, lon: Double, accuracyM: Double?): PositionCheckDto =
+        AppJson.decodeFromString(
+            PositionCheckDto.serializer(),
+            request("POST", "/api/work-orders/$id/position", buildJsonObject { put("lat", lat); put("lon", lon); accuracyM?.let { put("accuracyM", it) } }),
+        )
 
     suspend fun firmwareList(): FirmwareListDto = AppJson.decodeFromString(FirmwareListDto.serializer(), request("GET", "/api/firmware"))
 

@@ -3,7 +3,10 @@ import { z } from 'zod';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
-import { isValidLatLon } from '../domain/geo.ts';
+import { distanceM, isValidLatLon } from '../domain/geo.ts';
+
+/** The installer must be within this distance of the order's position to save the acceptance test. */
+export const POSITION_MAX_M = 500;
 
 const DAY = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
 const KINDS = ['new', 'repoint', 'repair', 'survey'] as const;
@@ -41,11 +44,12 @@ interface Row {
   statusNote: string;
   jobId: string | null;
   doneAt: string | null;
+  locationFrom: string;
 }
 
 const SELECT = `SELECT w.id, w.created_at createdAt, w.updated_at updatedAt, w.assigned_to assignedTo, u.username assignee, w.day, w.slot, w.kind,
   w.customer, w.address, w.lat, w.lon, w.contact, w.pppoe_user pppoeUser, w.pppoe_ciphertext ciphertext, w.model, w.notes, w.status,
-  w.status_note statusNote, w.job_id jobId, w.done_at doneAt
+  w.status_note statusNote, w.job_id jobId, w.done_at doneAt, w.location_from locationFrom
   FROM work_orders w LEFT JOIN users u ON u.id = w.assigned_to`;
 
 /** What leaves the server: never the password, only whether the office set it. */
@@ -95,6 +99,18 @@ export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
   };
   const get = (id: number) => db.prepare(`${SELECT} WHERE w.id = ?`).get(id) as Row | undefined;
 
+  /** An order with an address but no position gets the address's (the GPS check needs a point). */
+  async function locate(id: number): Promise<{ lat: number; lon: number } | null> {
+    const o = get(id);
+    if (!o) return null;
+    if (o.lat != null && o.lon != null) return { lat: o.lat, lon: o.lon };
+    if (o.address.trim().length < 5) return null;
+    const hit = (await ctx.geocoder.search(o.address).catch(() => []))[0];
+    if (!hit) return null;
+    db.prepare("UPDATE work_orders SET lat = ?, lon = ?, location_from = 'address' WHERE id = ? AND lat IS NULL").run(hit.lat, hit.lon, id);
+    return { lat: hit.lat, lon: hit.lon };
+  }
+
   // ---- office (admins) ------------------------------------------------------------------------
   app.get('/api/admin/work-orders', admin, async (req) => {
     const q = z.object({ from: DAY.optional(), to: DAY.optional(), user: z.coerce.number().int().optional(), status: z.string().optional() }).parse(req.query);
@@ -121,8 +137,12 @@ export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
       )
       .run(now, req.user!.id, now, b.assignedTo ?? null, b.day, b.slot, b.kind, b.customer, b.address, b.lat ?? null, b.lon ?? null, b.contact, b.pppoeUser, b.pppoePassword ? ctx.sealer.seal(b.pppoePassword) : '', b.model, b.notes);
     const id = Number(r.lastInsertRowid);
+    if (b.lat != null) db.prepare("UPDATE work_orders SET location_from = 'office' WHERE id = ?").run(id);
+    else void locate(id);
     recordEvent(db, req.user!.id, 'work_order.create', `#${id}`, `${b.day} ${b.customer}`);
-    return reply.code(201).send({ item: view(get(id)!) });
+    const item = view(get(id)!);
+    ctx.notify.workOrderAssigned(item);
+    return reply.code(201).send({ item });
   });
 
   app.put('/api/admin/work-orders/:id', admin, async (req) => {
@@ -140,9 +160,24 @@ export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
     }
     if (b.pppoePassword !== undefined) cols.push(['pppoe_ciphertext', b.pppoePassword ? ctx.sealer.seal(b.pppoePassword) : '']);
     cols.push(['updated_at', nowIso()]);
+    if (b.lat !== undefined) cols.push(['location_from', b.lat == null ? '' : 'office']);
+    // a new day or time: the reminders and the late/missed alerts start again
+    if ((b.day !== undefined && b.day !== cur.day) || (b.slot !== undefined && b.slot !== cur.slot) || (b.assignedTo !== undefined && b.assignedTo !== cur.assignedTo)) {
+      cols.push(['reminders', ''], ['late_at', null], ['missed_at', null]);
+    }
     db.prepare(`UPDATE work_orders SET ${cols.map(([c]) => `${c} = ?`).join(', ')} WHERE id = ?`).run(...cols.map(([, v]) => v), id);
-    recordEvent(db, req.user!.id, 'work_order.update', `#${id}`, cols.map(([c]) => (c === 'pppoe_ciphertext' ? 'password' : c)).filter((c) => c !== 'updated_at').join(', '));
-    return { item: view(get(id)!) };
+    recordEvent(db, req.user!.id, 'work_order.update', `#${id}`, cols.map(([c]) => (c === 'pppoe_ciphertext' ? 'password' : c)).filter((c) => !['updated_at', 'reminders', 'late_at', 'missed_at'].includes(c)).join(', '));
+    if (b.address !== undefined && b.lat === undefined && cur.locationFrom !== 'office') {
+      // a new address replaces the position found from the old one
+      db.prepare("UPDATE work_orders SET lat = NULL, lon = NULL, location_from = '' WHERE id = ?").run(id);
+      void locate(id);
+    }
+    const item = view(get(id)!);
+    // the installer hears about a new assignment, a new day or time
+    if (item.assignedTo != null && item.status !== 'cancelled' && (item.assignedTo !== cur.assignedTo || item.day !== cur.day || item.slot !== cur.slot)) {
+      ctx.notify.workOrderAssigned(item, item.assignedTo === cur.assignedTo);
+    }
+    return { item };
   });
 
   app.delete('/api/admin/work-orders/:id', admin, async (req) => {
@@ -165,6 +200,43 @@ export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
       .prepare(`${SELECT} WHERE w.assigned_to = ? AND (w.day = ? OR (w.day < ? AND w.status IN ('open','started','postponed'))) AND w.status <> 'cancelled' ORDER BY w.day, w.slot, w.id`)
       .all(req.user!.id, d, d) as unknown as Row[];
     return { day: d, items: rows.map((r) => view(r, d)) };
+  });
+
+  /**
+   * The installer's GPS against the order's position (typed by the office or found from the
+   * address): beyond POSITION_MAX_M the acceptance test is blocked and the NOC is told once.
+   */
+  app.post('/api/work-orders/:id/position', user, async (req) => {
+    const id = z.coerce.number().int().positive().parse((req.params as { id: string }).id);
+    const b = z.object({ lat: z.number(), lon: z.number(), accuracyM: z.number().min(0).max(100_000).optional() }).strict().parse(req.body);
+    if (!isValidLatLon(b.lat, b.lon)) throw new HttpError(400, 'invalid_position');
+    const cur = get(id);
+    if (!cur || (cur.assignedTo !== req.user!.id && req.user!.role !== 'admin')) throw new HttpError(404, 'work_order_not_found');
+    const ref = await locate(id);
+    if (!ref) return { ok: true, checked: false, distanceM: null, maxM: POSITION_MAX_M, reference: null };
+    const d = Math.round(distanceM(ref, { lat: b.lat, lon: b.lon }));
+    const ok = d <= POSITION_MAX_M;
+    const prev = (() => {
+      try {
+        return JSON.parse((db.prepare('SELECT position_check p FROM work_orders WHERE id = ?').get(id) as { p: string }).p || '{}') as { notified?: boolean };
+      } catch {
+        return {};
+      }
+    })();
+    const notify = !ok && !prev.notified;
+    db.prepare('UPDATE work_orders SET position_check = ? WHERE id = ?').run(JSON.stringify({ distanceM: d, ok, at: nowIso(), accuracyM: b.accuracyM ?? null, notified: !!prev.notified || notify }), id);
+    const reference = get(id)!.locationFrom === 'address' ? 'address' : 'office';
+    if (!ok) {
+      recordEvent(db, req.user!.id, 'work_order.position_mismatch', `#${id}`, `${cur.customer}: ${d} m dalla posizione dell'intervento`);
+      if (notify) {
+        ctx.notify.inbox.push('noc', {
+          kind: 'work_order_noc',
+          title: `📍 Posizione non corrispondente: ${cur.customer}`,
+          lines: [`L'installatore ${req.user!.username} è a ${d >= 1000 ? `${(d / 1000).toFixed(1).replace('.', ',')} km` : `${d} m`} da ${reference === 'address' ? "l'indirizzo" : 'la posizione'} dell'intervento.`, cur.address, 'Il collaudo è bloccato finché i dati non coincidono.'].filter(Boolean),
+        });
+      }
+    }
+    return { ok, checked: true, distanceM: d, maxM: POSITION_MAX_M, reference };
   });
 
   app.post('/api/work-orders/:id/status', user, async (req) => {

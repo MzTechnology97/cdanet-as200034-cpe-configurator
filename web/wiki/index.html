@@ -70,7 +70,9 @@
 <div class="tip">Alcune funzioni possono non comparire sul tuo account: le attiva l'amministratore. Se ti serve uno strumento che non vedi, chiedi a lui.</div>
 
 <h2 id="accesso">2. Primo avvio e accesso</h2>
-<p>Al primo avvio Android chiede i permessi. Concedi <b>posizione</b> (serve per gli AP consigliati, la bussola e il mirino) e <b>dispositivi nelle vicinanze</b> (serve a leggere la Wi-Fi a cui sei collegato). La <b>fotocamera</b> viene chiesta la prima volta che apri il mirino o scatti le foto del collaudo.</p>
+<p>Al primo accesso l'app ti mostra l'<b>informativa privacy</b>: leggila, spunta la casella e tocca <b>Accetto</b>. L'accettazione viene registrata con data, ora e telefono; l'attestazione la scarichi da <b>Il mio account</b> nella console web. Se l'informativa cambia, l'app te la ripropone.</p>
+<p>Poi l'app controlla il telefono (<b>Prepara il telefono</b>): <b>posizione</b>, <b>GPS attivo</b>, <b>notifiche</b>, <b>fotocamera</b> e <b>dispositivi Wi-Fi vicini</b>, con un pulsante per sistemare ognuno. È consigliato anche togliere le <b>limitazioni della batteria</b>, così promemoria e notifiche arrivano in orario ad app chiusa.</p>
+<div class="warnbox">Senza permesso di posizione o con il GPS spento <b>installazioni e interventi non partono</b>: la posizione viene scritta nella CPE e confrontata con l'indirizzo dell'intervento.</div>
 <p>Nella schermata di accesso inserisci utente e password e tocca <b>Accedi</b>. L'indirizzo del server, nel riquadro <i>Server CDA Net</i>, è già impostato: cambialo con <b>Modifica URL</b> solo se te lo chiede l'amministratore. <b>Verifica collegamento</b> controlla che il server risponda.</p>
 <div class="shots">
   <figure><img src="img/app-permessi.jpg" alt="Richiesta del permesso di posizione" loading="lazy"><figcaption>Primo avvio: permesso di posizione.</figcaption></figure>
@@ -106,6 +108,8 @@
   <li><b>Naviga</b>: apre il navigatore verso l'indirizzo.</li>
   <li><b>Rimanda</b>: scrivi il motivo (per esempio <i>cliente assente</i>); l'ufficio lo vede subito.</li>
 </ul>
+<p><b>Notifiche</b> (anche ad app chiusa): ti avvisa quando ti viene assegnato un intervento o ne cambiano giorno e orario, e ricorda ogni intervento <b>24 ore, 2 ore, 1 ora e 30 minuti</b> prima. Se 30 minuti dopo l'orario non l'hai iniziato, ti avvisa che è <b>in ritardo</b>; se il giorno passa senza esito, che <b>non è stato fatto</b>. In entrambi i casi lo sa anche l'ufficio (NOC).</p>
+<p><b>Collaudo all'indirizzo giusto</b>: per un intervento avviato da qui il collaudo si salva solo se sei entro <b>500 metri</b> dall'indirizzo del cliente. Se sei più lontano l'app lo blocca e ti dice la distanza: controlla di essere dal cliente giusto o fai correggere l'indirizzo all'ufficio, che riceve la segnalazione.</p>
 <p>Quando il provisioning riesce, l'intervento si chiude da solo. Con Internet l'app scarica in anticipo anche gli AP intorno a ogni indirizzo, così <a href="#apvicini">AP vicini</a> funziona pure su un tetto senza segnale.</p>
 <p>Se compare un avviso arancione in alto (per esempio <i>collaudi in attesa di invio</i>) non devi fare nulla: i dati partono da soli appena il telefono torna online.</p>
 
@@ -373,6 +377,8 @@
   <tr><td>Collaudo in attesa di invio</td><td>Nessuna azione: parte da solo appena c'è rete.</td></tr>
   <tr><td>"Sessione scaduta: accedi di nuovo con la password"</td><td>Non hai usato l'app per 30 giorni, hai cambiato password o l'amministratore ha scollegato il telefono: accedi di nuovo.</td></tr>
   <tr><td>"Firmware rilevato … è richiesto 8.7.4"</td><td>Aggiorna la CPE da <a href="#firmware">CPE collegata → Firmware</a>, poi riprova con lo stesso pacchetto.</td></tr>
+  <tr><td>"C'è un problema tra i dati dell'intervento e la tua posizione"</td><td>Sei a più di 500 m dall'indirizzo dell'intervento: verifica il cliente, spostati all'aperto se il GPS è impreciso, oppure chiedi all'ufficio di correggere l'indirizzo.</td></tr>
+  <tr><td>"Il GPS del telefono è spento"</td><td>Attiva la localizzazione (tendina rapida o Impostazioni → Posizione): installazioni e interventi ripartono subito.</td></tr>
   <tr><td>Visibilità ostruita</td><td>Il terreno copre l'AP: prova un altro AP o un punto più alto; edifici e alberi vanno controllati a vista.</td></tr>
   <tr><td>AP vicini: "uso gli AP salvati"</td><td>Sei senza rete: i dati sono quelli salvati vicino a te. Azimut e tilt sono calcolati da quel punto.</td></tr>
 </table>

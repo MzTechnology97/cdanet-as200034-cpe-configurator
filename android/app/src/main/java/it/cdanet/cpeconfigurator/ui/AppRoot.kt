@@ -2,6 +2,10 @@ package it.cdanet.cpeconfigurator.ui
 
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
+import it.cdanet.cpeconfigurator.ui.screens.FieldReadiness
+import it.cdanet.cpeconfigurator.ui.screens.GpsGate
+import it.cdanet.cpeconfigurator.ui.screens.PrivacyScreen
+import it.cdanet.cpeconfigurator.ui.screens.ReadinessScreen
 import it.cdanet.cpeconfigurator.ui.screens.CpeHub
 import it.cdanet.cpeconfigurator.ui.screens.Dest
 import it.cdanet.cpeconfigurator.ui.screens.DevicesHub
@@ -111,7 +115,7 @@ enum class Screen(val title: String, val scroll: Boolean = true) {
     Coverage("Copertura AP"),
     Alignment("Puntamento antenna"),
     Diagnosis("Diagnosi CPE"),
-    Acceptance("Collaudo installazione"),
+    Acceptance("Collaudo"),
     Compass("Bussola verso l'AP"),
     Pointing("Trova l'AP", scroll = false),
     ArAim("Mirino verso l'AP", scroll = false),
@@ -125,7 +129,7 @@ enum class Screen(val title: String, val scroll: Boolean = true) {
     Camera("TVCC / IP camera"),
     Remote("Accesso remoto"),
     RouterOs("MikroTik · RouterOS"),
-    History("Storico provisioning"),
+    History("Storico"),
     Notifications("Notifiche"),
     Settings("Impostazioni"),
     Guide("Guida installatore", scroll = false),
@@ -262,6 +266,36 @@ fun AppRoot(c: AppContainer) {
         return
     }
 
+    // privacy notice: at the first login and whenever it changes (offline: asked next time)
+    val ctx = androidx.compose.ui.platform.LocalContext.current
+    var privacy by remember { mutableStateOf<it.cdanet.cpeconfigurator.data.PrivacyDto?>(null) }
+    var readinessDone by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(false) }
+    LaunchedEffect(session?.user?.id) {
+        val s = session ?: return@LaunchedEffect
+        privacy = runCatching { c.api.privacy() }.getOrNull()?.takeIf { it.required }
+        // alerts of the work orders and of the NOC on this phone, also with the app closed
+        if (!it.cdanet.cpeconfigurator.alerts.PhoneAlerts.isEnabled(ctx)) {
+            runCatching { c.api.notificationsDeviceToken() }.onSuccess { token ->
+                it.cdanet.cpeconfigurator.alerts.PhoneAlerts.enable(ctx, c.api.base().trimEnd('/'), token)
+            }
+        }
+        if (s.user.role == "admin") readinessDone = true
+    }
+    privacy?.let { p ->
+        if (session != null) {
+            PrivacyScreen(c, p, onAccepted = { privacy = null }, onLogout = {
+                privacy = null
+                scope.launch { logoutPhone(c) }
+                stack = listOf(Screen.Home)
+            })
+            return
+        }
+    }
+    if (session != null && !readinessDone && FieldReadiness.missing(ctx)) {
+        ReadinessScreen(onContinue = { readinessDone = true })
+        return
+    }
+
     BackHandler(enabled = stack.size > 1) { back() }
     QuickLoginOffer(c)
 
@@ -361,16 +395,18 @@ fun AppRoot(c: AppContainer) {
                     Screen.Devices -> DevicesHub(c, hubTabs[screen.name]) { hubTabs[screen.name] = it }
                     Screen.Tools -> ToolsList(toolGroups(modules, offline = session == null, ::go))
                     Screen.Search -> SearchScreen(c, onAcceptance = { c.selectedJob.value = it; go(Screen.Acceptance) })
-                    Screen.Provision -> InstallScreen(
-                        c,
-                        onOpenCpeWeb = { go(Screen.CpeWeb) },
-                        onLogin = { offline = false },
-                        onAim = { t -> c.compassTarget.value = t; arWithSignal = true; go(Screen.ArAim) },
-                        onCompass = { t -> c.compassTarget.value = t; go(Screen.Compass) },
-                        onPointing = { go(Screen.Pointing) },
-                        onAlignment = { go(Screen.Alignment) },
-                        onAcceptance = { go(Screen.Acceptance) },
-                    )
+                    Screen.Provision -> GpsGate {
+                        InstallScreen(
+                            c,
+                            onOpenCpeWeb = { go(Screen.CpeWeb) },
+                            onLogin = { offline = false },
+                            onAim = { t -> c.compassTarget.value = t; arWithSignal = true; go(Screen.ArAim) },
+                            onCompass = { t -> c.compassTarget.value = t; go(Screen.Compass) },
+                            onPointing = { go(Screen.Pointing) },
+                            onAlignment = { go(Screen.Alignment) },
+                            onAcceptance = { go(Screen.Acceptance) },
+                        )
+                    }
                     Screen.CpeWeb -> WifiRequired(c, "alla Wi-Fi di management della CPE", "Il primo avvio si fa sull'interfaccia web della CPE, raggiungibile solo in rete locale.") { CpeWebScreen(c) }
                     Screen.Wifi -> WifiScreen(c)
                     Screen.Network -> NetworkScreen(c)
@@ -381,7 +417,7 @@ fun AppRoot(c: AppContainer) {
                     )
                     Screen.Alignment -> WifiRequired(c, "alla Wi-Fi della CPE (management, es. \"LBE-5AC-Gen2:xxxx\") oppure a quella del router del cliente", "Il segnale si legge direttamente dalla CPE.") { AlignmentScreen(c) }
                     Screen.Diagnosis -> WifiRequired(c, "alla Wi-Fi della CPE (management, es. \"LBE-5AC-Gen2:xxxx\") oppure a quella del router del cliente", "La diagnosi interroga la CPE in rete locale.") { DiagnosisScreen(c) }
-                    Screen.Acceptance -> AcceptanceScreen(c)
+                    Screen.Acceptance -> GpsGate { AcceptanceScreen(c) }
                     Screen.Compass -> CompassScreen(c)
                     Screen.Pointing -> PointingScreen(
                         c,

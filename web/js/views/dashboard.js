@@ -5,12 +5,13 @@ import { isOn as moduleOn } from '../modules.js';
 import { uispStatusCard } from './uisp-panel.js';
 
 export async function dashboardView() {
-  const [s, profiles, uisp, osm, net] = await Promise.all([
+  const [s, profiles, uisp, osm, net, privacy] = await Promise.all([
     api('/api/admin/status'),
     api('/api/admin/profiles'),
     uispStatusCard(),
     osmStatus(),
     moduleOn('network_status') ? api('/api/network/status').catch(() => null) : null,
+    api('/api/admin/privacy').catch(() => null),
   ]);
   const missingProfiles = profiles.filter((p) => !p.templates.length).map((p) => p.model);
   const warnings = [];
@@ -19,6 +20,7 @@ export async function dashboardView() {
   if (missingProfiles.length) warnings.push(`Profili airOS 8.7.4 mancanti: ${missingProfiles.join(', ')}.`);
   if (!s.counts.wirelessNetworks) warnings.push('Nessuna chiave WPA2 configurata.');
   if (!s.androidRelease) warnings.push('Nessuna release Android pubblicata nel canale aggiornamenti.');
+  if (privacy && !privacy.complete) warnings.push('Informativa privacy da completare con i dati del titolare (Amministrazione → Informativa privacy): finché manca, l’app non la fa accettare.');
 
   const n = s.policy.network;
   return h(

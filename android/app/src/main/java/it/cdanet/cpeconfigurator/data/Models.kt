@@ -572,3 +572,24 @@ data class FirmwareImageDto(
 
 @Serializable
 data class FirmwareListDto(val target: String = "", val items: List<FirmwareImageDto> = emptyList())
+
+/** Privacy notice of the app (GET /api/privacy): shown at the first login and when it changes. */
+@Serializable
+data class NoticeSectionDto(val title: String = "", val paragraphs: List<String> = emptyList())
+
+@Serializable
+data class PrivacyNoticeDto(val title: String = "", val sections: List<NoticeSectionDto> = emptyList())
+
+@Serializable
+data class PrivacyDto(
+    val required: Boolean = false,
+    val version: String? = null,
+    val sha256: String? = null,
+    val notice: PrivacyNoticeDto? = null,
+    val acceptedAt: String? = null,
+    val acceptanceId: Int? = null,
+)
+
+/** The installer's GPS against the work order's position (address or office coordinates). */
+@Serializable
+data class PositionCheckDto(val ok: Boolean = true, val checked: Boolean = false, val distanceM: Int? = null, val maxM: Int = 500, val reference: String? = null)

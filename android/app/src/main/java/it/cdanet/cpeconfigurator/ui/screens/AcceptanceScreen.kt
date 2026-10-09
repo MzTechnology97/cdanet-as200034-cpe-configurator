@@ -231,11 +231,17 @@ fun AcceptanceScreen(c: AppContainer) {
         if (queued.any { it.jobId == j.id }) {
             Banner("Collaudo salvato sul telefono: verrà inviato appena c'è rete (anche chiudendo questa schermata).", WarnAmber)
         }
+        val activeOrder by c.activeWorkOrder.collectAsState()
+        activeOrder?.let { Text("Intervento: ${it.customer}${if (it.address.isNotBlank()) " · ${it.address}" else ""}. Il collaudo si salva solo entro ${WorkOrderPosition.MAX_M} m dall'indirizzo.", style = MaterialTheme.typography.bodySmall) }
+        // the reason it was not saved, next to the button (also shown at the top)
+        error?.let { msg -> it.cdanet.cpeconfigurator.ui.Notice(msg, it.cdanet.cpeconfigurator.ui.NoticeKind.Bad) }
         BusyButton("Salva e invia collaudo", sending, Modifier.fillMaxWidth(), enabled = report != null || photos.isNotEmpty()) {
             scope.launch {
                 sending = true
                 error = null
                 try {
+                    // the acceptance test of a work order happens at the customer's: GPS within 500 m
+                    activeOrder?.let { o -> WorkOrderPosition.verify(c, context, o) }
                     // Always through the on-device queue: nothing is lost if the roof has no signal.
                     val n = photos.size
                     c.acceptanceQueue.enqueue(j.id, j.deviceName.ifBlank { j.mac }, report, photos.map { it.jpeg to it.caption })
@@ -254,5 +260,39 @@ fun AcceptanceScreen(c: AppContainer) {
                 }
             }
         }
+    }
+}
+
+/**
+ * Where the installer is against the work order: the server compares with the office's position
+ * or the geocoded address (and tells the NOC); offline, the order's own coordinates are used.
+ * Throws with the message to show when the acceptance test must not be saved.
+ */
+object WorkOrderPosition {
+    const val MAX_M = 500
+
+    fun distanceM(lat1: Double, lon1: Double, lat2: Double, lon2: Double): Int =
+        it.cdanet.cpeconfigurator.data.PointingCache.distanceM(lat1, lon1, lat2, lon2)
+
+    /** Pure decision (unit-tested): null = go on, else why not. */
+    fun refusal(distanceM: Int?, accuracyM: Double?, customer: String): String? = when {
+        distanceM == null -> null
+        distanceM <= MAX_M -> null
+        else -> "C'è un problema tra i dati dell'intervento e la tua posizione: sei a ${if (distanceM >= 1000) "%.1f km".format(java.util.Locale.ITALY, distanceM / 1000.0) else "$distanceM m"} " +
+            "dall'indirizzo di $customer (massimo $MAX_M m). Il collaudo non si può salvare: verifica di essere dal cliente giusto o fai correggere l'indirizzo all'ufficio." +
+            (accuracyM?.takeIf { it > 100 }?.let { " (precisione GPS ${it.toInt()} m: spostati all'aperto e riprova)" } ?: "")
+    }
+
+    suspend fun verify(c: it.cdanet.cpeconfigurator.core.AppContainer, context: android.content.Context, o: it.cdanet.cpeconfigurator.data.WorkOrderDto) {
+        val loc = runCatching { it.cdanet.cpeconfigurator.network.LocationHelper(context).current() }.getOrElse {
+            throw IllegalStateException("Posizione GPS non disponibile: serve per verificare che il collaudo sia fatto all'indirizzo dell'intervento. ${it.message ?: ""}".trim())
+        }
+        val server = runCatching { c.api.checkWorkOrderPosition(o.id, loc.latitude, loc.longitude, loc.accuracy) }.getOrNull()
+        val d = when {
+            server?.checked == true -> server.distanceM
+            o.lat != null && o.lon != null -> distanceM(loc.latitude, loc.longitude, o.lat, o.lon)
+            else -> null
+        }
+        refusal(d, loc.accuracy, o.customer)?.let { throw IllegalStateException(it) }
     }
 }
