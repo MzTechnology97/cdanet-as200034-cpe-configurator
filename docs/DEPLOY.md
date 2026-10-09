@@ -123,6 +123,15 @@ Console → **Amministrazione → Impostazioni server** (solo admin): i parametr
 
 I segreti sono cifrati con la chiave master del server e **non vengono mai mostrati** (solo "impostata/non impostata"); nel Registro attività compare quali parametri sono cambiati, mai i valori. Quasi tutto vale subito; durata delle sessioni e rilasci valgono dopo **Riavvia l'app ora** (pulsante nella stessa pagina). La nuova password CPE vale per le CPE configurate da quel momento: quelle già installate mantengono la loro (per quelle gli strumenti di campo permettono di inserirla a mano).
 
+### Aggiornamento obbligatorio dell'app (v1.31)
+
+**App sempre all'ultima versione** (Provisioning e app, attiva di default):
+- appena il server conosce un nuovo APK (canale rilasci), le app più vecchie ricevono `426 client_update_required` su ogni chiamata, login compreso;
+- restano raggiungibili solo il canale aggiornamenti e la mappa;
+- l'app controlla all'avvio, ogni 15 minuti e appena il server la rifiuta, scarica da sola il nuovo APK (verificato con SHA-256) e mostra solo la schermata di installazione finché non è aggiornata.
+
+Le app fino alla v1.30 non mandano la versione a ogni chiamata: il server le riconosce dallo user agent di OkHttp e le blocca allo stesso modo, e loro propongono l'aggiornamento dal proprio banner. Spegnendo l'opzione vale solo la **Versione minima dell'app Android**.
+
 ### Infrastruttura (applicata dall'agente di aggiornamento)
 
 Nella stessa pagina, la scheda **Infrastruttura** cambia i parametri che riguardano gli altri container:

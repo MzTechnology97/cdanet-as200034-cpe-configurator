@@ -99,6 +99,11 @@ export const SERVER_SETTINGS: Def[] = [
     get: (c) => c.minAndroidVersion, set: (c, v) => (c.minAndroidVersion = (v as string | undefined) ?? '1.0.0'),
   },
   {
+    key: 'appForceLatest', env: 'APP_FORCE_LATEST', group: 'Provisioning e app', label: 'App sempre all’ultima versione (aggiornamento obbligatorio)', kind: 'bool',
+    help: 'Appena esce una nuova versione, l’app la scarica e non permette login né uso finché non è installata.',
+    get: (c) => c.appForceLatest, set: (c, v) => (c.appForceLatest = v === undefined ? true : !!v),
+  },
+  {
     key: 'jwtTtlHours', env: 'JWT_TTL_HOURS', group: 'Provisioning e app', label: 'Durata delle sessioni (ore)', kind: 'int', min: 1, max: 72, restart: true,
     get: (c) => c.jwtTtlHours, set: (c, v) => (c.jwtTtlHours = v as number),
   },

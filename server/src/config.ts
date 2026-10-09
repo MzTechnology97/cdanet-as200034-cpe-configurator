@@ -61,6 +61,8 @@ const envSchema = z.object({
 
   PROVISION_JOB_TTL_MINUTES: int(30, 5, 240),
   MIN_ANDROID_VERSION: z.string().regex(/^\d+\.\d+\.\d+$/).default('1.0.0'),
+  // the Android app must be on the latest published release (older ones cannot log in)
+  APP_FORCE_LATEST: z.enum(['0', '1']).default('1'),
   GDPR_AUDIT_RETENTION_DAYS: int(365, 1, 3650),
 
   ANDROID_RELEASE_DIR: z.string().default('/opt/cdanet/releases'),
@@ -143,6 +145,8 @@ export interface Config {
     syncMinutes: number;
   };
   routerOsAllowPublic: boolean;
+  /** Android app always on the latest release: older apps get 426 on every call. */
+  appForceLatest: boolean;
   uisp: { url: string; token: string; cacheSeconds: number } | null;
   uispAutoBackup: boolean;
   uispIgnoreTls: boolean;
@@ -219,6 +223,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
       syncMinutes: e.ANDROID_RELEASE_SYNC_MINUTES,
     },
     routerOsAllowPublic: e.ROUTEROS_ALLOW_PUBLIC === '1',
+    appForceLatest: e.APP_FORCE_LATEST === '1',
     uisp:
       e.UISP_API_URL && e.UISP_API_TOKEN
         ? { url: e.UISP_API_URL, token: e.UISP_API_TOKEN, cacheSeconds: e.UISP_CACHE_SECONDS }

@@ -33,6 +33,7 @@ import it.cdanet.cpeconfigurator.ui.GoodGreen
 import it.cdanet.cpeconfigurator.ui.KeyValue
 import it.cdanet.cpeconfigurator.ui.SectionCard
 import it.cdanet.cpeconfigurator.ui.WarnAmber
+import it.cdanet.cpeconfigurator.ui.startUpdate
 import it.cdanet.cpeconfigurator.update.UpdateInfo
 import it.cdanet.cpeconfigurator.update.UpdateState
 import kotlinx.coroutines.launch
@@ -44,20 +45,7 @@ import androidx.compose.ui.Alignment
 fun UpdateBanner(c: AppContainer, state: UpdateState, onState: (UpdateState) -> Unit) {
     val scope = rememberCoroutineScope()
     fun install(info: UpdateInfo) {
-        scope.launch {
-            if (!c.updater.canInstall()) {
-                onState(UpdateState.PermissionRequired)
-                c.updater.openInstallPermissionSettings()
-                return@launch
-            }
-            onState(UpdateState.Downloading(info))
-            onState(
-                runCatching { c.updater.download(info) }.fold(
-                    onSuccess = { apk -> c.updater.install(apk); UpdateState.ReadyToInstall(info) },
-                    onFailure = { UpdateState.Failed(it.message ?: "Download non riuscito") },
-                ),
-            )
-        }
+        scope.launch { startUpdate(c, info, onState) }
     }
     when (state) {
         is UpdateState.Available -> SectionCard("Aggiornamento disponibile") {

@@ -1,6 +1,8 @@
 package it.cdanet.cpeconfigurator.network
 
 import android.annotation.SuppressLint
+import it.cdanet.cpeconfigurator.BuildConfig
+import okhttp3.Interceptor
 import okhttp3.OkHttpClient
 import java.security.SecureRandom
 import java.security.cert.X509Certificate
@@ -26,13 +28,26 @@ object TestTls {
         override fun getAcceptedIssuers(): Array<X509Certificate> = emptyArray()
     }
 
-    private val cache: MutableMap<OkHttpClient, OkHttpClient> = Collections.synchronizedMap(WeakHashMap())
+    private val secure: MutableMap<OkHttpClient, OkHttpClient> = Collections.synchronizedMap(WeakHashMap())
+    private val insecure: MutableMap<OkHttpClient, OkHttpClient> = Collections.synchronizedMap(WeakHashMap())
 
-    fun apply(b: OkHttpClient.Builder): OkHttpClient.Builder =
-        if (!enabled) b else b
+    /**
+     * "android/<version>" on every call to our server (API, updates, outage feed, speed test, map):
+     * the server refuses outdated apps, except on the update channel.
+     */
+    val clientHeader = "android/${BuildConfig.VERSION_NAME.removeSuffix("-debug")}"
+    private val identify = Interceptor { chain ->
+        val r = chain.request()
+        chain.proceed(if (r.header("X-CDA-Client") == null) r.newBuilder().header("X-CDA-Client", clientHeader).build() else r)
+    }
+
+    fun apply(b: OkHttpClient.Builder): OkHttpClient.Builder {
+        b.addInterceptor(identify)
+        return if (!enabled) b else b
             .sslSocketFactory(SSLContext.getInstance("TLS").apply { init(null, arrayOf(trustAll), SecureRandom()) }.socketFactory, trustAll)
             .hostnameVerifier { _, _ -> true }
+    }
 
-    /** [base] as is, or its variant without certificate checks when the test option is on. */
-    fun wrap(base: OkHttpClient): OkHttpClient = if (!enabled) base else cache.getOrPut(base) { apply(base.newBuilder()).build() }
+    /** [base] with the app identity, and without certificate checks when the test option is on. */
+    fun wrap(base: OkHttpClient): OkHttpClient = (if (enabled) insecure else secure).getOrPut(base) { apply(base.newBuilder()).build() }
 }

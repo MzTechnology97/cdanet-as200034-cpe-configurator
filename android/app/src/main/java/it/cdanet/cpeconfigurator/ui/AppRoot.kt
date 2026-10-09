@@ -58,7 +58,9 @@ import it.cdanet.cpeconfigurator.ui.screens.SettingsScreen
 import it.cdanet.cpeconfigurator.ui.screens.SnmpScreen
 import it.cdanet.cpeconfigurator.ui.screens.UpdateBanner
 import it.cdanet.cpeconfigurator.ui.screens.WifiScreen
+import it.cdanet.cpeconfigurator.update.UpdateInfo
 import it.cdanet.cpeconfigurator.update.UpdateState
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 enum class Screen(val title: String, val scroll: Boolean = true) {
@@ -108,13 +110,36 @@ fun AppRoot(c: AppContainer) {
         if (stack.size > 1) stack = stack.dropLast(1)
     }
 
-    // Startup: update check (works before login so a broken build can always be replaced).
-    LaunchedEffect(Unit) {
-        update = UpdateState.Checking
-        update = runCatching { c.updater.check() }.fold(
-            onSuccess = { info -> if (info != null) UpdateState.Available(info) else UpdateState.UpToDate },
-            onFailure = { UpdateState.Idle },
-        )
+    // Update check (before login, so a broken build can always be replaced): at start, every
+    // 15 minutes and as soon as the server refuses this version. New versions download by
+    // themselves; a mandatory one ("App sempre all'ultima versione") blocks the whole app.
+    val required by c.api.updateRequired.collectAsState()
+    var mandatory by remember { mutableStateOf<UpdateInfo?>(null) }
+    var recheck by remember { mutableStateOf(0) }
+    LaunchedEffect(required, recheck) {
+        while (true) {
+            if (update is UpdateState.Idle) update = UpdateState.Checking
+            runCatching { c.updater.check() }
+                .onSuccess { info ->
+                    mandatory = info?.takeIf { it.mandatory }
+                    val working = update is UpdateState.Downloading || update is UpdateState.ReadyToInstall || update is UpdateState.PermissionRequired
+                    if (info == null) {
+                        if (!working) update = UpdateState.UpToDate
+                    } else if (!working && (update as? UpdateState.Available)?.info?.versionCode != info.versionCode) {
+                        update = UpdateState.Available(info)
+                    }
+                }
+                .onFailure { if (update is UpdateState.Checking) update = UpdateState.Idle }
+            delay(15 * 60_000L)
+        }
+    }
+    LaunchedEffect(update) {
+        val u = update
+        if (u is UpdateState.Available) startUpdate(c, u.info) { update = it }
+    }
+    if (mandatory != null || required != null) {
+        MandatoryUpdateScreen(c, mandatory, required, update, onState = { update = it }, onRecheck = { recheck++ })
+        return
     }
     LaunchedEffect(session) {
         if (session != null) {

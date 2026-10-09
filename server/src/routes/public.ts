@@ -309,7 +309,8 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
       versionCode: m.versionCode,
       versionName: m.versionName,
       sha256: m.sha256,
-      mandatory: m.mandatory,
+      // with "App sempre all'ultima versione" every new release is mandatory
+      mandatory: m.mandatory || ctx.cfg.appForceLatest,
       apkUrl: '/api/mobile/apk',
     };
   });
