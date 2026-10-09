@@ -1,6 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
 import android.webkit.WebView
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -32,6 +33,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import it.cdanet.cpeconfigurator.ui.NoticeKind
+import it.cdanet.cpeconfigurator.ui.Notice
+import it.cdanet.cpeconfigurator.data.PointingCache
 import it.cdanet.cpeconfigurator.core.AppContainer
 import it.cdanet.cpeconfigurator.data.AppJson
 import it.cdanet.cpeconfigurator.data.PointingApDto
@@ -62,19 +66,40 @@ fun PointingScreen(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (
     var data by remember { mutableStateOf<PointingDto?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
+    var saved by remember { mutableStateOf<String?>(null) }
     var height by remember { mutableStateOf("") }
     var tab by remember { mutableIntStateOf(1) }
+    var los by remember { mutableStateOf<it.cdanet.cpeconfigurator.data.PointingApDto?>(null) }
+    los?.let { a ->
+        data?.let { d -> LineOfSightDialog(c, d.from.lat, d.from.lon, a.id, a.name, height.replace(',', '.').toDoubleOrNull(), onClose = { los = null }) }
+    }
 
     suspend fun load() {
         busy = true
         error = null
+        saved = null
+        val user = c.session.state.value?.user?.id
+        val loc = runCatching { LocationHelper(context).current() }.getOrElse {
+            error = it.message
+            busy = false
+            return
+        }
         runCatching {
-            val loc = LocationHelper(context).current()
             c.api.pointing(loc.latitude, loc.longitude, height.replace(',', '.').toDoubleOrNull())
         }.onSuccess { d ->
             data = d
+            user?.let { u -> c.pointingCache.put(u, d) }
             if (height.isBlank()) height = d.from.height.let { if (it % 1.0 == 0.0) it.roundToInt().toString() else it.toString() }
-        }.onFailure { error = it.message }
+        }.onFailure { e ->
+            // no network on the roof: the APs saved here before (or with the day's work orders)
+            val hit = c.pointingCache.near(user, loc.latitude, loc.longitude)
+            if (hit != null) {
+                data = hit.first.data
+                saved = PointingCache.describe(hit.first, hit.second)
+            } else {
+                error = e.message + " · Nessun dato salvato vicino: apri Trova l'AP con la rete (gli interventi di oggi si salvano da soli)."
+            }
+        }
         busy = false
     }
     LaunchedEffect(Unit) { load() }
@@ -96,6 +121,7 @@ fun PointingScreen(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (
             Tab(selected = tab == 1, onClick = { tab = 1 }, text = { Text("LISTA") })
         }
         ErrorBanner(error) { error = null }
+        saved?.let { Box(Modifier.padding(horizontal = 14.dp, vertical = 6.dp)) { Notice(it, NoticeKind.Warn) } }
         val d = data
         if (tab == 0) {
             if (d != null) PointingMap(c, d, Modifier.weight(1f).fillMaxWidth()) else Text("Ricerca della posizione…", Modifier.padding(14.dp))
@@ -144,8 +170,9 @@ fun PointingScreen(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (
                         }
                     }
                     Row {
-                        TextButton(onClick = { onAim(target(a, d)) }) { Text("Mirino (fotocamera)") }
+                        TextButton(onClick = { onAim(target(a, d)) }) { Text("Mirino") }
                         TextButton(onClick = { onCompass(target(a, d)) }) { Text("Bussola") }
+                        TextButton(onClick = { los = a }) { Text("Visibilità") }
                     }
                 }
             }

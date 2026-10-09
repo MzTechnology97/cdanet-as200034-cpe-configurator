@@ -4,7 +4,8 @@ import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { approxPoint, roughDistance } from '../domain/approx.ts';
-import { isValidLatLon } from '../domain/geo.ts';
+import { distanceM, isValidLatLon } from '../domain/geo.ts';
+import { lineOfSight, pathPoints } from '../domain/los.ts';
 import { estimateSignal, type ApModel } from '../domain/coverage-model.ts';
 import { elevationAngle } from '../services/dem.ts';
 
@@ -101,6 +102,43 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
         };
         return keys ? { ...base, distanceM: roughDistance(a.distanceM), approx: approxPoint(lat, lon, `ap:${a.id}`, ctx.cfg.jwtSecret) } : { ...base, distanceM: a.distanceM, lat, lon };
       }),
+    };
+  });
+
+  /**
+   * Line of sight towards one AP: terrain profile (DEM) between the CPE point and the AP, earth
+   * curvature and 60% of the first Fresnel zone. Installers get distances and heights only, never
+   * the AP's coordinates.
+   */
+  app.get('/api/pointing/profile', { preHandler: [ctx.auth.requireUser, ctx.modules.require('compass')] }, async (req) => {
+    const c = config();
+    const q = z
+      .object({ lat: z.coerce.number(), lon: z.coerce.number(), apId: z.string().min(1).max(80), height: z.coerce.number().min(0).max(100).optional() })
+      .parse(req.query);
+    if (!isValidLatLon(q.lat, q.lon)) throw new HttpError(400, 'invalid_position');
+    if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
+    if (!ctx.dem.enabled) throw new HttpError(503, 'dem_not_configured');
+    const keys = req.user!.role === 'admin' ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
+    const allow = keys ? (a: { id: string; siteId: string | null }) => keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`)) : undefined;
+    const aps = await ctx.uisp.nearestAps({ lat: q.lat, lon: q.lon }, 15, ctx.uispSettings.coverageMaxKm, allow);
+    const ap = aps.find((a) => a.id === q.apId);
+    if (!ap) throw new HttpError(404, 'ap_not_found');
+    const D = distanceM({ lat: q.lat, lon: q.lon }, { lat: ap.lat, lon: ap.lon });
+    const n = Math.max(16, Math.min(96, Math.round(D / 60)));
+    const pts = pathPoints({ lat: q.lat, lon: q.lon }, { lat: ap.lat, lon: ap.lon }, n);
+    const ground = await Promise.all(pts.map((p) => ctx.dem.elevation(p.lat, p.lon)));
+    if (ground.some((g) => g === null)) throw new HttpError(503, 'dem_unavailable');
+    const height = q.height ?? c.cpeHeightM;
+    const from = ground[0]! + height;
+    const { altitude } = resolveApAltitude(ap.gpsAltitude, ground[n]!, ap.siteHeight ?? c.apHeightM);
+    const freq = ap.frequency && ap.frequency > 1000 ? ap.frequency : 5600;
+    const r = lineOfSight(pts.map((p, i) => ({ d: p.f * D, ground: ground[i]! })), from, altitude ?? ground[n]! + c.apHeightM, freq);
+    return {
+      ap: { id: ap.id, name: ap.name },
+      distanceM: keys ? roughDistance(D) : Math.round(D),
+      cpeHeightM: height,
+      frequencyMhz: freq,
+      ...r,
     };
   });
 }

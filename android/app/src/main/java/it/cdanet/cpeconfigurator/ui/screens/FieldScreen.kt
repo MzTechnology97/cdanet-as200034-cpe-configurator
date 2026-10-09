@@ -189,10 +189,8 @@ private fun rememberFieldAccess(c: AppContainer): Boolean {
 fun AlignmentScreen(c: AppContainer) {
     if (!rememberFieldAccess(c)) return
     val st by c.field.state.collectAsState()
-    var sound by remember { mutableStateOf(true) }
-    val tone = remember { AlignmentTone() }
     KeepScreenOnWhileRunning(c, FieldMode.Alignment)
-    LaunchedEffect(sound) { c.field.onSample = if (sound) { s -> tone.beep(s.signal) } else null }
+    var feedback by remember { mutableStateOf<RoofFeedback?>(null) }
     val t = c.field.thresholds
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -210,11 +208,9 @@ fun AlignmentScreen(c: AppContainer) {
                 s.noise?.let { KeyValue("Rumore", "$it dBm") }
             }
         }
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text("Bip di puntamento (più acuto = segnale migliore)", modifier = Modifier.weight(1f))
-            Switch(checked = sound, onCheckedChange = { sound = it })
-        }
-        OutlinedButton(onClick = { c.field.resetPeak() }) { Text("Azzera picco e grafico") }
+        // beep (higher = better), the signal read aloud, a tap on each new peak
+        RoofAids(c) { feedback = it }
+        OutlinedButton(onClick = { c.field.resetPeak(); feedback?.resetPeak() }) { Text("Azzera picco e grafico") }
         SurveyCard(c, st.status?.apMac)
     }
 }

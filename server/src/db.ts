@@ -304,6 +304,36 @@ const MIGRATIONS: string[] = [
   ALTER TABLE outage_zones ADD COLUMN notify_planned INTEGER NOT NULL DEFAULT 0;
   UPDATE outage_zones SET notify_planned = COALESCE((SELECT telegram_planned FROM users WHERE users.id = outage_zones.owner_id), 0) WHERE owner_id IS NOT NULL;
   `,
+  // 17: work orders assigned by the office (agenda of the day). The PPPoE password is sealed with
+  // the master key like the Wi-Fi keys: the installer never types or sees it.
+  `
+  CREATE TABLE work_orders(
+    id INTEGER PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    updated_at TEXT NOT NULL,
+    assigned_to INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    day TEXT NOT NULL,
+    slot TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL CHECK(kind IN('new','repoint','repair','survey')),
+    customer TEXT NOT NULL,
+    address TEXT NOT NULL DEFAULT '',
+    lat REAL,
+    lon REAL,
+    contact TEXT NOT NULL DEFAULT '',
+    pppoe_user TEXT NOT NULL DEFAULT '',
+    pppoe_ciphertext TEXT NOT NULL DEFAULT '',
+    model TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT 'open' CHECK(status IN('open','started','done','cancelled','postponed')),
+    status_note TEXT NOT NULL DEFAULT '',
+    job_id TEXT REFERENCES provisioning_jobs(id) ON DELETE SET NULL,
+    done_at TEXT
+  );
+  CREATE INDEX work_orders_day ON work_orders(day);
+  CREATE INDEX work_orders_assigned ON work_orders(assigned_to, day);
+  ALTER TABLE provisioning_jobs ADD COLUMN work_order_id INTEGER REFERENCES work_orders(id) ON DELETE SET NULL;
+  `,
 ];
 
 export function openDatabase(path: string): Db {

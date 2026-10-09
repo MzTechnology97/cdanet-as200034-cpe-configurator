@@ -31,7 +31,24 @@ object Validation {
         if (!isMac(f.mac)) add("MAC non valido: 12 cifre esadecimali, con o senza separatori")
         if (f.serial.isBlank()) add("Seriale obbligatorio")
         if (!PPPOE.matches(f.pppoeUser.trim())) add("Username RADIUS nel formato cognome.nome@cda-net.it")
-        if (f.pppoePassword.isEmpty() && f.replaces == null) add("Password PPPoE obbligatoria")
+        if (f.pppoePassword.isEmpty() && f.replaces == null && f.workOrderId == null) add("Password PPPoE obbligatoria")
+    }
+
+    /**
+     * Model of the configurator from what the CPE announces (Ubiquiti discovery: "LBE-5AC-Gen2",
+     * "LiteBeam 5AC Gen2", "Loco5AC"…); null when it is not one of the supported models. Pure.
+     */
+    fun modelFromDiscovery(model: String?, fullModel: String?): String? {
+        val t = listOfNotNull(fullModel, model).joinToString(" ").lowercase().replace("-", " ")
+        val words = t.split(Regex("[^a-z0-9]+")).toSet()
+        return when {
+            "litebeam" in t || "lbe" in words -> "LiteBeam 5AC"
+            "loco" in t -> "NanoStation Loco 5AC"
+            "nanobeam" in t || "nbe" in words -> "NanoBeam 5AC"
+            "powerbeam" in t || "pbe" in words -> "PowerBeam 5AC"
+            "nanostation" in t || "ns 5ac" in t -> "NanoStation 5AC"
+            else -> null
+        }
     }
 
     /** Barcode/QR from the CPE label: a MAC (any notation) or the serial. */

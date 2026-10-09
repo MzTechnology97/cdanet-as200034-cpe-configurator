@@ -4,6 +4,7 @@ import { gzipSync } from 'node:zlib';
 import { buildApp } from '../src/app.ts';
 import { openDatabase } from '../src/db.ts';
 import { elevationAngle, sampleHgt, tileName } from '../src/services/dem.ts';
+import { fresnelRadius, lineOfSight } from '../src/domain/los.ts';
 import { gpsAltitude } from '../src/services/uisp.ts';
 import { resolveApAltitude } from '../src/routes/pointing.ts';
 import { sectorWidth } from '../src/domain/coverage-model.ts';
@@ -47,6 +48,22 @@ describe('Puntamento: terreno e tilt', () => {
     assert.equal(sectorWidth('LAP-GPS'), 90);
   });
 
+  it('checks the line of sight with the Fresnel zone', () => {
+    // 5.6 GHz, 2 km: first Fresnel radius in the middle ~ 5.2 m
+    assert.ok(Math.abs(fresnelRadius(1000, 1000, 5600) - 5.17) < 0.05);
+    const flat = Array.from({ length: 21 }, (_, i) => ({ d: i * 100, ground: 500 }));
+    assert.equal(lineOfSight(flat, 506, 515).verdict, 'clear');
+    // a 30 m hill at 1 km blocks the view; raising the CPE frees it
+    const hill = flat.map((p) => ({ ...p, ground: p.d === 1000 ? 530 : 500 }));
+    const blocked = lineOfSight(hill, 506, 515);
+    assert.equal(blocked.verdict, 'blocked');
+    assert.equal(blocked.worst!.d, 1000);
+    assert.ok(blocked.raiseCpeM > 30 && blocked.raiseCpeM < 50, String(blocked.raiseCpeM));
+    // just above the line: visible, but the Fresnel zone is obstructed
+    const bump = flat.map((p) => ({ ...p, ground: p.d === 1000 ? 508 : 500 }));
+    assert.equal(lineOfSight(bump, 506, 515).verdict, 'fresnel');
+  });
+
   it('computes the tilt with earth curvature', () => {
     assert.equal(elevationAngle(2000, 500, 600), 2.9);
     assert.ok(elevationAngle(30000, 500, 500) < 0, 'same height far away: slightly below the horizon');
@@ -88,6 +105,16 @@ describe('Puntamento: terreno e tilt', () => {
     assert.ok(t.aps[0].approx);
     assert.equal(t.aps[0].distanceM % 50, 0);
     assert.equal(typeof t.aps[0].bearing, 'number');
+
+    // line of sight on flat ground: clear; installers get distances only, no coordinates
+    const los = await app.inject({ method: 'GET', url: '/api/pointing/profile?lat=37.58&lon=14.12&apId=ap-n2', headers: T });
+    assert.equal(los.statusCode, 200, los.body);
+    const lj = los.json();
+    assert.equal(lj.verdict, 'clear');
+    assert.equal(lj.cpeHeightM, 4);
+    assert.ok(lj.chart.length >= 17);
+    assert.ok(!los.body.includes('"lat"') && !los.body.includes('"lon"'), 'no AP position');
+    assert.equal((await app.inject({ method: 'GET', url: '/api/pointing/profile?lat=37.58&lon=14.12&apId=ap-unknown', headers: T })).statusCode, 404);
     await app.close();
   });
 });

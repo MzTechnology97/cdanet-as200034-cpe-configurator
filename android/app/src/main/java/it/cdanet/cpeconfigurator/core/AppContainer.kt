@@ -32,7 +32,8 @@ class AppContainer(context: Context) {
     val routerOs = RouterOsClient(api, network)
     val tools = LocalTools(network, api, session)
     val field = FieldController(api, network, scope)
-    val install = it.cdanet.cpeconfigurator.install.InstallController(api, field)
+    val pointingCache = it.cdanet.cpeconfigurator.data.PointingCache(appContext)
+    val install = it.cdanet.cpeconfigurator.install.InstallController(api, field, pointingCache, session)
     val quickLogin = it.cdanet.cpeconfigurator.security.QuickLogin(appContext)
 
     /** Set after a login with the password: the app then offers the fingerprint/face quick login. */

@@ -77,10 +77,17 @@ import kotlinx.coroutines.launch
 private val KIND = mapOf("guasto_mt" to "Guasto media tensione", "guasto_bt" to "Guasto bassa tensione", "lavoro" to "Lavoro programmato", "altro" to "Interruzione")
 private fun hm(s: String?) = s?.replace('T', ' ')?.let { "${it.substring(8, 10)}/${it.substring(5, 7)} ${it.substring(11)}" } ?: "—"
 
-/** Guasti Enel: outages in the zones of interest, and notifications on this phone and on Telegram. */
+/** What a part of the "Rete" area shows: the outages (map and list) or the areas and their alerts. */
+enum class OutageSection { List, Areas }
+
+/**
+ * Guasti Enel. [OutageSection.List]: outages in the zones of interest with the map;
+ * [OutageSection.Areas]: notifications on this phone and the user's own areas of interest
+ * (Telegram is set up once, in Impostazioni).
+ */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
-fun OutagesScreen(c: AppContainer) {
+fun OutagesScreen(c: AppContainer, section: OutageSection = OutageSection.List) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val admin = c.session.isAdmin
@@ -109,9 +116,9 @@ fun OutagesScreen(c: AppContainer) {
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         ErrorBanner(error) { error = null }
-        ListHeader(data?.let { d -> if (d.active.isEmpty()) "Nessuna interruzione" else "${d.active.size} ${if (d.active.size == 1) "interruzione" else "interruzioni"}" } ?: "Guasti Enel", busy) { scope.launch { load() } }
+        if (section == OutageSection.List) ListHeader(data?.let { d -> if (d.active.isEmpty()) "Nessuna interruzione" else "${d.active.size} ${if (d.active.size == 1) "interruzione" else "interruzioni"}" } ?: "Guasti Enel", busy) { scope.launch { load() } }
         val d = data
-        if (d != null) {
+        if (d != null && section == OutageSection.List) {
             val at = d.lastRun?.at ?: d.generatedAt
             Text(
                 when {
@@ -159,27 +166,33 @@ fun OutagesScreen(c: AppContainer) {
                     }
                 }
             }        }
-        // settings after the outages: what the technician looks for first is the map and the list
+        if (section == OutageSection.Areas) AreasAndAlerts(c, admin, alerts, planned, onAlerts = { on ->
+            if (!on) {
+                OutageAlerts.disable(context)
+                alerts = false
+            } else if (Build.VERSION.SDK_INT >= 33 && !OutageAlerts.canNotify(context)) {
+                permission.launch(Manifest.permission.POST_NOTIFICATIONS)
+            } else {
+                scope.launch { turnOn() }
+            }
+        }, onPlanned = { p ->
+            planned = p
+            if (alerts) scope.launch { turnOn() }
+        }, onChanged = { scope.launch { load() } })
+    }
+}
+
+/** Phone notifications and the areas of interest (installers) or the shared zones (admins). */
+@Composable
+private fun AreasAndAlerts(c: AppContainer, admin: Boolean, alerts: Boolean, planned: Boolean, onAlerts: (Boolean) -> Unit, onPlanned: (Boolean) -> Unit, onChanged: () -> Unit) {
         SectionCard("Notifiche sul telefono", icon = it.cdanet.cpeconfigurator.R.drawable.ic_notifications) {
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(if (admin) "Avvisami dei guasti nelle zone CDA Net" else "Avvisami dei guasti nelle mie zone", modifier = Modifier.weight(1f))
-                Switch(checked = alerts, onCheckedChange = { on ->
-                    if (!on) {
-                        OutageAlerts.disable(context)
-                        alerts = false
-                    } else if (Build.VERSION.SDK_INT >= 33 && !OutageAlerts.canNotify(context)) {
-                        permission.launch(Manifest.permission.POST_NOTIFICATIONS)
-                    } else {
-                        scope.launch { turnOn() }
-                    }
-                })
+                Switch(checked = alerts, onCheckedChange = onAlerts)
             }
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(if (admin) "Anche i lavori programmati" else "Anche i lavori sui POP/AP assegnati", modifier = Modifier.weight(1f))
-                Switch(checked = planned, onCheckedChange = { p ->
-                    planned = p
-                    if (alerts) scope.launch { turnOn() }
-                })
+                Switch(checked = planned, onCheckedChange = onPlanned)
             }
             Text(
                 "Controllo ogni 15 minuti anche ad app chiusa, con un accesso in sola lettura ai guasti (revocato se cambi password o esci da tutti i dispositivi)." +
@@ -187,11 +200,9 @@ fun OutagesScreen(c: AppContainer) {
                 style = MaterialTheme.typography.bodySmall,
             )
         }
-        PersonalTelegramCard(c)
-        if (!admin) MyZones(c) { scope.launch { load() } }
-        if (admin) ZoneEditor(c, personal = false) { scope.launch { load() } }
-
-    }
+        Text("Le notifiche su Telegram si collegano in Impostazioni.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (!admin) MyZones(c, onChanged)
+        if (admin) ZoneEditor(c, personal = false, onAdded = onChanged)
 }
 
 private val SHORT = mapOf("guasto_mt" to "Guasto MT", "guasto_bt" to "Guasto BT", "lavoro" to "Lavoro programmato", "altro" to "Interruzione")

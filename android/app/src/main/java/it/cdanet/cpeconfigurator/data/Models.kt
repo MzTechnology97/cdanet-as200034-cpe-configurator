@@ -306,11 +306,39 @@ data class ProvisionRequest(
     val serial: String,
     val ssid: String,
     val pppoeUser: String,
-    val pppoePassword: String,
+    /** null when the job starts from a work order: the server uses the office's sealed password. */
+    val pppoePassword: String? = null,
     /** Named template of the model; null = the model's default (omitted from JSON). */
     val templateId: Int? = null,
     val location: CpeLocation? = null,
+    val workOrderId: Long? = null,
 )
+
+/** A work order of the office (agenda): never the PPPoE password, only whether it is set. */
+@Serializable
+data class WorkOrderDto(
+    val id: Long,
+    val day: String,
+    val slot: String = "",
+    val kind: String = "new",
+    val kindLabel: String = "",
+    val customer: String,
+    val address: String = "",
+    val lat: Double? = null,
+    val lon: Double? = null,
+    val contact: String = "",
+    val pppoeUser: String = "",
+    val hasPassword: Boolean = false,
+    val model: String = "",
+    val notes: String = "",
+    val status: String = "open",
+    val statusNote: String = "",
+    val overdue: Boolean = false,
+    val jobId: String? = null,
+)
+
+@Serializable
+data class WorkOrdersDto(val day: String = "", val items: List<WorkOrderDto> = emptyList())
 
 /** CPE position: phone GPS, geocoded address or manual entry. */
 @Serializable
@@ -511,3 +539,21 @@ data class RosCatalogDto(val sections: List<RosSectionDto>)
 
 @Serializable
 data class ApiErrorDto(val error: String = "", val minVersion: String? = null, val missing: List<String>? = null, val extra: JsonElement? = null)
+
+/** Line of sight towards an AP over the terrain (chart points in metres). */
+@Serializable
+data class LosPointDto(val d: Int, val ground: Double, val los: Double, val fresnel60: Double)
+
+@Serializable
+data class LosWorstDto(val d: Int = 0, val clearanceM: Double = 0.0, val fresnel60M: Double = 0.0)
+
+@Serializable
+data class LosDto(
+    val distanceM: Int = 0,
+    val cpeHeightM: Double = 0.0,
+    val frequencyMhz: Int = 5600,
+    val verdict: String = "clear",
+    val worst: LosWorstDto? = null,
+    val raiseCpeM: Double = 0.0,
+    val chart: List<LosPointDto> = emptyList(),
+)

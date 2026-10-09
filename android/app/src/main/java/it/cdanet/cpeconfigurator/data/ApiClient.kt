@@ -48,6 +48,12 @@ private val ERRORS = mapOf(
     "link_expired" to "Codice scaduto: premi di nuovo Collega Telegram",
     "telegram_not_configured" to "Notifiche Telegram non attive: chiedi all'amministratore",
     "telegram_error" to "Telegram ha rifiutato il messaggio: scrivi prima al bot e controlla l'ID",
+    "dem_not_configured" to "Modello del terreno non configurato sul server",
+    "dem_unavailable" to "Modello del terreno non disponibile in questa zona",
+    "ap_not_found" to "AP non trovato tra quelli vicini",
+    "work_order_not_found" to "Intervento non trovato",
+    "work_order_closed" to "Intervento già chiuso o annullato",
+    "work_order_password_missing" to "L'intervento non ha la password PPPoE: chiedila all'ufficio",
     "too_many_zones" to "Hai già 20 zone: eliminane una",
     "zone_not_found" to "Zona non trovata",
     "geocoder_unreachable" to "Servizio indirizzi non raggiungibile",
@@ -232,6 +238,12 @@ class ApiClient(
     suspend fun reverseGeocode(lat: Double, lon: Double): ReverseGeocodeDto =
         AppJson.decodeFromString(ReverseGeocodeDto.serializer(), request("GET", "/api/geocode/reverse?lat=$lat&lon=$lon"))
 
+    suspend fun workOrders(): WorkOrdersDto = AppJson.decodeFromString(WorkOrdersDto.serializer(), request("GET", "/api/work-orders"))
+
+    suspend fun setWorkOrderStatus(id: Long, status: String, note: String = "") {
+        request("POST", "/api/work-orders/$id/status", buildJsonObject { put("status", status); put("note", note) })
+    }
+
     suspend fun myOutageZones(): MyZonesDto = AppJson.decodeFromString(MyZonesDto.serializer(), request("GET", "/api/outages/zones"))
 
     /** Personal area of interest of the user. */
@@ -250,6 +262,9 @@ class ApiClient(
     suspend fun deleteMyOutageZone(id: String) {
         request("DELETE", "/api/outages/zones/${id.removePrefix("z")}")
     }
+
+    suspend fun lineOfSight(lat: Double, lon: Double, apId: String, height: Double?): LosDto =
+        AppJson.decodeFromString(LosDto.serializer(), request("GET", "/api/pointing/profile?lat=$lat&lon=$lon&apId=${java.net.URLEncoder.encode(apId, "UTF-8")}" + (height?.let { "&height=$it" } ?: "")))
 
     suspend fun pointing(lat: Double, lon: Double, height: Double?): PointingDto =
         AppJson.decodeFromString(PointingDto.serializer(), request("GET", "/api/pointing?lat=$lat&lon=$lon" + (height?.let { "&height=$it" } ?: "")))

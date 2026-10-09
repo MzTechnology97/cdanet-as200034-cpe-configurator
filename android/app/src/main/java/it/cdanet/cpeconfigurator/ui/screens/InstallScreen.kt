@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.NoticeKind
+import it.cdanet.cpeconfigurator.ui.Notice
 import it.cdanet.cpeconfigurator.ui.CheckRow
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
@@ -278,6 +280,7 @@ fun BestApsBeforeInstall(c: AppContainer, location: CpeLocation, selectedSsid: S
         if (configured == null) configured = runCatching { c.api.wirelessNetworks() }.getOrNull()
     }
     ErrorBanner(st.pointingError)
+    st.pointingSaved?.let { Notice(it, NoticeKind.Warn) }
     val p = st.pointing
     if (p == null) {
         if (st.pointingError == null) Text("Ricerca degli AP migliori…", color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -489,8 +492,12 @@ private fun CheckLine(title: String, v: Verdict, detail: String) = CheckRow(titl
 
 // ---- 4 · Aggancio all'AP --------------------------------------------------------------------
 
+/** "AP visibili" of the connected-CPE area: the CPE's own site survey and the move to a better AP. */
 @Composable
-private fun LinkStep(c: AppContainer) {
+fun CpeApsPanel(c: AppContainer) = CpeStep(c) { LinkStep(c, withNext = false) }
+
+@Composable
+private fun LinkStep(c: AppContainer, withNext: Boolean = true) {
     val scope = rememberCoroutineScope()
     val f by c.field.state.collectAsState()
     val st by c.install.state.collectAsState()
@@ -611,7 +618,7 @@ private fun LinkStep(c: AppContainer) {
         )
     }
 
-    NextButton(c, if (s?.associated == true) "Avanti: puntamento" else "Avanti comunque: puntamento", enabled = r?.running != true)
+    if (withNext) NextButton(c, if (s?.associated == true) "Avanti: puntamento" else "Avanti comunque: puntamento", enabled = r?.running != true)
 }
 
 // ---- 5 · Puntamento -------------------------------------------------------------------------
@@ -622,18 +629,12 @@ private fun AimStep(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: 
     val context = LocalContext.current
     val f by c.field.state.collectAsState()
     val st by c.install.state.collectAsState()
-    var sound by remember { mutableStateOf(true) }
     var locating by remember { mutableStateOf(false) }
-    val tone = remember { AlignmentTone() }
-    LaunchedEffect(sound) { c.field.onSample = if (sound) { smp -> tone.beep(smp.signal) } else null }
 
     FieldConnection(c, FieldMode.Alignment)
     val s = f.status
     s?.let { AlignmentGauge(it, c.field.thresholds, f.peak, f.history) }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("Bip di puntamento", modifier = Modifier.weight(1f))
-        Switch(checked = sound, onCheckedChange = { sound = it })
-    }
+    RoofAids(c)
     s?.let { cur -> cur.rxModulation?.let { KeyValue("Modulazione", "↓ $it" + (cur.txModulation?.let { tx -> " · ↑ $tx" } ?: "")) } }
 
     val ssid = s?.takeIf { it.associated }?.essid ?: st.expectedSsid
