@@ -39,6 +39,8 @@ export function createAdvisor(ctx: AppContext, log?: (m: string) => void) {
       )
       .run(key, JSON.stringify(value), nowIso());
   let running = false;
+  /** Inputs of the last analysis (memory only): the optimiser ranks its channels on them. */
+  let last: AdvisorInput[] = [];
 
   /** Licensed band of the network for the channel suggestions (Impostazioni server). */
   const range = () => {
@@ -97,6 +99,7 @@ export function createAdvisor(ctx: AppContext, log?: (m: string) => void) {
   async function run(inputs: AdvisorInput[]): Promise<void> {
     if (running) return;
     running = true;
+    last = inputs;
     try {
       const checks = await modelChecks(inputs).catch(() => ({ expected: undefined, cpeSignal: undefined, rebalance: undefined }));
       const findings = analyzeNetwork(inputs, { range: range(), minDbm: ctx.cfg.thresholds.signalMin, ...checks });
@@ -107,7 +110,9 @@ export function createAdvisor(ctx: AppContext, log?: (m: string) => void) {
       write(KEY, { at: now, findings, since } satisfies Stored);
       // the NOC hears about the new critical findings (not about the ones it already knows or dismissed)
       const dismissed = read<Record<string, string>>(DISMISSED, {});
-      const fresh = findings.filter((f) => f.severity === 'critico' && !prev.since[f.id] && !(dismissed[f.id] && dismissed[f.id]! > now));
+      // an AP under automatic optimisation is on a test channel: no alarms for it
+      const testing = ctx.optimizer?.activeAp() ?? null;
+      const fresh = findings.filter((f) => f.severity === 'critico' && f.apId !== testing && !prev.since[f.id] && !(dismissed[f.id] && dismissed[f.id]! > now));
       if (fresh.length && prev.at) {
         ctx.notify.inbox.push('noc', {
           kind: 'network_advice',
@@ -124,6 +129,14 @@ export function createAdvisor(ctx: AppContext, log?: (m: string) => void) {
 
   return {
     run,
+    /** Inputs of the last analysis (empty until the first hourly refresh after a restart). */
+    inputs: () => last,
+    /** The range of the channel suggestions, MHz. */
+    range,
+    /** A stored finding by id. */
+    finding(id: string): Finding | null {
+      return read<Stored>(KEY, { at: null, findings: [], since: {} }).findings.find((f) => f.id === id) ?? null;
+    },
     /** Findings with "since" and the dismissed ones marked (until when). */
     view() {
       const s = read<Stored>(KEY, { at: null, findings: [], since: {} });

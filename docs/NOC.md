@@ -27,7 +27,7 @@ Dall'elenco: link allo storico della CPE e, nell'app, lo storico del segnale deg
 
 ## IA-AP: assistente della rete (admin, v1.32.55)
 
-Console → **IA-AP**, e nell'app Rete → **IA-AP** (anche come scorciatoia della Home); solo admin, gli installatori non vedono né la scheda né i dati. Ogni ora, insieme al carico serale degli AP, il server analizza tutti gli AP airMAX di UISP e le loro CPE e scrive cosa sistemare. Solo lettura: nessuna modifica ai dispositivi.
+Console → **IA-AP**, e nell'app Rete → **IA-AP** (anche come scorciatoia della Home); solo admin, gli installatori non vedono né la scheda né i dati. Ogni ora, insieme al carico serale degli AP, il server analizza tutti gli AP airMAX di UISP e le loro CPE e scrive cosa sistemare. L'analisi è in sola lettura; i dispositivi cambiano solo con l'ottimizzazione automatica, avviata da un admin (sotto).
 
 Dati usati, tutti da UISP: stazioni collegate (segnale, rumore, modulazione attuale e ideale nei due sensi, airtime, capacità, polarizzazioni), statistiche della settimana (andamento del segnale, carico serale 20–23), **spettro misurato dall'AP e da ogni CPE** (come airView), frequenza, ampiezza, azimut e modello dell'antenna; in più il modello di copertura per il segnale atteso di ogni cliente.
 
@@ -50,6 +50,22 @@ Dati usati, tutti da UISP: stazioni collegate (segnale, rumore, modulazione attu
 **Canali proposti**: sempre interi dentro la banda di Impostazioni server → Assistente rete (predefinita 5120–5800 MHz), mai sovrapposti a un nostro AP vicino. Lo spettro considerato è la media di quello dell'AP e di quello mediano delle sue CPE. Il cambio di frequenza stima anche la **risposta in frequenza delle antenne** (guadagno migliore a centro banda, circa 1,5 dB in meno per antenna ai bordi) e la perdita di percorso: un canale che porterebbe il cliente più debole sotto il minimo del collaudo viene scartato.
 
 Ogni avviso dice cosa fare e, dove serve, i parametri (frequenza, ampiezza); per le CPE c'è il link alla scheda (nell'app: Gestisci CPE). *Ignora 7/90 giorni* nasconde un avviso (registrato nello storico eventi); *Aggiorna ora* rilegge UISP senza aspettare l'ora. I nuovi problemi critici arrivano come notifica a tutti gli admin (Notifiche → "Assistente rete").
+
+### Ottimizzazione automatica (v1.32.56)
+
+Spenta di default: si accende in Impostazioni server → Assistente rete (*Ottimizzazione automatica degli AP tramite UISP*). Da un avviso di un AP (canale più libero, ampiezza, rumore, modulazione, canale sovrapposto) un admin preme **Ottimizza…** nella console o nell'app, legge cosa succederà e conferma:
+
+- **cosa**: il canale consigliato dall'avviso, oppure la ricerca del canale migliore (fino a 3 prove scelte sullo spettro di AP e CPE, stesse regole dei suggerimenti: banda consentita, mai sopra un nostro AP vicino, cliente più debole protetto);
+- **quando**: stanotte alle 3:00 (consigliato) o subito.
+
+Per ogni prova il server, tramite UISP:
+
+1. misura i collegamenti sul canale attuale (3 letture in 2 minuti: capacità, SNR, modulazione, segnale del cliente più debole);
+2. controlla che il canale esista nella tabella della radio e che ogni CPE lo possa seguire (elenco frequenze della CPE);
+3. cambia solo frequenza, ampiezza e modo IEEE dell'AP (il resto della configurazione è riletto da UISP e riscritto com'è; chiavi e segreti non vengono mai salvati né mostrati);
+4. aspetta che **tutte** le CPE si riaggancino (al massimo 5 minuti), poi 4 minuti di assestamento, poi misura di nuovo.
+
+Un canale è **migliore** se la capacità totale delle CPE sale almeno del 5% senza perdere più di 1 dB di SNR mediano e senza che il cliente più debole perda più di 3 dB. Alla fine resta il migliore; se nessuno lo è, o se una CPE non si riaggancia, l'AP torna al **canale iniziale** e gli admin ricevono una notifica (anche su Telegram, se scelto) con l'esito di ogni prova. Un AP alla volta; *Annulla e ripristina* ferma la prova in corso e rimette il canale iniziale. Se il server si riavvia durante una prova, alla ripartenza rimette il canale iniziale e lo segnala. Ogni avvio e annullamento è nel registro attività.
 
 ## Statistiche (admin)
 

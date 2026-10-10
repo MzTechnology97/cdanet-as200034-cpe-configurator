@@ -64,6 +64,8 @@ Ogni provisioning riuscito non genera un messaggio singolo, ma entra nel riepilo
 
 **Assistente rete (IA-AP, v1.32.55)**: i nuovi problemi critici su AP e CPE trovati dall'analisi oraria arrivano solo nella pagina Notifiche degli admin (non su Telegram). Vedi [NOC.md](NOC.md#ia-ap-assistente-della-rete-admin-v13255).
 
+**IA-AP, ottimizzazione automatica (v1.32.56)**: l'esito di ogni ottimizzazione di un AP (canale migliore tenuto, ripristinato, CPE non riagganciate, ripristino incompleto) arriva agli admin nella pagina Notifiche e, se scelto, su Telegram.
+
 ## Privacy
 
 Telegram è un servizio esterno. I messaggi contengono solo modello, MAC, SSID e nome utente dell'installatore, **mai** nome, indirizzo o posizione del cliente, utente o password PPPoE, chiavi Wi-Fi o credenziali.
