@@ -96,12 +96,14 @@ internal fun ScanRadar(hosts: List<ScanHost>, scanning: Boolean, progress: Float
     val sweep by rememberInfiniteTransition(label = "radar").animateFloat(
         0f, 360f, infiniteRepeatable(tween(2600, easing = LinearEasing), RepeatMode.Restart), label = "sweep",
     )
+    // distance relative to the slowest host: a fast LAN still fills the radar
+    val maxMs = (hosts.mapNotNull { it.latencyMs }.maxOrNull() ?: 0).coerceAtLeast(10)
     val blips = hosts.map { h ->
         val last = h.ip.substringAfterLast('.').toIntOrNull() ?: 0
         val third = net24(h.ip).substringAfterLast('.').toIntOrNull() ?: 0
         val angle = ((last + third * 37) % 256) / 256f * 360f
-        // farther = slower: 1 ms near the center, 200+ ms at the edge
-        val dist = h.latencyMs?.let { (kotlin.math.ln(1f + it) / kotlin.math.ln(201f)).coerceIn(0.18f, 0.92f) } ?: 0.86f
+        // farther = slower, on a log scale up to the slowest host
+        val dist = h.latencyMs?.let { 0.22f + 0.68f * (kotlin.math.ln(1f + it) / kotlin.math.ln(1f + maxMs)) }?.coerceIn(0.22f, 0.9f) ?: 0.88f
         Triple(angle, dist, if (h.isGateway) DeviceType.Router else scanType(h))
     }
     val colors = DeviceType.entries.associateWith { typeColor(it) }
@@ -318,7 +320,7 @@ internal fun HostRow(h: ScanHost, expanded: Boolean, onToggle: () -> Unit, actio
                         if (h.isGateway) Flag("GATEWAY", WarnAmber)
                         if (h.isSelf) Flag("TU", MaterialTheme.colorScheme.primary)
                     }
-                    (h.hostname ?: h.netbios)?.let { Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    (h.hostname ?: h.netbios ?: h.ubnt?.hostname)?.let { Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) }
                     val kindText = h.kind.ifBlank { type.label }
                     Text(
                         // "Router MikroTik · MikroTik" once: the vendor only when the type does not name it
