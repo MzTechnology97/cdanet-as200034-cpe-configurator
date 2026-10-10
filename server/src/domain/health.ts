@@ -1,4 +1,5 @@
 import type { UispDevice } from '../services/uisp.ts';
+import { isSuspended, type RadiusInfo } from '../services/crm-sync.ts';
 
 /**
  * Health of the customer CPEs: current UISP state compared with the acceptance test (when the
@@ -7,7 +8,19 @@ import type { UispDevice } from '../services/uisp.ts';
  * configuration) is involved.
  */
 
-export type IssueKind = 'offline' | 'not_in_uisp' | 'pending' | 'weak_signal' | 'signal_drop' | 'ethernet' | 'low_capacity' | 'firmware';
+export type IssueKind =
+  | 'offline'
+  | 'not_in_uisp'
+  | 'pending'
+  | 'weak_signal'
+  | 'signal_drop'
+  | 'ethernet'
+  | 'low_capacity'
+  | 'firmware'
+  /** CPE online in UISP, PPPoE session down in RADIUS: the customer has no Internet (admins only). */
+  | 'pppoe_offline'
+  /** Account, customer or a service suspended in the CRM (admins only). */
+  | 'account_suspended';
 
 export interface HealthThresholds {
   signalGood: number;
@@ -46,7 +59,7 @@ export interface CpeNow {
 }
 
 const OFFLINE = new Set(['disconnected', 'inactive', 'unknown']);
-const WEIGHT: Record<IssueKind, number> = { offline: 50, not_in_uisp: 30, weak_signal: 20, signal_drop: 18, ethernet: 15, pending: 10, low_capacity: 8, firmware: 3 };
+const WEIGHT: Record<IssueKind, number> = { offline: 50, pppoe_offline: 45, not_in_uisp: 30, weak_signal: 20, signal_drop: 18, ethernet: 15, pending: 10, low_capacity: 8, account_suspended: 5, firmware: 3 };
 
 export function firmwareIs(version: string, target: string): boolean {
   return new RegExp(`(^|[^0-9.])v?${target.replace(/\./g, '\\.')}(?![0-9])`).test(version);
@@ -66,8 +79,9 @@ export function nowOf(d: UispDevice): CpeNow {
   };
 }
 
-export function issuesOf(job: InstalledJob, now: CpeNow | null, t: HealthThresholds): IssueKind[] {
-  if (!now) return ['not_in_uisp'];
+export function issuesOf(job: InstalledJob, now: CpeNow | null, t: HealthThresholds, radius: RadiusInfo | null = null): IssueKind[] {
+  const suspended = radius !== null && isSuspended(radius);
+  if (!now) return suspended ? ['not_in_uisp', 'account_suspended'] : ['not_in_uisp'];
   const issues: IssueKind[] = [];
   const offline = OFFLINE.has(now.status);
   if (offline) issues.push('offline');
@@ -77,18 +91,29 @@ export function issuesOf(job: InstalledJob, now: CpeNow | null, t: HealthThresho
   if (!offline && ((now.ethMbps !== null && now.ethMbps > 0 && now.ethMbps < t.ethMinMbps) || now.ethHalfDuplex)) issues.push('ethernet');
   if (!offline && now.dlCapacityMbps !== null && now.dlCapacityMbps > 0 && now.dlCapacityMbps < t.capacityMinMbps) issues.push('low_capacity');
   if (now.firmware && !firmwareIs(now.firmware, t.targetFirmware)) issues.push('firmware');
+  // RADIUS (admins): a suspended customer is offline on purpose, not a fault
+  if (radius) {
+    if (suspended) issues.push('account_suspended');
+    else if (!offline && radius.online === false) issues.push('pppoe_offline');
+  }
   return issues;
 }
 
-export function installedHealth<J extends InstalledJob>(jobs: J[], byMac: Map<string, UispDevice>, t: HealthThresholds) {
+/**
+ * [radiusOf] (admins, CRM connected): the RADIUS account of a CPE, added to the row with the
+ * pppoe_offline / account_suspended issues.
+ */
+export function installedHealth<J extends InstalledJob>(jobs: J[], byMac: Map<string, UispDevice>, t: HealthThresholds, radiusOf?: (j: J) => RadiusInfo | null) {
   const cpes = jobs.map((j) => {
     const d = byMac.get(j.mac);
     const now = d ? nowOf(d) : null;
+    const radius = radiusOf ? radiusOf(j) : null;
     return {
       ...j,
       now,
       signalDelta: now?.signal != null && j.acceptanceSignal != null ? Math.round(now.signal - j.acceptanceSignal) : null,
-      issues: issuesOf(j, now, t),
+      issues: issuesOf(j, now, t, radius),
+      ...(radiusOf ? { radius: radius ? radiusView(radius) : null } : {}),
     };
   });
   const score = (c: (typeof cpes)[number]) => c.issues.reduce((s, i) => s + WEIGHT[i], 0);
@@ -106,7 +131,27 @@ export function installedHealth<J extends InstalledJob>(jobs: J[], byMac: Map<st
       ethernet: count('ethernet'),
       low_capacity: count('low_capacity'),
       firmware: count('firmware'),
+      // only with the RADIUS state (admins, CRM connected)
+      ...(radiusOf ? { pppoe_offline: count('pppoe_offline'), account_suspended: count('account_suspended') } : {}),
     },
     cpes,
+  };
+}
+
+/** What the NOC sees of a RADIUS account next to a CPE. */
+export function radiusView(r: RadiusInfo) {
+  return {
+    username: r.username,
+    accountStatus: r.accountStatus,
+    customerName: r.customerName,
+    customerStatus: r.customerStatus,
+    servicesSuspended: r.servicesSuspended,
+    suspended: isSuspended(r),
+    profile: r.profile,
+    speed: r.speed,
+    online: r.online,
+    clientIp: r.clientIp,
+    sessionSeconds: r.sessionSeconds,
+    checkedAt: r.checkedAt,
   };
 }

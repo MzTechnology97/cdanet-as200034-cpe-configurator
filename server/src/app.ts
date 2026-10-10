@@ -32,6 +32,8 @@ import { createTelegram } from './services/telegram.ts';
 import type { Uisp } from './services/uisp.ts';
 import { createConnectors } from './services/connectors.ts';
 import { createCrmSettings } from './services/crm.ts';
+import { createCrmSync, type CrmSync } from './services/crm-sync.ts';
+import { crmRoutes } from './routes/crm.ts';
 import { connectorRoutes } from './routes/connectors.ts';
 import { uispRoutes } from './routes/uisp.ts';
 import { mapRoutes } from './routes/map.ts';
@@ -102,6 +104,7 @@ export async function buildApp(
     uispSettings: { autoBackup: uispCfg?.autoBackup ?? cfg.uispAutoBackup, coverageMaxKm: uispCfg?.coverageMaxKm ?? cfg.coverageMaxKm },
     connectors,
     crm: createCrmSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
+    crmSync: undefined as unknown as CrmSync,
     geocoder: createGeocoder({ ...cfg.geocoder, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
     telegram,
     modules,
@@ -112,6 +115,7 @@ export async function buildApp(
     notify: undefined as unknown as Notifier,
     version,
   };
+  ctx.crmSync = createCrmSync(db, ctx.crm);
   ctx.outages = createOutages(db, {
     ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
     getUisp: () => ctx.uisp,
@@ -212,6 +216,7 @@ export async function buildApp(
   workOrderRoutes(app, ctx);
   firmwareRoutes(app, ctx);
   privacyRoutes(app, ctx);
+  crmRoutes(app, ctx);
   adminRoutes(app, ctx);
   toolRoutes(app, ctx);
   uispRoutes(app, ctx);

@@ -98,6 +98,7 @@ function networkMap(filters, onSectors) {
       popName ? `POP ${popName}` : 'AP senza POP',
       STATE[a.state][0],
       a.cpe ? `CPE ${a.cpe.total - a.cpe.offline}/${a.cpe.total} online` : null,
+      pppoeText(a),
       a.model,
       a.served?.servedM ? `settore ${a.served.width}° verso ${a.served.center}°, clienti fino a ${km(a.served.servedM)}` : 'nessun fascio: mancano clienti con posizione',
       a.locationFrom === 'pop' ? 'posizione del POP (l’AP non ne ha una sua)' : null,
@@ -234,7 +235,25 @@ function cpeBar(a) {
   const bar = h('i');
   bar.style.width = `${Math.round(ratio * 100)}%`;
   bar.style.background = ratio >= 0.7 ? STATE_COLOR.ok : ratio >= 0.4 ? STATE_COLOR.degraded : STATE_COLOR.down;
-  return h('span', { class: 'cpe-cell' }, h('span', { class: 'cpe-bar' }, bar), h('span', { class: 'small' }, `${online}/${a.cpe.total}`));
+  const pppoe = pppoeText(a);
+  return h(
+    'span',
+    { class: 'cpe-cell' },
+    h('span', { class: 'cpe-bar' }, bar),
+    h('span', { class: 'small' }, `${online}/${a.cpe.total}`),
+    // admins with the CRM: PPPoE sessions of the CPEs of the AP
+    pppoe ? h('span', { class: `small ${a.pppoe.offline ? 'bad-text' : 'muted'}`, title: 'Sessioni PPPoE dal RADIUS' }, ` · ${pppoe}`) : null,
+  );
+}
+
+/** "PPPoE 12 online · 2 offline · 1 sospeso" (admins, CRM connected), null otherwise. */
+function pppoeText(a) {
+  const p = a.pppoe;
+  if (!p || !(p.online + p.offline + p.suspended)) return null;
+  const parts = [`${p.online} online`];
+  if (p.offline) parts.push(`${p.offline} offline`);
+  if (p.suspended) parts.push(`${p.suspended} ${p.suspended === 1 ? 'sospeso' : 'sospesi'}`);
+  return `PPPoE ${parts.join(' · ')}`;
 }
 
 /** "Stato rete": POPs and APs (installers: the assigned ones), refreshed every minute. No notifications. */
