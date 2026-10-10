@@ -138,6 +138,8 @@ export function installedHealth<J extends InstalledJob>(jobs: J[], byMac: Map<st
     return {
       ...j,
       now,
+      // UISP device id: admins open the CPE page (Stato CPE) from the row
+      deviceId: d?.id ?? null,
       firmware: now?.firmware ? { version: firmwareVersion(now.firmware)?.join('.') ?? now.firmware, state: firmwareState(now.firmware, t.targetFirmware) } : null,
       signalDelta: now?.signal != null && j.acceptanceSignal != null ? Math.round(now.signal - j.acceptanceSignal) : null,
       issues: issuesOf(j, now, t, radius),

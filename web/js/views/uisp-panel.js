@@ -180,7 +180,7 @@ function svg(tag, attrs = {}, ...children) {
 }
 
 /** Line chart of the signal (and the AP-side signal) with the good / minimum thresholds (Impostazioni server). */
-function signalChart(st) {
+export function signalChart(st) {
   const W = 640, H = 180, P = 28;
   const pts = st.signal.points;
   const all = [...pts, ...st.remoteSignal.points].map((p) => p[1]);

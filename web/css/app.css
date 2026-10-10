@@ -267,6 +267,7 @@ button.link { background: none; border: none; color: var(--brand); padding: 4px 
 .ap-actions { text-align: right; white-space: nowrap; }
 .ap-actions .btns { justify-content: flex-end; flex-wrap: nowrap; }
 button.small-btn { min-height: 30px; padding: 4px 11px; font-size: .8rem; }
+.button-link.small-btn { min-height: 30px; padding: 4px 11px; font-size: .8rem; }
 button.small-btn.on { border-color: var(--brand); color: var(--brand-ink); }
 @media (max-width: 640px) {
   .net-table tr.pop-row { background: transparent; border: 0; padding: 0; margin: 14px 0 6px; }

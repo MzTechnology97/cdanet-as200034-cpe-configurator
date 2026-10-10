@@ -25,6 +25,7 @@ import { adminGuideView } from './views/guide.js';
 import { workOrdersView } from './views/work-orders.js';
 import { firmwareView } from './views/firmware.js';
 import { privacyView } from './views/privacy.js';
+import { cpeView } from './views/cpe.js';
 import { setAdmin } from './terms.js';
 import { icon } from './icons.js';
 
@@ -35,6 +36,8 @@ const ROUTES = [
   { id: 'work-orders', icon: 'pending_actions', label: 'Interventi', installerLabel: 'I miei interventi', view: workOrdersView, module: 'work_orders' },
   { id: 'jobs', label: 'Storico provisioning', icon: 'history', view: jobsView },
   { id: 'health', icon: 'monitor_heart', label: 'Salute CPE', installerLabel: 'Le mie CPE', view: healthView, module: 'cpe_health' },
+  // one CPE managed as in the UISP app (opened from Salute CPE, not in the menu)
+  { id: 'cpe', icon: 'monitor_heart', label: 'CPE', view: cpeView, module: 'cpe_health', admin: true, hidden: true, parent: 'health' },
   { id: 'customers', icon: 'my_location', label: 'Clienti', view: customersView, admin: true },
   { id: 'stats', icon: 'query_stats', label: 'Statistiche', view: statsView, admin: true, module: 'stats' },
   { id: 'outages', icon: 'power_off', label: 'Guasti Enel', view: outagesView, module: 'power_outages' },
@@ -91,7 +94,7 @@ function renderChrome(user) {
   navToggle.hidden = false;
   mount(
     sidebar,
-    ROUTES.filter((r) => allowed(r, user)).map((r) =>
+    ROUTES.filter((r) => allowed(r, user) && !r.hidden).map((r) =>
       r.group
         ? h('div', { class: 'group' }, r.group)
         : r.href
@@ -151,7 +154,7 @@ async function route() {
   const [path, query = ''] = location.hash.replace(/^#\//, '').split('?');
   const id = path || (s.user.role === 'admin' ? 'dashboard' : 'jobs');
   const r = ROUTES.find((x) => x.id === id && x.view && allowed(x, s.user)) ?? ROUTES.find((x) => x.id === 'jobs');
-  for (const a of sidebar.querySelectorAll('a')) a.classList.toggle('active', a.dataset.route === r.id);
+  for (const a of sidebar.querySelectorAll('a')) a.classList.toggle('active', a.dataset.route === (r.parent ?? r.id));
   void pollUnread();
   mount(viewEl, h('p', { class: 'muted' }, 'Caricamento…'));
   try {
