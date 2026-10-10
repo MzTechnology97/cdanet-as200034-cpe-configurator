@@ -193,6 +193,19 @@ class ApiClient(
     suspend fun reportKo(req: KoRequest): Long =
         AppJson.decodeFromString(KoCreatedDto.serializer(), request("POST", "/api/installs/ko", AppJson.encodeToJsonElement(KoRequest.serializer(), req))).id
 
+    /** IA-AP (admins): findings on APs and CPEs. */
+    suspend fun advisor(): AdvisorDto = AppJson.decodeFromString(AdvisorDto.serializer(), request("GET", "/api/admin/advisor"))
+
+    /** Hides a finding for [days] (0 = shows it again). */
+    suspend fun dismissAdvice(id: String, days: Int) {
+        request("POST", "/api/admin/advisor/dismiss", buildJsonObject { put("id", id); put("days", days) })
+    }
+
+    /** New data from UISP now (one or two minutes). */
+    suspend fun refreshAdvisor() {
+        request("POST", "/api/admin/advisor/refresh", buildJsonObject { })
+    }
+
     suspend fun notifications(): NotificationsDto = AppJson.decodeFromString(NotificationsDto.serializer(), request("GET", "/api/notifications?limit=100"))
 
     suspend fun unreadNotifications(): Int = AppJson.decodeFromString(UnreadDto.serializer(), request("GET", "/api/notifications/count")).unread

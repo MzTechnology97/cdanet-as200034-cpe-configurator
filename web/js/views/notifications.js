@@ -2,7 +2,7 @@ import { api } from '../api.js';
 import { badge, busy, card, fmtDate, h, mount, pageHead, toast } from '../dom.js';
 import { myTelegramCard } from './my-telegram.js';
 
-const ICON = { provisioning_failed: '❌', install_ko: '⛔', review_pending: '📶', install_activated: '✅' };
+const ICON = { provisioning_failed: '❌', install_ko: '⛔', review_pending: '📶', install_activated: '✅', network_advice: '🛠️' };
 
 /** Unread count for the bell and the menu (polled while logged in). */
 export async function unreadCount() {

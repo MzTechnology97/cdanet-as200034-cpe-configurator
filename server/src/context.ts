@@ -17,6 +17,7 @@ import type { Telegram } from './services/telegram.ts';
 import type { Dem } from './services/dem.ts';
 import type { TerrainStore } from './services/terrain-store.ts';
 import type { ApLoadService } from './services/ap-load.ts';
+import type { Advisor } from './services/ap-advisor.ts';
 import type { ServerSettings } from './services/server-settings.ts';
 
 export interface AppContext {
@@ -36,6 +37,8 @@ export interface AppContext {
   crmSync: CrmSync;
   /** Load of the APs and capacity curve, refreshed hourly from UISP. */
   apLoad: ApLoadService;
+  /** Assistente rete: findings on APs and CPEs, after every load refresh. */
+  advisor: Advisor;
   geocoder: Geocoder;
   telegram: Telegram;
   modules: Modules;

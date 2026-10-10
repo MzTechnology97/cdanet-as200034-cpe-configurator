@@ -171,6 +171,11 @@ export const SERVER_SETTINGS: Def[] = [
     get: (c) => c.coverageCpeGainDbi, set: (c, v) => (c.coverageCpeGainDbi = (v as number | undefined) ?? 23),
   },
   {
+    key: 'advisorFreqRange', env: 'ADVISOR_FREQ_RANGE', group: 'Assistente rete', label: 'Frequenze utilizzabili per i suggerimenti di canale (MHz, da-a)', kind: 'text',
+    help: 'L’assistente propone canali solo dentro questo intervallo, con il canale intero dentro (bordi compresi): predefinito 5120-5800. I canali dei nostri AP vicini sono sempre evitati, e un canale che porterebbe il cliente più debole sotto il minimo del collaudo viene scartato (risposta in frequenza delle antenne e perdita di percorso).',
+    get: (c) => c.advisorFreqRange, set: (c, v) => (c.advisorFreqRange = /^\s*\d{4}\s*-\s*\d{4}\s*$/.test(String(v ?? '')) ? String(v) : '5120-5800'),
+  },
+  {
     key: 'coverageBuildingM', env: 'COVERAGE_BUILDING_HEIGHT_M', group: 'Simulazione radio', label: 'Altezza media degli edifici (m)', kind: 'int', min: 0, max: 60,
     help: 'Dove la mappa del suolo (ESA WorldCover) indica edifici, il profilo verso l’AP si alza di questa altezza: un paese tra la CPE e l’AP può fare ombra. Gli edifici entro 50 m dalla CPE e dall’AP non contano (l’antenna è sopra il tetto). 0 = edifici ignorati.',
     get: (c) => c.coverageBuildingM, set: (c, v) => (c.coverageBuildingM = (v as number | undefined) ?? 8),

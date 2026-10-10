@@ -1,6 +1,8 @@
 import type { Db } from '../db.ts';
 import { nowIso } from '../db.ts';
 import { apCapacityFactor, capacityAt, capacityCurve, summarizeLoad, type ApLoad, type CapacityCurve, type CapacitySample } from '../domain/ap-load.ts';
+import { advisorInput, type AdvisorInput } from '../domain/advisor.ts';
+import { sectorWidth } from '../domain/coverage-model.ts';
 import { isAp, isPtp, type Uisp } from './uisp.ts';
 
 /**
@@ -20,7 +22,7 @@ interface Stored {
   widths: Record<string, number>;
 }
 
-export function createApLoad(db: Db, getUisp: () => Uisp | null, log?: (m: string) => void) {
+export function createApLoad(db: Db, getUisp: () => Uisp | null, log?: (m: string) => void, onInputs?: (inputs: AdvisorInput[]) => Promise<void> | void) {
   let data: Stored = (() => {
     try {
       const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(KEY) as { value: string } | undefined;
@@ -43,6 +45,7 @@ export function createApLoad(db: Db, getUisp: () => Uisp | null, log?: (m: strin
       const loads: Record<string, ApLoad> = {};
       const widths: Record<string, number> = {};
       const own = new Map<string, CapacitySample[]>();
+      const inputs: AdvisorInput[] = [];
       let next = 0;
       const worker = async () => {
         while (next < aps.length) {
@@ -50,6 +53,7 @@ export function createApLoad(db: Db, getUisp: () => Uisp | null, log?: (m: strin
           const [stations, stats] = await Promise.all([uisp.apStations(ap.id).catch(() => null), uisp.weekStatistics(ap.id).catch(() => null)]);
           const load = summarizeLoad(stats, stations, ap);
           loads[ap.id] = load;
+          inputs.push(advisorInput({ id: ap.id, name: ap.name, location: ap.location, heading: ap.heading, frequency: ap.frequency, beamWidth: sectorWidth(ap.model) }, stations, stats, load));
           const width = load.channelWidthMhz ?? 20;
           widths[ap.id] = width;
           // the CPE's own signal (what the coverage model estimates) with the capacity of its link
@@ -73,6 +77,8 @@ export function createApLoad(db: Db, getUisp: () => Uisp | null, log?: (m: strin
         `INSERT INTO settings(key, value, updated_at, updated_by) VALUES(?, ?, ?, NULL)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
       ).run(KEY, JSON.stringify(data), nowIso());
+      // the Assistente rete works on the same data, without asking UISP again
+      if (onInputs) await onInputs(inputs);
     } catch (err) {
       log?.(`ap load: ${(err as Error).message}`);
     } finally {

@@ -358,3 +358,10 @@ th:first-child { border-top-left-radius: 10px; }
 th:last-child { border-top-right-radius: 10px; }
 tr:hover > td { background: color-mix(in srgb, var(--brand) 4%, transparent); }
 .notice { border-radius: 12px; }
+
+/* IA-AP */
+.advice { display: grid; gap: 4px; padding: 10px 0; border-top: 1px solid var(--line); }
+.advice:first-of-type { border-top: 0; }
+.advice.muted { opacity: .6; }
+.advice .btns { align-items: center; margin-top: 4px; }
+.advice .btns > span { flex: 1 1 auto; }

@@ -62,6 +62,8 @@ Il link apre lo storico già filtrato sul MAC della CPE (`/#/jobs?q=<MAC>`).
 
 Ogni provisioning riuscito non genera un messaggio singolo, ma entra nel riepilogo serale.
 
+**Assistente rete (IA-AP, v1.32.55)**: i nuovi problemi critici su AP e CPE trovati dall'analisi oraria arrivano solo nella pagina Notifiche degli admin (non su Telegram). Vedi [NOC.md](NOC.md#ia-ap-assistente-della-rete-admin-v13255).
+
 ## Privacy
 
 Telegram è un servizio esterno. I messaggi contengono solo modello, MAC, SSID e nome utente dell'installatore, **mai** nome, indirizzo o posizione del cliente, utente o password PPPoE, chiavi Wi-Fi o credenziali.

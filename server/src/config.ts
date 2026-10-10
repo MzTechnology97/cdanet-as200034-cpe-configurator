@@ -81,6 +81,7 @@ const envSchema = z.object({
   COVERAGE_CPE_GAIN_DBI: int(23, 0, 40),
   COVERAGE_BUILDING_HEIGHT_M: int(8, 0, 60),
   COVERAGE_HIDE_BELOW_DBM: int(-70, -100, -40),
+  ADVISOR_FREQ_RANGE: z.string().regex(/^\s*\d{4}\s*-\s*\d{4}\s*$/).default('5120-5800'),
   COVERAGE_TREE_HEIGHT_M: int(8, 0, 40),
   MIN_ANDROID_VERSION: z.string().regex(/^\d+\.\d+\.\d+$/).default('1.0.0'),
   // the Android app must be on the latest published release (older ones cannot log in)
@@ -171,6 +172,8 @@ export interface Config {
   /** Average height of the buildings (land cover "built-up") between the CPE and the AP, m. */
   /** Verifica copertura: APs with an estimated signal weaker than this are not listed (−100 = all). */
   coverageHideBelowDbm: number;
+  /** Assistente rete: frequencies the channel suggestions may use, "from-to" MHz. */
+  advisorFreqRange: string;
   coverageBuildingM: number;
   /** Average height of the trees (land cover "tree cover"), m. */
   coverageTreeM: number;
@@ -270,6 +273,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     coverageEirpDbm: e.COVERAGE_AP_EIRP_DBM,
     coverageCpeGainDbi: e.COVERAGE_CPE_GAIN_DBI,
     coverageHideBelowDbm: e.COVERAGE_HIDE_BELOW_DBM,
+    advisorFreqRange: e.ADVISOR_FREQ_RANGE,
     coverageBuildingM: e.COVERAGE_BUILDING_HEIGHT_M,
     coverageTreeM: e.COVERAGE_TREE_HEIGHT_M,
     minAndroidVersion: e.MIN_ANDROID_VERSION,
