@@ -146,6 +146,14 @@ La bussola indica dove girare ("Gira di 23° a destra", "Allineato" entro ±3°)
 
 La bussola serve per il puntamento grossolano; quello fine si fa con il segnale (Puntamento antenna).
 
+## Verifica copertura (area "Copertura")
+
+Quinta area della barra in basso (dopo Installa) e scorciatoia in Oggi, con il modulo Copertura attivo. Serve prima del sopralluogo: indirizzo, coordinate, GPS del telefono o tocco sulla mappa; per ogni AP segnale stimato, direzione, **Visibilità** con l'altezza della CPE indicata e **Bussola**.
+- **Installatori**: solo gli AP assegnati (POP o AP), in posizione approssimativa, e al massimo il numero impostato in Impostazioni server; lo filtra il server (`/api/coverage`), non l'app.
+- **Admin**: tutti gli AP sulla mappa (da `/api/network/status`), ricerca per nome dell'AP, fino a 10 risultati e **Simula copertura** (`/api/admin/coverage/simulation`) con la stessa scala colori della console.
+
+La mappa è la pagina `/map-embed.html` del server; i tocchi tornano all'app tramite l'interfaccia JavaScript `CdaApp`, aggiunta solo su quella pagina.
+
 ## Trova l'AP (mappa, lista e mirino in fotocamera)
 
 Dal GPS del telefono l'app mostra gli AP vicini (per gli installatori solo quelli assegnati):

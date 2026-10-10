@@ -376,6 +376,23 @@ data class CoverageAp(
     val rating: String? = null,
 )
 
+/** What the app shows of a radio simulation (the map gets the whole answer). */
+@Serializable
+data class SimulationInfoDto(
+    val ap: SimulationApDto,
+    val cells: List<SimulationCellDto> = emptyList(),
+    val customers: Int = 0,
+    val radiusM: Int = 0,
+    val minDbm: Int = -75,
+    val theoretical: Boolean = false,
+)
+
+@Serializable
+data class SimulationApDto(val id: String = "", val name: String = "")
+
+@Serializable
+data class SimulationCellDto(val dbm: Double)
+
 @Serializable
 data class CoverageDto(
     val maxKm: Int,

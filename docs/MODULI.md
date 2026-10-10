@@ -11,7 +11,7 @@ Ogni modifica finisce nel Registro attività ("Funzionalità modificate").
 
 | Modulo | Dove | Default |
 |---|---|---|
-| Copertura AP | web + app (anche "AP vicini" nel provisioning) | attivo |
+| Copertura AP | web + app (area "Copertura" nella barra in basso; anche "AP vicini" nel provisioning) | attivo |
 | Puntamento antenna | app | attivo |
 | Diagnosi CPE | app | attivo |
 | Bussola verso l'AP | app | attivo |

@@ -203,27 +203,3 @@ fun NearbyAps(c: AppContainer, location: CpeLocation, onPick: ((CoverageAp) -> U
         }
     }
 }
-
-@Composable
-fun CoverageScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? = null) {
-    var location by remember { mutableStateOf<CpeLocation?>(null) }
-    var label by remember { mutableStateOf("") }
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        SectionCard("Posizione") {
-            LocationPicker(c, location, label) { l, lab ->
-                location = l
-                label = lab
-            }
-        }
-        location?.let { l ->
-            SectionCard("AP consigliati") {
-                NearbyAps(c, l, onCompass = onCompass, withMap = true)
-                Text(
-                    "Prima gli AP con il segnale stimato migliore, poi i più vicini, entro il raggio configurato. La freccia indica la direzione di puntamento (0° = nord).",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
-}
