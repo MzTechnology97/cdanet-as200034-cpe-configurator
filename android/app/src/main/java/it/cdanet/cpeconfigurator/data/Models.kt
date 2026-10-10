@@ -39,7 +39,12 @@ data class SignalHistoryDto(
     val downlinkCapacity: SeriesDto = SeriesDto(),
     val uplinkCapacity: SeriesDto = SeriesDto(),
     val outages: List<UispOutageDto>? = null,
+    /** Guide lines of the chart: the thresholds of Impostazioni server (older servers: none). */
+    val thresholds: SignalGuidesDto = SignalGuidesDto(),
 )
+
+@Serializable
+data class SignalGuidesDto(val good: Int = -65, val min: Int = -75)
 
 /** Body of POST /api/provisioning/jobs/{id}/replace: the rest comes from the replaced job. */
 @Serializable

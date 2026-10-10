@@ -113,7 +113,11 @@ class AcceptanceQueue(
                         try {
                             api.uploadPhoto(item.jobId, withContext(Dispatchers.IO) { f.readBytes() }, p.caption)
                         } catch (e: ApiException) {
-                            if (e.status == 401 || e.status == 429 || e.status >= 500) throw e
+                            // 409 = job result still queued: retry later, like the report
+                            if (e.status == 409 || e.status == 401 || e.status == 429 || e.status >= 500) throw e
+                            // refused for good (too big, not a JPEG…): say so instead of losing it silently
+                            val why = "foto «${p.caption}» non accettata (${e.message ?: e.code})"
+                            _rejected.value = _rejected.value + (item.jobId to listOfNotNull(_rejected.value[item.jobId], why).joinToString("; "))
                         }
                         f.delete()
                     }

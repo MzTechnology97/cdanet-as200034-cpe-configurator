@@ -47,6 +47,19 @@ const netInt = (key: keyof Config['network'], env: string, label: string, min: n
   set: (c, v) => ((c.network as Record<string, unknown>)[key] = v),
 });
 
+const threshold = (key: keyof Config['thresholds'], env: string, label: string, min: number, max: number, help?: string): Def => ({
+  key: `thresholds.${key}`,
+  env,
+  group: 'Soglie di collaudo e salute CPE',
+  label,
+  ...(help ? { help } : {}),
+  kind: 'int',
+  min,
+  max,
+  get: (c) => c.thresholds[key],
+  set: (c, v) => (c.thresholds[key] = v as number),
+});
+
 export const SERVER_SETTINGS: Def[] = [
   {
     key: 'cpe.adminUsername', env: 'CPE_ADMIN_USERNAME', group: 'Credenziali delle CPE', label: 'Utente amministratore CPE', kind: 'text',
@@ -120,6 +133,13 @@ export const SERVER_SETTINGS: Def[] = [
     key: 'routerOsAllowPublic', env: 'ROUTEROS_ALLOW_PUBLIC', group: 'Provisioning e app', label: 'RouterOS: consenti indirizzi pubblici', kind: 'bool',
     get: (c) => c.routerOsAllowPublic, set: (c, v) => (c.routerOsAllowPublic = !!v),
   },
+  threshold('signalGood', 'SIGNAL_GOOD_DBM', 'Segnale buono (dBm)', -90, -40, 'Sopra questo valore il segnale della CPE è "ottimo" in diagnosi e collaudo.'),
+  threshold('signalMin', 'SIGNAL_MIN_DBM', 'Segnale minimo accettato (dBm)', -95, -45, 'Sotto: collaudo da approvare dal NOC, "segnale debole" in Salute CPE, AP "improbabili" in Copertura.'),
+  threshold('cinrMin', 'CINR_MIN_DB', 'CINR minimo (dB)', 0, 40, 'Sotto indica interferenze o un puntamento impreciso.'),
+  threshold('chainDelta', 'CHAIN_DELTA_DB', 'Differenza massima tra le catene (dB)', 1, 30, 'Oltre suggerisce un problema di polarizzazione o un ostacolo.'),
+  threshold('capacityMinMbps', 'CAPACITY_MIN_MBPS', 'Capacità airMAX minima (Mbit/s, download)', 1, 2000),
+  threshold('ethMinMbps', 'ETH_MIN_MBPS', 'Velocità minima della porta LAN (Mbit/s)', 10, 1000, 'Sotto (o in half duplex) il cavo o il connettore è da controllare.'),
+  threshold('signalDropDb', 'SIGNAL_DROP_DB', 'Calo di segnale rispetto al collaudo (dB)', 1, 30, 'Salute CPE: "segnale calato" se il segnale è sceso almeno di tanto.'),
   {
     key: 'installerCoverageAps', env: 'INSTALLER_COVERAGE_APS', group: 'Copertura per gli installatori', label: 'AP mostrati per ogni verifica di copertura', kind: 'int', min: 1, max: 20,
     help: 'Il server valuta tutti gli AP assegnati all’installatore entro il raggio di copertura (Connettori → UISP), li ordina per segnale stimato e mostra i primi di questo numero; esclude gli AP non attivi o troppo deboli. Vale per la console web e per l’app (Copertura, AP vicini); gli amministratori scelgono ogni volta.',

@@ -179,14 +179,15 @@ function svg(tag, attrs = {}, ...children) {
   return el;
 }
 
-/** Line chart of the signal (and the AP-side signal) with the -65 / -75 dBm thresholds. */
+/** Line chart of the signal (and the AP-side signal) with the good / minimum thresholds (Impostazioni server). */
 function signalChart(st) {
   const W = 640, H = 180, P = 28;
   const pts = st.signal.points;
   const all = [...pts, ...st.remoteSignal.points].map((p) => p[1]);
   if (!pts.length) return h('p', { class: 'small muted' }, nms('Nessun dato di segnale in UISP per il periodo.', 'Nessun dato di segnale per il periodo.'));
   const t0 = pts[0][0], t1 = pts[pts.length - 1][0] || t0 + 1;
-  const lo = Math.min(-80, ...all) - 2, hi = Math.max(-45, ...all) + 2;
+  const good = st.thresholds?.good ?? -65, min = st.thresholds?.min ?? -75;
+  const lo = Math.min(min - 5, ...all) - 2, hi = Math.max(-45, good + 5, ...all) + 2;
   const x = (t) => P + ((t - t0) / Math.max(1, t1 - t0)) * (W - P - 8);
   const y = (v) => 8 + ((hi - v) / (hi - lo)) * (H - 8 - 22);
   const line = (list) => list.map(([t, v], i) => `${i ? 'L' : 'M'}${x(t).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
@@ -198,8 +199,8 @@ function signalChart(st) {
   return svg(
     'svg',
     { viewBox: `0 0 ${W} ${H}`, class: 'chart', role: 'img', 'aria-label': 'Andamento del segnale' },
-    ...guide(-65, 'var(--good)', '-65'),
-    ...guide(-75, 'var(--bad)', '-75'),
+    ...guide(good, 'var(--good)', String(good)),
+    ...guide(min, 'var(--bad)', String(min)),
     st.remoteSignal.points.length ? svg('path', { d: line(st.remoteSignal.points), fill: 'none', stroke: 'var(--muted)', 'stroke-width': 1.5, 'stroke-dasharray': '3 3' }) : '',
     svg('path', { d: line(pts), fill: 'none', stroke: 'var(--brand)', 'stroke-width': 2 }),
     svg('text', { x: P, y: H - 4, 'font-size': 10, fill: 'var(--muted)' }, day(t0)),

@@ -73,9 +73,9 @@ export const acceptanceSchema = z
 const RADIO_CHECKS = new Set(['Segnale ricevuto', 'Segnale lato AP', 'CINR (qualità)', 'Capacità airMAX', 'Catene (polarizzazioni)', "Collegamento all'AP"]);
 
 /** Why the acceptance test needs the NOC's approval ('' = it does not). */
-export function poorRadio(a: z.infer<typeof acceptanceSchema>): string {
+export function poorRadio(a: z.infer<typeof acceptanceSchema>, signalMin: number = FIELD_THRESHOLDS.signalMin): string {
   const why: string[] = [];
-  if (a.radio.signal != null && a.radio.signal < FIELD_THRESHOLDS.signalMin) why.push(`segnale ${a.radio.signal} dBm (minimo ${FIELD_THRESHOLDS.signalMin})`);
+  if (a.radio.signal != null && a.radio.signal < signalMin) why.push(`segnale ${a.radio.signal} dBm (minimo ${signalMin})`);
   for (const c of a.checks) if (c.verdict === 'bad' && RADIO_CHECKS.has(c.title) && !(c.title === 'Segnale ricevuto' && why.length)) why.push(`${c.title}: ${c.detail}`);
   return why.join(' · ').slice(0, 500);
 }
@@ -137,7 +137,7 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
     const a = acceptanceSchema.parse(req.body);
     const { verdict: v, ...data } = a;
     // a new test replaces the previous decision: poor radio waits again for the NOC
-    const reason = poorRadio(a);
+    const reason = poorRadio(a, ctx.cfg.thresholds.signalMin);
     db.prepare(
       `INSERT INTO job_acceptance(job_id, created_at, user_id, verdict, data, review, review_reason, review_at, review_by, review_note) VALUES(?,?,?,?,?,?,?,NULL,NULL,'')
        ON CONFLICT(job_id) DO UPDATE SET created_at = excluded.created_at, user_id = excluded.user_id, verdict = excluded.verdict, data = excluded.data,

@@ -62,6 +62,14 @@ const envSchema = z.object({
   CPE_DISCOVERY_PORT: int(10001, 1, 65535),
 
   PROVISION_JOB_TTL_MINUTES: int(30, 5, 240),
+  // thresholds of the acceptance test, the field diagnosis and Salute CPE (Impostazioni server)
+  SIGNAL_GOOD_DBM: int(-65, -90, -40),
+  SIGNAL_MIN_DBM: int(-75, -95, -45),
+  CINR_MIN_DB: int(20, 0, 40),
+  CHAIN_DELTA_DB: int(6, 1, 30),
+  CAPACITY_MIN_MBPS: int(100, 1, 2000),
+  ETH_MIN_MBPS: int(100, 10, 1000),
+  SIGNAL_DROP_DB: int(6, 1, 30),
   // nearest APs an installer gets from a coverage check (web and app alike)
   INSTALLER_COVERAGE_APS: int(5, 1, 20),
   // theoretical estimate for APs without customers: EIRP of the AP and gain of the CPE antenna
@@ -144,6 +152,8 @@ export interface Config {
     discoveryPort: number;
   };
   jobTtlMinutes: number;
+  /** Thresholds of the acceptance test, field diagnosis, Salute CPE and coverage ranking. */
+  thresholds: { signalGood: number; signalMin: number; cinrMin: number; chainDelta: number; capacityMinMbps: number; ethMinMbps: number; signalDropDb: number };
   installerCoverageAps: number;
   coverageEirpDbm: number;
   coverageCpeGainDbi: number;
@@ -226,6 +236,15 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
       discoveryPort: e.CPE_DISCOVERY_PORT,
     },
     jobTtlMinutes: e.PROVISION_JOB_TTL_MINUTES,
+    thresholds: {
+      signalGood: e.SIGNAL_GOOD_DBM,
+      signalMin: e.SIGNAL_MIN_DBM,
+      cinrMin: e.CINR_MIN_DB,
+      chainDelta: e.CHAIN_DELTA_DB,
+      capacityMinMbps: e.CAPACITY_MIN_MBPS,
+      ethMinMbps: e.ETH_MIN_MBPS,
+      signalDropDb: e.SIGNAL_DROP_DB,
+    },
     installerCoverageAps: e.INSTALLER_COVERAGE_APS,
     coverageEirpDbm: e.COVERAGE_AP_EIRP_DBM,
     coverageCpeGainDbi: e.COVERAGE_CPE_GAIN_DBI,

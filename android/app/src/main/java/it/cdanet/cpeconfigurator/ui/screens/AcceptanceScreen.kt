@@ -264,7 +264,7 @@ fun AcceptanceScreen(c: AppContainer) {
                     photos.clear()
                     c.acceptanceQueue.sync()
                     // refused by the server for good: say so, never "registered"
-                    c.acceptanceQueue.rejected.value[j.id]?.let { why -> throw IllegalStateException("Il server ha rifiutato il collaudo: $why") }
+                    c.acceptanceQueue.rejected.value[j.id]?.let { why -> throw IllegalStateException("Il server non ha accettato: $why") }
                     done = if (c.acceptanceQueue.isPending(j.id)) {
                         "Senza rete: collaudo${if (n > 0) " e $n foto" else ""} in coda sul telefono, invio automatico appena torna la connessione."
                     } else {
