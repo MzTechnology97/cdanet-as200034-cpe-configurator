@@ -19,8 +19,7 @@ import it.cdanet.cpeconfigurator.ui.screens.SearchScreen
 import it.cdanet.cpeconfigurator.ui.screens.ToolEntry
 import it.cdanet.cpeconfigurator.ui.screens.ToolsList
 import it.cdanet.cpeconfigurator.ui.screens.cpeTabTitles
-import it.cdanet.cpeconfigurator.ui.screens.installTabTitles
-import it.cdanet.cpeconfigurator.ui.screens.networkTabTitles
+import it.cdanet.cpeconfigurator.ui.screens.hubTabTitles
 import it.cdanet.cpeconfigurator.ui.screens.rememberHubTabs
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.core.Animatable
@@ -179,12 +178,7 @@ fun AppRoot(c: AppContainer) {
 
     /** Opens a screen, on a given tab for the areas with tabs. */
     fun open(d: Dest) {
-        val titles = when (d.screen) {
-            Screen.Installations -> installTabTitles(modules, c.session.isAdmin)
-            Screen.NetHub -> networkTabTitles(modules)
-            Screen.CpeHub -> cpeTabTitles(modules)
-            else -> emptyList()
-        }
+        val titles = hubTabTitles(d.screen, modules, c.session.isAdmin)
         d.tab?.let { t -> titles.indexOf(t).takeIf { it >= 0 }?.let { hubTabs[d.screen.name] = it } }
         if (d.screen in TOP) top(d.screen) else go(d.screen)
     }
