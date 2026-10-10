@@ -10,6 +10,7 @@ import { SSID_RX, TARGET_FIRMWARE, parseClientHeader, parseMac, versionAtLeast }
  * an already provisioned CPE, so they need the CDA Net CPE credentials. Same trust model
  * as the provisioning package: Android client only, short-lived, audited, never stored.
  */
+/** Defaults of the thresholds (the live ones are in Impostazioni server: ctx.cfg.thresholds). */
 export const FIELD_THRESHOLDS = {
   /** dBm: good / acceptable received signal on the CPE. */
   signalGood: -65,
@@ -53,7 +54,7 @@ export function fieldRoutes(app: FastifyInstance, ctx: AppContext) {
       hosts: [...new Set([n.lanIp, n.factoryIp])],
       sshPort: n.sshPort,
       targetFirmware: TARGET_FIRMWARE,
-      thresholds: FIELD_THRESHOLDS,
+      thresholds: ctx.cfg.thresholds,
       expiresAt: new Date(Date.now() + 8 * 3600_000).toISOString(),
     };
   });

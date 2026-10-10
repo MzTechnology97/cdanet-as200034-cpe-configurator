@@ -42,7 +42,7 @@ fun SignalHistory(c: AppContainer, job: JobDto) {
             d == null -> Text("Lettura storico…", style = MaterialTheme.typography.bodySmall)
             d.signal.points.isEmpty() -> Text("Nessun dato di segnale negli ultimi 7 giorni.", style = MaterialTheme.typography.bodySmall)
             else -> {
-                SeriesChart(d.signal, d.remoteSignal)
+                SeriesChart(d.signal, d.remoteSignal, d.thresholds.good.toDouble(), d.thresholds.min.toDouble())
                 KeyValue("Segnale min / medio / max", "${d.signal.min?.roundToInt()} / ${d.signal.avg?.roundToInt()} / ${d.signal.max?.roundToInt()} dBm")
                 d.downlinkCapacity.avg?.let { KeyValue("Capacità media", "${(it / 1000).roundToInt()} / ${((d.uplinkCapacity.avg ?: 0.0) / 1000).roundToInt()} Mbit/s") }
                 d.outages?.let { KeyValue("Interruzioni (7 giorni)", it.size.toString()) }
@@ -59,7 +59,7 @@ fun SignalHistory(c: AppContainer, job: JobDto) {
 }
 
 @Composable
-private fun SeriesChart(signal: SeriesDto, remote: SeriesDto) {
+private fun SeriesChart(signal: SeriesDto, remote: SeriesDto, good: Double, min: Double) {
     val line = MaterialTheme.colorScheme.primary
     val muted = MaterialTheme.colorScheme.outline
     val cGoodGreen = GoodGreen
@@ -71,13 +71,13 @@ private fun SeriesChart(signal: SeriesDto, remote: SeriesDto) {
         val t0 = pts.first().first
         val t1 = pts.last().first.coerceAtLeast(t0 + 1)
         val all = (pts + rpts).map { it.second }
-        val lo = minOf(-80.0, all.min()) - 2
-        val hi = maxOf(-45.0, all.max()) + 2
+        val lo = minOf(min - 5, all.min()) - 2
+        val hi = maxOf(-45.0, good + 5, all.max()) + 2
         fun x(t: Double) = ((t - t0) / (t1 - t0) * size.width).toFloat()
         fun y(v: Double) = ((hi - v) / (hi - lo) * size.height).toFloat()
         val dash = PathEffect.dashPathEffect(floatArrayOf(10f, 10f))
-        drawLine(cGoodGreen, Offset(0f, y(-65.0)), Offset(size.width, y(-65.0)), pathEffect = dash)
-        drawLine(cBadRed, Offset(0f, y(-75.0)), Offset(size.width, y(-75.0)), pathEffect = dash)
+        drawLine(cGoodGreen, Offset(0f, y(good)), Offset(size.width, y(good)), pathEffect = dash)
+        drawLine(cBadRed, Offset(0f, y(min)), Offset(size.width, y(min)), pathEffect = dash)
         rpts.zipWithNext().forEach { (a, b) -> drawLine(muted, Offset(x(a.first), y(a.second)), Offset(x(b.first), y(b.second)), strokeWidth = 2f) }
         pts.zipWithNext().forEach { (a, b) -> drawLine(line, Offset(x(a.first), y(a.second)), Offset(x(b.first), y(b.second)), strokeWidth = 4f) }
     }

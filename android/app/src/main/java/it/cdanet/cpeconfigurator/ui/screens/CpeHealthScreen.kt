@@ -61,7 +61,11 @@ private val ISSUES = mapOf(
     "ethernet" to "porta LAN",
     "pending" to "in attesa di attivazione",
     "low_capacity" to "capacità bassa",
-    "firmware" to "firmware",
+    "firmware" to "firmware da aggiornare",
+    // admins with ISP Billing connected (the server sends them only to admins)
+    "pppoe_offline" to "PPPoE offline",
+    "account_suspended" to "account sospeso",
+    "account_terminated" to "cliente cessato",
 )
 
 /** "Le mie CPE": the CPEs I installed, current state vs the acceptance test (no PPPoE data). */

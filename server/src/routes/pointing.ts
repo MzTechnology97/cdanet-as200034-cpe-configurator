@@ -7,7 +7,6 @@ import { approxPoint, roughDistance } from '../domain/approx.ts';
 import { distanceM, isValidLatLon } from '../domain/geo.ts';
 import { lineOfSight, pathPoints } from '../domain/los.ts';
 import { estimateOrTheory, rankCoverage, type ApModel } from '../domain/coverage-model.ts';
-import { FIELD_THRESHOLDS } from './field.ts';
 import { elevationAngle } from '../services/dem.ts';
 
 /**
@@ -89,7 +88,7 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
     };
     const ranked = rankCoverage(
       inRange.map((a) => ({ ...a, estimate: estimateFor(a) })),
-      FIELD_THRESHOLDS.signalMin,
+      ctx.cfg.thresholds.signalMin,
     );
     const useful = keys ? ranked.filter((a) => a.rating !== 'non attivo' && a.rating !== 'improbabile') : ranked;
     const aps = useful.slice(0, keys ? ctx.cfg.installerCoverageAps : q.limit);

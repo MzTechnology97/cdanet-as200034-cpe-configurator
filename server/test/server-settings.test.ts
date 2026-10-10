@@ -37,6 +37,13 @@ describe('Impostazioni server dal web (invece del .env)', () => {
     assert.equal(access.credentials.password, 'Nuova-Password-Cpe-9');
     assert.ok(access.hosts.includes('192.168.10.254'));
 
+    // thresholds of the acceptance test: set from the web, sent to the app at once
+    assert.equal(access.thresholds.signalMin, -75);
+    assert.equal((await call('PUT', '/api/admin/server-settings', { values: { 'thresholds.signalMin': -72 } })).statusCode, 200);
+    assert.equal((await call('PUT', '/api/admin/server-settings', { values: { 'thresholds.signalMin': -20 } })).statusCode, 400, 'out of range');
+    const access2 = (await call('POST', '/api/field/access', { purpose: 'diagnosis' }, { ...T, ...ANDROID })).json();
+    assert.equal(access2.thresholds.signalMin, -72);
+
     // validation, unknown keys, admins only, activity log without values
     assert.equal((await call('PUT', '/api/admin/server-settings', { values: { 'network.lanIp': '999.1.1.1' } })).statusCode, 400);
     assert.equal((await call('PUT', '/api/admin/server-settings', { values: { nonEsiste: 1 } })).json().error, 'unknown_setting');

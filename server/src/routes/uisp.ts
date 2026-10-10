@@ -8,7 +8,6 @@ import { toCsv } from '../domain/csv.ts';
 import { configDrift } from '../domain/drift.ts';
 import { installedHealth, type InstalledJob } from '../domain/health.ts';
 import type { RadiusInfo } from '../services/crm-sync.ts';
-import { FIELD_THRESHOLDS } from './field.ts';
 import { isValidLatLon } from '../domain/geo.ts';
 import { parseMac, SSID_PARTS, TARGET_FIRMWARE } from '../domain/policy.ts';
 import type { ModuleKey } from '../services/modules.ts';
@@ -114,7 +113,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     };
     const ranked = rankCoverage(
       inRange.map((a) => ({ ...a, estimate: estimateFor(a) })),
-      FIELD_THRESHOLDS.signalMin,
+      ctx.cfg.thresholds.signalMin,
     );
     // installers: only the APs worth a try (no inactive ones, none whose best case is below the minimum)
     const useful = keys ? ranked.filter((a) => a.rating !== 'non attivo' && a.rating !== 'improbabile') : ranked;
@@ -123,7 +122,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       maxKm,
       restricted: !!keys,
       assignedCount: keys ? [...keys].filter((k) => !k.startsWith('z')).length : null,
-      minSignalDbm: FIELD_THRESHOLDS.signalMin,
+      minSignalDbm: ctx.cfg.thresholds.signalMin,
       inRange: inRange.length,
       discarded: ranked.length - useful.length,
       aps: aps.map(({ lat, lon, siteId: _site, gpsAltitude: _alt, siteHeight: _h, ...a }) => {
@@ -151,7 +150,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!m) throw new HttpError(404, 'ap_not_found');
     const radio = { eirpDbm: ctx.cfg.coverageEirpDbm, cpeGainDbi: ctx.cfg.coverageCpeGainDbi };
     const theoretical = !m.fit;
-    const base = { ap: { id: ap.id, name: ap.name, lat: ap.location.lat, lon: ap.location.lon }, minDbm: FIELD_THRESHOLDS.signalMin, goodDbm: FIELD_THRESHOLDS.signalGood, theoretical };
+    const base = { ap: { id: ap.id, name: ap.name, lat: ap.location.lat, lon: ap.location.lon }, minDbm: ctx.cfg.thresholds.signalMin, goodDbm: ctx.cfg.thresholds.signalGood, theoretical };
     // learned: out to 1.5 times the customers served; theory: to where the signal falls to −80 dBm.
     // At least 1.5 km, at most 15 km; 40 x 40 cells.
     const f = ap.frequency && ap.frequency > 1000 ? ap.frequency : 5600;
@@ -199,7 +198,8 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     const device = await deviceOf(job);
     if (!device) throw new HttpError(409, 'uisp_device_not_found');
     const [stats, outages] = await Promise.all([uisp().statistics(device.id, range), uisp().outages(device.id, range).catch(() => null)]);
-    return { device: { id: device.id, name: device.name }, ...stats, outages };
+    // the guide lines of the chart: the thresholds of Impostazioni server
+    return { device: { id: device.id, name: device.name }, ...stats, outages, thresholds: { good: ctx.cfg.thresholds.signalGood, min: ctx.cfg.thresholds.signalMin } };
   });
 
   // ---- Salute CPE (module cpe_health) -------------------------------------------------------
@@ -294,7 +294,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
         rows.push(tag(d ? uispRow(d, a.username) : { ...uispRow({ name: a.name, model: '', mac, ssid: null } as UispDevice, a.username) }, 'uisp'));
       }
     }
-    const t = { ...FIELD_THRESHOLDS, targetFirmware: TARGET_FIRMWARE, signalDropDb: 6 };
+    const t = { ...ctx.cfg.thresholds, targetFirmware: TARGET_FIRMWARE };
     // admins with the CRM connected: the RADIUS account of each CPE, by session MAC or by the PPPoE user of the installation
     let radiusOf: ((j: InstalledJob) => RadiusInfo | null) | undefined;
     if (admin && ctx.crmSync.available()) {
