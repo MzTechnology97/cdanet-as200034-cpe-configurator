@@ -107,7 +107,7 @@ class FieldDiagnosisTest {
     fun acceptanceAveragesSignalAndSerializesForTheServer() {
         val base = AirosStatus.parse(raw)
         val samples = listOf(-60, -62, -58, -61).map { base.copy(signal = it) }
-        val r = Acceptance.build(samples, t, "8.7.18", InternetTest(true, pingMs = 18.0, jitterMs = 2.0, downloadMbps = 95.0, uploadMbps = 20.0), "  nota  ", java.time.Instant.parse("2026-10-09T08:00:00Z"))
+        val r = Acceptance.build(samples, t, "8.7.18", InternetTest(true, pingMs = 18.0, jitterMs = 2.0, downloadMbps = 95.0, uploadMbps = 20.0), "  nota  ", java.time.Instant.parse("2026-10-09T08:00:00Z"), cpeHeightM = 7.5)
         assertEquals(-60, r.radio.signal)
         assertEquals(-62, r.radio.signalMin)
         assertEquals(-58, r.radio.signalMax)
@@ -117,9 +117,19 @@ class FieldDiagnosisTest {
         assertTrue(r.checks.any { it.title == "Internet dal lato cliente" && it.verdict == "ok" })
         val json = AppJson.encodeToString(AcceptanceReport.serializer(), r)
         assertTrue(json.contains("\"measuredAt\":\"2026-10-09T08:00:00Z\""))
+        assertTrue(json.contains("\"cpeHeightM\":7.5"))
         assertFalse(json.contains("null"))
 
         val noInternet = Acceptance.build(samples, t, "8.7.18", InternetTest(false, note = "non raggiungibile"), "")
         assertEquals("warn", noInternet.verdict)
+    }
+
+    @Test
+    fun cpeHeightIsTypedInMetres() {
+        assertEquals(7.5, it.cdanet.cpeconfigurator.field.parseCpeHeight(" 7,5 "))
+        assertEquals(12.0, it.cdanet.cpeconfigurator.field.parseCpeHeight("12"))
+        assertEquals(null, it.cdanet.cpeconfigurator.field.parseCpeHeight(""))
+        assertEquals(null, it.cdanet.cpeconfigurator.field.parseCpeHeight("0"))
+        assertEquals(null, it.cdanet.cpeconfigurator.field.parseCpeHeight("350"))
     }
 }
