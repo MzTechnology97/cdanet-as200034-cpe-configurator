@@ -135,6 +135,41 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     };
   });
 
+  /**
+   * Admin, Copertura: radio simulation of one AP. Expected signal of a new CPE on a grid around
+   * it, learned from the customers already connected (distance, direction, nearby customers);
+   * obstacles are not considered (that is the line-of-sight profile). Cells with no estimate are
+   * left out.
+   */
+  app.get('/api/admin/coverage/simulation', mod('coverage', admin), async (req) => {
+    const q = z.object({ apId: z.string().min(1).max(80) }).parse(req.query);
+    const ap = (await uisp().apsWithLocation()).find((a) => a.id === q.apId && !isPtp(a));
+    if (!ap) throw new HttpError(404, 'ap_not_found');
+    const m = (await uisp().apModels([ap.id])).get(ap.id);
+    const base = { ap: { id: ap.id, name: ap.name, lat: ap.location.lat, lon: ap.location.lon }, minDbm: FIELD_THRESHOLDS.signalMin, goodDbm: FIELD_THRESHOLDS.signalGood };
+    if (!m?.fit) return { ...base, customers: m?.samples.length ?? 0, cells: [], cellM: 0, radiusM: 0, sector: m?.sector ?? null, servedM: m?.servedM ?? null };
+    // out to 1.5 times the customers served (at least 1.5 km, at most 15 km), 40 x 40 cells
+    const radiusM = Math.round(Math.min(15000, Math.max(1500, (m.servedM ?? 2000) * 1.5)));
+    const n = 40;
+    const cellM = (2 * radiusM) / n;
+    const mPerLat = 111_320;
+    const mPerLon = 111_320 * Math.cos((ap.location.lat * Math.PI) / 180);
+    const cells: Array<{ lat: number; lon: number; dbm: number; confidence: string }> = [];
+    for (let i = 0; i < n; i++) {
+      for (let j = 0; j < n; j++) {
+        const dx = -radiusM + (i + 0.5) * cellM;
+        const dy = -radiusM + (j + 0.5) * cellM;
+        const d = Math.hypot(dx, dy);
+        if (d > radiusM) continue;
+        const b = ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360;
+        const e = estimateSignal(m, d, b);
+        if (e.signalDbm === null) continue;
+        cells.push({ lat: Math.round((ap.location.lat + dy / mPerLat) * 1e6) / 1e6, lon: Math.round((ap.location.lon + dx / mPerLon) * 1e6) / 1e6, dbm: e.signalDbm, confidence: e.confidence });
+      }
+    }
+    return { ...base, customers: m.samples.length, cells, cellM: Math.round(cellM), radiusM, sector: m.sector, servedM: m.servedM };
+  });
+
   // ---- UISP status of a provisioned CPE -----------------------------------------------
   app.get('/api/provisioning/jobs/:id/uisp', user, async (req) => {
     const job = loadJob(req);

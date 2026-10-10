@@ -2,6 +2,7 @@ import { api } from '../api.js';
 import { badge, busy, card, field, h, mount, pageHead, table } from '../dom.js';
 import { createMap, drawCoverage, fit, legend, MAP_COLORS as C } from '../map.js';
 import { nms } from '../terms.js';
+import { adminCoverageView } from './coverage-admin.js';
 
 /**
  * Coverage check: nearest APs to a position (address, coordinates or this device's GPS).
@@ -12,10 +13,10 @@ const km = (m) => (m < 1000 ? `${m} m` : `${(m / 1000).toFixed(m < 10000 ? 2 : 1
 
 const CONF = { alta: 'good', media: 'warn', bassa: '' };
 /** Rating from the server: APs are already sorted best first. */
-const RATING = { buono: ['buono', 'good'], possibile: ['possibile', 'warn'], 'senza stima': ['senza stima', ''], improbabile: ['improbabile', 'bad'], 'non attivo': ['non attivo', 'bad'] };
+export const RATING = { buono: ['buono', 'good'], possibile: ['possibile', 'warn'], 'senza stima': ['senza stima', ''], improbabile: ['improbabile', 'bad'], 'non attivo': ['non attivo', 'bad'] };
 
 /** Expected signal of a new CPE, learned from the customers already on the AP. */
-function estimateCell(e) {
+export function estimateCell(e) {
   if (!e || e.signalDbm == null) return h('span', { class: 'small muted' }, 'nessun cliente con segnale');
   return h(
     'div',
@@ -73,6 +74,8 @@ function coverageMap(la, lo, aps) {
 }
 
 export async function coverageView({ user } = {}) {
+  // admins: the full page with the map of every AP and the radio simulation
+  if (user?.role === 'admin') return adminCoverageView();
   const out = h('div', {});
   const addr = h('input', { placeholder: 'Via Roma 12, 94100 Enna', autocomplete: 'off' });
   const lat = h('input', { inputmode: 'decimal', placeholder: '37.5671' });

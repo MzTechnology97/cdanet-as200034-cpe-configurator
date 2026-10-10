@@ -138,8 +138,8 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!ctx.dem.enabled) throw new HttpError(503, 'dem_not_configured');
     const keys = req.user!.role === 'admin' ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
     const allow = keys ? (a: { id: string; siteId: string | null }) => keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`)) : undefined;
-    // any AP within range: the list may have ranked a farther one first
-    const aps = await ctx.uisp.nearestAps({ lat: q.lat, lon: q.lon }, 500, ctx.uispSettings.coverageMaxKm, allow);
+    // any AP within range: the list may have ranked a farther one first (admins: as far as Copertura goes)
+    const aps = await ctx.uisp.nearestAps({ lat: q.lat, lon: q.lon }, 500, keys ? ctx.uispSettings.coverageMaxKm : 200, allow);
     const ap = aps.find((a) => a.id === q.apId);
     if (!ap) throw new HttpError(404, 'ap_not_found');
     const D = distanceM({ lat: q.lat, lon: q.lon }, { lat: ap.lat, lon: ap.lon });
