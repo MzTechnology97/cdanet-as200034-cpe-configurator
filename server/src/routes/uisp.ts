@@ -131,7 +131,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
         // Installers: exact direction for pointing, rounded distance and only an approximate area on the map.
         if (!keys) return { ...base, lat, lon, served: served(a) };
         const stations = ctx.outages.config().installerClients ? base.stations : null;
-        return { ...base, stations, distanceM: roughDistance(a.distanceM), approx: approxPoint(lat, lon, `ap:${a.id}`, ctx.cfg.jwtSecret) };
+        return { ...base, stations, distanceM: roughDistance(a.distanceM, ctx.cfg.installerDistanceStepM), approx: approxPoint(lat, lon, `ap:${a.id}`, ctx.cfg.jwtSecret) };
       }),
     };
   });

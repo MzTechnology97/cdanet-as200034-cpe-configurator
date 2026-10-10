@@ -119,7 +119,7 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
           estimate: a.estimate,
           rating: a.rating,
         };
-        return keys ? { ...base, distanceM: roughDistance(a.distanceM), approx: approxPoint(lat, lon, `ap:${a.id}`, ctx.cfg.jwtSecret) } : { ...base, distanceM: a.distanceM, lat, lon };
+        return keys ? { ...base, distanceM: roughDistance(a.distanceM, ctx.cfg.installerDistanceStepM), approx: approxPoint(lat, lon, `ap:${a.id}`, ctx.cfg.jwtSecret) } : { ...base, distanceM: a.distanceM, lat, lon };
       }),
     };
   });
@@ -155,7 +155,7 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
     const r = lineOfSight(pts.map((p, i) => ({ d: p.f * D, ground: ground[i]! })), from, altitude ?? ground[n]! + c.apHeightM, freq);
     return {
       ap: { id: ap.id, name: ap.name },
-      distanceM: keys ? roughDistance(D) : Math.round(D),
+      distanceM: keys ? roughDistance(D, ctx.cfg.installerDistanceStepM) : Math.round(D),
       cpeHeightM: height,
       frequencyMhz: freq,
       ...r,

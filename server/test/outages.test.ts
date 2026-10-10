@@ -182,6 +182,12 @@ describe('Guasti Enel (e-distribuzione)', () => {
     assert.equal(capT.lat, undefined, 'installers never get the real AP position');
     assert.ok(capT.approx.radiusM > 0);
     assert.equal(capT.distanceM % 50, 0);
+    // a coarser rounding set by the admin applies to installers only
+    assert.equal((await call('PUT', '/api/admin/server-settings', { values: { installerDistanceStepM: 500 } })).statusCode, 200);
+    assert.equal((await cov(T)).aps[0].distanceM % 500, 0);
+    const exact = (await cov(H)).aps.find((a: { id: string }) => a.id === capT.id).distanceM;
+    assert.equal((await cov(T)).aps[0].distanceM, Math.max(500, Math.round(exact / 500) * 500), 'installers: rounded; admins: exact');
+    assert.equal((await call('PUT', '/api/admin/server-settings', { values: { installerDistanceStepM: null } })).statusCode, 200);
     assert.equal(typeof (await cov(H)).aps[0].lat, 'number', 'admins: real position');
     // installers: as many APs as set in Impostazioni server, whatever the client asks (web or app)
     const every = (await cov(H)).aps as Array<{ id: string; name: string }>;
