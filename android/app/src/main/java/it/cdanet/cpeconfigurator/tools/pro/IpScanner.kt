@@ -125,6 +125,8 @@ class IpScanner(private val wifi: Network?) {
         self: Set<String>,
         /** DNS of the LAN (router) for reverse lookups; null = skip. */
         dnsServer: String?,
+        /** Each host as soon as it answers (address, latency): live counters before the names. */
+        onAlive: (String, Int) -> Unit = { _, _ -> },
         onProgress: (Progress) -> Unit,
     ): List<ScanHost> = coroutineScope {
         val ips = (cidr.first..cidr.last).map { Ip.format(it) }
@@ -164,7 +166,7 @@ class IpScanner(private val wifi: Network?) {
                         }.awaitAll()
                     }
                     if (fake.alive(open.toSet(), refused)) {
-                        best?.let { alive[ip] = it to "TCP" }
+                        best?.let { alive[ip] = it to "TCP"; onAlive(ip, it) }
                         (open - fake.ports).takeIf { it.isNotEmpty() }?.let { ports[ip] = it.toMutableSet() }
                     }
                     onProgress(Progress(done.incrementAndGet(), ips.size * if (icmp) 2 else 1, alive.size, "Sondaggio TCP"))
@@ -179,7 +181,7 @@ class IpScanner(private val wifi: Network?) {
                 async(Dispatchers.IO) {
                     pingSem.withPermit {
                         coroutineContext.ensureActive()
-                        ping(ip)?.let { alive[ip] = it to "ICMP" }
+                        ping(ip)?.let { alive[ip] = it to "ICMP"; onAlive(ip, it) }
                         onProgress(Progress(done.incrementAndGet(), ips.size * 2, alive.size, "Ping ICMP"))
                     }
                 }

@@ -256,6 +256,18 @@ class TopologyTest {
     }
 
     @Test
+    fun theHostListGetsVendorsAndTypesFromTheGraph() {
+        // scanner hosts without MAC or vendor, as on a phone (no ARP table)
+        val bare = TopologyDemo.hosts.map { it.copy(vendor = null, kind = "") }
+        val g = Topology.build(TopologyDemo.hosts, TopologyDemo.snmp, TopologyDemo.GATEWAY, fingerprints = TopologyDemo.fingerprints).graph
+        val out = it.cdanet.cpeconfigurator.tools.topology.hostsFromGraph(bare, g).associateBy { it.ip }
+        val sw = g.nodes.first { it.label == "sw-core" }
+        assertEquals(DeviceType.Switch, it.cdanet.cpeconfigurator.tools.pro.DeviceGuess.type(out.getValue(sw.ip!!).kind))
+        assertEquals("TP-Link", out.getValue(sw.ip!!).vendor)
+        assertEquals(bare.size, out.size)
+    }
+
+    @Test
     fun scannerLabelsMapToDeviceTypes() {
         val g = it.cdanet.cpeconfigurator.tools.pro.DeviceGuess
         assertEquals(DeviceType.Camera, g.type("Telecamera / NVR"))
