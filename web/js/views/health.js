@@ -272,7 +272,7 @@ export async function healthView({ user }) {
           'account_terminated' in t ? stat('CPE di clienti cessati', t.account_terminated) : null,
         ),
         h('p', { class: 'small muted' }, `${nms('Stato UISP', 'Stato')} del ${fmtDate(data.generatedAt)}. "Segnale calato": almeno ${data.thresholds.signalDropDb} dB in meno rispetto al collaudo (solo CPE installate con l’app).`),
-        data.stale?.count
+        admin && data.stale?.count
           ? h(
               'p',
               { class: 'small' },

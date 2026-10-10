@@ -301,7 +301,8 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       return !!d && isStaleCpe(d, months);
     };
     const staleCount = rows.filter(gone).length;
-    const shownRows = q.stale ? rows : rows.filter((r) => !gone(r));
+    // admins only can ask for them: installers never see the gone CPEs
+    const shownRows = q.stale && admin ? rows : rows.filter((r) => !gone(r));
     const t = { ...ctx.cfg.thresholds, targetFirmware: TARGET_FIRMWARE };
     // admins with the CRM connected: the RADIUS account of each CPE, by session MAC or by the PPPoE user of the installation
     let radiusOf: ((j: InstalledJob) => RadiusInfo | null) | undefined;
@@ -315,7 +316,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     const h = installedHealth(shownRows, byMac, t, radiusOf);
     return {
       generatedAt: nowIso(),
-      stale: { months, count: staleCount, shown: q.stale },
+      ...(admin ? { stale: { months, count: staleCount, shown: q.stale } } : {}),
       uisp: !!ctx.uisp && uispOk,
       thresholds: t,
       ...h,

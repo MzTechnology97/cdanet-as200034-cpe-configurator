@@ -114,7 +114,8 @@ fun CpeHealthScreen(c: AppContainer, onRepoint: (() -> Unit)? = null) {
         )
             RefreshButton(busy) { scope.launch { load() } }
         }
-        d.stale?.takeIf { it.count > 0 }?.let { st ->
+        // admins only: the server does not send it to installers, who never see the gone CPEs
+        d.stale?.takeIf { admin && it.count > 0 }?.let { st ->
             Row(verticalAlignment = Alignment.CenterVertically) {
                 Text(
                     if (showStale) "Mostrate anche ${st.count} CPE offline da più di ${st.months} mesi" else "${st.count} CPE offline da più di ${st.months} mesi non mostrate (clienti probabilmente dismessi)",

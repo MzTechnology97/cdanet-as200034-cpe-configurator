@@ -62,6 +62,14 @@ describe('Salute CPE installate', () => {
     assert.ok((await call('GET', '/api/cpe-health?stale=1')).json().cpes.some((c: { mac: string }) => c.mac === '66:55:44:33:22:11'), 'shown on request');
     const ap = (await call('GET', '/api/network/status')).json().pops.flatMap((p: { aps: object[] }) => p.aps).find((a: { id: string }) => a.id === 'ap-n2');
     assert.ok(ap.cpe === null || ap.cpe.offline === 0, JSON.stringify(ap.cpe));
+    // installers: never, not even on request
+    await call('PUT', '/api/admin/modules', { cpe_health: true });
+    await app.inject({ method: 'POST', url: '/api/admin/users', headers: H, payload: { username: 'tecnico', password: 'Installer-Pass-123' } });
+    const T = { authorization: `Bearer ${(await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'tecnico', password: 'Installer-Pass-123' } })).json().token}` };
+    await app.inject({ method: 'PUT', url: '/api/admin/cpe-assignments', headers: H, payload: { macs: ['66:55:44:33:22:11'], userId: (await call('GET', '/api/admin/users')).json().find((u: { username: string }) => u.username === 'tecnico').id } });
+    const inst = (await app.inject({ method: 'GET', url: '/api/cpe-health?stale=1', headers: T })).json();
+    assert.ok(!inst.cpes.some((c: { mac: string }) => c.mac === '66:55:44:33:22:11'), 'installers: gone CPEs hidden even on request');
+    assert.equal(inst.stale, undefined);
     // 0 = everything, as before
     await call('PUT', '/api/admin/server-settings', { values: { staleCpeMonths: 0 } });
     assert.ok((await call('GET', '/api/cpe-health')).json().cpes.some((c: { mac: string }) => c.mac === '66:55:44:33:22:11'));
