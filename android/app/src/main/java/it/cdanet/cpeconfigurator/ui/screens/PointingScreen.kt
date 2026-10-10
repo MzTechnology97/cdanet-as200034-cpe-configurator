@@ -146,7 +146,7 @@ fun PointingScreen(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (
             if (d.aps.isEmpty()) {
                 SectionCard {
                     Text(
-                        if (d.restricted && d.assignedCount == 0) "Nessun POP/AP assegnato al tuo account: chiedi all'amministratore." else "Nessun AP entro ${d.maxKm} km.",
+                        noApMessage(d.restricted, d.assignedCount, d.discarded, d.maxKm),
                         color = WarnAmber,
                     )
                 }
@@ -157,7 +157,10 @@ fun PointingScreen(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(km(a.distanceM), Modifier.width(76.dp), style = MaterialTheme.typography.bodyMedium)
                         Column(Modifier.weight(1f)) {
-                            Text(a.name, fontWeight = FontWeight.SemiBold)
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Text(a.name, fontWeight = FontWeight.SemiBold)
+                                RatingLabel(a.rating)
+                            }
                             Text(
                                 listOfNotNull(
                                     a.altitude?.let { "Alt: ${it.roundToInt()} m s.l.m." + if (a.altitudeFrom == "gps") " (GPS)" else "" },

@@ -121,6 +121,11 @@ export const SERVER_SETTINGS: Def[] = [
     get: (c) => c.routerOsAllowPublic, set: (c, v) => (c.routerOsAllowPublic = !!v),
   },
   {
+    key: 'installerCoverageAps', env: 'INSTALLER_COVERAGE_APS', group: 'Copertura per gli installatori', label: 'AP mostrati per ogni verifica di copertura', kind: 'int', min: 1, max: 20,
+    help: 'Il server valuta tutti gli AP assegnati all’installatore entro il raggio di copertura (Connettori → UISP), li ordina per segnale stimato e mostra i primi di questo numero; esclude gli AP non attivi o troppo deboli. Vale per la console web e per l’app (Copertura, AP vicini); gli amministratori scelgono ogni volta.',
+    get: (c) => c.installerCoverageAps, set: (c, v) => (c.installerCoverageAps = (v as number | undefined) ?? 5),
+  },
+  {
     key: 'releases.githubRepo', env: 'ANDROID_RELEASE_GITHUB_REPO', group: 'Rilasci dell’app Android', label: 'Repository GitHub dei rilasci (owner/repo)', kind: 'text', restart: true,
     get: (c) => c.releases.githubRepo, set: (c, v) => (c.releases.githubRepo = v as string | undefined),
   },

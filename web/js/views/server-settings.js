@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { badge, busy, card, fmtDate, h, mount, pageHead, toast } from '../dom.js';
+import { badge, busy, card, field, fmtDate, h, mount, pageHead, toast } from '../dom.js';
 
 const SOURCE = { web: ['impostato dal web', 'good'], env: ['da .env', ''], default: ['predefinito', ''] };
 
@@ -96,6 +96,7 @@ export async function serverSettingsView() {
           });
         return card(h('h2', {}, g), ...fields, h('div', { class: 'btns' }, save));
       }),
+      pointingBox,
       infraBox,
       card(
         h('h2', {}, 'Restano nel file .env'),
@@ -109,6 +110,8 @@ export async function serverSettingsView() {
   }
 
   const infraBox = h('div', {});
+  // antenna heights for the tilt in the app (were in Copertura)
+  const pointingBox = pointingSettings();
   try {
     render(await api('/api/admin/server-settings'));
     infraCard(infraBox);
@@ -291,4 +294,32 @@ async function infraCard(box) {
   }
 
   await load();
+}
+
+/** Admin: antenna heights for the tilt shown in the app ("Trova l'AP"). */
+function pointingSettings() {
+  const box = h('div', {});
+  api('/api/admin/pointing/config')
+    .then((c) => {
+      const ap = h('input', { type: 'number', min: 0, max: 200, step: 1, value: c.apHeightM });
+      const cpe = h('input', { type: 'number', min: 0, max: 100, step: 0.5, value: c.cpeHeightM });
+      const save = h('button', { type: 'button', class: 'primary' }, 'Salva');
+      save.onclick = () =>
+        busy(save, async () => {
+          await api('/api/admin/pointing/config', { method: 'PUT', body: { apHeightM: Number(ap.value) || 0, cpeHeightM: Number(cpe.value) || 0 } });
+          toast('Altezze salvate');
+        });
+      mount(
+        box,
+        card(
+          h('h2', {}, 'Puntamento nell’app'),
+          h('p', { class: 'small muted' }, 'Per il tilt verso gli AP l’app usa l’altitudine del terreno (modello SRTM, scaricato dal server solo per le zone usate) più queste altezze dal suolo.'),
+          h('div', { class: 'row' }, field('Altezza antenne AP (m dal suolo)', ap), field('Altezza CPE predefinita (m dal suolo)', cpe)),
+          c.dem ? null : h('div', { class: 'notice warn' }, 'Modello del terreno disattivato (DEM_URL vuoto): il tilt non viene calcolato.'),
+          h('div', { class: 'btns' }, save),
+        ),
+      );
+    })
+    .catch(() => {});
+  return box;
 }

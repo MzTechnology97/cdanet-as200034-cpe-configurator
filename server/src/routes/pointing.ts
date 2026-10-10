@@ -6,7 +6,8 @@ import { nowIso, recordEvent } from '../db.ts';
 import { approxPoint, roughDistance } from '../domain/approx.ts';
 import { distanceM, isValidLatLon } from '../domain/geo.ts';
 import { lineOfSight, pathPoints } from '../domain/los.ts';
-import { estimateSignal, type ApModel } from '../domain/coverage-model.ts';
+import { estimateSignal, rankCoverage, type ApModel } from '../domain/coverage-model.ts';
+import { FIELD_THRESHOLDS } from './field.ts';
 import { elevationAngle } from '../services/dem.ts';
 
 /**
@@ -68,9 +69,23 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
     const keys = req.user!.role === 'admin' ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
     const allow = keys ? (a: { id: string; siteId: string | null }) => keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`)) : undefined;
-    const aps = await ctx.uisp.nearestAps({ lat: q.lat, lon: q.lon }, q.limit, ctx.uispSettings.coverageMaxKm, allow);
-    const models = await ctx.uisp.apModels(aps.map((a) => a.id)).catch(() => new Map<string, ApModel>());
+    // same choice as Copertura: every AP within range rated by estimated signal, the limit last
+    // (installers: the number set in Impostazioni server, no inactive or hopeless APs)
+    const inRange = await ctx.uisp.nearestAps({ lat: q.lat, lon: q.lon }, 500, ctx.uispSettings.coverageMaxKm, allow);
+    const models = await ctx.uisp.apModels(inRange.map((a) => a.id)).catch(() => new Map<string, ApModel>());
     const clientsShown = !keys || ctx.outages.config().installerClients;
+    const estimateFor = (a: { id: string; distanceM: number; bearing: number }) => {
+      const m = models.get(a.id);
+      if (!m) return null;
+      const e = estimateSignal(m, a.distanceM, (a.bearing + 180) % 360);
+      return { ...e, basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null };
+    };
+    const ranked = rankCoverage(
+      inRange.map((a) => ({ ...a, estimate: estimateFor(a) })),
+      FIELD_THRESHOLDS.signalMin,
+    );
+    const useful = keys ? ranked.filter((a) => a.rating !== 'non attivo' && a.rating !== 'improbabile') : ranked;
+    const aps = useful.slice(0, keys ? ctx.cfg.installerCoverageAps : q.limit);
     const height = q.height ?? c.cpeHeightM;
     const [ground, ...apGround] = await Promise.all([ctx.dem.elevation(q.lat, q.lon), ...aps.map((a) => ctx.dem.elevation(a.lat, a.lon))]);
     const from = ground === null ? null : ground + height;
@@ -80,6 +95,8 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
       maxKm: ctx.uispSettings.coverageMaxKm,
       restricted: !!keys,
       assignedCount: keys ? [...keys].filter((k) => !k.startsWith('z')).length : null,
+      inRange: inRange.length,
+      discarded: ranked.length - useful.length,
       aps: aps.map(({ lat, lon, siteId: _site, stations: _st, ...a }, i) => {
         const { altitude, from: altitudeFrom } = resolveApAltitude(a.gpsAltitude, apGround[i] ?? null, a.siteHeight ?? c.apHeightM);
         const base = {
@@ -93,12 +110,8 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
           altitude,
           altitudeFrom,
           tiltDeg: altitude !== null && from !== null ? elevationAngle(a.distanceM, from, altitude) : null,
-          estimate: (() => {
-            const m = models.get(a.id);
-            if (!m) return null;
-            const e = estimateSignal(m, a.distanceM, (a.bearing + 180) % 360);
-            return { ...e, basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null };
-          })(),
+          estimate: a.estimate,
+          rating: a.rating,
         };
         return keys ? { ...base, distanceM: roughDistance(a.distanceM), approx: approxPoint(lat, lon, `ap:${a.id}`, ctx.cfg.jwtSecret) } : { ...base, distanceM: a.distanceM, lat, lon };
       }),
@@ -120,7 +133,8 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!ctx.dem.enabled) throw new HttpError(503, 'dem_not_configured');
     const keys = req.user!.role === 'admin' ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
     const allow = keys ? (a: { id: string; siteId: string | null }) => keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`)) : undefined;
-    const aps = await ctx.uisp.nearestAps({ lat: q.lat, lon: q.lon }, 15, ctx.uispSettings.coverageMaxKm, allow);
+    // any AP within range: the list may have ranked a farther one first
+    const aps = await ctx.uisp.nearestAps({ lat: q.lat, lon: q.lon }, 500, ctx.uispSettings.coverageMaxKm, allow);
     const ap = aps.find((a) => a.id === q.apId);
     if (!ap) throw new HttpError(404, 'ap_not_found');
     const D = distanceM({ lat: q.lat, lon: q.lon }, { lat: ap.lat, lon: ap.lon });

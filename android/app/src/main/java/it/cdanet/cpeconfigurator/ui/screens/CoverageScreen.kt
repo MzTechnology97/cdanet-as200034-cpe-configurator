@@ -110,6 +110,27 @@ fun LocationPicker(c: AppContainer, current: CpeLocation?, label: String, onLoca
     }
 }
 
+/** How promising the AP is from here (server rating, the list is already sorted best first). */
+@Composable
+fun RatingLabel(rating: String?) {
+    val r = rating ?: return
+    val color = when (r) {
+        "buono" -> MaterialTheme.colorScheme.primary
+        "improbabile", "non attivo" -> MaterialTheme.colorScheme.error
+        else -> MaterialTheme.colorScheme.onSurfaceVariant
+    }
+    Text("  $r", style = MaterialTheme.typography.labelMedium, color = color, fontWeight = FontWeight.SemiBold)
+}
+
+/** "No AP" message: nothing assigned, everything discarded (inactive or weak) or nothing in range. */
+fun noApMessage(restricted: Boolean, assignedCount: Int?, discarded: Int, maxKm: Int): String = when {
+    restricted && assignedCount == 0 -> "Nessun POP/AP assegnato al tuo account: chiedi all'amministratore."
+    discarded == 1 -> "Nessun AP utilizzabile: l'unico AP entro $maxKm km ha un segnale stimato insufficiente o non è attivo."
+    discarded > 1 -> "Nessun AP utilizzabile: tutti i $discarded AP entro $maxKm km hanno un segnale stimato insufficiente o non sono attivi."
+    restricted -> "Nessun AP tra quelli assegnati entro $maxKm km."
+    else -> "Nessun AP entro $maxKm km."
+}
+
 /** Nearest APs (from UISP, via the server) with distance and pointing direction. */
 @Composable
 fun NearbyAps(c: AppContainer, location: CpeLocation, onPick: ((CoverageAp) -> Unit)? = null, onCompass: ((CompassTarget) -> Unit)? = null, withMap: Boolean = false) {
@@ -143,11 +164,7 @@ fun NearbyAps(c: AppContainer, location: CpeLocation, onPick: ((CoverageAp) -> U
     when {
         d == null && error == null -> Text("Ricerca AP vicini…", color = MaterialTheme.colorScheme.onSurfaceVariant)
         d != null && d.aps.isEmpty() -> Text(
-            when {
-                d.restricted && d.assignedCount == 0 -> "Nessun POP/AP assegnato al tuo account: chiedi all'amministratore."
-                d.restricted -> "Nessun AP tra quelli assegnati entro ${d.maxKm} km."
-                else -> "Nessun AP entro ${d.maxKm} km."
-            },
+            noApMessage(d.restricted, d.assignedCount, d.discarded, d.maxKm),
             color = MaterialTheme.colorScheme.error,
         )
         d != null -> d.aps.forEachIndexed { i, ap ->
@@ -155,7 +172,10 @@ fun NearbyAps(c: AppContainer, location: CpeLocation, onPick: ((CoverageAp) -> U
             Row(Modifier.fillMaxWidth().padding(vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
                 Text("↑", fontSize = 26.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.rotate(ap.bearing.toFloat()))
                 Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                    Text(ap.name.ifBlank { ap.id }, fontWeight = FontWeight.SemiBold)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(ap.name.ifBlank { ap.id }, fontWeight = FontWeight.SemiBold)
+                        RatingLabel(ap.rating)
+                    }
                     Text(
                         listOfNotNull(ap.ssid, ap.siteName).joinToString(" · "),
                         style = MaterialTheme.typography.bodySmall,
@@ -196,10 +216,10 @@ fun CoverageScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? = null
             }
         }
         location?.let { l ->
-            SectionCard("AP più vicini") {
+            SectionCard("AP consigliati") {
                 NearbyAps(c, l, onCompass = onCompass, withMap = true)
                 Text(
-                    "La freccia indica la direzione di puntamento (0° = nord). Vengono mostrati solo gli AP più vicini entro il raggio configurato.",
+                    "Prima gli AP con il segnale stimato migliore, poi i più vicini, entro il raggio configurato. La freccia indica la direzione di puntamento (0° = nord).",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

@@ -62,6 +62,8 @@ const envSchema = z.object({
   CPE_DISCOVERY_PORT: int(10001, 1, 65535),
 
   PROVISION_JOB_TTL_MINUTES: int(30, 5, 240),
+  // nearest APs an installer gets from a coverage check (web and app alike)
+  INSTALLER_COVERAGE_APS: int(5, 1, 20),
   MIN_ANDROID_VERSION: z.string().regex(/^\d+\.\d+\.\d+$/).default('1.0.0'),
   // the Android app must be on the latest published release (older ones cannot log in)
   APP_FORCE_LATEST: z.enum(['0', '1']).default('1'),
@@ -139,6 +141,7 @@ export interface Config {
     discoveryPort: number;
   };
   jobTtlMinutes: number;
+  installerCoverageAps: number;
   minAndroidVersion: string;
   auditRetentionDays: number;
   releases: {
@@ -218,6 +221,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
       discoveryPort: e.CPE_DISCOVERY_PORT,
     },
     jobTtlMinutes: e.PROVISION_JOB_TTL_MINUTES,
+    installerCoverageAps: e.INSTALLER_COVERAGE_APS,
     minAndroidVersion: e.MIN_ANDROID_VERSION,
     auditRetentionDays: e.GDPR_AUDIT_RETENTION_DAYS,
     releases: {
