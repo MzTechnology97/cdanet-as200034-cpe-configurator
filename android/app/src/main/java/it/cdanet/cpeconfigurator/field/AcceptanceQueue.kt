@@ -97,9 +97,9 @@ class AcceptanceQueue(
                         // 409 = result still queued, 401/429/5xx = retry later; other 4xx can never succeed.
                         if (e.status == 409 || e.status == 401 || e.status == 429 || e.status >= 500) throw e
                         try {
-                            // a server older than the app does not know the CPE height yet: it goes in the notes
-                            if (e.status != 400 || report.cpeHeightM == null) throw e
-                            api.putAcceptance(item.jobId, withHeightInNotes(report))
+                            // a server older than the app does not know the new fields yet: height in the notes
+                            if (e.status != 400 || (report.cpeHeightM == null && report.position == null)) throw e
+                            api.putAcceptance(item.jobId, forOlderServer(report))
                         } catch (e2: ApiException) {
                             if (e2.status == 409 || e2.status == 401 || e2.status == 429 || e2.status >= 500) throw e2
                             _rejected.value = _rejected.value + (item.jobId to (e2.message ?: e2.code))
@@ -132,10 +132,10 @@ class AcceptanceQueue(
         done
     }
 
-    /** The CPE height written in the notes, for servers that do not have the field yet. */
-    private fun withHeightInNotes(r: AcceptanceReport): AcceptanceReport {
-        val h = "Altezza CPE dal suolo: ${r.cpeHeightM.toString().removeSuffix(".0").replace('.', ',')} m"
-        return r.copy(cpeHeightM = null, notes = listOf(r.notes, h).filter { it.isNotBlank() }.joinToString("\n").take(1000))
+    /** For servers older than the app: without the new fields, the CPE height written in the notes. */
+    private fun forOlderServer(r: AcceptanceReport): AcceptanceReport {
+        val h = r.cpeHeightM?.let { "Altezza CPE dal suolo: ${it.toString().removeSuffix(".0").replace('.', ',')} m" }
+        return r.copy(cpeHeightM = null, position = null, notes = listOfNotNull(r.notes, h).filter { it.isNotBlank() }.joinToString("\n").take(1000))
     }
 
     fun syncInBackground() {

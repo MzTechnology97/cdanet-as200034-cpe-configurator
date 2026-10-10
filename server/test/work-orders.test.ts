@@ -64,6 +64,16 @@ describe('Agenda interventi', () => {
     assert.deepEqual([done.status, done.jobId], ['done', jobId]);
     assert.equal((await call('POST', '/api/provisioning/jobs', req, { ...T, ...ANDROID })).json().error, 'work_order_closed');
 
+    // the acceptance test of an order is refused far from the order's position (also from the offline queue)
+    const test = { verdict: 'ok', measuredAt: new Date().toISOString(), samples: 1, cpe: {}, radio: {}, internet: { tested: false }, checks: [] };
+    const far = await call('PUT', `/api/provisioning/jobs/${jobId}/acceptance`, { ...test, position: { lat: 37.7, lon: 14.28, accuracyM: 5 } }, T);
+    assert.equal(far.statusCode, 422, far.body);
+    assert.equal(far.json().error, 'acceptance_position_mismatch');
+    const near = await call('PUT', `/api/provisioning/jobs/${jobId}/acceptance`, { ...test, position: { lat: 37.5715, lon: 14.2805, accuracyM: 5 } }, T);
+    assert.equal(near.statusCode, 200, near.body);
+    assert.equal((await call('GET', `/api/provisioning/jobs/${jobId}/acceptance`, undefined, T)).json().acceptance.position, undefined, 'the position is not stored in the report');
+    assert.equal((await call('PUT', `/api/provisioning/jobs/${jobId}/acceptance`, test, T)).statusCode, 200, 'older apps send no position');
+
     // postpone / edit / delete
     const o2 = (await call('POST', '/api/admin/work-orders', { assignedTo: tid, day: '2026-01-01', customer: 'Bianchi', kind: 'repair' })).json().item;
     assert.equal(o2.overdue, true, 'open order of a past day');
