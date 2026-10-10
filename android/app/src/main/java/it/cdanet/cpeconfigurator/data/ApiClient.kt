@@ -65,6 +65,7 @@ private val ERRORS = mapOf(
     "replace_same_mac" to "Il MAC è quello della CPE sostituita: inserisci quello della CPE nuova",
     "module_disabled" to "Funzione non disponibile per il tuo account",
     "job_not_completed" to "Esito del provisioning non ancora registrato sul server",
+    "acceptance_position_mismatch" to "Collaudo rifiutato: sei a più di 500 m dalla posizione dell'intervento. Verifica il cliente o fai correggere l'indirizzo all'ufficio.",
     "too_many_photos" to "Troppe foto per questo job (massimo 8)",
     "photo_not_jpeg" to "La foto deve essere in formato JPEG",
     "device_revoked" to "Accesso del telefono revocato (password cambiata, account disattivato o uscita da tutti i dispositivi): accedi con la password",

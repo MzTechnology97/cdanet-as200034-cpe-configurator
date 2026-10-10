@@ -66,7 +66,12 @@ data class AcceptanceReport(
     val notes: String = "",
     /** Height of the installed CPE above the ground, metres (entered by the technician). */
     val cpeHeightM: Double? = null,
+    /** Phone GPS when the test was saved: the server checks it against the work order's position. */
+    val position: AcceptancePosition? = null,
 )
+
+@Serializable
+data class AcceptancePosition(val lat: Double, val lon: Double, val accuracyM: Double? = null)
 
 /** CPE height typed by the technician ("6", "6,5"): metres above the ground, null if missing or not plausible. */
 fun parseCpeHeight(text: String): Double? = text.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it in 0.5..100.0 }

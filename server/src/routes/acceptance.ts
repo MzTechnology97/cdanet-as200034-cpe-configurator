@@ -6,6 +6,7 @@ import { z } from 'zod';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
+import { distanceM } from '../domain/geo.ts';
 import { photoDir } from '../services/photos.ts';
 import { FIELD_THRESHOLDS } from './field.ts';
 import { resolveKoByAcceptance } from './ko.ts';
@@ -64,6 +65,8 @@ export const acceptanceSchema = z
       .strict(),
     checks: z.array(z.object({ title: z.string().max(80), verdict: z.enum(['ok', 'warn', 'bad', 'info']), detail: z.string().max(400) }).strict()).max(30),
     notes: z.string().max(1000).default(''),
+    // phone GPS when the test is saved: checked against the work order's position (older apps: none)
+    position: z.object({ lat: z.number(), lon: z.number(), accuracyM: z.number().min(0).max(100_000).nullable().optional() }).strict().optional(),
     // height of the CPE above the ground, typed by the technician (older apps do not send it)
     cpeHeightM: z.number().min(0.5).max(100).nullable().optional(),
   })
@@ -85,7 +88,11 @@ interface JobRow {
   user_id: number;
   status: string;
   mac: string;
+  work_order_id: number | null;
 }
+
+/** Same limit as the app: farther than this from the work order, the acceptance test is refused. */
+export const ACCEPTANCE_MAX_M = 500;
 
 export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
   const user = { preHandler: [ctx.auth.requireUser, ctx.modules.require('acceptance')] };
@@ -96,7 +103,7 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
 
   const loadJob = (req: FastifyRequest) => {
     const id = z.string().uuid().parse((req.params as { id: string }).id);
-    const job = db.prepare('SELECT id, user_id, status, mac FROM provisioning_jobs WHERE id = ?').get(id) as JobRow | undefined;
+    const job = db.prepare('SELECT id, user_id, status, mac, work_order_id FROM provisioning_jobs WHERE id = ?').get(id) as JobRow | undefined;
     if (!job) throw new HttpError(404, 'job_not_found');
     // installers: their own installations and the CPEs assigned to them (re-pointing, maintenance)
     const assigned = () => !!db.prepare('SELECT 1 FROM cpe_assignments WHERE mac = ? AND user_id = ?').get(job.mac, req.user!.id);
@@ -135,7 +142,19 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
     const job = loadJob(req);
     if (job.status !== 'success') throw new HttpError(409, 'job_not_completed');
     const a = acceptanceSchema.parse(req.body);
-    const { verdict: v, ...data } = a;
+    // a job started from a work order: the test is valid only at the customer's (the app checks it
+    // too, this covers tests sent later from the offline queue and any other client)
+    if (job.work_order_id && a.position) {
+      const o = db.prepare('SELECT lat, lon, customer FROM work_orders WHERE id = ?').get(job.work_order_id) as { lat: number | null; lon: number | null; customer: string } | undefined;
+      if (o && o.lat != null && o.lon != null) {
+        const d = Math.round(distanceM({ lat: o.lat, lon: o.lon }, { lat: a.position.lat, lon: a.position.lon }));
+        if (d > ACCEPTANCE_MAX_M) {
+          recordEvent(db, req.user!.id, 'job.acceptance_position', job.id, `${o.customer}: collaudo a ${d} m dall'intervento, rifiutato`);
+          throw new HttpError(422, 'acceptance_position_mismatch');
+        }
+      }
+    }
+    const { verdict: v, position: _pos, ...data } = a;
     // a new test replaces the previous decision: poor radio waits again for the NOC
     const reason = poorRadio(a, ctx.cfg.thresholds.signalMin);
     db.prepare(
