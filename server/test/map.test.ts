@@ -30,7 +30,10 @@ describe('Mappa (Protomaps)', () => {
     const d = distanceM(real, a);
     assert.ok(d > 0 && d < a.radiusM, `${d} m`);
     assert.equal(roughDistance(734), 750);
-    assert.equal(roughDistance(1234), 1200);
+    assert.equal(roughDistance(1234), 1250);
+    assert.equal(roughDistance(1234, 500), 1000, 'a coarser step from Impostazioni server');
+    assert.equal(roughDistance(3900, 500), 4000);
+    assert.equal(roughDistance(120, 500), 500, 'never 0');
   });
 
   it('reads the PMTiles header and serves byte ranges', async () => {
