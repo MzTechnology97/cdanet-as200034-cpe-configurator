@@ -156,12 +156,12 @@ export const SERVER_SETTINGS: Def[] = [
     get: (c) => c.installerDistanceStepM, set: (c, v) => (c.installerDistanceStepM = (v as number | undefined) ?? 50),
   },
   {
-    key: 'coverageEirpDbm', env: 'COVERAGE_AP_EIRP_DBM', group: 'Simulazione radio (AP senza clienti)', label: 'Potenza irradiata dagli AP (EIRP, dBm)', kind: 'int', min: 10, max: 60,
-    help: 'Per gli AP che non hanno ancora clienti la copertura si stima in teoria (spazio libero). 30 dBm è il limite in Italia per la banda 5,47–5,725 GHz. Gli AP con clienti usano i segnali reali e questo valore non conta.',
+    key: 'coverageEirpDbm', env: 'COVERAGE_AP_EIRP_DBM', group: 'Simulazione radio', label: 'Potenza irradiata dagli AP (EIRP, dBm)', kind: 'int', min: 10, max: 60,
+    help: 'Base della stima di copertura (Copertura, AP vicini, simulazione): spazio libero da questa potenza, poi terreno e antenna. Non serve che sia esatto: il server confronta la teoria con il segnale reale di tutti i clienti e si corregge da solo (calibrazione di rete, mostrata nella simulazione: se resta lontana da 0 dB, sposta qui la differenza). Predefinito 30 dBm (limite della banda libera 5,47–5,725 GHz); con frequenze in licenza e firmware sbloccato è più alto.',
     get: (c) => c.coverageEirpDbm, set: (c, v) => (c.coverageEirpDbm = (v as number | undefined) ?? 30),
   },
   {
-    key: 'coverageCpeGainDbi', env: 'COVERAGE_CPE_GAIN_DBI', group: 'Simulazione radio (AP senza clienti)', label: 'Guadagno dell’antenna della CPE (dBi)', kind: 'int', min: 0, max: 40,
+    key: 'coverageCpeGainDbi', env: 'COVERAGE_CPE_GAIN_DBI', group: 'Simulazione radio', label: 'Guadagno dell’antenna della CPE (dBi)', kind: 'int', min: 0, max: 40,
     help: 'La CPE tipica dei clienti: LiteBeam 5AC Gen2 23 dBi, NanoStation 5AC 16 dBi, PowerBeam 5AC 25 dBi.',
     get: (c) => c.coverageCpeGainDbi, set: (c, v) => (c.coverageCpeGainDbi = (v as number | undefined) ?? 23),
   },

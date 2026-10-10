@@ -15,7 +15,14 @@ const CONF = { alta: 'good', media: 'warn', bassa: '' };
 /** Rating from the server: APs are already sorted best first. */
 export const RATING = { buono: ['buono', 'good'], possibile: ['possibile', 'warn'], 'senza stima': ['senza stima', ''], improbabile: ['improbabile', 'bad'], 'non attivo': ['non attivo', 'bad'] };
 
-/** Expected signal of a new CPE, learned from the customers already on the AP. */
+/** What the hills between the point and the AP do to the signal (same profile as Visibilità). */
+const TERRAIN = {
+  clear: () => 'terreno libero fino all’AP',
+  fresnel: (db) => `una collina sfiora la linea di vista (−${Math.round(db)} dB)`,
+  blocked: (db) => `ostruito dal terreno (−${Math.round(db)} dB): verifica con Visibilità`,
+};
+
+/** Expected signal of a new CPE: theory, terrain and the customers already on the AP. */
 export function estimateCell(e) {
   if (!e || e.signalDbm == null) return h('span', { class: 'small muted' }, 'nessun cliente con segnale');
   return h(
@@ -27,10 +34,12 @@ export function estimateCell(e) {
     badge(`affidabilità ${e.confidence}`, CONF[e.confidence] ?? ''),
     e.inSector === false ? h('div', { class: 'small' }, 'fuori dal settore già servito') : null,
     e.beyondServed ? h('div', { class: 'small' }, 'più lontano dei clienti attuali') : null,
+    e.tooFar ? h('div', { class: 'small' }, 'oltre 20 km: troppo lontano per un aggancio') : null,
+    e.terrain ? h('div', { class: 'small' }, TERRAIN[e.terrain.verdict](e.terrain.lossDb)) : null,
     e.theoretical
       ? h('div', { class: 'small muted' }, 'stima teorica: l’AP non ha ancora clienti')
       : e.basis != null
-        ? h('div', { class: 'small muted' }, `stima da ${e.basis} clienti${e.nearby ? `, ${e.nearby} vicini` : ''}`)
+        ? h('div', { class: 'small muted' }, `calibrata su ${e.basis} clienti${e.nearby ? `, ${e.nearby} vicini` : ''}`)
         : null,
   );
 }
@@ -88,7 +97,7 @@ export async function coverageView({ user } = {}) {
   const admin = user?.role === 'admin';
   // admins: how many APs and how far (installers: the server's limits)
   const howMany = h('select', {}, ...[5, 10, 20, 50].map((n) => h('option', { value: n }, `${n} AP`)));
-  const howFar = h('select', {}, ...[10, 25, 50, 100, 200].map((n) => h('option', { value: n, selected: n === 50 }, `entro ${n} km`)));
+  const howFar = h('select', {}, ...[5, 10, 15, 20].map((n) => h('option', { value: n, selected: n === 20 }, `entro ${n} km`)));
 
   async function check(la, lo, label) {
     mount(out, h('p', { class: 'muted' }, 'Ricerca degli AP vicini…'));

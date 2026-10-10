@@ -191,6 +191,7 @@ window.cdaSimulation = async (d) => {
   const mPerLat = 111320;
   const mPerLon = 111320 * Math.cos((d.ap.lat * Math.PI) / 180);
   for (const c of d.cells ?? []) {
+    if (c.dbm < (d.minDbm ?? -75) - 15) continue; // clearly no coverage: left blank, not a red disc
     L.rectangle(
       [
         [c.lat - half / mPerLat, c.lon - half / mPerLon],

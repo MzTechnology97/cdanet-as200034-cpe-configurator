@@ -78,7 +78,8 @@ export async function adminCoverageView() {
   const search = h('input', { type: 'search', class: 'grow', placeholder: 'Indirizzo, coordinate (37.56, 14.27) o nome di un AP', autocomplete: 'off' });
   const searchBtn = h('button', { type: 'submit', class: 'primary' }, 'Cerca');
   const gps = h('button', { type: 'button' }, 'La mia posizione');
-  const howFar = h('select', {}, ...[10, 25, 50, 100, 200].map((n) => h('option', { value: n, selected: n === 25 }, `entro ${n} km`)));
+  // the farthest real link is 20 km (usually under 15): beyond that no AP is worth proposing
+  const howFar = h('select', {}, ...[5, 10, 15, 20].map((n) => h('option', { value: n, selected: n === 20 }, `entro ${n} km`)));
   const height = h('input', { type: 'number', min: 0.5, max: 100, step: 0.5, value: 6, inputmode: 'decimal' });
   const choices = h('div', {});
   const el = h('div', { class: 'map map-tall' });
@@ -140,7 +141,8 @@ export async function adminCoverageView() {
     let r;
     try {
       // every AP in range, already ranked by the server (50 is its maximum): nothing to choose by hand
-      r = await api(`/api/coverage?lat=${la}&lon=${lo}&limit=50&km=${howFar.value}`);
+      const hM = Number(String(height.value).replace(',', '.'));
+      r = await api(`/api/coverage?lat=${la}&lon=${lo}&limit=50&km=${howFar.value}${hM >= 0.5 && hM <= 100 ? `&height=${hM}` : ''}`);
     } catch (e) {
       return mount(out, h('div', { class: 'notice bad' }, e.message));
     }
@@ -236,6 +238,7 @@ export async function adminCoverageView() {
     const mPerLat = 111320;
     const mPerLon = 111320 * Math.cos((d.ap.lat * Math.PI) / 180);
     for (const c of d.cells) {
+      if (c.dbm < d.minDbm - 15) continue; // clearly no coverage: left blank, not a red disc
       L.rectangle(
         [
           [c.lat - half / mPerLat, c.lon - half / mPerLon],
@@ -260,17 +263,23 @@ export async function adminCoverageView() {
         'div',
         { class: 'sim-info' },
         h('b', {}, `Simulazione ${d.theoretical ? 'teorica ' : ''}di ${d.ap.name}`),
-        h('span', { class: 'small muted' }, ` · ${d.theoretical ? 'nessun cliente da cui imparare' : `da ${d.customers} clienti`} · raggio ${km(d.radiusM)} · ${Math.round((100 * good) / d.cells.length)}% dell’area sopra ${d.minDbm} dBm`),
+        h(
+          'span',
+          { class: 'small muted' },
+          ` · ${d.theoretical ? 'nessun cliente da cui calibrare' : `calibrata su ${d.customers} clienti`}${d.ignored ? ` (${d.ignored} con posizione non valida in UISP, esclusi)` : ''} · raggio ${km(d.radiusM)} · ${Math.round((100 * good) / d.cells.length)}% dell’area sopra ${d.minDbm} dBm`,
+        ),
         ' ',
         clearBtn(),
         legend(SCALE.map(([, color, text]) => [color, text])),
-        d.theoretical
-          ? h(
-              'div',
-              { class: 'notice warn' },
-              'Stima teorica, meno precisa: l’AP non ha ancora clienti con segnale. Calcolata in spazio libero dalla potenza irradiata dell’AP e dal guadagno della CPE (Impostazioni server → Simulazione radio), con il settore dell’antenna se l’azimut è impostato in UISP (tratteggio). Margine ±8 dB; non considera ostacoli: per un punto preciso usa Visibilità. Diventa una stima reale appena l’AP ha i primi clienti.',
-            )
-          : h('p', { class: 'small muted' }, 'Segnale atteso per una CPE nuova, stimato dai clienti già collegati (distanza, direzione, clienti vicini). Non considera ostacoli: per un punto preciso usa Visibilità. Colori tenui: stima poco affidabile (fuori dal settore servito o lontano dai clienti). Tratteggio: area già servita.'),
+        h(
+          d.theoretical ? 'div' : 'p',
+          { class: d.theoretical ? 'notice warn' : 'small muted' },
+          `Segnale atteso per una CPE nuova: potenza irradiata dell’AP e guadagno della CPE (Impostazioni server → Simulazione radio), spazio libero${d.antenna ? ', diagramma dell’antenna (azimut da UISP)' : ''}${d.terrain ? ' e terreno tra ogni punto e l’AP (colline; edifici e alberi non sono nel modello)' : ' (terreno non disponibile: le colline non sono considerate)'}. `,
+          d.theoretical
+            ? 'Stima teorica, margine ±8 dB: l’AP non ha ancora clienti con segnale da cui calibrarla.'
+            : 'I clienti già collegati correggono la teoria, con un peso che cresce con il loro numero: pochi clienti, stima vicina alla teoria.',
+          ' Area vuota: nessuna copertura (sotto −90 dBm). Colori tenui: stima poco affidabile. Tratteggio: settore dell’antenna o area già servita. Per un punto preciso usa Visibilità.',
+        ),
       ),
     );
   }

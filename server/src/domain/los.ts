@@ -69,3 +69,61 @@ export function lineOfSight(profile: ProfilePoint[], fromAltitude: number, toAlt
 export function pathPoints(a: { lat: number; lon: number }, b: { lat: number; lon: number }, n: number) {
   return Array.from({ length: n + 1 }, (_, i) => ({ lat: a.lat + ((b.lat - a.lat) * i) / n, lon: a.lon + ((b.lon - a.lon) * i) / n, f: i / n }));
 }
+
+/** Diffraction loss (dB) of a single knife edge with parameter ν (ITU-R P.526, approximation). */
+export function knifeEdgeLossDb(nu: number): number {
+  if (nu <= -0.78) return 0;
+  return 6.9 + 20 * Math.log10(Math.sqrt((nu - 0.1) ** 2 + 1) + nu - 0.1);
+}
+
+/**
+ * Loss (dB) caused by the terrain between two antennas: Deygout method (the main edge, then the
+ * main edge of each side, ITU-R P.526) over the profile with earth curvature. 0 when the path and
+ * 60% of the Fresnel zone are clear; a few dB when a hill only enters the Fresnel zone; tens of dB
+ * when a ridge hides the AP. Terrain only, as for the line of sight.
+ */
+export function diffractionLossDb(profile: ProfilePoint[], fromAltitude: number, toAltitude: number, freqMHz = 5600): number {
+  if (profile.length < 3) return 0;
+  const lambda = 299.792458 / freqMHz;
+  const edge = (i0: number, i1: number, h0: number, h1: number) => {
+    let best: { i: number; nu: number } | null = null;
+    const a = profile[i0]!.d;
+    const span = profile[i1]!.d - a;
+    if (span <= 0) return null;
+    for (let i = i0 + 1; i < i1; i++) {
+      const d1 = profile[i]!.d - a;
+      const d2 = span - d1;
+      if (d1 <= 0 || d2 <= 0) continue;
+      const h = profile[i]!.ground + (d1 * d2) / (2 * R_EFF) - (h0 + ((h1 - h0) * d1) / span);
+      const nu = h * Math.sqrt((2 * span) / (lambda * d1 * d2));
+      if (!best || nu > best.nu) best = { i, nu };
+    }
+    return best;
+  };
+  const deygout = (i0: number, i1: number, h0: number, h1: number, depth: number): number => {
+    const e = edge(i0, i1, h0, h1);
+    if (!e || e.nu <= -0.78) return 0;
+    let loss = knifeEdgeLossDb(e.nu);
+    if (depth > 0) {
+      const top = profile[e.i]!.ground;
+      loss += deygout(i0, e.i, h0, top, depth - 1) + deygout(e.i, i1, top, h1, depth - 1);
+    }
+    return loss;
+  };
+  return Math.round(Math.min(60, deygout(0, profile.length - 1, fromAltitude, toAltitude, 1)) * 10) / 10;
+}
+
+/**
+ * Altitude of the AP antenna, metres a.s.l. UISP's location.altitude is the GPS altitude on GPS
+ * APs; on the others it holds small values (a height above the ground typed in UISP). Otherwise:
+ * terrain + antenna height (site height in UISP, else the admin default). Pure, unit-tested.
+ */
+export function resolveApAltitude(reported: number | null, ground: number | null, height: number): { altitude: number | null; from: 'gps' | 'uisp' | 'terreno' | null } {
+  if (reported !== null) {
+    // GPS altitude: kept, but never under the ground + 5 m (the vertical GPS error is ±15 m: an
+    // antenna "inside" the hill it stands on would hide every customer)
+    if (ground !== null ? reported >= ground - 30 : reported >= 100) return { altitude: ground !== null ? Math.max(reported, ground + 5) : reported, from: 'gps' };
+    if (ground !== null && reported >= 0 && reported < 100) return { altitude: ground + reported, from: 'uisp' };
+  }
+  return ground === null ? { altitude: null, from: null } : { altitude: ground + height, from: 'terreno' };
+}

@@ -86,6 +86,31 @@ export function createDem(opts: { dir: string; baseUrl: string; fetchImpl?: type
 
   return {
     enabled: !!opts.baseUrl,
+    /**
+     * Synchronous elevation for every point of an area (tiles loaded once): for the terrain of many
+     * profiles at a time (Copertura, radio simulation). null when the model is off or unreachable.
+     */
+    async sampler(minLat: number, minLon: number, maxLat: number, maxLon: number): Promise<((lat: number, lon: number) => number | null) | null> {
+      if (!opts.baseUrl) return null;
+      const tiles = new Map<string, Buffer | null>();
+      try {
+        for (let la = Math.floor(minLat); la <= Math.floor(maxLat); la++) {
+          for (let lo = Math.floor(minLon); lo <= Math.floor(maxLon); lo++) {
+            const name = tileName(la + 0.5, lo + 0.5);
+            tiles.set(name, await tile(name));
+          }
+        }
+      } catch (err) {
+        opts.log?.(`dem: ${(err as Error).message}`);
+        return null;
+      }
+      return (lat, lon) => {
+        const t = tiles.get(tileName(lat, lon));
+        if (t === undefined) return null;
+        const v = t ? sampleHgt(t, lat, lon) : 0;
+        return v === null ? null : Math.max(0, v);
+      };
+    },
     /** Ground elevation, metres a.s.l.: 0 on the sea, null when unknown (service off or unreachable). */
     async elevation(lat: number, lon: number): Promise<number | null> {
       if (!opts.baseUrl) return null;
