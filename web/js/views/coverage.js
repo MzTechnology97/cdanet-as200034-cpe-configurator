@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { badge, busy, card, field, h, mount, pageHead, table, toast } from '../dom.js';
+import { badge, busy, card, field, h, mount, pageHead, table } from '../dom.js';
 import { createMap, drawCoverage, fit, legend, MAP_COLORS as C } from '../map.js';
 import { nms } from '../terms.js';
 
@@ -11,6 +11,8 @@ export const osmLink = (lat, lon) => `https://www.openstreetmap.org/?mlat=${lat}
 const km = (m) => (m < 1000 ? `${m} m` : `${(m / 1000).toFixed(m < 10000 ? 2 : 1)} km`);
 
 const CONF = { alta: 'good', media: 'warn', bassa: '' };
+/** Rating from the server: APs are already sorted best first. */
+const RATING = { buono: ['buono', 'good'], possibile: ['possibile', 'warn'], 'senza stima': ['senza stima', ''], improbabile: ['improbabile', 'bad'], 'non attivo': ['non attivo', 'bad'] };
 
 /** Expected signal of a new CPE, learned from the customers already on the AP. */
 function estimateCell(e) {
@@ -28,9 +30,10 @@ function estimateCell(e) {
   );
 }
 
-export function apTable(aps) {
+export function apTable(aps, admin = true) {
   return table(
     [
+      { label: 'Valutazione', render: (a) => (a.rating ? badge(...RATING[a.rating]) : '—') },
       { label: 'AP', render: (a) => h('div', {}, h('b', {}, a.name || a.id), h('div', { class: 'small muted' }, a.siteName ?? '')) },
       { label: 'SSID', render: (a) => h('span', { class: 'mono' }, a.ssid ?? '—') },
       { label: 'Distanza', render: (a) => km(a.distanceM) },
@@ -38,8 +41,8 @@ export function apTable(aps) {
       { label: 'Segnale stimato', render: (a) => estimateCell(a.estimate) },
       { label: 'Stato', render: (a) => badge(a.status === 'active' ? 'online' : a.status, a.status === 'active' ? 'good' : 'bad') },
       { label: 'Client', render: (a) => (a.stations ?? '—') },
-      { label: 'Frequenza', render: (a) => (a.frequency ? `${a.frequency} MHz` : '—') },
-    ],
+      admin ? { label: 'Frequenza', render: (a) => (a.frequency ? `${a.frequency} MHz` : '—') } : null,
+    ].filter(Boolean),
     aps,
   );
 }
@@ -69,34 +72,6 @@ function coverageMap(la, lo, aps) {
   );
 }
 
-/** Admin: antenna heights for the tilt shown in the app ("Trova l'AP"). */
-function pointingSettings() {
-  const box = h('div', {});
-  api('/api/admin/pointing/config')
-    .then((c) => {
-      const ap = h('input', { type: 'number', min: 0, max: 200, step: 1, value: c.apHeightM });
-      const cpe = h('input', { type: 'number', min: 0, max: 100, step: 0.5, value: c.cpeHeightM });
-      const save = h('button', { type: 'button', class: 'primary' }, 'Salva');
-      save.onclick = () =>
-        busy(save, async () => {
-          await api('/api/admin/pointing/config', { method: 'PUT', body: { apHeightM: Number(ap.value) || 0, cpeHeightM: Number(cpe.value) || 0 } });
-          toast('Altezze salvate');
-        });
-      mount(
-        box,
-        card(
-          h('h2', {}, 'Puntamento (app)'),
-          h('p', { class: 'small muted' }, 'Per il tilt verso gli AP l’app usa l’altitudine del terreno (modello SRTM, scaricato dal server solo per le zone usate) più queste altezze dal suolo.'),
-          h('div', { class: 'row' }, field('Altezza antenne AP (m dal suolo)', ap), field('Altezza CPE predefinita (m dal suolo)', cpe)),
-          c.dem ? null : h('div', { class: 'notice warn' }, 'Modello del terreno disattivato (DEM_URL vuoto): il tilt non viene calcolato.'),
-          h('div', { class: 'btns' }, save),
-        ),
-      );
-    })
-    .catch(() => {});
-  return box;
-}
-
 export async function coverageView({ user } = {}) {
   const out = h('div', {});
   const addr = h('input', { placeholder: 'Via Roma 12, 94100 Enna', autocomplete: 'off' });
@@ -111,17 +86,30 @@ export async function coverageView({ user } = {}) {
   async function check(la, lo, label) {
     mount(out, h('p', { class: 'muted' }, 'Ricerca degli AP vicini…'));
     try {
-      const r = await api(`/api/coverage?lat=${la}&lon=${lo}&limit=${admin ? howMany.value : 5}${admin ? `&km=${howFar.value}` : ''}`);
+      // installers: how many APs and how far are decided by the server (Impostazioni server, Connettori)
+      const r = await api(`/api/coverage?lat=${la}&lon=${lo}${admin ? `&limit=${howMany.value}&km=${howFar.value}` : ''}`);
       mount(
         out,
         card(
-          h('h2', {}, 'AP più vicini'),
+          h('h2', {}, 'AP consigliati'),
           h('p', { class: 'small muted' }, `${label} · ${la.toFixed(5)}, ${lo.toFixed(5)} · `, h('a', { href: osmLink(la, lo), target: '_blank', rel: 'noopener' }, 'apri il punto su OpenStreetMap')),
           r.aps.length
-            ? [coverageMap(la, lo, r.aps), apTable(r.aps)]
+            ? [coverageMap(la, lo, r.aps), apTable(r.aps, admin)]
             : h('div', { class: 'notice warn' }, r.restricted && !r.assignedCount
                 ? 'Nessun POP/AP assegnato al tuo account: chiedi all’amministratore.'
-                : nms(`Nessun AP con posizione entro ${r.maxKm} km: verifica la posizione o le coordinate degli AP in UISP.`, `Nessun AP${r.restricted ? ' tra quelli assegnati' : ''} entro ${r.maxKm} km da questo punto.`)),
+                : r.discarded
+                  ? `Nessun AP utilizzabile: ${r.discarded === 1 ? 'l’unico AP' : `tutti i ${r.discarded} AP`} entro ${r.maxKm} km ${r.discarded === 1 ? 'ha' : 'hanno'} un segnale stimato insufficiente o non ${r.discarded === 1 ? 'è attivo' : 'sono attivi'}.`
+                  : nms(`Nessun AP con posizione entro ${r.maxKm} km: verifica la posizione o le coordinate degli AP in UISP.`, `Nessun AP${r.restricted ? ' tra quelli assegnati' : ''} entro ${r.maxKm} km da questo punto.`)),
+          r.aps.length
+            ? h(
+                'p',
+                { class: 'small muted' },
+                `Ordinati dal segnale stimato migliore (minimo per il collaudo: ${r.minSignalDbm} dBm); a parità, il più vicino. ${r.inRange} AP valutati entro ${r.maxKm} km`,
+                r.discarded ? `, ${r.discarded} scartati perché non attivi o con segnale stimato insufficiente` : '',
+                r.aps.length < r.inRange - (r.discarded ?? 0) ? `, mostrati i primi ${r.aps.length}` : '',
+                '.',
+              )
+            : null,
           h('p', { class: 'small muted' }, 'Il puntamento è l’azimut dalla posizione della CPE verso l’AP (0° = nord, senso orario). La copertura effettiva dipende da visibilità ottica, ostacoli e allineamento.'),
         ),
       );
@@ -213,12 +201,11 @@ export async function coverageView({ user } = {}) {
       'Copertura',
       admin
         ? 'Gli AP più vicini a un indirizzo o a una posizione, con distanza, direzione di puntamento e segnale stimato. La mappa di tutta la rete è in Stato rete.'
-        : 'Gli AP più vicini a un indirizzo o a una posizione, con distanza e direzione di puntamento. Vengono mostrati solo gli AP entro il raggio configurato.',
+        : 'Gli AP consigliati per un indirizzo o una posizione: prima quelli con il segnale stimato migliore, con distanza e direzione di puntamento, entro il raggio configurato.',
     ),
     admin ? card(h('h2', {}, 'Ricerca'), h('div', { class: 'row' }, field('Quanti AP', howMany), field('Distanza massima', howFar))) : null,
     card(h('h2', {}, 'Da indirizzo'), addrForm, results),
     card(h('h2', {}, 'Da coordinate o GPS'), coordForm, h('div', { class: 'btns' }, gps)),
     out,
-    user?.role === 'admin' ? pointingSettings() : null,
   );
 }

@@ -176,11 +176,23 @@ describe('Guasti Enel (e-distribuzione)', () => {
     assert.ok(o10, JSON.stringify(seen.active));
     assert.ok(o10.impact.some((i: { name: string }) => i.name === 'AP N2 D01'), 'the POP covers its APs');
     assert.deepEqual((await cov(T)).aps.map((a: { name: string }) => a.name), ['AP N2 D01'], 'coverage: APs of the assigned POP');
+    assert.equal(seen.source, null, 'installers never see the data source');
+    assert.equal((await call('GET', '/api/outages')).json().source, 'e-distribuzione');
     const capT = (await cov(T)).aps[0];
     assert.equal(capT.lat, undefined, 'installers never get the real AP position');
     assert.ok(capT.approx.radiusM > 0);
     assert.equal(capT.distanceM % 50, 0);
     assert.equal(typeof (await cov(H)).aps[0].lat, 'number', 'admins: real position');
+    // installers: as many APs as set in Impostazioni server, whatever the client asks (web or app)
+    const every = (await cov(H)).aps as Array<{ id: string; name: string }>;
+    assert.equal((await call('PUT', `/api/admin/assignments/${tid}`, { items: [{ key: 'pop:site-n2', name: 'Nodo 2 - Monte' }, ...every.map((a) => ({ key: `ap:${a.id}`, name: a.name }))] })).statusCode, 200);
+    const many = async () => (await call('GET', '/api/coverage?lat=37.6&lon=14.1&limit=50', undefined, T)).json().aps.length;
+    assert.equal(await many(), Math.min(5, every.length), 'default: 5 APs');
+    assert.equal((await call('PUT', '/api/admin/server-settings', { values: { installerCoverageAps: 1 } })).statusCode, 200);
+    assert.equal(await many(), 1, 'the setting caps the installer');
+    assert.ok((await call('GET', '/api/coverage?lat=37.6&lon=14.1&limit=50')).json().aps.length >= 2, 'admins are not capped');
+    assert.equal((await call('PUT', '/api/admin/server-settings', { values: { installerCoverageAps: null } })).statusCode, 200);
+    assert.equal((await call('PUT', `/api/admin/assignments/${tid}`, { items: [{ key: 'pop:site-n2', name: 'Nodo 2 - Monte' }] })).statusCode, 200);
     assert.ok(o10.impact.every((i: { distanceM: number }) => i.distanceM % 50 === 0), 'rounded distances');
     const mapT = (await call('GET', '/api/outages/map', undefined, T)).json();
     assert.deepEqual(mapT.infra.map((i: { name: string }) => i.name).sort(), ['AP N2 D01', 'Nodo 2 - Monte']);

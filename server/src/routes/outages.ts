@@ -32,7 +32,8 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
   const view = (u: AuthUser) => ({
     generatedAt: ctx.outages.status()?.at ?? null,
     lastRun: u.role === 'admin' ? ctx.outages.status() : null,
-    source: 'e-distribuzione',
+    // the data source is for admins only (installers never see where the data comes from)
+    source: u.role === 'admin' ? 'e-distribuzione' : null,
     labels: KIND_LABEL,
     scope: u.role === 'admin' ? { all: true, assigned: [], zones: [] } : { all: false, assigned: ctx.outages.assignments(u.id), zones: ctx.outages.manualZones(u.id) },
     active: shown(u, ctx.outages.active(keysFor(u))),

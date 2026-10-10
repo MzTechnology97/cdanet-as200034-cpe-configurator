@@ -202,6 +202,8 @@ data class PointingApDto(
     val lon: Double? = null,
     val approx: ApproxDto? = null,
     val estimate: SignalEstimateDto? = null,
+    /** buono, possibile, senza stima, improbabile, non attivo: the list comes sorted best first. */
+    val rating: String? = null,
 )
 
 /** "Trova l'AP": nearest APs from the installation point with altitude and tilt. */
@@ -213,6 +215,8 @@ data class PointingDto(
     val restricted: Boolean = false,
     val assignedCount: Int? = null,
     val aps: List<PointingApDto> = emptyList(),
+    /** APs within range left out for an installer (inactive or estimated signal too low). */
+    val discarded: Int = 0,
 )
 
 @Serializable
@@ -365,10 +369,20 @@ data class CoverageAp(
     val relay: Int? = null,
     /** Expected signal of a new CPE here, from the customers already on this AP. */
     val estimate: SignalEstimateDto? = null,
+    /** buono, possibile, senza stima, improbabile, non attivo: the list comes sorted best first. */
+    val rating: String? = null,
 )
 
 @Serializable
-data class CoverageDto(val maxKm: Int, val aps: List<CoverageAp>, val restricted: Boolean = false, val assignedCount: Int? = null)
+data class CoverageDto(
+    val maxKm: Int,
+    val aps: List<CoverageAp>,
+    val restricted: Boolean = false,
+    val assignedCount: Int? = null,
+    /** APs within range that were rated, and how many were left out (inactive or signal too low). */
+    val inRange: Int = 0,
+    val discarded: Int = 0,
+)
 
 @Serializable
 /** isDefault = default for the signed-in installer (personal default if any, else the model default). */

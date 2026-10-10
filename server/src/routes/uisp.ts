@@ -13,7 +13,7 @@ import { parseMac, SSID_PARTS, TARGET_FIRMWARE } from '../domain/policy.ts';
 import type { ModuleKey } from '../services/modules.ts';
 import { isAp, isPtp, type UispDevice } from '../services/uisp.ts';
 import { approxPoint, roughDistance } from '../domain/approx.ts';
-import { estimateSignal, type ApModel } from '../domain/coverage-model.ts';
+import { estimateSignal, rankCoverage, type ApModel } from '../domain/coverage-model.ts';
 
 interface JobRow {
   id: string;
@@ -85,16 +85,19 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     const q = z
       .object({ lat: z.coerce.number(), lon: z.coerce.number(), limit: z.coerce.number().int().min(1).max(50).default(5), km: z.coerce.number().min(1).max(200).optional() })
       .parse(req.query);
-    // admins: no limits (up to 50 APs, the distance they ask up to 200 km); installers: 10 APs within the configured radius
+    // admins: no limits (up to 50 APs, the distance they ask up to 200 km); installers, from the
+    // web or the app alike: the number set in Impostazioni server, within the configured radius
     const isAdmin = req.user!.role === 'admin';
-    const limit = isAdmin ? q.limit : Math.min(q.limit, 10);
+    const limit = isAdmin ? q.limit : ctx.cfg.installerCoverageAps;
     const maxKm = isAdmin ? (q.km ?? ctx.uispSettings.coverageMaxKm) : ctx.uispSettings.coverageMaxKm;
     if (!isValidLatLon(q.lat, q.lon)) throw new HttpError(400, 'invalid_position');
     // Installers check coverage only on the POPs/APs assigned to them by the admin.
     const keys = req.user!.role === 'admin' ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
     const allow = keys ? (a: { id: string; siteId: string | null }) => keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`)) : undefined;
-    const aps = await uisp().nearestAps({ lat: q.lat, lon: q.lon }, limit, maxKm, allow);
-    const models = await uisp().apModels(aps.map((a) => a.id)).catch(() => new Map<string, ApModel>());
+    // every AP within range is rated, the limit comes last: a good AP a bit farther away is not
+    // hidden by closer ones with a worse signal
+    const inRange = await uisp().nearestAps({ lat: q.lat, lon: q.lon }, 500, maxKm, allow);
+    const models = await uisp().apModels(inRange.map((a) => a.id)).catch(() => new Map<string, ApModel>());
     const clientsShown = !keys || ctx.outages.config().installerClients;
     const estimateFor = (a: { id: string; distanceM: number; bearing: number }) => {
       const m = models.get(a.id);
@@ -107,17 +110,27 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       const m = models.get(a.id);
       return m && m.sector ? { center: m.sector.center, width: m.sector.width, servedM: m.servedM } : null;
     };
+    const ranked = rankCoverage(
+      inRange.map((a) => ({ ...a, estimate: estimateFor(a) })),
+      FIELD_THRESHOLDS.signalMin,
+    );
+    // installers: only the APs worth a try (no inactive ones, none whose best case is below the minimum)
+    const useful = keys ? ranked.filter((a) => a.rating !== 'non attivo' && a.rating !== 'improbabile') : ranked;
+    const aps = useful.slice(0, limit);
     return {
       maxKm,
       restricted: !!keys,
       assignedCount: keys ? [...keys].filter((k) => !k.startsWith('z')).length : null,
+      minSignalDbm: FIELD_THRESHOLDS.signalMin,
+      inRange: inRange.length,
+      discarded: ranked.length - useful.length,
       aps: aps.map(({ lat, lon, siteId: _site, gpsAltitude: _alt, siteHeight: _h, ...a }) => {
         const m = a.ssid ? SSID_PARTS.exec(a.ssid) : null;
         const base = { ...a, node: m ? Number(m[1]) : null, district: m ? Number(m[2]) : null, relay: m?.[3] ? Number(m[3]) : null };
         // Installers: exact direction for pointing, rounded distance and only an approximate area on the map.
-        if (!keys) return { ...base, lat, lon, estimate: estimateFor(a), served: served(a) };
+        if (!keys) return { ...base, lat, lon, served: served(a) };
         const stations = ctx.outages.config().installerClients ? base.stations : null;
-        return { ...base, stations, distanceM: roughDistance(a.distanceM), approx: approxPoint(lat, lon, `ap:${a.id}`, ctx.cfg.jwtSecret), estimate: estimateFor(a) };
+        return { ...base, stations, distanceM: roughDistance(a.distanceM), approx: approxPoint(lat, lon, `ap:${a.id}`, ctx.cfg.jwtSecret) };
       }),
     };
   });

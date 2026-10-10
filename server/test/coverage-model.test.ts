@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { buildApModel, estimateSignal, servedArc } from '../src/domain/coverage-model.ts';
+import { buildApModel, estimateSignal, rankCoverage, servedArc } from '../src/domain/coverage-model.ts';
 
 const AP = { lat: 37.6, lon: 14.1 };
 /** Point [d] metres east (bearing 90°) or west of the AP. */
@@ -37,4 +37,31 @@ describe('Copertura dai clienti installati', () => {
     assert.equal(e.signalDbm, null);
     assert.equal(e.confidence, 'bassa');
   });
+});
+
+it('coverage ranking: good APs first by signal, a farther good AP beats closer weak ones', () => {
+  const est = (signalDbm: number | null, spread = 4, inSector: boolean | null = true) => ({
+    signalDbm,
+    low: signalDbm === null ? null : signalDbm - spread,
+    high: signalDbm === null ? null : signalDbm + spread,
+    inSector,
+    beyondServed: false,
+    confidence: 'media' as const,
+    basis: 5,
+    nearby: 1,
+  });
+  const aps = [
+    { id: 'near-weak', distanceM: 800, status: 'active', estimate: est(-84) },
+    { id: 'near-none', distanceM: 900, status: 'active', estimate: null },
+    { id: 'down', distanceM: 500, status: 'disconnected', estimate: est(-55) },
+    { id: 'far-good', distanceM: 6000, status: 'active', estimate: est(-62) },
+    { id: 'mid-ok', distanceM: 3000, status: 'active', estimate: est(-70) },
+    { id: 'edge', distanceM: 2000, status: 'active', estimate: est(-78, 6) },
+    { id: 'outside', distanceM: 1500, status: 'active', estimate: est(-66, 10, false) },
+  ];
+  const r = rankCoverage(aps, -75);
+  assert.deepEqual(
+    r.map((a) => `${a.id}:${a.rating}`),
+    ['far-good:buono', 'mid-ok:buono', 'outside:possibile', 'edge:possibile', 'near-none:senza stima', 'near-weak:improbabile', 'down:non attivo'],
+  );
 });

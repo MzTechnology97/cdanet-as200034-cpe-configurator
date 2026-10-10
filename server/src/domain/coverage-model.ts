@@ -134,3 +134,29 @@ export function estimateSignal(m: ApModel, d: number, b: number): SignalEstimate
     nearby,
   };
 }
+
+/** How promising an AP is for a new CPE at the checked point. */
+export type CoverageRating = 'buono' | 'possibile' | 'senza stima' | 'improbabile' | 'non attivo';
+
+const RATING_ORDER: Record<CoverageRating, number> = { buono: 0, possibile: 1, 'senza stima': 2, improbabile: 3, 'non attivo': 4 };
+
+/** Rating of one AP: [minDbm] is the minimum signal accepted at the acceptance test. */
+type Estimated = Pick<SignalEstimate, 'signalDbm' | 'high' | 'inSector'>;
+
+export function rateCoverage(status: string, e: Estimated | null, minDbm: number): CoverageRating {
+  if (status !== 'active') return 'non attivo';
+  if (!e || e.signalDbm === null) return 'senza stima';
+  if (e.high !== null && e.high < minDbm) return 'improbabile'; // not even the optimistic bound is enough
+  return e.signalDbm >= minDbm && e.inSector !== false ? 'buono' : 'possibile';
+}
+
+/**
+ * Every AP within range, best first: likely good ones by estimated signal, then the possible ones,
+ * those without an estimate (by distance) and last the unlikely and the inactive ones. The limit is
+ * applied after this, so a good AP a bit farther away is not hidden by closer, worse ones.
+ */
+export function rankCoverage<T extends { distanceM: number; status: string; estimate: Estimated | null }>(aps: T[], minDbm: number): Array<T & { rating: CoverageRating }> {
+  return aps
+    .map((a) => ({ ...a, rating: rateCoverage(a.status, a.estimate, minDbm) }))
+    .sort((a, b) => RATING_ORDER[a.rating] - RATING_ORDER[b.rating] || (b.estimate?.signalDbm ?? -999) - (a.estimate?.signalDbm ?? -999) || a.distanceM - b.distanceM);
+}
