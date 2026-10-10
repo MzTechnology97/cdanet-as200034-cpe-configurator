@@ -183,8 +183,24 @@ class TopologyScanner(private val network: NetworkHelper) {
         }
         val enriched = merged.map { h -> h.mac?.let { vendors[it] }?.let { v -> if (h.vendor == null) h.copy(vendor = v) else h } ?: h }
         progress("Costruzione del grafo…")
-        return TopologyRun(Topology.build(enriched, devices, gatewayIp, found, prints), found, enriched, devices)
+        val result = Topology.build(enriched, devices, gatewayIp, found, prints)
+        return TopologyRun(result, found, hostsFromGraph(enriched, result.graph), devices)
     }
 
     private data class Quad(val found: List<Found>, val merged: List<ScanHost>, val devices: List<SnmpDevice>, val prints: Map<String, List<String>>)
+}
+
+/**
+ * The host list gets what the graph learned: vendor and type from SNMP, discovery, fingerprints
+ * and factory names (the scanner alone rarely knows the MAC, Android hides the ARP table).
+ */
+fun hostsFromGraph(hosts: List<ScanHost>, graph: Graph): List<ScanHost> {
+    val byIp = graph.nodes.filter { it.ip != null }.associateBy { it.ip }
+    return hosts.map { h ->
+        val n = byIp[h.ip] ?: return@map h
+        val vendor = h.vendor ?: n.vendor?.takeIf { it !in ProductHints.GENERIC }
+        // the type only: the vendor is shown next to it, and full IEEE names are long
+        val kind = if (n.type == DeviceType.Unknown || n.type == DeviceType.Internet) h.kind else n.type.label
+        h.copy(vendor = vendor, mac = h.mac ?: n.mac, kind = kind)
+    }
 }

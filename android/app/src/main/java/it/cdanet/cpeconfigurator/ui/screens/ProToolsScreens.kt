@@ -84,6 +84,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import androidx.compose.material3.FilterChip
+import it.cdanet.cpeconfigurator.tools.topology.ProductHints
 import it.cdanet.cpeconfigurator.tools.topology.Topology
 import it.cdanet.cpeconfigurator.tools.topology.TopologyDemo
 import it.cdanet.cpeconfigurator.tools.topology.LinkKind
@@ -128,6 +129,8 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
     var openHost by remember { mutableStateOf<String?>(null) }
     var showMap by remember { mutableStateOf(false) }
     var showGrid by remember { mutableStateOf(false) }
+    /** Hosts that answered in the running scan, before names and vendors (radar and counters). */
+    val live = remember { androidx.compose.runtime.mutableStateMapOf<String, Int>() }
     var typeFilter by remember { mutableStateOf<it.cdanet.cpeconfigurator.tools.topology.DeviceType?>(null) }
     var options by remember { mutableStateOf(false) }
     var topoSettings by remember { mutableStateOf(false) }
@@ -152,12 +155,14 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
         val ubntList = ubntJob?.await().orEmpty()
         targets.forEachIndexed { i, t ->
             val label = if (targets.size > 1) "Subnet ${i + 1}/${targets.size} ($t) · " else ""
-            val found = IpScanner(net).scan(t, icmp, ubntList, wl?.gateway, selfIps, wl?.dns?.firstOrNull { it.contains('.') }) { p -> progress = p.copy(phase = label + p.phase) }
+            val found = IpScanner(net).scan(t, icmp, ubntList, wl?.gateway, selfIps, wl?.dns?.firstOrNull { it.contains('.') }, onAlive = { ip, ms -> live[ip] = ms }) { p -> progress = p.copy(phase = label + p.phase) }
             progress = IpScanner.Progress(1, 1, found.size, "Produttori (IEEE)")
             val vendors = if (c.session.token != null) runCatching { c.api.macVendors(found.mapNotNull { it.mac }) }.getOrDefault(emptyMap()) else emptyMap()
             val known = hosts.map { it.ip }.toSet()
             hosts += found.filter { it.ip !in known }.map { h ->
                 val v = h.mac?.let { vendors[it] }
+                    ?: ProductHints.of(h.hostname, h.netbios, h.ubnt?.fullModel ?: h.ubnt?.model)?.vendor
+                        ?.takeIf { it !in ProductHints.GENERIC }
                 h.copy(vendor = v, kind = DeviceGuess.guess(v, h.ports.toSet(), h.hostname ?: h.netbios, h.isGateway, h.ubnt?.fullModel ?: h.ubnt?.model))
             }
         }
@@ -200,7 +205,7 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
     }
 
     // the map builds itself once the scan is over (or when it is opened after the scan)
-    LaunchedEffect(showMap, job) { if (showMap && job == null && topo == null) buildTopology() }
+    LaunchedEffect(job) { if (job == null && hosts.isNotEmpty() && topo == null) buildTopology() }
 
     fun start() {
         error = null
@@ -208,6 +213,7 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
         topo = null
         selectedNode = null
         typeFilter = null
+        live.clear()
         startedAt = System.currentTimeMillis()
         elapsed = 0
         job = scope.launch {
@@ -248,13 +254,17 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
                 PanelTitle("Scansione della rete", R.drawable.ic_radar) {
                     when {
-                        job != null -> StatusChip("IN CORSO", NoticeKind.Warn)
+                        job != null -> StatusChip("1/2 SCANSIONE", NoticeKind.Warn)
+                        topoBusy != null -> StatusChip("2/2 TOPOLOGIA", NoticeKind.Warn)
                         hosts.isNotEmpty() -> StatusChip("COMPLETATA", NoticeKind.Good)
                         else -> {}
                     }
                 }
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    ScanRadar(hosts, job != null, progress?.let { if (it.total > 0) it.done / it.total.toFloat() else null }, size = 128.dp)
+                    // live: the hosts that answered so far, before their names and vendors
+                    val known = hosts.map { it.ip }.toSet()
+                    val shownOnRadar = hosts.toList() + live.filterKeys { it !in known }.map { (ip, ms) -> ScanHost(ip, ms, "TCP") }
+                    ScanRadar(shownOnRadar, job != null || topoBusy != null, progress?.let { if (it.total > 0) it.done / it.total.toFloat() else null }, size = 128.dp)
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         MonoFact("Wi-Fi", link?.wifiSsid?.trim('"') ?: "—")
@@ -285,13 +295,24 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
                         if (wide) Field("Intervallo (fino a /16)", wideRange, { wideRange = it.trim() }, keyboardType = KeyboardType.Uri, supporting = "Prova i gateway tipici (.1, .254) di ogni /24 e scansiona quelle attive (al massimo 16).")
                     }
                 }
-                if (job == null) BusyButton(if (hosts.isEmpty()) "Avvia scansione" else "Nuova scansione", false, Modifier.fillMaxWidth()) { start() }
+                if (job == null) BusyButton(
+                    if (topoBusy != null) "Costruzione della topologia…" else if (hosts.isEmpty()) "Avvia scansione" else "Nuova scansione",
+                    topoBusy != null,
+                    Modifier.fillMaxWidth(),
+                ) { start() }
                 else OutlinedButton(onClick = { job?.cancel() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Interrompi") }
+                // phase 2: SNMP, discovery and fingerprints right after the scan (no fixed length)
+                if (job == null) topoBusy?.let { phase ->
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        LinearProgressIndicator(Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)))
+                        Text("Fase 2 di 2 · topologia, produttori e tipi: $phase", style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, maxLines = 3)
+                    }
+                }
                 progress?.let { p ->
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                         LinearProgressIndicator(progress = { if (p.total > 0) p.done / p.total.toFloat() else 0f }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)))
                         Row {
-                            Text(p.phase, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f), maxLines = 2)
+                            Text("Fase 1 di 2 · " + p.phase, style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace, modifier = Modifier.weight(1f), maxLines = 2)
                             Text("${p.done}/${p.total} · ${mmss(elapsed)}", style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace)
                         }
                     }
@@ -326,7 +347,12 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
     fun Results(wide: Boolean) {
         if (hosts.isEmpty()) {
             if (job == null) EmptyState(R.drawable.ic_radar, "Nessun host ancora", "Avvia la scansione: qui compariranno host, porte, griglia degli indirizzi e topologia della rete.")
+            else EmptyState(R.drawable.ic_radar, "Scansione in corso", "${live.size} host hanno già risposto: nomi, produttori e porte compaiono a fine subnet.")
             return
+        }
+        when {
+            job != null -> Notice("Scansione in corso: l'elenco si completa a ogni subnet, poi parte da sola la topologia.", NoticeKind.Info)
+            topoBusy != null -> Notice("Scansione completata. Costruzione della topologia in corso (SNMP, discovery, impronte): produttori, tipi e collegamenti si aggiornano al termine.", NoticeKind.Info)
         }
         androidx.compose.material3.SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
             listOf("Elenco", "Griglia IP", "Topologia").forEachIndexed { i, label ->

@@ -319,8 +319,10 @@ internal fun HostRow(h: ScanHost, expanded: Boolean, onToggle: () -> Unit, actio
                         if (h.isSelf) Flag("TU", MaterialTheme.colorScheme.primary)
                     }
                     (h.hostname ?: h.netbios)?.let { Text(it, style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis) }
+                    val kindText = h.kind.ifBlank { type.label }
                     Text(
-                        listOfNotNull(h.kind.ifBlank { null } ?: type.label, h.vendor).distinct().joinToString(" · "),
+                        // "Router MikroTik · MikroTik" once: the vendor only when the type does not name it
+                        listOfNotNull(kindText, h.vendor?.takeIf { v -> !kindText.contains(v.substringBefore(' '), true) }).joinToString(" · "),
                         style = MaterialTheme.typography.labelMedium,
                         color = col,
                         maxLines = 1,

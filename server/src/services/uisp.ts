@@ -310,6 +310,21 @@ export function createUisp(opts: UispOptions) {
      * Coverage model of each AP from its customers (position of the CPE or of its site, signal).
      * Positions stay on the server: callers expose only estimates.
      */
+    /**
+     * Where the altitude of each AP comes from (Impostazioni server → Puntamento): its own GPS
+     * altitude in UISP, the height of its site, or neither (then the configured antenna height).
+     */
+    async apAltitudeSources() {
+      const list = (await aps()).filter((d) => !isPtp(d));
+      const fallback = list.filter((d) => d.altitude === null && d.siteHeight === null);
+      return {
+        total: list.length,
+        gps: list.filter((d) => d.altitude !== null).length,
+        siteHeight: list.filter((d) => d.altitude === null && d.siteHeight !== null).length,
+        fallback: fallback.map((d) => d.name).sort((a, b) => a.localeCompare(b, 'it', { numeric: true })),
+      };
+    },
+
     async apModels(apIds: string[]) {
       const want = new Set(apIds);
       const [ds, ss] = await Promise.all([devices(), sites().catch(() => [] as UispSite[])]);
