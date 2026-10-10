@@ -82,6 +82,7 @@ Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). 
 
 ## Già rilasciato
 
+- v1.32.36: stato sintetico del cliente dal CRM (cessato, in cessazione, sospeso, servizi sospesi, offline, online) in Salute CPE; account terminati tenuti con l'ultima sessione: "CPE di clienti cessati" ancora in rete.
 - v1.32.34: pagina Clienti nella console: anagrafiche e sedi di installazione da ISP Billing con PPPoE, CPE in rete e distanza tra la posizione del CRM e quella UISP; sedi senza coordinate dall'indirizzo.
 - v1.32.32: stato RADIUS da ISP Billing per il NOC: sincronizzazione ogni 10 minuti, colonna PPPoE e problemi "PPPoE offline" e "account sospeso" in Salute CPE, account PPPoE offline/sospesi/senza CPE, sessioni per AP in Stato rete.
 - v1.32.31: guida installatore aggiornata con la nuova Scansione LAN (host attivi, griglia IP, topologia, discovery, porte) e dati di esempio per tutte le schede nelle build di sviluppo.
