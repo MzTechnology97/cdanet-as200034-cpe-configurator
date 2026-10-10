@@ -52,6 +52,27 @@ function crmCard(crm) {
     ),
     h('div', { class: 'crm-contacts small' }, cu.phone ? h('div', {}, '📞 ', tel(cu.phone), cu.phone2 ? [' · ', tel(cu.phone2)] : null) : null, cu.email ? h('div', {}, '✉ ', h('a', { href: `mailto:${cu.email}` }, cu.email)) : null, cu.address ? h('div', {}, 'Residenza: ', cu.address) : null),
     crm.site ? h('p', { class: 'small' }, h('b', {}, 'Sede di installazione: '), [crm.site.description, crm.site.address].filter(Boolean).join(' · ') || '—', crm.site.lat != null ? [' · ', h('a', { href: `https://www.openstreetmap.org/?mlat=${crm.site.lat}&mlon=${crm.site.lon}#map=18/${crm.site.lat}/${crm.site.lon}`, target: '_blank', rel: 'noopener' }, 'mappa')] : null) : null,
+    crm.lines?.length
+      ? [
+          h('h3', {}, `Altre linee del cliente (${crm.lines.length})`),
+          table(
+            [
+              { label: 'Sede', render: (l) => v(l.site) },
+              { label: 'Utente PPPoE', render: (l) => h('span', { class: 'mono' }, l.username) },
+              { label: 'Stato', render: (l) => badge(...(ACCOUNT[l.state] ?? [l.state, ''])) },
+              { label: 'Profilo', render: (l) => (l.speed ? `${l.speed.down}M/${l.speed.up}M` : v(l.profile)) },
+              {
+                label: 'CPE',
+                render: (l) =>
+                  l.cpe
+                    ? h('div', {}, l.cpe.name, ' ', l.cpe.customer ? h('a', { class: 'button-link small-btn', href: `#/cpe?id=${encodeURIComponent(l.cpe.deviceId)}` }, 'Gestisci') : null)
+                    : h('span', { class: 'small muted' }, 'non trovata in UISP'),
+              },
+            ],
+            crm.lines,
+          ),
+        ]
+      : null,
     h('p', { class: 'small muted' }, `Dati di ISP Billing${a.checkedAt ? ` aggiornati il ${fmtDate(a.checkedAt)}` : ''}. La password PPPoE non viene mostrata.`),
   );
 }

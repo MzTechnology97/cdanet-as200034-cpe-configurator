@@ -42,7 +42,7 @@ export function cpeAdminRoutes(app: FastifyInstance, ctx: AppContext) {
    * PPPoE session or by the PPPoE user of the installation, then the customer and the installation
    * site. undefined = CRM not connected; null = no account found for this CPE.
    */
-  function crmOf(mac: string | null, jobId: string | undefined) {
+  async function crmOf(mac: string | null, jobId: string | undefined) {
     if (!ctx.crmSync.available()) return undefined;
     const idx = ctx.crmSync.index();
     const user = jobId ? (db.prepare('SELECT lower(pppoe_user) u FROM provisioning_jobs WHERE id = ?').get(jobId) as { u: string } | undefined)?.u : undefined;
@@ -53,7 +53,31 @@ export function cpeAdminRoutes(app: FastifyInstance, ctx: AppContext) {
       | Record<string, string | number | null>
       | undefined;
     const addr = (o: Record<string, unknown>) => [o.address_line1, o.address_line2, [o.postal_code, o.city].filter(Boolean).join(' '), o.state_code].filter(Boolean).join(', ');
+    // the customer's other lines (a customer may have several sites, CPEs and PPPoE accounts):
+    // each with its site, state, plan and CPE in UISP (session MAC, else PPPoE user of the installation)
+    const devices = await uisp().allDevices().catch(() => []);
+    const byMac = new Map(devices.filter((x) => x.mac).map((x) => [x.mac!, x]));
+    const jobMac = new Map(
+      (db.prepare("SELECT lower(pppoe_user) u, mac FROM provisioning_jobs WHERE status = 'success' AND pppoe_user <> '' ORDER BY created_at").all() as Array<{ u: string; mac: string }>).map((x) => [x.u, x.mac]),
+    );
+    const others = ctx.crmSync
+      .all()
+      .filter((x) => x.customerId === r.customerId && x.accountId !== r.accountId && x.accountStatus !== 'Terminato')
+      .map((x) => {
+        const s = x.addressId ? (db.prepare('SELECT * FROM crm_addresses WHERE address_id = ?').get(x.addressId) as Record<string, unknown> | undefined) : undefined;
+        const m = x.mac ?? jobMac.get(x.username.toLowerCase()) ?? null;
+        const cpe = m ? byMac.get(m) : undefined;
+        return {
+          username: x.username,
+          state: radiusState(x),
+          profile: x.profile,
+          speed: x.speed,
+          site: s ? [s.description, addr(s)].filter(Boolean).join(' · ') || null : null,
+          cpe: cpe ? { deviceId: cpe.id, name: cpe.name, status: cpe.status, customer: !isAp(cpe) && !isPtp(cpe) } : null,
+        };
+      });
     return {
+      lines: others,
       account: {
         username: r.username,
         status: r.accountStatus,
@@ -102,7 +126,7 @@ export function cpeAdminRoutes(app: FastifyInstance, ctx: AppContext) {
           | { id: string; createdAt: string }
           | undefined)
       : undefined;
-    return { cpe: cpeView(detail, interfaces, wireless, unms), backups, job: job ?? null, crm: crmOf(d.mac, job?.id) };
+    return { cpe: cpeView(detail, interfaces, wireless, unms), backups, job: job ?? null, crm: await crmOf(d.mac, job?.id) };
   });
 
   app.get('/api/admin/cpe/:deviceId/statistics', admin, async (req) => {
