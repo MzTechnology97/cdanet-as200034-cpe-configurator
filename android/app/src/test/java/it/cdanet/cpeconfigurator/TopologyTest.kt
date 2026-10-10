@@ -256,6 +256,21 @@ class TopologyTest {
     }
 
     @Test
+    fun scannerLabelsMapToDeviceTypes() {
+        val g = it.cdanet.cpeconfigurator.tools.pro.DeviceGuess
+        assertEquals(DeviceType.Camera, g.type("Telecamera / NVR"))
+        assertEquals(DeviceType.AccessPoint, g.type("Access point Cambium"))
+        assertEquals(DeviceType.Cpe, g.type("Radio / access point"))
+        assertEquals(DeviceType.Router, g.type("Router MikroTik"))
+        assertEquals(DeviceType.Router, g.type("Stampante", isGateway = true))
+        assertEquals(DeviceType.Computer, g.type("PC / server Windows"))
+        assertEquals(DeviceType.Server, g.type("Linux / dispositivo SSH"))
+        assertEquals(DeviceType.Iot, g.type("IoT / domotica Shelly"))
+        assertEquals(DeviceType.VoipPhone, g.type("Telefono VoIP"))
+        assertEquals(DeviceType.Unknown, g.type(""))
+    }
+
+    @Test
     fun withoutSnmpEverythingHangsFromTheGateway() {
         val t = Topology.build(hosts, emptyList(), "192.168.1.1")
         assertEquals("base", t.mode)

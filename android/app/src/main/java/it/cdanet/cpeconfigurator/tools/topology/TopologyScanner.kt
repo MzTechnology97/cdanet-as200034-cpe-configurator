@@ -44,6 +44,57 @@ class TopologyScanner(private val network: NetworkHelper) {
         }
     }
 
+    /** The protocols of [discover], in display order. */
+    val protocols = listOf("MNDP", "Ubiquiti", "SADP", "Dahua", "ONVIF", "WSD", "SSDP", "mDNS", "NSDP")
+
+    /** Vendor protocols in parallel (~3.5 s), each reported to [onDone] with its answers when it ends. */
+    private suspend fun vendorDiscovery(local: String?, onDone: (String, Int) -> Unit = { _, _ -> }): List<Found> = coroutineScope {
+        fun go(name: String, block: suspend () -> List<Found>) = async { runCatching { block() }.getOrDefault(emptyList()).also { onDone(name, it.size) } }
+        listOf(
+            go("MNDP") { VendorDiscovery.mndp(3500) },
+            go("Dahua") { VendorDiscovery.dahua(3500) },
+            go("ONVIF") { VendorDiscovery.onvif(3500) },
+            go("WSD") { VendorDiscovery.wsd(3500) },
+            go("SSDP") { VendorDiscovery.ssdp(3500) },
+            go("mDNS") { VendorDiscovery.mdns(3500) },
+            go("NSDP") { VendorDiscovery.nsdp(3500) },
+            go("SADP") {
+                Sadp.discover(local, 3500).map { d ->
+                    Found(d.ip, "SADP", "Hikvision", name = d.description.ifBlank { null }, model = d.model.ifBlank { null }, mac = d.mac.ifBlank { null }, firmware = d.firmware.ifBlank { null })
+                }
+            },
+        ).awaitAll().flatten()
+    }
+
+    /**
+     * Discovery only (the Discovery tab): every vendor protocol plus Ubiquiti on the Wi-Fi network;
+     * [onDone] gets each protocol when it ends, with the number of answers.
+     */
+    suspend fun discover(onDone: (String, Int) -> Unit = { _, _ -> }): List<Found> = coroutineScope {
+        val ubnt = async(Dispatchers.IO) {
+            runCatching { it.cdanet.cpeconfigurator.tools.UbntDiscovery.discover(network, 3500) }.getOrDefault(emptyList()).mapNotNull { d ->
+                d.ip?.let { ip ->
+                    Found(
+                        ip, "Ubiquiti", "Ubiquiti", name = d.hostname, model = d.fullModel ?: d.model, mac = d.mac, firmware = d.firmware,
+                        details = listOfNotNull(d.ssid?.let { "SSID" to it }, d.uptimeSec?.let { "Uptime" to "${it / 86400} g ${it % 86400 / 3600} h" }).toMap(),
+                    )
+                }
+            }.also { onDone("Ubiquiti", it.size) }
+        }
+        val rest = withContext(Dispatchers.IO) {
+            network.onWifi {
+                val lock = network.multicastLock()
+                lock.acquire()
+                try {
+                    vendorDiscovery(network.wifiLink()?.addresses?.map { it.substringBefore('/') }?.firstOrNull { Ip.parse(it) != null }, onDone)
+                } finally {
+                    lock.release()
+                }
+            }
+        }
+        rest + ubnt.await()
+    }
+
     /** Adds discovery names, vendors, MACs and types to the scanned hosts (and the hosts only discovery saw). */
     fun merge(hosts: List<ScanHost>, found: List<Found>): List<ScanHost> {
         val byIp = found.groupBy { it.ip }
@@ -84,22 +135,7 @@ class TopologyScanner(private val network: NetworkHelper) {
                     val local = network.wifiLink()?.addresses?.map { it.substringBefore('/') }?.firstOrNull { Ip.parse(it) != null }
                     val found = if (!discovery) emptyList() else {
                         progress("Discovery multi-vendor (MikroTik, Ubiquiti, Hikvision, Dahua, ONVIF, WS-Discovery, UPnP, mDNS, Netgear)…")
-                        coroutineScope {
-                            listOf(
-                                async { runCatching { VendorDiscovery.mndp(3500) }.getOrDefault(emptyList()) },
-                                async { runCatching { VendorDiscovery.dahua(3500) }.getOrDefault(emptyList()) },
-                                async { runCatching { VendorDiscovery.onvif(3500) }.getOrDefault(emptyList()) },
-                                async { runCatching { VendorDiscovery.wsd(3500) }.getOrDefault(emptyList()) },
-                                async { runCatching { VendorDiscovery.ssdp(3500) }.getOrDefault(emptyList()) },
-                                async { runCatching { VendorDiscovery.mdns(3500) }.getOrDefault(emptyList()) },
-                                async { runCatching { VendorDiscovery.nsdp(3500) }.getOrDefault(emptyList()) },
-                                async {
-                                    runCatching { Sadp.discover(local, 3500) }.getOrDefault(emptyList()).map { d ->
-                                        Found(d.ip, "SADP", "Hikvision", name = d.description.ifBlank { null }, model = d.model.ifBlank { null }, mac = d.mac.ifBlank { null }, firmware = d.firmware.ifBlank { null })
-                                    }
-                                },
-                            ).awaitAll().flatten()
-                        }
+                        vendorDiscovery(local)
                     }
                     var merged = merge(hosts, found)
                     val devices = if (communities.isEmpty()) emptyList() else {

@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.tools.pro
 
+import it.cdanet.cpeconfigurator.tools.topology.DeviceType
+
 /** Best guess of what a host is, from vendor, open ports and name (shown as a hint, never trusted). */
 object DeviceGuess {
     private fun v(vendor: String?, vararg names: String) = vendor != null && names.any { vendor.contains(it, ignoreCase = true) }
@@ -35,6 +37,33 @@ object DeviceGuess {
             22 in ports && ports.size <= 2 -> "Linux / dispositivo SSH"
             name.contains("android", true) -> "Android"
             else -> ""
+        }
+    }
+
+    /** Device type of a guess label ("Telecamera / NVR", "Access point Cambium", "Router MikroTik"…), for icons and colors. */
+    fun type(kind: String, isGateway: Boolean = false): DeviceType {
+        if (isGateway) return DeviceType.Router
+        val k = kind.lowercase()
+        DeviceType.entries.firstOrNull { it != DeviceType.Unknown && it != DeviceType.Internet && k.startsWith(it.label.lowercase()) }?.let { return it }
+        return when {
+            k.isBlank() -> DeviceType.Unknown
+            "nvr" in k && "telecamera" !in k -> DeviceType.Nvr
+            "telecamera" in k || "rtsp" in k -> DeviceType.Camera
+            "radio" in k || "antenna" in k || "cpe" in k -> DeviceType.Cpe
+            "access point" in k -> DeviceType.AccessPoint
+            "firewall" in k -> DeviceType.Firewall
+            "router" in k || "gateway" in k || "routerboard" in k -> DeviceType.Router
+            "switch" in k -> DeviceType.Switch
+            "ont" in k || "modem" in k -> DeviceType.Ont
+            "stampante" in k -> DeviceType.Printer
+            "nas" in k -> DeviceType.Nas
+            "voip" in k -> DeviceType.VoipPhone
+            "pc" in k || "windows" in k || "computer" in k || "mac" in k -> DeviceType.Computer
+            "server" in k || "linux" in k || "ssh" in k -> DeviceType.Server
+            "iphone" in k || "android" in k || "smartphone" in k -> DeviceType.Phone
+            "tv" in k || "chromecast" in k || "multimedia" in k -> DeviceType.Tv
+            "iot" in k || "domotica" in k -> DeviceType.Iot
+            else -> DeviceType.Unknown
         }
     }
 }

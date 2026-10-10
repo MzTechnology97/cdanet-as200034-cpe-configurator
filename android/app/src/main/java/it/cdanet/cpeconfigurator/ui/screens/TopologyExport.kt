@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import android.content.ContentValues
 import android.content.Context
 import android.content.Intent
 import android.graphics.Bitmap
@@ -12,6 +13,10 @@ import android.graphics.PorterDuffColorFilter
 import android.graphics.RectF
 import android.graphics.Typeface
 import android.graphics.pdf.PdfDocument
+import android.net.Uri
+import android.os.Build
+import android.os.Environment
+import android.provider.MediaStore
 import android.text.TextPaint
 import android.text.TextUtils
 import androidx.core.content.ContextCompat
@@ -76,6 +81,40 @@ object TopologyExport {
         out.outputStream().use { doc.writeTo(it) }
         doc.close()
         return out
+    }
+
+    /** Folder of the phone's Downloads where the exports are saved. */
+    const val DOWNLOAD_FOLDER = "Download/CDA Net"
+
+    /**
+     * Copies [f] into Download/CDA Net (Android 10+: no permission needed) and returns its Uri;
+     * null on older Android, where the export is shared instead.
+     */
+    fun saveToDownloads(context: Context, f: File, mime: String): Uri? {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.Q) return null
+        val r = context.contentResolver
+        val values = ContentValues().apply {
+            put(MediaStore.MediaColumns.DISPLAY_NAME, f.name)
+            put(MediaStore.MediaColumns.MIME_TYPE, mime)
+            put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS + "/CDA Net")
+            put(MediaStore.MediaColumns.IS_PENDING, 1)
+        }
+        val uri = r.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values) ?: return null
+        try {
+            r.openOutputStream(uri)!!.use { out -> f.inputStream().use { it.copyTo(out) } }
+            r.update(uri, ContentValues().apply { put(MediaStore.MediaColumns.IS_PENDING, 0) }, null, null)
+        } catch (e: Exception) {
+            r.delete(uri, null, null)
+            throw e
+        }
+        return uri
+    }
+
+    /** Opens a saved export with the phone's viewer (gallery, PDF reader). */
+    fun open(context: Context, uri: Uri, mime: String) {
+        val view = Intent(Intent.ACTION_VIEW).setDataAndType(uri, mime).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { context.startActivity(view) }
+            .onFailure { android.widget.Toast.makeText(context, "Nessuna app per aprire il file", android.widget.Toast.LENGTH_SHORT).show() }
     }
 
     fun share(context: Context, f: File, mime: String) {

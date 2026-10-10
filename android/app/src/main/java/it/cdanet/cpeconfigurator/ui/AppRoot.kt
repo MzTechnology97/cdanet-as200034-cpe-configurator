@@ -107,7 +107,8 @@ import it.cdanet.cpeconfigurator.update.UpdateState
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
-enum class Screen(val title: String, val scroll: Boolean = true) {
+/** [wide]: uses up to 1280 dp on tablets (side-by-side panels) instead of the 760 dp reading column. */
+enum class Screen(val title: String, val scroll: Boolean = true, val wide: Boolean = false) {
     Home("CDA Net CPE"),
     Provision("Installazione CPE"),
     CpeWeb("Primo avvio airOS", scroll = false),
@@ -122,7 +123,7 @@ enum class Screen(val title: String, val scroll: Boolean = true) {
     Pointing("Trova l'AP", scroll = false),
     ArAim("Mirino verso l'AP", scroll = false),
     CpeHealth("Le mie CPE"),
-    IpScanner("Scanner IP"),
+    IpScanner("Scanner IP", scroll = false, wide = true),
     PortScanner("Port scanner"),
     NetDiag("Diagnostica di rete"),
     Outages("Guasti Enel"),
@@ -140,7 +141,7 @@ enum class Screen(val title: String, val scroll: Boolean = true) {
     NetHub("Rete", scroll = false),
     Tools("Strumenti"),
     CpeHub("CPE collegata", scroll = false),
-    Lan("Scansione LAN", scroll = false),
+    Lan("Scansione LAN", scroll = false, wide = true),
     Diag("Diagnostica di rete", scroll = false),
     Devices("Apparati in LAN", scroll = false),
     Search("Cerca"),
@@ -500,7 +501,7 @@ fun AppRoot(c: AppContainer) {
                     ) {
                         // wide screens (tablet, landscape): a readable column in the middle
                         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.TopCenter) {
-                            Box(Modifier.widthIn(max = 760.dp).fillMaxSize()) {
+                            Box(Modifier.widthIn(max = if (screen.wide) 1280.dp else 760.dp).fillMaxSize()) {
                                 if (screen.scroll) {
                                     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 8.dp)) {
                                         if (screen == Screen.Home) UpdateBanner(c, update) { update = it }
