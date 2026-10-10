@@ -88,6 +88,16 @@ export function firmwareState(fw: string | null | undefined, target: string): Fi
   return 'ok';
 }
 
+/**
+ * A CPE gone for good: offline and not seen for more than [months] (0 = never). A device that
+ * never reported when it was last seen is not considered gone.
+ */
+export function isStaleCpe(d: { status: string; lastSeen: string | null }, months: number, now = Date.now()): boolean {
+  if (months <= 0 || OFFLINE.has(d.status) === false || !d.lastSeen) return false;
+  const seen = Date.parse(d.lastSeen);
+  return Number.isFinite(seen) && seen < now - months * 30.44 * 86_400_000;
+}
+
 export function nowOf(d: UispDevice): CpeNow {
   return {
     status: d.status,

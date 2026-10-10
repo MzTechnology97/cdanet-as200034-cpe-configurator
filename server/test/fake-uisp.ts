@@ -41,9 +41,17 @@ export const STATION = {
   attributes: { ssid: 'CDA-NET-N2-D01', apDevice: { id: 'ap-n2', name: 'AP N2 D01' } },
 };
 
-export function fakeUisp(opts: { authorizeMethod?: 'POST' | 'PUT'; backupCfg?: string } = {}) {
+export function fakeUisp(opts: { authorizeMethod?: 'POST' | 'PUT'; backupCfg?: string; goneCpe?: boolean } = {}) {
   const calls: Array<{ method: string; path: string; body: unknown; token: string | null }> = [];
   const devices = [AP_N2, AP_N7, FAR_AP, PTP, STATION, OLD_CPE].map((d) => structuredClone(d));
+  // a customer gone since 2023 but still in UISP, on AP N2
+  if (opts.goneCpe) {
+    devices.push({
+      identification: { id: 'cpe-gone', name: 'VERDI ANNA', mac: '66:55:44:33:22:11', role: 'station', authorized: true, firmwareVersion: '8.7.4' },
+      overview: { status: 'disconnected', signal: null, wirelessMode: 'sta-ptmp', lastSeen: '2023-02-22T15:30:58Z' },
+      attributes: { ssid: 'CDA-NET-N2-D01', apDevice: { id: 'ap-n2', name: 'AP N2 D01' } },
+    } as unknown as (typeof devices)[number]);
+  }
   const unms: Record<string, unknown> = {};
   let wireless: unknown = {
     mode: 'sta-ptmp', ssid: 'CDA-NET-N2-D01', txPower: 24, antennaGain: 23, ackDistance: 2400, isACKAutoDistanceEnabled: true, isAutoChannelWidthEnabled: false, channelWidth: 20,

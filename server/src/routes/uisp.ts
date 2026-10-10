@@ -6,7 +6,7 @@ import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { toCsv } from '../domain/csv.ts';
 import { configDrift } from '../domain/drift.ts';
-import { installedHealth, type InstalledJob } from '../domain/health.ts';
+import { installedHealth, isStaleCpe, type InstalledJob } from '../domain/health.ts';
 import type { RadiusInfo } from '../services/crm-sync.ts';
 import { isValidLatLon } from '../domain/geo.ts';
 import { parseMac, SSID_PARTS, TARGET_FIRMWARE } from '../domain/policy.ts';
@@ -253,7 +253,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
 
   const cpeHealth = async (req: FastifyRequest) => {
     const q = z
-      .object({ installer: z.string().trim().max(80).optional(), scope: z.enum(['all', 'app']).default('all') })
+      .object({ installer: z.string().trim().max(80).optional(), scope: z.enum(['all', 'app']).default('all'), stale: z.coerce.boolean().default(false) })
       .parse(req.query);
     const viewer = req.user!;
     const admin = viewer.role === 'admin';
@@ -294,6 +294,15 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
         rows.push(tag(d ? uispRow(d, a.username) : { ...uispRow({ name: a.name, model: '', mac, ssid: null } as UispDevice, a.username) }, 'uisp'));
       }
     }
+    // CPEs offline for too long (Impostazioni server): out of the list unless asked for
+    const months = ctx.cfg.staleCpeMonths;
+    const gone = (r: { mac: string }) => {
+      const d = byMac.get(r.mac);
+      return !!d && isStaleCpe(d, months);
+    };
+    const staleCount = rows.filter(gone).length;
+    // admins only can ask for them: installers never see the gone CPEs
+    const shownRows = q.stale && admin ? rows : rows.filter((r) => !gone(r));
     const t = { ...ctx.cfg.thresholds, targetFirmware: TARGET_FIRMWARE };
     // admins with the CRM connected: the RADIUS account of each CPE, by session MAC or by the PPPoE user of the installation
     let radiusOf: ((j: InstalledJob) => RadiusInfo | null) | undefined;
@@ -304,9 +313,10 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       );
       radiusOf = (j) => idx.byMac.get(j.mac) ?? (j.jobId && pppoe.has(j.jobId) ? (idx.byUser.get(pppoe.get(j.jobId)!) ?? null) : null);
     }
-    const h = installedHealth(rows, byMac, t, radiusOf);
+    const h = installedHealth(shownRows, byMac, t, radiusOf);
     return {
       generatedAt: nowIso(),
+      ...(admin ? { stale: { months, count: staleCount, shown: q.stale } } : {}),
       uisp: !!ctx.uisp && uispOk,
       thresholds: t,
       ...h,

@@ -428,7 +428,11 @@ data class CpeHealthTotalsDto(
 )
 
 @Serializable
-data class CpeHealthDto(val totals: CpeHealthTotalsDto = CpeHealthTotalsDto(), val cpes: List<CpeHealthItemDto> = emptyList())
+data class CpeHealthDto(val totals: CpeHealthTotalsDto = CpeHealthTotalsDto(), val cpes: List<CpeHealthItemDto> = emptyList(), val stale: StaleCpesDto? = null)
+
+/** CPEs offline for longer than the server setting: left out unless asked for. */
+@Serializable
+data class StaleCpesDto(val months: Int = 12, val count: Int = 0, val shown: Boolean = false)
 
 @Serializable
 data class ProvisionRequest(

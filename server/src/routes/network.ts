@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { isSuspended } from '../services/crm-sync.ts';
+import { isStaleCpe } from '../domain/health.ts';
 
 /** AP state shown in "Stato rete". */
 export type ApState = 'ok' | 'degraded' | 'down';
@@ -27,7 +28,7 @@ export function networkRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
     const u = req.user!;
     const keys = u.role === 'admin' ? null : new Set(ctx.outages.assignments(u.id).map((i) => i.key));
-    const [inf, counts] = await Promise.all([ctx.uisp.infrastructure(), ctx.uisp.cpeCounts()]);
+    const [inf, counts] = await Promise.all([ctx.uisp.infrastructure(), ctx.uisp.cpeCounts((d) => isStaleCpe(d, ctx.cfg.staleCpeMonths))]);
     // admins: real positions and the sector already served, for the map of the whole network
     const sectors = keys
       ? new Map()

@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { buildApp } from '../src/app.ts';
 import { openDatabase } from '../src/db.ts';
-import { firmwareIs, firmwareState, firmwareVersion, installedHealth, type InstalledJob } from '../src/domain/health.ts';
+import { firmwareIs, firmwareState, firmwareVersion, installedHealth, isStaleCpe, type InstalledJob } from '../src/domain/health.ts';
 import { ethSpeed, normalizeDevice } from '../src/services/uisp.ts';
 import { fakeUisp } from './fake-uisp.ts';
 import { ADMIN, SAMPLE_TEMPLATE, testConfig } from './helpers.ts';
@@ -39,6 +39,40 @@ describe('Salute CPE installate', () => {
     assert.equal(firmwareState('qualcosa', '8.7.4'), 'unknown');
     assert.equal(firmwareState(null, '8.7.4'), 'unknown');
     assert.deepEqual(firmwareVersion('XC.qca956x.v8.7.11.46972'), [8, 7, 11]);
+  });
+
+  it('a CPE offline for longer than the setting is gone', () => {
+    const now = Date.parse('2026-10-10T12:00:00Z');
+    assert.equal(isStaleCpe({ status: 'disconnected', lastSeen: '2023-02-22T15:30:58Z' }, 12, now), true);
+    assert.equal(isStaleCpe({ status: 'disconnected', lastSeen: '2026-06-01T00:00:00Z' }, 12, now), false, '4 months: still a fault to look at');
+    assert.equal(isStaleCpe({ status: 'active', lastSeen: '2023-02-22T15:30:58Z' }, 12, now), false, 'online again');
+    assert.equal(isStaleCpe({ status: 'disconnected', lastSeen: null }, 12, now), false, 'never reported');
+    assert.equal(isStaleCpe({ status: 'disconnected', lastSeen: '2023-02-22T15:30:58Z' }, 0, now), false, '0 = never hidden');
+  });
+
+  it('Salute CPE and Stato rete leave out the CPEs gone for more than the set months', async () => {
+    const uisp = fakeUisp({ goneCpe: true });
+    const { app } = await buildApp(testConfig(), 'test', { db: openDatabase(':memory:'), logger: false, uisp: uisp.uisp, fetchImpl: uisp.fetchImpl });
+    const H = { authorization: `Bearer ${(await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: ADMIN.username, password: ADMIN.password } })).json().token}` };
+    const call = (method: 'GET' | 'PUT', url: string, payload?: object) => app.inject({ method, url, headers: H, payload });
+    await call('PUT', '/api/admin/modules', { cpe_health: true, network_status: true });
+    const h = (await call('GET', '/api/cpe-health')).json();
+    assert.ok(!h.cpes.some((c: { mac: string }) => c.mac === '66:55:44:33:22:11'));
+    assert.deepEqual(h.stale, { months: 12, count: 1, shown: false });
+    assert.ok((await call('GET', '/api/cpe-health?stale=1')).json().cpes.some((c: { mac: string }) => c.mac === '66:55:44:33:22:11'), 'shown on request');
+    const ap = (await call('GET', '/api/network/status')).json().pops.flatMap((p: { aps: object[] }) => p.aps).find((a: { id: string }) => a.id === 'ap-n2');
+    assert.ok(ap.cpe === null || ap.cpe.offline === 0, JSON.stringify(ap.cpe));
+    // installers: never, not even on request
+    await call('PUT', '/api/admin/modules', { cpe_health: true });
+    await app.inject({ method: 'POST', url: '/api/admin/users', headers: H, payload: { username: 'tecnico', password: 'Installer-Pass-123' } });
+    const T = { authorization: `Bearer ${(await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: 'tecnico', password: 'Installer-Pass-123' } })).json().token}` };
+    await app.inject({ method: 'PUT', url: '/api/admin/cpe-assignments', headers: H, payload: { macs: ['66:55:44:33:22:11'], userId: (await call('GET', '/api/admin/users')).json().find((u: { username: string }) => u.username === 'tecnico').id } });
+    const inst = (await app.inject({ method: 'GET', url: '/api/cpe-health?stale=1', headers: T })).json();
+    assert.ok(!inst.cpes.some((c: { mac: string }) => c.mac === '66:55:44:33:22:11'), 'installers: gone CPEs hidden even on request');
+    assert.equal(inst.stale, undefined);
+    // 0 = everything, as before
+    await call('PUT', '/api/admin/server-settings', { values: { staleCpeMonths: 0 } });
+    assert.ok((await call('GET', '/api/cpe-health')).json().cpes.some((c: { mac: string }) => c.mac === '66:55:44:33:22:11'));
   });
 
   it('compares the current state with the acceptance test', () => {

@@ -141,6 +141,11 @@ export const SERVER_SETTINGS: Def[] = [
   threshold('ethMinMbps', 'ETH_MIN_MBPS', 'Velocità minima della porta LAN (Mbit/s)', 10, 1000, 'Sotto (o in half duplex) il cavo o il connettore è da controllare.'),
   threshold('signalDropDb', 'SIGNAL_DROP_DB', 'Calo di segnale rispetto al collaudo (dB)', 1, 30, 'Salute CPE: "segnale calato" se il segnale è sceso almeno di tanto.'),
   {
+    key: 'staleCpeMonths', env: 'STALE_CPE_MONTHS', group: 'Soglie di collaudo e salute CPE', label: 'Nascondi le CPE offline da più di (mesi, 0 = mai)', kind: 'int', min: 0, max: 120,
+    help: 'CPE di clienti spariti da tempo ma ancora in UISP: non compaiono in Salute CPE (si possono mostrare con un pulsante) e non contano tra le CPE offline degli AP in Stato rete, così un AP non risulta "con molte CPE offline" per vecchi clienti. In UISP non viene cancellato nulla.',
+    get: (c) => c.staleCpeMonths, set: (c, v) => (c.staleCpeMonths = (v as number | undefined) ?? 12),
+  },
+  {
     key: 'installerCoverageAps', env: 'INSTALLER_COVERAGE_APS', group: 'Copertura per gli installatori', label: 'AP mostrati per ogni verifica di copertura', kind: 'int', min: 1, max: 20,
     help: 'Il server valuta tutti gli AP assegnati all’installatore entro il raggio di copertura (Connettori → UISP), li ordina per segnale stimato e mostra i primi di questo numero; esclude gli AP non attivi o troppo deboli. Vale per la console web e per l’app (Copertura, AP vicini); gli amministratori scelgono ogni volta.',
     get: (c) => c.installerCoverageAps, set: (c, v) => (c.installerCoverageAps = (v as number | undefined) ?? 5),

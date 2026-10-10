@@ -345,10 +345,11 @@ export function createUisp(opts: UispOptions) {
     },
 
     /** CPEs (stations) per AP id: how many and how many not active (Stato rete). */
-    async cpeCounts() {
+    /** [gone]: CPEs to leave out (offline for too long, see Impostazioni server). */
+    async cpeCounts(gone?: (d: UispDevice) => boolean) {
       const m = new Map<string, { total: number; offline: number }>();
       for (const d of await devices()) {
-        if (!d.apId || isAp(d)) continue;
+        if (!d.apId || isAp(d) || gone?.(d)) continue;
         const c = m.get(d.apId) ?? { total: 0, offline: 0 };
         c.total++;
         if (d.status !== 'active') c.offline++;

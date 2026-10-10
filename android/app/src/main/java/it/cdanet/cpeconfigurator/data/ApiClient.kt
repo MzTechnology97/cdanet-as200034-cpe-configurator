@@ -369,7 +369,8 @@ class ApiClient(
         request("POST", "/api/admin/outages/zones", buildJsonObject { put("name", name); put("lat", lat); put("lon", lon); put("radiusKm", radiusKm) })
     }
 
-    suspend fun cpeHealth(): CpeHealthDto = AppJson.decodeFromString(CpeHealthDto.serializer(), request("GET", "/api/cpe-health"))
+    /** [stale]: also the CPEs offline for longer than the server setting (normally left out). */
+    suspend fun cpeHealth(stale: Boolean = false): CpeHealthDto = AppJson.decodeFromString(CpeHealthDto.serializer(), request("GET", "/api/cpe-health" + if (stale) "?stale=1" else ""))
 
     // ---- admin "Stato CPE" (UISP API through the server) ----
     suspend fun adminCpe(deviceId: String): AdminCpeDto =
