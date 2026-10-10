@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
-import { buildApModel, estimateSignal, rankCoverage, servedArc } from '../src/domain/coverage-model.ts';
+import { buildApModel, estimateOrTheory, estimateSignal, rankCoverage, servedArc, theoreticalSignal } from '../src/domain/coverage-model.ts';
 
 const AP = { lat: 37.6, lon: 14.1 };
 /** Point [d] metres east (bearing 90°) or west of the AP. */
@@ -64,4 +64,27 @@ it('coverage ranking: good APs first by signal, a farther good AP beats closer w
     r.map((a) => `${a.id}:${a.rating}`),
     ['far-good:buono', 'mid-ok:buono', 'outside:possibile', 'edge:possibile', 'near-none:senza stima', 'near-weak:improbabile', 'down:non attivo'],
   );
+});
+
+it('theoretical estimate for an AP without customers: free space, sector, low confidence', () => {
+  const r = { eirpDbm: 30, cpeGainDbi: 23 };
+  const near = theoreticalSignal({ sector: { center: 90, width: 90 } }, 1000, 90, 5600, r);
+  const far = theoreticalSignal({ sector: { center: 90, width: 90 } }, 4000, 90, 5600, r);
+  // 1 km at 5.6 GHz: path loss ~107.4 dB → 30 + 23 − 107.4 − 4 ≈ −58 dBm; 4 times farther = 12 dB less
+  assert.equal(near.signalDbm, -58);
+  assert.equal(far.signalDbm, -70);
+  assert.equal(near.theoretical, true);
+  assert.equal(near.confidence, 'bassa');
+  assert.equal(near.high! - near.low!, 16);
+  const behind = theoreticalSignal({ sector: { center: 90, width: 90 } }, 1000, 270, 5600, r);
+  assert.equal(behind.inSector, false);
+  assert.equal(behind.signalDbm, -78, 'outside the sector: 20 dB lower');
+  assert.equal(theoreticalSignal({ sector: null }, 1000, 270, null, r).inSector, null, 'no azimuth: direction unknown');
+  // a model learned from customers wins over the theory
+  const learned = buildApModel(AP, [0, 1, 2, 3, 4].map((i) => ({ lat: AP.lat + 0.01 + i * 0.002, lon: AP.lon + 0.01, signal: -60 - i })));
+  assert.equal(estimateOrTheory(learned, 2000, 40, 5600, r).theoretical, undefined);
+  assert.equal(estimateOrTheory(buildApModel(AP, []), 2000, 40, 5600, r).theoretical, true);
+  // ranking: a strong theoretical estimate is only "possibile", never "buono"
+  const ranked = rankCoverage([{ distanceM: 1000, status: 'active', estimate: near }], -75);
+  assert.equal(ranked[0]!.rating, 'possibile');
 });

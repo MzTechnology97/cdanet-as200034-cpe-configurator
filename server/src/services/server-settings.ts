@@ -126,6 +126,16 @@ export const SERVER_SETTINGS: Def[] = [
     get: (c) => c.installerCoverageAps, set: (c, v) => (c.installerCoverageAps = (v as number | undefined) ?? 5),
   },
   {
+    key: 'coverageEirpDbm', env: 'COVERAGE_AP_EIRP_DBM', group: 'Simulazione radio (AP senza clienti)', label: 'Potenza irradiata dagli AP (EIRP, dBm)', kind: 'int', min: 10, max: 60,
+    help: 'Per gli AP che non hanno ancora clienti la copertura si stima in teoria (spazio libero). 30 dBm è il limite in Italia per la banda 5,47–5,725 GHz. Gli AP con clienti usano i segnali reali e questo valore non conta.',
+    get: (c) => c.coverageEirpDbm, set: (c, v) => (c.coverageEirpDbm = (v as number | undefined) ?? 30),
+  },
+  {
+    key: 'coverageCpeGainDbi', env: 'COVERAGE_CPE_GAIN_DBI', group: 'Simulazione radio (AP senza clienti)', label: 'Guadagno dell’antenna della CPE (dBi)', kind: 'int', min: 0, max: 40,
+    help: 'La CPE tipica dei clienti: LiteBeam 5AC Gen2 23 dBi, NanoStation 5AC 16 dBi, PowerBeam 5AC 25 dBi.',
+    get: (c) => c.coverageCpeGainDbi, set: (c, v) => (c.coverageCpeGainDbi = (v as number | undefined) ?? 23),
+  },
+  {
     key: 'releases.githubRepo', env: 'ANDROID_RELEASE_GITHUB_REPO', group: 'Rilasci dell’app Android', label: 'Repository GitHub dei rilasci (owner/repo)', kind: 'text', restart: true,
     get: (c) => c.releases.githubRepo, set: (c, v) => (c.releases.githubRepo = v as string | undefined),
   },

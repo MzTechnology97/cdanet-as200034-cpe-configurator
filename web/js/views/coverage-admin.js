@@ -241,12 +241,14 @@ export async function adminCoverageView() {
           [c.lat - half / mPerLat, c.lon - half / mPerLon],
           [c.lat + half / mPerLat, c.lon + half / mPerLon],
         ],
-        { stroke: false, fillColor: scaleColor(c.dbm), fillOpacity: c.confidence === 'bassa' ? 0.18 : 0.38, interactive: false },
+        { stroke: false, fillColor: scaleColor(c.dbm), fillOpacity: d.theoretical ? 0.3 : c.confidence === 'bassa' ? 0.18 : 0.38, interactive: false },
       ).addTo(simLayer);
     }
-    if (d.sector && d.servedM) {
+    // learned: the area already served; theory: the sector of the antenna (azimuth from UISP)
+    if (d.sector && (d.servedM || d.theoretical)) {
+      const reach = d.servedM || d.radiusM;
       const pts = [[d.ap.lat, d.ap.lon]];
-      for (let i = 0; i <= 24; i++) pts.push(towards(d.ap.lat, d.ap.lon, d.sector.center - d.sector.width / 2 + (d.sector.width * i) / 24, d.servedM));
+      for (let i = 0; i <= 24; i++) pts.push(towards(d.ap.lat, d.ap.lon, d.sector.center - d.sector.width / 2 + (d.sector.width * i) / 24, reach));
       L.polygon(pts, { color: '#0f172a', weight: 1.5, fill: false, dashArray: '4 5', interactive: false }).addTo(simLayer);
     }
     L.circleMarker([d.ap.lat, d.ap.lon], { radius: 8, color: '#0f172a', weight: 3, fillColor: '#ffffff', fillOpacity: 1, interactive: false }).addTo(simLayer);
@@ -257,12 +259,18 @@ export async function adminCoverageView() {
       h(
         'div',
         { class: 'sim-info' },
-        h('b', {}, `Simulazione di ${d.ap.name}`),
-        h('span', { class: 'small muted' }, ` · da ${d.customers} clienti · raggio ${km(d.radiusM)} · ${Math.round((100 * good) / d.cells.length)}% dell’area sopra ${d.minDbm} dBm`),
+        h('b', {}, `Simulazione ${d.theoretical ? 'teorica ' : ''}di ${d.ap.name}`),
+        h('span', { class: 'small muted' }, ` · ${d.theoretical ? 'nessun cliente da cui imparare' : `da ${d.customers} clienti`} · raggio ${km(d.radiusM)} · ${Math.round((100 * good) / d.cells.length)}% dell’area sopra ${d.minDbm} dBm`),
         ' ',
         clearBtn(),
         legend(SCALE.map(([, color, text]) => [color, text])),
-        h('p', { class: 'small muted' }, 'Segnale atteso per una CPE nuova, stimato dai clienti già collegati (distanza, direzione, clienti vicini). Non considera ostacoli: per un punto preciso usa Visibilità. Colori tenui: stima poco affidabile (fuori dal settore servito o lontano dai clienti). Tratteggio: area già servita.'),
+        d.theoretical
+          ? h(
+              'div',
+              { class: 'notice warn' },
+              'Stima teorica, meno precisa: l’AP non ha ancora clienti con segnale. Calcolata in spazio libero dalla potenza irradiata dell’AP e dal guadagno della CPE (Impostazioni server → Simulazione radio), con il settore dell’antenna se l’azimut è impostato in UISP (tratteggio). Margine ±8 dB; non considera ostacoli: per un punto preciso usa Visibilità. Diventa una stima reale appena l’AP ha i primi clienti.',
+            )
+          : h('p', { class: 'small muted' }, 'Segnale atteso per una CPE nuova, stimato dai clienti già collegati (distanza, direzione, clienti vicini). Non considera ostacoli: per un punto preciso usa Visibilità. Colori tenui: stima poco affidabile (fuori dal settore servito o lontano dai clienti). Tratteggio: area già servita.'),
       ),
     );
   }

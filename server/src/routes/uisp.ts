@@ -14,7 +14,7 @@ import { parseMac, SSID_PARTS, TARGET_FIRMWARE } from '../domain/policy.ts';
 import type { ModuleKey } from '../services/modules.ts';
 import { isAp, isPtp, type UispDevice } from '../services/uisp.ts';
 import { approxPoint, roughDistance } from '../domain/approx.ts';
-import { estimateSignal, rankCoverage, type ApModel } from '../domain/coverage-model.ts';
+import { estimateOrTheory, rankCoverage, type ApModel } from '../domain/coverage-model.ts';
 
 interface JobRow {
   id: string;
@@ -100,11 +100,12 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     const inRange = await uisp().nearestAps({ lat: q.lat, lon: q.lon }, 500, maxKm, allow);
     const models = await uisp().apModels(inRange.map((a) => a.id)).catch(() => new Map<string, ApModel>());
     const clientsShown = !keys || ctx.outages.config().installerClients;
-    const estimateFor = (a: { id: string; distanceM: number; bearing: number }) => {
+    const radio = { eirpDbm: ctx.cfg.coverageEirpDbm, cpeGainDbi: ctx.cfg.coverageCpeGainDbi };
+    const estimateFor = (a: { id: string; distanceM: number; bearing: number; frequency: number | null }) => {
       const m = models.get(a.id);
       if (!m) return null;
-      // bearing from the AP towards the point = reverse of the pointing direction
-      const e = estimateSignal(m, a.distanceM, (a.bearing + 180) % 360);
+      // bearing from the AP towards the point = reverse of the pointing direction; no customers: theory
+      const e = estimateOrTheory(m, a.distanceM, (a.bearing + 180) % 360, a.frequency, radio);
       return { ...e, basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null };
     };
     const served = (a: { id: string }) => {
@@ -147,10 +148,15 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     const ap = (await uisp().apsWithLocation()).find((a) => a.id === q.apId && !isPtp(a));
     if (!ap) throw new HttpError(404, 'ap_not_found');
     const m = (await uisp().apModels([ap.id])).get(ap.id);
-    const base = { ap: { id: ap.id, name: ap.name, lat: ap.location.lat, lon: ap.location.lon }, minDbm: FIELD_THRESHOLDS.signalMin, goodDbm: FIELD_THRESHOLDS.signalGood };
-    if (!m?.fit) return { ...base, customers: m?.samples.length ?? 0, cells: [], cellM: 0, radiusM: 0, sector: m?.sector ?? null, servedM: m?.servedM ?? null };
-    // out to 1.5 times the customers served (at least 1.5 km, at most 15 km), 40 x 40 cells
-    const radiusM = Math.round(Math.min(15000, Math.max(1500, (m.servedM ?? 2000) * 1.5)));
+    if (!m) throw new HttpError(404, 'ap_not_found');
+    const radio = { eirpDbm: ctx.cfg.coverageEirpDbm, cpeGainDbi: ctx.cfg.coverageCpeGainDbi };
+    const theoretical = !m.fit;
+    const base = { ap: { id: ap.id, name: ap.name, lat: ap.location.lat, lon: ap.location.lon }, minDbm: FIELD_THRESHOLDS.signalMin, goodDbm: FIELD_THRESHOLDS.signalGood, theoretical };
+    // learned: out to 1.5 times the customers served; theory: to where the signal falls to −80 dBm.
+    // At least 1.5 km, at most 15 km; 40 x 40 cells.
+    const f = ap.frequency && ap.frequency > 1000 ? ap.frequency : 5600;
+    const reach = 1000 * 10 ** ((radio.eirpDbm + radio.cpeGainDbi - 4 + 80 - 32.44 - 20 * Math.log10(f)) / 20);
+    const radiusM = Math.round(Math.min(15000, Math.max(1500, theoretical ? reach : (m.servedM ?? 2000) * 1.5)));
     const n = 40;
     const cellM = (2 * radiusM) / n;
     const mPerLat = 111_320;
@@ -163,7 +169,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
         const d = Math.hypot(dx, dy);
         if (d > radiusM) continue;
         const b = ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360;
-        const e = estimateSignal(m, d, b);
+        const e = estimateOrTheory(m, d, b, ap.frequency, radio);
         if (e.signalDbm === null) continue;
         cells.push({ lat: Math.round((ap.location.lat + dy / mPerLat) * 1e6) / 1e6, lon: Math.round((ap.location.lon + dx / mPerLon) * 1e6) / 1e6, dbm: e.signalDbm, confidence: e.confidence });
       }

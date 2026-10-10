@@ -6,7 +6,7 @@ import { nowIso, recordEvent } from '../db.ts';
 import { approxPoint, roughDistance } from '../domain/approx.ts';
 import { distanceM, isValidLatLon } from '../domain/geo.ts';
 import { lineOfSight, pathPoints } from '../domain/los.ts';
-import { estimateSignal, rankCoverage, type ApModel } from '../domain/coverage-model.ts';
+import { estimateOrTheory, rankCoverage, type ApModel } from '../domain/coverage-model.ts';
 import { FIELD_THRESHOLDS } from './field.ts';
 import { elevationAngle } from '../services/dem.ts';
 
@@ -79,10 +79,12 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
     const inRange = await ctx.uisp.nearestAps({ lat: q.lat, lon: q.lon }, 500, ctx.uispSettings.coverageMaxKm, allow);
     const models = await ctx.uisp.apModels(inRange.map((a) => a.id)).catch(() => new Map<string, ApModel>());
     const clientsShown = !keys || ctx.outages.config().installerClients;
-    const estimateFor = (a: { id: string; distanceM: number; bearing: number }) => {
+    const radio = { eirpDbm: ctx.cfg.coverageEirpDbm, cpeGainDbi: ctx.cfg.coverageCpeGainDbi };
+    const estimateFor = (a: { id: string; distanceM: number; bearing: number; frequency: number | null }) => {
       const m = models.get(a.id);
       if (!m) return null;
-      const e = estimateSignal(m, a.distanceM, (a.bearing + 180) % 360);
+      // no customers on the AP: theoretical estimate (less accurate, marked as such)
+      const e = estimateOrTheory(m, a.distanceM, (a.bearing + 180) % 360, a.frequency, radio);
       return { ...e, basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null };
     };
     const ranked = rankCoverage(

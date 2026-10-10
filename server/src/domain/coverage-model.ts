@@ -42,6 +42,51 @@ export interface SignalEstimate {
   basis: number | null;
   /** Customers with a signal within ~500 m of the point and the same direction from the AP. */
   nearby: number;
+  /** No customers to learn from: free-space estimate from the radio parameters (less accurate). */
+  theoretical?: boolean;
+}
+
+/** Radio parameters of the theoretical estimate (Impostazioni server → Simulazione radio). */
+export interface RadioDefaults {
+  /** Power radiated by the AP towards the customers (EIRP), dBm. */
+  eirpDbm: number;
+  /** Gain of the customer's CPE antenna, dBi. */
+  cpeGainDbi: number;
+}
+
+/** Losses of a real link not in free space (cables, polarisation, a little fading), dB. */
+const REAL_LOSS_DB = 4;
+/** Outside the sector: side and back lobes of a sector antenna are this much lower, dB. */
+const OFF_SECTOR_DB = 20;
+/** Uncertainty of the theoretical estimate, dB. */
+const THEORY_SPREAD_DB = 8;
+
+/**
+ * Expected signal of a CPE at distance [d] and bearing [b] from an AP with no customers to learn
+ * from: EIRP + CPE gain − free-space path loss at the AP frequency, and the sector of the antenna
+ * when its azimuth is known. No obstacles (that is the line-of-sight profile): low confidence.
+ */
+export function theoreticalSignal(m: Pick<ApModel, 'sector'>, d: number, b: number, freqMHz: number | null, r: RadioDefaults): SignalEstimate {
+  const f = freqMHz && freqMHz > 1000 ? freqMHz : 5600;
+  const fspl = 20 * Math.log10(Math.max(30, d) / 1000) + 20 * Math.log10(f) + 32.44;
+  const inSector = m.sector ? angleDiff(b, m.sector.center) <= m.sector.width / 2 + 10 : null;
+  const est = r.eirpDbm + r.cpeGainDbi - fspl - REAL_LOSS_DB - (inSector === false ? OFF_SECTOR_DB : 0);
+  return {
+    signalDbm: Math.round(est),
+    low: Math.round(est - THEORY_SPREAD_DB),
+    high: Math.round(Math.min(-30, est + THEORY_SPREAD_DB)),
+    inSector,
+    beyondServed: false,
+    confidence: 'bassa',
+    basis: 0,
+    nearby: 0,
+    theoretical: true,
+  };
+}
+
+/** Learned estimate when the AP has customers with a signal, the theoretical one otherwise. */
+export function estimateOrTheory(m: ApModel, d: number, b: number, freqMHz: number | null, r: RadioDefaults): SignalEstimate {
+  return m.fit ? estimateSignal(m, d, b) : theoreticalSignal(m, d, b, freqMHz, r);
 }
 
 const angleDiff = (a: number, b: number) => {
@@ -141,12 +186,13 @@ export type CoverageRating = 'buono' | 'possibile' | 'senza stima' | 'improbabil
 const RATING_ORDER: Record<CoverageRating, number> = { buono: 0, possibile: 1, 'senza stima': 2, improbabile: 3, 'non attivo': 4 };
 
 /** Rating of one AP: [minDbm] is the minimum signal accepted at the acceptance test. */
-type Estimated = Pick<SignalEstimate, 'signalDbm' | 'high' | 'inSector'>;
+type Estimated = Pick<SignalEstimate, 'signalDbm' | 'high' | 'inSector' | 'theoretical'>;
 
 export function rateCoverage(status: string, e: Estimated | null, minDbm: number): CoverageRating {
   if (status !== 'active') return 'non attivo';
   if (!e || e.signalDbm === null) return 'senza stima';
   if (e.high !== null && e.high < minDbm) return 'improbabile'; // not even the optimistic bound is enough
+  if (e.theoretical) return 'possibile'; // from theory only: never more than "to be checked"
   return e.signalDbm >= minDbm && e.inSector !== false ? 'buono' : 'possibile';
 }
 
