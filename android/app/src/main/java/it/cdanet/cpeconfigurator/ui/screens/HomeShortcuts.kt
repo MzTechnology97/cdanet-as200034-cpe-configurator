@@ -76,12 +76,20 @@ fun shortcutCatalog(m: Map<String, Boolean>, admin: Boolean, offline: Boolean): 
     }
     if (on) add(Shortcut("notifications", "Notifiche", "Esiti del NOC, interventi e avvisi", R.drawable.ic_notifications, Area.Work, Dest(Screen.Notifications)))
     // customer's network: these work without login too
-    if (tools) add(Shortcut("lan", "Scansione LAN", "Apparati nella rete del cliente", R.drawable.ic_radar, Area.Tools, Dest(Screen.Lan)))
+    if (tools) add(Shortcut("lan", "Scansione LAN", "Host attivi e topologia della rete del cliente", R.drawable.ic_radar, Area.Tools, Dest(Screen.Lan, LAN_TABS[0])))
+    if (tools) add(Shortcut("lan_discovery", "Discovery LAN", "Apparati riconosciuti per marca e modello", R.drawable.ic_device_hub, Area.Tools, Dest(Screen.Lan, LAN_TABS[1])))
+    if (tools) add(Shortcut("ports", "Scanner porte", "Porte aperte di un host", R.drawable.ic_manage_search, Area.Tools, Dest(Screen.Lan, LAN_TABS[2])))
     if (tools) add(Shortcut("wifi", "Wi-Fi Analyzer", "Reti, canali e consiglio per il router", R.drawable.ic_wifi_find, Area.Tools, Dest(Screen.Wifi)))
-    if (tools) add(Shortcut("net_diag", "Diagnostica di rete", "Ping, traceroute, DNS, speed test", R.drawable.ic_speed, Area.Tools, Dest(Screen.Diag)))
+    if (tools) add(Shortcut("net_diag", "Diagnostica di rete", "Ping, traceroute, speed test, MTU", R.drawable.ic_speed, Area.Tools, Dest(Screen.Diag, DIAG_TABS[0])))
+    if (tools) add(Shortcut("net_diag_adv", "Diagnostica avanzata", "Ping continuo, DNS, HTTP, Wake-on-LAN", R.drawable.ic_query_stats, Area.Tools, Dest(Screen.Diag, DIAG_TABS[1])))
     if (tools) add(Shortcut("devices", "Apparati in LAN", "SNMP e telecamere", R.drawable.ic_memory, Area.Tools, Dest(Screen.Devices)))
+    if (tools) add(Shortcut("snmp", "SNMP", "Interroga switch, router e apparati", R.drawable.ic_memory, Area.Tools, Dest(Screen.Devices, DEVICES_TABS[0])))
+    if (tools) add(Shortcut("cameras", "TVCC / IP camera", "ONVIF, Hikvision SADP, RTSP", R.drawable.ic_videocam, Area.Tools, Dest(Screen.Devices, DEVICES_TABS[1])))
     if (m["routeros"] != false) add(Shortcut("routeros", "MikroTik · RouterOS", "Consultazione in sola lettura", R.drawable.ic_router, Area.Tools, Dest(Screen.RouterOs)))
     if (tools) add(Shortcut("remote", "Accesso remoto", "SSH e Remote Desktop", R.drawable.ic_terminal, Area.Tools, Dest(Screen.Remote)))
+    // app
+    if (on) add(Shortcut("search", "Cerca", "Cliente, MAC o SSID tra installazioni e CPE", R.drawable.ic_search, Area.Help, Dest(Screen.Search)))
+    add(Shortcut("settings", "Impostazioni", "Account, notifiche, server", R.drawable.ic_settings, Area.Help, Dest(Screen.Settings)))
     if (on) add(Shortcut("guide", "Guida", "Installazione passo per passo", R.drawable.ic_menu_book, Area.Help, Dest(Screen.Guide)))
 }
 
