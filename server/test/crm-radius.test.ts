@@ -43,12 +43,6 @@ function fakeCrm() {
     '20': [{ address_id: 201, description: 'Indirizzo principale', address_line1: 'Via Valle 2', city: 'Enna', lat: '37.6', lng: '14.1', is_main: true }],
     '30': [{ address_id: 301, description: 'Indirizzo principale', address_line1: 'Via Senza Punto 3', city: 'Enna', lat: null, lng: null, is_main: true }],
   };
-  // installation sites: ROSSI's has coordinates, VERDI's has none
-  const addresses: Record<string, object[]> = {
-    '10': [{ address_id: 100, description: 'Indirizzo principale', address_line1: 'Via Sede Legale 1', city: 'Enna', lat: '', lng: '', is_main: true }, { address_id: 101, description: 'Installazione', address_line1: 'Contrada Monte 5', city: 'Enna', postal_code: '94100', lat: '37.5701', lng: '14.2702', is_main: false }],
-    '20': [{ address_id: 201, description: 'Indirizzo principale', address_line1: 'Via Valle 2', city: 'Enna', lat: '37.6', lng: '14.1', is_main: true }],
-    '30': [{ address_id: 301, description: 'Indirizzo principale', address_line1: 'Via Senza Punto 3', city: 'Enna', lat: null, lng: null, is_main: true }],
-  };
   const calls: string[] = [];
   const page = (data: object[]) => Response.json({ status: 'OK', message: null, data: { data, max_items: 30, total: String(data.length), prev: null, next: null, pages: 1 } });
   const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
