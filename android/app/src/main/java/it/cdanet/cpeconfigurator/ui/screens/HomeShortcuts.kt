@@ -31,6 +31,11 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import it.cdanet.cpeconfigurator.R
+import it.cdanet.cpeconfigurator.data.ApiClient
+import it.cdanet.cpeconfigurator.data.Settings
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import it.cdanet.cpeconfigurator.ui.Area
 import it.cdanet.cpeconfigurator.ui.Screen
 
@@ -90,6 +95,33 @@ fun resolveShortcuts(saved: List<String>?, catalog: List<Shortcut>): List<Shortc
     return (saved ?: DEFAULT_SHORTCUTS).distinct().mapNotNull { byId[it] }
 }
 
+/**
+ * The account's shortcuts: the server keeps them (they follow the account on every phone), the
+ * phone keeps a copy for an instant Home and for when there is no network. A change made offline
+ * is marked and sent at the next sync, so the server copy never overwrites it.
+ */
+class ShortcutStore(private val settings: Settings, private val api: ApiClient) {
+    private val lock = Mutex()
+
+    /** Opening Home online: send a pending change, else take the server's choice. */
+    suspend fun sync(account: String) = lock.withLock {
+        runCatching {
+            if (settings.homeShortcutsDirty(account)) {
+                api.setHomeShortcuts(settings.homeShortcuts(account).first())
+                settings.markHomeShortcutsSaved(account)
+            } else {
+                settings.setHomeShortcuts(account, api.homeShortcuts(), dirty = false)
+            }
+        }
+    }
+
+    /** A change in the editor: on the phone at once, then on the server (later if offline). */
+    suspend fun save(account: String, ids: List<String>?) = lock.withLock {
+        settings.setHomeShortcuts(account, ids, dirty = true)
+        runCatching { api.setHomeShortcuts(ids) }.onSuccess { settings.markHomeShortcutsSaved(account) }
+    }
+}
+
 /** Editor moves: one place up or down, clamped. */
 fun moveShortcut(ids: List<String>, id: String, delta: Int): List<String> {
     val i = ids.indexOf(id)
@@ -112,7 +144,7 @@ fun ShortcutEditor(catalog: List<Shortcut>, chosen: List<String>, onChange: (Lis
     ModalBottomSheet(onDismissRequest = onDismiss, sheetState = sheet) {
         Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 24.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Text("Scorciatoie della home", style = MaterialTheme.typography.titleLarge)
-            Text("Scegli quali vedere in Oggi e in che ordine. Valgono per il tuo account su questo telefono.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Scegli quali vedere in Oggi e in che ordine. Seguono il tuo account: le ritrovi su ogni telefono da cui accedi.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             Spacer(Modifier.height(8.dp))
             Text("IN HOME · ${inHome.size}", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.onSurfaceVariant)
             if (inHome.isEmpty()) Text("Nessuna: aggiungine una qui sotto.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)

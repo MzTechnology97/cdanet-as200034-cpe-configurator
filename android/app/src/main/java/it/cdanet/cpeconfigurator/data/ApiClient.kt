@@ -398,6 +398,15 @@ class ApiClient(
         request("GET", "/api/admin/coverage/simulation?apId=" + java.net.URLEncoder.encode(apId, "UTF-8"))
 
     /** Admins: default CPE height of Impostazioni server (metres above ground). */
+    /** Home shortcuts of the account, the same on every phone (null: never customised). */
+    suspend fun homeShortcuts(): List<String>? = shortcutIds(request("GET", "/api/auth/shortcuts"))
+
+    suspend fun setHomeShortcuts(ids: List<String>?): List<String>? =
+        shortcutIds(request("PUT", "/api/auth/shortcuts", buildJsonObject { put("ids", ids?.let { l -> kotlinx.serialization.json.JsonArray(l.map { kotlinx.serialization.json.JsonPrimitive(it) }) } ?: kotlinx.serialization.json.JsonNull) }))
+
+    private fun shortcutIds(json: String): List<String>? =
+        (AppJson.parseToJsonElement(json).jsonObject["ids"] as? kotlinx.serialization.json.JsonArray)?.map { it.jsonPrimitive.content }
+
     suspend fun defaultCpeHeight(): Double? =
         runCatching { AppJson.parseToJsonElement(request("GET", "/api/admin/pointing/config")).jsonObject["cpeHeightM"]?.jsonPrimitive?.doubleOrNull }.getOrNull()
 

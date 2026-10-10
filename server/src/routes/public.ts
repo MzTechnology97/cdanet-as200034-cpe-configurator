@@ -134,6 +134,25 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     };
   });
 
+  /**
+   * Home shortcuts of the app, chosen by the account and kept with it (any phone it logs in from).
+   * ids: in order; null = never customised (the app shows its defaults). The app knows which ids
+   * exist: unknown ones are kept and ignored there, so an older app does not drop newer choices.
+   */
+  const shortcutIds = z.array(z.string().regex(/^[a-z][a-z0-9_]{0,31}$/)).max(40).nullable();
+
+  app.get('/api/auth/shortcuts', { preHandler: ctx.auth.requireUser }, async (req) => {
+    const r = ctx.db.prepare('SELECT home_shortcuts FROM users WHERE id = ?').get(req.user!.id) as { home_shortcuts: string | null };
+    return { ids: r.home_shortcuts === null ? null : (JSON.parse(r.home_shortcuts) as string[]) };
+  });
+
+  app.put('/api/auth/shortcuts', { preHandler: ctx.auth.requireUser }, async (req) => {
+    const { ids } = z.object({ ids: shortcutIds }).strict().parse(req.body);
+    const clean = ids === null ? null : [...new Set(ids)];
+    ctx.db.prepare('UPDATE users SET home_shortcuts = ? WHERE id = ?').run(clean === null ? null : JSON.stringify(clean), req.user!.id);
+    return { ids: clean };
+  });
+
   // ---- Two-step verification (TOTP) ------------------------------------------------------
   const totpRow = (id: number) => ctx.db.prepare('SELECT * FROM users WHERE id = ?').get(id) as TotpRow;
   const needPassword = (u: TotpRow, password: string, ip: string) => {

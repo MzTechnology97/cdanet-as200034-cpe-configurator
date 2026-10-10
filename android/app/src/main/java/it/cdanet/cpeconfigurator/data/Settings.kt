@@ -46,18 +46,29 @@ class Settings(private val context: Context) {
     }
 
     /**
-     * Home shortcuts chosen by an account on this phone, in order (null: never customised, the
-     * defaults apply). One list per server and username, so two accounts on one phone keep theirs.
+     * Copy on this phone of the account's Home shortcuts (the server keeps them with the account),
+     * in order; null: never customised, the defaults apply. One per server and username. [dirty]:
+     * changed here and not yet saved on the server (no network): sent at the next sync.
      */
     fun homeShortcuts(account: String): Flow<List<String>?> = context.dataStore.data.map { p ->
         p[shortcutsKey(account)]?.let { v -> v.split(',').filter { it.isNotBlank() } }
     }
 
-    suspend fun setHomeShortcuts(account: String, ids: List<String>?) {
-        context.dataStore.edit { if (ids == null) it.remove(shortcutsKey(account)) else it[shortcutsKey(account)] = ids.joinToString(",") }
+    suspend fun setHomeShortcuts(account: String, ids: List<String>?, dirty: Boolean) {
+        context.dataStore.edit {
+            if (ids == null) it.remove(shortcutsKey(account)) else it[shortcutsKey(account)] = ids.joinToString(",")
+            it[shortcutsDirtyKey(account)] = dirty
+        }
+    }
+
+    suspend fun homeShortcutsDirty(account: String): Boolean = context.dataStore.data.first()[shortcutsDirtyKey(account)] ?: false
+
+    suspend fun markHomeShortcutsSaved(account: String) {
+        context.dataStore.edit { it[shortcutsDirtyKey(account)] = false }
     }
 
     private fun shortcutsKey(account: String) = stringPreferencesKey("home_shortcuts:${account.lowercase()}")
+    private fun shortcutsDirtyKey(account: String) = booleanPreferencesKey("home_shortcuts_dirty:${account.lowercase()}")
 
     companion object {
         /** HTTPS anywhere, plain HTTP only towards private/CGNAT/loopback hosts. */

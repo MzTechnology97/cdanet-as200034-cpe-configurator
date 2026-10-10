@@ -36,7 +36,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -109,7 +108,6 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
     val install by c.install.state.collectAsState()
     val modules by c.modules.collectAsState()
     val admin = session?.user?.role == "admin"
-    val scope = rememberCoroutineScope()
     val lastUser by c.settings.lastUsername.collectAsState(initial = "")
     val backend by c.settings.backendUrl.collectAsState(initial = "")
     // shortcuts are per account (server + username) on this phone; offline: the last one logged in
@@ -118,6 +116,8 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
     val saved by remember(account) { c.settings.homeShortcuts(account).map { SavedShortcuts(it) } }.collectAsState(initial = null)
     val savedShortcuts = saved?.ids
     var editing by remember { mutableStateOf(false) }
+    val shortcutStore = remember { ShortcutStore(c.settings, c.api) }
+    LaunchedEffect(account, offline) { if (!offline && session != null && account.isNotBlank()) shortcutStore.sync(account) }
     var today by remember { mutableStateOf(Today(null, null, null)) }
     LaunchedEffect(offline, modules) {
         if (offline) return@LaunchedEffect
@@ -203,9 +203,9 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
                 onChange = { ids ->
                     // ids of features off right now stay saved, so they come back when turned on
                     val hidden = (savedShortcuts ?: DEFAULT_SHORTCUTS).filter { id -> catalog.none { it.id == id } }
-                    scope.launch { c.settings.setHomeShortcuts(account, ids + hidden) }
+                    c.scope.launch { shortcutStore.save(account, ids + hidden) }
                 },
-                onReset = { scope.launch { c.settings.setHomeShortcuts(account, null) } },
+                onReset = { c.scope.launch { shortcutStore.save(account, null) } },
                 onDismiss = { editing = false },
             )
         }
