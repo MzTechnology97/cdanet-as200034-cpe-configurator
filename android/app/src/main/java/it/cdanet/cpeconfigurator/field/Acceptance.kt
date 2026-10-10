@@ -64,7 +64,12 @@ data class AcceptanceReport(
     val internet: InternetTest,
     val checks: List<AcceptanceCheck>,
     val notes: String = "",
+    /** Height of the installed CPE above the ground, metres (entered by the technician). */
+    val cpeHeightM: Double? = null,
 )
+
+/** CPE height typed by the technician ("6", "6,5"): metres above the ground, null if missing or not plausible. */
+fun parseCpeHeight(text: String): Double? = text.trim().replace(',', '.').toDoubleOrNull()?.takeIf { it in 0.5..100.0 }
 
 /** Builds the acceptance report from several CPE readings (signal averaged) and the Internet test. */
 object Acceptance {
@@ -77,6 +82,7 @@ object Acceptance {
         internet: InternetTest,
         notes: String,
         now: Instant = Instant.now(),
+        cpeHeightM: Double? = null,
     ): AcceptanceReport {
         require(samples.isNotEmpty()) { "Nessuna lettura della CPE" }
         val last = samples.last()
@@ -121,6 +127,7 @@ object Acceptance {
             internet = internet,
             checks = checks.take(30).map { AcceptanceCheck(it.title, it.verdict.name.lowercase(), it.detail.take(400)) },
             notes = notes.trim().take(1000),
+            cpeHeightM = cpeHeightM,
         )
     }
 }
