@@ -439,6 +439,10 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX crm_addresses_customer ON crm_addresses(customer_id);
   `,
+  // 24: Home shortcuts of the app chosen by each account (JSON list of ids; NULL = the defaults)
+  `
+  ALTER TABLE users ADD COLUMN home_shortcuts TEXT;
+  `,
 ];
 
 export function openDatabase(path: string): Db {

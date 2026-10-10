@@ -28,6 +28,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -55,6 +56,7 @@ import it.cdanet.cpeconfigurator.ui.Notice
 import it.cdanet.cpeconfigurator.ui.NoticeKind
 import it.cdanet.cpeconfigurator.ui.Screen
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
 /** Where a Home counter or shortcut leads: a screen and, for areas with tabs, which tab. */
@@ -106,6 +108,16 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
     val install by c.install.state.collectAsState()
     val modules by c.modules.collectAsState()
     val admin = session?.user?.role == "admin"
+    val lastUser by c.settings.lastUsername.collectAsState(initial = "")
+    val backend by c.settings.backendUrl.collectAsState(initial = "")
+    // shortcuts are per account (server + username) on this phone; offline: the last one logged in
+    val account = (session?.user?.username ?: lastUser).takeIf { it.isNotBlank() }?.let { "$it@$backend" }.orEmpty()
+    // null until read from the phone, so the defaults never flash before the account's choice
+    val saved by remember(account) { c.settings.homeShortcuts(account).map { SavedShortcuts(it) } }.collectAsState(initial = null)
+    val savedShortcuts = saved?.ids
+    var editing by remember { mutableStateOf(false) }
+    val shortcutStore = remember { ShortcutStore(c.settings, c.api) }
+    LaunchedEffect(account, offline) { if (!offline && session != null && account.isNotBlank()) shortcutStore.sync(account) }
     var today by remember { mutableStateOf(Today(null, null, null)) }
     LaunchedEffect(offline, modules) {
         if (offline) return@LaunchedEffect
@@ -161,24 +173,41 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
             }
         }
 
-        val shortcuts = buildList {
-            val cpe = cpeTabTitles(modules)
-            if (!offline && cpe.isNotEmpty()) add(Shortcut("CPE collegata", "Diagnosi, puntamento, AP visibili, collaudo", R.drawable.ic_cell_tower, Area.Field, Dest(Screen.CpeHub)))
-            if (!offline && "Puntamento" in cpe) add(Shortcut("Puntamento", "Segnale in tempo reale con bip", R.drawable.ic_signal_cellular_alt, Area.Field, Dest(Screen.CpeHub, "Puntamento")))
-            if (!offline && modules["coverage"] != false) add(Shortcut("Verifica copertura", "Un indirizzo è coperto? Prima del sopralluogo", R.drawable.ic_map, Area.Network, Dest(Screen.Coverage)))
-            if (!offline && "AP vicini" in networkTabTitles(modules)) add(Shortcut("AP vicini", "Sul posto: AP intorno a te, bussola e mirino", R.drawable.ic_explore, Area.Network, Dest(Screen.NetHub, "AP vicini")))
-            if (modules["network_tools"] != false) add(Shortcut("Scansione LAN", "Apparati nella rete del cliente", R.drawable.ic_radar, Area.Tools, Dest(Screen.Lan)))
-            if (!offline) add(Shortcut("Guida", "Installazione passo per passo", R.drawable.ic_menu_book, Area.Help, Dest(Screen.Guide)))
-        }
-        if (shortcuts.isNotEmpty()) {
-            Enter(order++) { GroupHeader("Scorciatoie", Area.Field) }
-            shortcuts.chunked(2).forEach { pair ->
-                Enter(order++) {
-                    Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                        pair.forEach { t -> FeatureTile(t.title, t.subtitle, t.icon, t.area, Modifier.weight(1f).fillMaxHeight(), wide = pair.size == 1) { onOpen(t.dest) } }
-                    }
+        // shortcuts: the ones this account chose, in its order (Modifica)
+        val catalog = shortcutCatalog(modules, admin, offline)
+        val shortcuts = if (saved == null) emptyList() else resolveShortcuts(savedShortcuts, catalog)
+        Enter(order++) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(Modifier.weight(1f)) { GroupHeader("Scorciatoie", Area.Field) }
+                if (account.isNotBlank()) TextButton(onClick = { editing = true }, modifier = Modifier.padding(top = 6.dp)) {
+                    Icon(painterResource(R.drawable.ic_edit), contentDescription = null, modifier = Modifier.size(16.dp))
+                    Spacer(Modifier.width(6.dp))
+                    Text("Modifica")
                 }
             }
+        }
+        if (saved != null && shortcuts.isEmpty()) Enter(order++) {
+            Text("Nessuna scorciatoia: tocca Modifica per sceglierle.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.padding(horizontal = 4.dp))
+        }
+        shortcuts.chunked(2).forEach { pair ->
+            Enter(order++) {
+                Row(Modifier.fillMaxWidth().height(IntrinsicSize.Max), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    pair.forEach { t -> FeatureTile(t.title, t.subtitle, t.icon, t.area, Modifier.weight(1f).fillMaxHeight(), wide = pair.size == 1) { onOpen(t.dest) } }
+                }
+            }
+        }
+        if (editing) {
+            ShortcutEditor(
+                catalog = catalog,
+                chosen = shortcuts.map { it.id },
+                onChange = { ids ->
+                    // ids of features off right now stay saved, so they come back when turned on
+                    val hidden = (savedShortcuts ?: DEFAULT_SHORTCUTS).filter { id -> catalog.none { it.id == id } }
+                    c.scope.launch { shortcutStore.save(account, ids + hidden) }
+                },
+                onReset = { c.scope.launch { shortcutStore.save(account, null) } },
+                onDismiss = { editing = false },
+            )
         }
         Text(
             "CDA Net CPE ${BuildConfig.VERSION_NAME}",
@@ -190,9 +219,9 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
     }
 }
 
-private class Counter(val value: Int?, val label: String, @DrawableRes val icon: Int, val area: Area, val dest: Dest)
+private class SavedShortcuts(val ids: List<String>?)
 
-private class Shortcut(val title: String, val subtitle: String, @DrawableRes val icon: Int, val area: Area, val dest: Dest)
+private class Counter(val value: Int?, val label: String, @DrawableRes val icon: Int, val area: Area, val dest: Dest)
 
 /** A big number of the day: tap to open where it comes from. */
 @Composable
