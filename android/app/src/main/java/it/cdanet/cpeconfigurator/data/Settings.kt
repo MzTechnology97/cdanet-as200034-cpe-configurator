@@ -15,7 +15,7 @@ import it.cdanet.cpeconfigurator.network.TestTls
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
-/** Non-secret preferences only (backend URL, last username). */
+/** Non-secret preferences only (backend URL, last username, Home shortcuts). */
 class Settings(private val context: Context) {
     private val backendKey = stringPreferencesKey("backend_url")
     private val usernameKey = stringPreferencesKey("last_username")
@@ -44,6 +44,20 @@ class Settings(private val context: Context) {
     suspend fun setLastUsername(value: String) {
         context.dataStore.edit { it[usernameKey] = value }
     }
+
+    /**
+     * Home shortcuts chosen by an account on this phone, in order (null: never customised, the
+     * defaults apply). One list per server and username, so two accounts on one phone keep theirs.
+     */
+    fun homeShortcuts(account: String): Flow<List<String>?> = context.dataStore.data.map { p ->
+        p[shortcutsKey(account)]?.let { v -> v.split(',').filter { it.isNotBlank() } }
+    }
+
+    suspend fun setHomeShortcuts(account: String, ids: List<String>?) {
+        context.dataStore.edit { if (ids == null) it.remove(shortcutsKey(account)) else it[shortcutsKey(account)] = ids.joinToString(",") }
+    }
+
+    private fun shortcutsKey(account: String) = stringPreferencesKey("home_shortcuts:${account.lowercase()}")
 
     companion object {
         /** HTTPS anywhere, plain HTTP only towards private/CGNAT/loopback hosts. */
