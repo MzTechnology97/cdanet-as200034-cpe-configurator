@@ -53,6 +53,7 @@ import { createDem } from './services/dem.ts';
 import { createTerrainStore } from './services/terrain-store.ts';
 import { createApLoad, type ApLoadService } from './services/ap-load.ts';
 import { createAdvisor, type Advisor } from './services/ap-advisor.ts';
+import { createOptimizer, type Optimizer } from './services/ap-optimizer.ts';
 
 const CSP = [
   "default-src 'self'",
@@ -114,6 +115,7 @@ export async function buildApp(
     crmSync: undefined as unknown as CrmSync,
     apLoad: undefined as unknown as ApLoadService,
     advisor: undefined as unknown as Advisor,
+    optimizer: undefined as unknown as Optimizer,
     geocoder: createGeocoder({ ...cfg.geocoder, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
     telegram,
     modules,
@@ -127,6 +129,7 @@ export async function buildApp(
   };
   ctx.crmSync = createCrmSync(db, ctx.crm);
   ctx.advisor = createAdvisor(ctx);
+  ctx.optimizer = createOptimizer(ctx);
   ctx.apLoad = createApLoad(db, () => ctx.uisp, undefined, (inputs) => ctx.advisor.run(inputs));
   ctx.outages = createOutages(db, {
     ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),

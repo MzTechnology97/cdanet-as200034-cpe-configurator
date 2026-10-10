@@ -15,6 +15,7 @@ export const NOTIFY_KINDS = {
   work_order_late: { label: 'Intervento in ritardo o non fatto', audience: 'installer', telegram: true },
   work_order_noc: { label: 'Interventi in ritardo o non fatti (NOC)', audience: 'noc', telegram: true },
   network_advice: { label: 'Assistente rete: nuovi problemi critici su AP e CPE', audience: 'noc', telegram: false },
+  network_optimizer: { label: 'IA-AP: esito delle ottimizzazioni automatiche degli AP (canale tenuto o ripristinato)', audience: 'noc', telegram: true },
 } as const;
 export type NotifyKind = keyof typeof NOTIFY_KINDS;
 export const isNotifyKind = (k: string): k is NotifyKind => k in NOTIFY_KINDS;

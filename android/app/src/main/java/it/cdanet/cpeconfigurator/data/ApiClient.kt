@@ -46,6 +46,13 @@ private val ERRORS = mapOf(
     "target_non_privato" to "Consentiti solo target su reti private/CGNAT",
     "template_not_allowed" to "Template non disponibile per il tuo account",
     "uisp_not_configured" to "Servizio non disponibile: contatta l'amministratore",
+    "optimizer_disabled" to "Ottimizzazione automatica spenta: Impostazioni server → Assistente rete (console)",
+    "finding_not_optimizable" to "Questo avviso non si risolve cambiando il canale dell'AP",
+    "finding_without_channel" to "L'avviso non ha un canale consigliato: usa \"Cerca il canale migliore\"",
+    "already_scheduled" to "C'è già un'ottimizzazione programmata o in corso per questo AP",
+    "advisor_data_missing" to "Dati dell'analisi non ancora pronti: rileggi UISP e riprova tra due minuti",
+    "no_candidates" to "Nessun canale candidato dentro la banda consentita",
+    "not_cancellable" to "Questa ottimizzazione non si può più annullare",
     "uisp_unreachable" to "Servizio di rete non raggiungibile, riprova più tardi",
     "start_not_found" to "Non trovo ancora il tuo messaggio: apri il bot, premi Avvia e riprova",
     "link_expired" to "Codice scaduto: premi di nuovo Collega Telegram",
@@ -199,6 +206,19 @@ class ApiClient(
     /** Hides a finding for [days] (0 = shows it again). */
     suspend fun dismissAdvice(id: String, days: Int) {
         request("POST", "/api/admin/advisor/dismiss", buildJsonObject { put("id", id); put("days", days) })
+    }
+
+    /** IA-AP automatic optimisation: state and runs. */
+    suspend fun optimizer(): OptimizerDto = AppJson.decodeFromString(OptimizerDto.serializer(), request("GET", "/api/admin/advisor/optimizer"))
+
+    /** Starts the optimisation of the AP of a finding, confirmed by the admin ([when]: now / night). */
+    suspend fun startOptimizer(findingId: String, mode: String, `when`: String) {
+        request("POST", "/api/admin/advisor/optimizer", buildJsonObject { put("findingId", findingId); put("mode", mode); put("when", `when`); put("confirm", true) })
+    }
+
+    /** Cancels a scheduled run or stops the active one (the AP goes back to its channel). */
+    suspend fun cancelOptimizer(id: String) {
+        request("POST", "/api/admin/advisor/optimizer/" + java.net.URLEncoder.encode(id, "UTF-8") + "/cancel", buildJsonObject { })
     }
 
     /** New data from UISP now (one or two minutes). */

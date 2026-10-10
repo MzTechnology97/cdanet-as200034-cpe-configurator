@@ -219,8 +219,27 @@ export function bestChannel(
   neighbours: Array<{ f: number; w: number }>,
   /** The links of the AP: the weakest must stay above [minDbm] at the new frequency. */
   links?: { from: number; signals: number[]; minDbm: number },
-): { centre: number; occupancy: number; weakestDbm: number | null } | null {
-  let best: { centre: number; occupancy: number; weakestDbm: number | null } | null = null;
+): ChannelChoice | null {
+  return rankChannels(spectrum, width, range, neighbours, links)[0] ?? null;
+}
+
+export interface ChannelChoice {
+  centre: number;
+  /** Occupancy of the channel plus the penalties (near AP, loss of the weakest customer). */
+  occupancy: number;
+  /** Signal of the weakest customer on this channel, dBm (null: no customers). */
+  weakestDbm: number | null;
+}
+
+/** Every usable channel of [width] in [range], best first (same rules as [bestChannel]). */
+export function rankChannels(
+  spectrum: Array<[number, number]>,
+  width: number,
+  range: { from: number; to: number },
+  neighbours: Array<{ f: number; w: number }>,
+  links?: { from: number; signals: number[]; minDbm: number },
+): ChannelChoice[] {
+  const out: ChannelChoice[] = [];
   const weakest = links?.signals.length ? Math.min(...links.signals) : null;
   for (let c = Math.ceil((range.from + width / 2) / 5) * 5; c + width / 2 <= range.to; c += 5) {
     const occ = channelOccupancy(spectrum, c, width);
@@ -229,9 +248,35 @@ export function bestChannel(
     const after = weakest !== null && links ? Math.round((weakest + frequencyShiftDb(links.from, c)) * 10) / 10 : null;
     if (after !== null && after < links!.minDbm && after < weakest!) continue;
     const score = occ + (neighbours.some((n) => overlap({ f: c, w: width }, n)) ? 100 : 0) + (after !== null && weakest !== null ? Math.max(0, weakest - after) : 0);
-    if (!best || score < best.occupancy) best = { centre: c, occupancy: score, weakestDbm: after };
+    if (score < 100) out.push({ centre: c, occupancy: score, weakestDbm: after });
   }
-  return best && best.occupancy < 100 ? best : null;
+  // best first; on equal score the channel nearer the current one (smaller change for the antennas)
+  return out.sort((a, b) => a.occupancy - b.occupancy || (links ? Math.abs(a.centre - links.from) - Math.abs(b.centre - links.from) : a.centre - b.centre));
+}
+
+/**
+ * Channels to try on an AP for the automatic optimisation: the best [n] of its link spectrum for
+ * each width in [widths] (the current one by default), far enough from each other to be really
+ * different (half a channel), never on a near AP, the current channel excluded. Best first.
+ */
+export function channelCandidates(inputs: AdvisorInput[], apId: string, o: { range: { from: number; to: number }; minDbm?: number }, widths?: number[], n = 3): Array<ChannelChoice & { width: number }> {
+  const ap = inputs.find((i) => i.apId === apId);
+  if (!ap || ap.frequency === null || ap.widthMhz === null) return [];
+  const near = ap.location ? inputs.filter((x) => x.apId !== apId && x.frequency !== null && x.widthMhz !== null && x.location !== null && distanceM(ap.location!, x.location!) <= RULES.coChannelM) : [];
+  const neighbours = near.map((x) => ({ f: x.frequency!, w: x.widthMhz! }));
+  const spectrum = linkSpectrum(ap.spectrum, ap.stations.map((s) => s.spectrum));
+  const links = { from: ap.frequency, signals: ap.stations.map((s) => s.rxSignal).filter((v): v is number => v !== null), minDbm: o.minDbm ?? -75 };
+  const all = (widths?.length ? widths : [ap.widthMhz])
+    .flatMap((w) => rankChannels(spectrum, w, o.range, neighbours, links).map((c) => ({ ...c, width: w })))
+    .filter((c) => !(c.centre === ap.frequency && c.width === ap.widthMhz))
+    .sort((a, b) => a.occupancy - b.occupancy);
+  const out: Array<ChannelChoice & { width: number }> = [];
+  for (const c of all) {
+    if (out.length >= n) break;
+    if (out.some((x) => x.width === c.width && Math.abs(x.centre - c.centre) < c.width / 2)) continue;
+    out.push(c);
+  }
+  return out;
 }
 
 export interface AdvisorOptions {

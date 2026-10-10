@@ -58,6 +58,13 @@ const MESSAGES = {
   connector_incomplete: 'Servono indirizzo UISP e token',
   uisp_not_configured: 'UISP non configurato (Connettori)',
   uisp_tls_error: 'Certificato TLS di UISP non valido',
+  optimizer_disabled: 'Ottimizzazione automatica spenta: Impostazioni server → Assistente rete',
+  finding_not_optimizable: 'Questo avviso non si risolve cambiando il canale dell’AP',
+  finding_without_channel: 'L’avviso non ha un canale consigliato: usa “Cerca il canale migliore”',
+  already_scheduled: 'C’è già un’ottimizzazione programmata o in corso per questo AP',
+  advisor_data_missing: 'Dati dell’analisi non ancora pronti: premi Aggiorna ora e riprova tra due minuti',
+  no_candidates: 'Nessun canale candidato dentro la banda consentita',
+  not_cancellable: 'Questa ottimizzazione non si può più annullare',
 };
 
 export const session = {

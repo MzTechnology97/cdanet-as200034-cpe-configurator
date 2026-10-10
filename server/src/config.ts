@@ -81,6 +81,7 @@ const envSchema = z.object({
   COVERAGE_CPE_GAIN_DBI: int(23, 0, 40),
   COVERAGE_BUILDING_HEIGHT_M: int(8, 0, 60),
   COVERAGE_HIDE_BELOW_DBM: int(-70, -100, -40),
+  ADVISOR_AUTO_OPTIMIZE: z.enum(['0', '1']).default('0'),
   ADVISOR_FREQ_RANGE: z.string().regex(/^\s*\d{4}\s*-\s*\d{4}\s*$/).default('5120-5800'),
   COVERAGE_TREE_HEIGHT_M: int(8, 0, 40),
   MIN_ANDROID_VERSION: z.string().regex(/^\d+\.\d+\.\d+$/).default('1.0.0'),
@@ -174,6 +175,8 @@ export interface Config {
   coverageHideBelowDbm: number;
   /** Assistente rete: frequencies the channel suggestions may use, "from-to" MHz. */
   advisorFreqRange: string;
+  /** IA-AP: admins may start the automatic channel optimisation of an AP through UISP. */
+  advisorAutoOptimize: boolean;
   coverageBuildingM: number;
   /** Average height of the trees (land cover "tree cover"), m. */
   coverageTreeM: number;
@@ -274,6 +277,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     coverageCpeGainDbi: e.COVERAGE_CPE_GAIN_DBI,
     coverageHideBelowDbm: e.COVERAGE_HIDE_BELOW_DBM,
     advisorFreqRange: e.ADVISOR_FREQ_RANGE,
+    advisorAutoOptimize: e.ADVISOR_AUTO_OPTIMIZE === '1',
     coverageBuildingM: e.COVERAGE_BUILDING_HEIGHT_M,
     coverageTreeM: e.COVERAGE_TREE_HEIGHT_M,
     minAndroidVersion: e.MIN_ANDROID_VERSION,

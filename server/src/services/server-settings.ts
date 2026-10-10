@@ -176,6 +176,11 @@ export const SERVER_SETTINGS: Def[] = [
     get: (c) => c.advisorFreqRange, set: (c, v) => (c.advisorFreqRange = /^\s*\d{4}\s*-\s*\d{4}\s*$/.test(String(v ?? '')) ? String(v) : '5120-5800'),
   },
   {
+    key: 'advisorAutoOptimize', env: 'ADVISOR_AUTO_OPTIMIZE', group: 'Assistente rete', label: 'Ottimizzazione automatica degli AP tramite UISP', kind: 'bool',
+    help: 'Permette agli amministratori di far provare all’IA-AP il canale consigliato (o i migliori dello spettro) su un AP: cambia il canale tramite UISP, aspetta che tutte le CPE si riaggancino, confronta i collegamenti e tiene il canale solo se è davvero migliore, altrimenti torna a quello iniziale. Un AP alla volta, sempre dopo la conferma di un amministratore. Spento = l’assistente dà solo consigli.',
+    get: (c) => c.advisorAutoOptimize, set: (c, v) => (c.advisorAutoOptimize = !!v),
+  },
+  {
     key: 'coverageBuildingM', env: 'COVERAGE_BUILDING_HEIGHT_M', group: 'Simulazione radio', label: 'Altezza media degli edifici (m)', kind: 'int', min: 0, max: 60,
     help: 'Dove la mappa del suolo (ESA WorldCover) indica edifici, il profilo verso l’AP si alza di questa altezza: un paese tra la CPE e l’AP può fare ombra. Gli edifici entro 50 m dalla CPE e dall’AP non contano (l’antenna è sopra il tetto). 0 = edifici ignorati.',
     get: (c) => c.coverageBuildingM, set: (c, v) => (c.coverageBuildingM = (v as number | undefined) ?? 8),
