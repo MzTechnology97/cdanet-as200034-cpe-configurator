@@ -59,7 +59,7 @@ fun SignalHistory(c: AppContainer, job: JobDto) {
 }
 
 @Composable
-private fun SeriesChart(signal: SeriesDto, remote: SeriesDto, good: Double, min: Double) {
+internal fun SeriesChart(signal: SeriesDto, remote: SeriesDto, good: Double, min: Double) {
     val line = MaterialTheme.colorScheme.primary
     val muted = MaterialTheme.colorScheme.outline
     val cGoodGreen = GoodGreen

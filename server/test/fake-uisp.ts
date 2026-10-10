@@ -53,6 +53,11 @@ export function fakeUisp(opts: { authorizeMethod?: 'POST' | 'PUT'; backupCfg?: s
     } as unknown as (typeof devices)[number]);
   }
   const unms: Record<string, unknown> = {};
+  let wireless: unknown = {
+    mode: 'sta-ptmp', ssid: 'CDA-NET-N2-D01', txPower: 24, antennaGain: 23, ackDistance: 2400, isACKAutoDistanceEnabled: true, isAutoChannelWidthEnabled: false, channelWidth: 20,
+    boardInfo: { radio1: { txPowerRange: { min: -4, max: 24 }, channelWidthList: [10, 20, 40, 80] } },
+    securityConfig: { security: 'wpa2AES', presharedKey: 'chiave-segreta-wpa', authServerSecret: 'segreto-radius' },
+  };
   const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     const method = init?.method ?? 'GET';
@@ -116,7 +121,11 @@ export function fakeUisp(opts: { authorizeMethod?: 'POST' | 'PUT'; backupCfg?: s
       return new Response(JSON.stringify({ result: true, message: 'ok' }));
     }
     if (/^\/devices\/airmaxes\/[^/]+\/config\/wireless$/.test(path)) {
-      return new Response(JSON.stringify({ mode: 'sta-ptmp', ssid: 'CDA-NET-N2-D01', txPower: 24, antennaGain: 23, ackDistance: 2400, isAutoChannelWidthEnabled: false, securityConfig: { security: 'wpa2AES', presharedKey: 'chiave-segreta-wpa', authServerSecret: 'segreto-radius' } }));
+      if (method === 'PUT') {
+        wireless = body;
+        return new Response('{}');
+      }
+      return new Response(JSON.stringify(wireless));
     }
     if (/^\/devices\/[^/]+\/backups\/[^/]+\/apply$/.test(path)) return new Response('{"result":true}');
     if (path === '/outages') return new Response(JSON.stringify({ items: [{ id: 'o1', startTimestamp: '2026-10-05T02:00:00Z', endTimestamp: '2026-10-05T02:20:00Z', type: 'outage', aggregatedTime: 1200, inProgress: false }] }));

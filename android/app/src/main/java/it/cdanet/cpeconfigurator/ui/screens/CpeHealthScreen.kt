@@ -156,13 +156,17 @@ fun CpeHealthScreen(c: AppContainer, onRepoint: (() -> Unit)? = null) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        // admins: one CPE managed as in the UISP app
+        var manage by remember { mutableStateOf<String?>(null) }
+        manage?.let { id -> CpeAdminDialog(c, id) { manage = null } }
         if (shown.isNotEmpty()) SectionCard {
             shown.take(limit).forEachIndexed { i, cpe ->
                 if (i > 0) HorizontalDivider()
                 CpeRow(c, cpe, admin, expanded = open == cpe.mac, history = history == cpe.mac,
                     onToggle = { open = if (open == cpe.mac) null else cpe.mac },
                     onHistory = { history = if (history == cpe.mac) null else cpe.mac },
-                    onRepoint = if (cpe.issues.any { it in REPOINT }) onRepoint else null)
+                    onRepoint = if (cpe.issues.any { it in REPOINT }) onRepoint else null,
+                    onManage = if (admin) cpe.deviceId?.let { id -> { manage = id } } else null)
             }
         }
         if (shown.size > limit) {
@@ -189,6 +193,7 @@ private fun CpeRow(
     onToggle: () -> Unit,
     onHistory: () -> Unit,
     onRepoint: (() -> Unit)?,
+    onManage: (() -> Unit)? = null,
 ) {
     val color = when {
         cpe.issues.any { it in SERIOUS } -> BadRed
@@ -237,6 +242,7 @@ private fun CpeRow(
                         TextButton(onClick = onHistory) { Text(if (history) "Nascondi storico" else "Storico 7 giorni") }
                     }
                     if (onRepoint != null) TextButton(onClick = onRepoint) { Text("Ripuntamento") }
+                    if (onManage != null) TextButton(onClick = onManage) { Text("Gestisci") }
                 }
                 val jobId = cpe.jobId
                 if (history && jobId != null) {
