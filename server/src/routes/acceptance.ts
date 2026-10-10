@@ -64,6 +64,8 @@ export const acceptanceSchema = z
       .strict(),
     checks: z.array(z.object({ title: z.string().max(80), verdict: z.enum(['ok', 'warn', 'bad', 'info']), detail: z.string().max(400) }).strict()).max(30),
     notes: z.string().max(1000).default(''),
+    // height of the CPE above the ground, typed by the technician (older apps do not send it)
+    cpeHeightM: z.number().min(0.5).max(100).nullable().optional(),
   })
   .strict();
 

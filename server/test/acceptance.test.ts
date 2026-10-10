@@ -18,6 +18,7 @@ const ACCEPTANCE = {
   internet: { tested: true, pingMs: 18, jitterMs: 2, downloadMbps: 95.2, uploadMbps: 19.8 },
   checks: [{ title: 'Segnale ricevuto', verdict: 'ok', detail: '-58 dBm: ottimo' }],
   notes: 'Staffa a muro, cavo in canalina',
+  cpeHeightM: 7.5,
 };
 
 describe('Collaudo (acceptance test) with photos', () => {
@@ -48,6 +49,9 @@ describe('Collaudo (acceptance test) with photos', () => {
     assert.equal(put.statusCode, 200, put.body);
     assert.equal((await t.app.inject({ method: 'PUT', url: `${base}/acceptance`, headers: t.auth(tec), payload: { ...ACCEPTANCE, password: 'x' } })).statusCode, 400);
     assert.equal((await t.app.inject({ method: 'PUT', url: `${base}/acceptance`, headers: t.auth(other), payload: ACCEPTANCE })).statusCode, 403);
+    // the CPE height goes in the report; an implausible one is refused
+    assert.equal((await t.app.inject({ method: 'GET', url: `${base}/acceptance`, headers: t.auth(tec) })).json().acceptance.cpeHeightM, 7.5);
+    assert.equal((await t.app.inject({ method: 'PUT', url: `${base}/acceptance`, headers: t.auth(tec), payload: { ...ACCEPTANCE, cpeHeightM: 500 } })).statusCode, 400);
 
     // photos: JPEG only, owner or admin
     const up = (headers: Record<string, string>, body: Buffer, caption = 'Antenna') =>

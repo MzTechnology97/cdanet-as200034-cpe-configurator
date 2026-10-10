@@ -50,6 +50,10 @@ class AcceptanceQueue(
     private val _pending = MutableStateFlow(load())
     val pending: StateFlow<List<QueuedAcceptance>> = _pending.asStateFlow()
 
+    /** Reports the server refused for good (job id → reason): shown, never reported as saved. */
+    private val _rejected = MutableStateFlow<Map<String, String>>(emptyMap())
+    val rejected: StateFlow<Map<String, String>> = _rejected.asStateFlow()
+
     private fun load(): List<QueuedAcceptance> = runCatching { AppJson.decodeFromString(serializer, index.readText()) }.getOrDefault(emptyList())
 
     private fun save(items: List<QueuedAcceptance>) {
@@ -70,6 +74,7 @@ class AcceptanceQueue(
         }
         val cur = _pending.value.firstOrNull { it.jobId == jobId }
         val merged = QueuedAcceptance(jobId, label, report ?: cur?.report, (cur?.photos ?: emptyList()) + files)
+        _rejected.value = _rejected.value - jobId
         save(_pending.value.filterNot { it.jobId == jobId } + merged)
     }
 
@@ -91,6 +96,14 @@ class AcceptanceQueue(
                     } catch (e: ApiException) {
                         // 409 = result still queued, 401/429/5xx = retry later; other 4xx can never succeed.
                         if (e.status == 409 || e.status == 401 || e.status == 429 || e.status >= 500) throw e
+                        try {
+                            // a server older than the app does not know the CPE height yet: it goes in the notes
+                            if (e.status != 400 || report.cpeHeightM == null) throw e
+                            api.putAcceptance(item.jobId, withHeightInNotes(report))
+                        } catch (e2: ApiException) {
+                            if (e2.status == 409 || e2.status == 401 || e2.status == 429 || e2.status >= 500) throw e2
+                            _rejected.value = _rejected.value + (item.jobId to (e2.message ?: e2.code))
+                        }
                     }
                     report = null
                 }
@@ -113,6 +126,12 @@ class AcceptanceQueue(
         }
         save(left)
         done
+    }
+
+    /** The CPE height written in the notes, for servers that do not have the field yet. */
+    private fun withHeightInNotes(r: AcceptanceReport): AcceptanceReport {
+        val h = "Altezza CPE dal suolo: ${r.cpeHeightM.toString().removeSuffix(".0").replace('.', ',')} m"
+        return r.copy(cpeHeightM = null, notes = listOf(r.notes, h).filter { it.isNotBlank() }.joinToString("\n").take(1000))
     }
 
     fun syncInBackground() {
