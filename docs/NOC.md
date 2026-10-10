@@ -51,7 +51,7 @@ Dati usati, tutti da UISP: stazioni collegate (segnale, rumore, modulazione attu
 
 Ogni avviso dice cosa fare e, dove serve, i parametri (frequenza, ampiezza); per le CPE c'è il link alla scheda (nell'app: Gestisci CPE). *Ignora 7/90 giorni* nasconde un avviso (registrato nello storico eventi); *Aggiorna ora* rilegge UISP senza aspettare l'ora. I nuovi problemi critici arrivano come notifica a tutti gli admin (Notifiche → "Assistente rete").
 
-### Ottimizzazione automatica (v1.32.56)
+### Ottimizzazione automatica (v1.32.57)
 
 Spenta di default: si accende in Impostazioni server → Assistente rete (*Ottimizzazione automatica degli AP tramite UISP*). Da un avviso di un AP (canale più libero, ampiezza, rumore, modulazione, canale sovrapposto) un admin preme **Ottimizza…** nella console o nell'app, legge cosa succederà e conferma:
 
