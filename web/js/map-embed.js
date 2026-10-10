@@ -129,3 +129,86 @@ window.cdaFocus = async (id) => {
   f.marker.openPopup();
 };
 
+
+// ---- Verifica copertura (app) ----------------------------------------------------------------
+// The app listens through window.CdaApp (an Android bridge, only on this page of our server):
+// a tap on the map checks that point, "Simula copertura" on an AP runs its radio simulation.
+
+/** Same scale as the console simulation, from excellent to unusable. */
+const SIM_SCALE = [
+  [-60, '#15803d'],
+  [-65, '#22c55e'],
+  [-70, '#a3e635'],
+  [-75, '#facc15'],
+  [-80, '#f97316'],
+  [-999, '#dc2626'],
+];
+const simColor = (dbm) => SIM_SCALE.find(([min]) => dbm >= min)[1];
+const STATE_COLOR = { ok: '#14b8a6', degraded: '#f59e0b', down: '#dc2626' };
+let baseLayer = null;
+let simLayer = null;
+let tapToCheck = false;
+
+/** Turns on "tap a point to check it" (the app passes the point back to itself). */
+window.cdaCoverageMode = async () => {
+  const map = await ready;
+  if (!map || tapToCheck) return;
+  tapToCheck = true;
+  map.on('click', (e) => window.CdaApp?.onMapClick?.(e.latlng.lat, e.latlng.lng));
+};
+
+/** Admins: every AP with a position (data of /api/network/status), each one with "Simula copertura". */
+window.cdaCoverageBase = async (d) => {
+  const map = await ready;
+  if (!map || !d) return;
+  const L = window.L;
+  baseLayer ??= L.layerGroup().addTo(map);
+  baseLayer.clearLayers();
+  const aps = [...(d.pops ?? []).flatMap((p) => (p.aps ?? []).map((a) => ({ ...a, pop: p.name }))), ...(d.apsWithoutPop ?? []).map((a) => ({ ...a, pop: null }))].filter((a) => a.lat != null && a.lon != null);
+  for (const a of aps) {
+    const sim = document.createElement('button');
+    sim.type = 'button';
+    sim.className = 'small-btn';
+    sim.textContent = 'Simula copertura';
+    sim.onclick = () => {
+      map.closePopup();
+      window.CdaApp?.onSimulate?.(a.id);
+    };
+    const box = popup(a.name, a.ssid && a.ssid !== a.name ? a.ssid : null, a.pop ? `POP ${a.pop}` : 'AP senza POP', a.model);
+    box.append(sim);
+    L.circleMarker([a.lat, a.lon], { radius: 5, color: STATE_COLOR[a.state] ?? '#64748b', weight: 2, fillOpacity: 0.85, bubblingMouseEvents: false }).bindPopup(box).addTo(baseLayer);
+  }
+};
+
+/** Radio simulation of one AP (data of /api/admin/coverage/simulation): estimated signal cells and the sector. */
+window.cdaSimulation = async (d) => {
+  const map = await ready;
+  if (!map || !d?.ap) return;
+  const L = window.L;
+  simLayer ??= L.layerGroup().addTo(map);
+  simLayer.clearLayers();
+  const half = d.cellM / 2;
+  const mPerLat = 111320;
+  const mPerLon = 111320 * Math.cos((d.ap.lat * Math.PI) / 180);
+  for (const c of d.cells ?? []) {
+    L.rectangle(
+      [
+        [c.lat - half / mPerLat, c.lon - half / mPerLon],
+        [c.lat + half / mPerLat, c.lon + half / mPerLon],
+      ],
+      { stroke: false, fillColor: simColor(c.dbm), fillOpacity: d.theoretical ? 0.3 : c.confidence === 'bassa' ? 0.18 : 0.38, interactive: false },
+    ).addTo(simLayer);
+  }
+  if (d.sector && (d.servedM || d.theoretical)) {
+    const reach = d.servedM || d.radiusM;
+    const pts = [[d.ap.lat, d.ap.lon]];
+    for (let i = 0; i <= 24; i++) pts.push(towards(d.ap.lat, d.ap.lon, d.sector.center - d.sector.width / 2 + (d.sector.width * i) / 24, reach));
+    L.polygon(pts, { color: '#0f172a', weight: 1.5, fill: false, dashArray: '4 5', interactive: false }).addTo(simLayer);
+  }
+  L.circleMarker([d.ap.lat, d.ap.lon], { radius: 8, color: '#0f172a', weight: 3, fillColor: '#ffffff', fillOpacity: 1, interactive: false }).addTo(simLayer);
+  map.fitBounds(L.latLng(d.ap.lat, d.ap.lon).toBounds(d.radiusM * 2.1));
+};
+
+window.cdaClearSimulation = async () => {
+  simLayer?.clearLayers();
+};

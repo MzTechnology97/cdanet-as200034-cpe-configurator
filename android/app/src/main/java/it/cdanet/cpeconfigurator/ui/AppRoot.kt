@@ -78,7 +78,7 @@ import it.cdanet.cpeconfigurator.ui.WifiRequired
 import it.cdanet.cpeconfigurator.ui.screens.AlignmentScreen
 import it.cdanet.cpeconfigurator.ui.screens.CameraScreen
 import it.cdanet.cpeconfigurator.ui.screens.CompassScreen
-import it.cdanet.cpeconfigurator.ui.screens.CoverageScreen
+import it.cdanet.cpeconfigurator.ui.screens.CoverageCheckScreen
 import it.cdanet.cpeconfigurator.ui.screens.CpeHealthScreen
 import it.cdanet.cpeconfigurator.ui.screens.CpeWebScreen
 import it.cdanet.cpeconfigurator.ui.screens.DiagnosisScreen
@@ -115,7 +115,7 @@ enum class Screen(val title: String, val scroll: Boolean = true, val wide: Boole
     Wifi("Wi-Fi Analyzer"),
     Network("Strumenti di rete"),
     Discovery("Discovery LAN"),
-    Coverage("Copertura AP"),
+    Coverage("Copertura"),
     Alignment("Puntamento antenna"),
     Diagnosis("Diagnosi CPE"),
     Acceptance("Collaudo"),
@@ -148,7 +148,7 @@ enum class Screen(val title: String, val scroll: Boolean = true, val wide: Boole
 }
 
 /** The four areas of the bottom bar. */
-private val TOP = listOf(Screen.Home, Screen.Installations, Screen.NetHub, Screen.Tools)
+private val TOP = listOf(Screen.Home, Screen.Installations, Screen.Coverage, Screen.NetHub, Screen.Tools)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -308,9 +308,12 @@ fun AppRoot(c: AppContainer) {
     val areas = listOf(
         Triple(Screen.Home, "Oggi", R.drawable.ic_home to R.drawable.ic_home_filled),
         Triple(Screen.Installations, "Installa", R.drawable.ic_settings_input_antenna to R.drawable.ic_settings_input_antenna_filled),
+        // before going to a customer: is the address covered? (its own area, not the on-site AP vicini)
+        Triple(Screen.Coverage, "Copertura", R.drawable.ic_map to R.drawable.ic_map),
         Triple(Screen.NetHub, "Rete", R.drawable.ic_hub to R.drawable.ic_hub_filled),
         Triple(Screen.Tools, "Strumenti", R.drawable.ic_handyman to R.drawable.ic_handyman_filled),
     ).filter { (s, _, _) -> session != null || s == Screen.Home || s == Screen.Tools }
+        .filter { (s, _, _) -> s != Screen.Coverage || modules["coverage"] != false }
 
     Scaffold(
         topBar = {
@@ -435,7 +438,7 @@ fun AppRoot(c: AppContainer) {
                     Screen.Wifi -> WifiScreen(c)
                     Screen.Network -> NetworkScreen(c)
                     Screen.Discovery -> WifiRequired(c, "alla Wi-Fi della rete locale da analizzare", "La discovery funziona solo sulla stessa LAN.") { DiscoveryScreen(c) }
-                    Screen.Coverage -> CoverageScreen(
+                    Screen.Coverage -> CoverageCheckScreen(
                         c,
                         onCompass = if (c.moduleOn("compass")) ({ t: it.cdanet.cpeconfigurator.field.CompassTarget -> c.compassTarget.value = t; go(Screen.Compass) }) else null,
                     )
