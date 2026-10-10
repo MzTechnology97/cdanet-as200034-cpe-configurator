@@ -210,8 +210,14 @@ object FieldDiagnosis {
             null -> Unit
         }
         if (targetFirmware != null && s.firmware != null) {
-            val ok = Regex("""(^|[^0-9.])v?${Regex.escape(targetFirmware)}(?![0-9])""").containsMatchIn(s.firmware)
-            add(Check("Firmware", if (ok) Verdict.Ok else Verdict.Warn, s.firmware + if (ok) "" else " (standard: $targetFirmware)"))
+            // same rule as the server: equal or newer is fine, only an older one is to update
+            add(
+                when (FirmwareVersion.state(s.firmware, targetFirmware)) {
+                    FirmwareVersion.State.Old -> Check("Firmware", Verdict.Warn, "${s.firmware} (da aggiornare: riferimento $targetFirmware)")
+                    FirmwareVersion.State.Legacy -> Check("Firmware", Verdict.Info, "${s.firmware} (serie M, airOS 6: non aggiornabile all'8.x)")
+                    else -> Check("Firmware", Verdict.Ok, s.firmware)
+                },
+            )
         }
         s.uptimeSec?.let { u ->
             add(if (u < 600) Check("Accesa da", Verdict.Warn, "${formatDuration(u)}: riavvio recente, verifica alimentazione/PoE se succede spesso") else Check("Accesa da", Verdict.Info, formatDuration(u)))
@@ -257,5 +263,23 @@ object FieldDiagnosis {
             h > 0 -> "${h}h ${m}m"
             else -> "${m}m ${sec % 60}s"
         }
+    }
+}
+
+/** airOS version of a CPE against the reference one (same rules as Salute CPE on the server). */
+object FirmwareVersion {
+    enum class State { Ok, Old, Legacy, Unknown }
+
+    /** "XC.qca956x.v8.7.11.46972…" → [8, 7, 11]; null if there is no version in it. */
+    fun parse(fw: String): List<Int>? =
+        Regex("""(?:^|[^0-9.])v?(\d+)\.(\d+)\.(\d+)""").find(fw)?.groupValues?.drop(1)?.map { it.toInt() }
+
+    fun state(fw: String, target: String): State {
+        val v = parse(fw) ?: return State.Unknown
+        val t = parse(target) ?: return State.Unknown
+        // the airMAX M series (XM/XW/TI) runs airOS 6 and cannot be updated to 8.x
+        if (v[0] < 8 && Regex("""^(XM|XW|TI)\.""", RegexOption.IGNORE_CASE).containsMatchIn(fw.trim())) return State.Legacy
+        for (i in 0..2) if (v[i] != t[i]) return if (v[i] > t[i]) State.Ok else State.Old
+        return State.Ok
     }
 }

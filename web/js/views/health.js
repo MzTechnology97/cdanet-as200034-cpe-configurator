@@ -11,8 +11,22 @@ const ISSUES = {
   ethernet: ['porta LAN', 'warn'],
   pending: ['da accettare', 'warn'],
   low_capacity: ['capacità bassa', 'warn'],
-  firmware: ['firmware', ''],
+  firmware: ['firmware da aggiornare', ''],
 };
+/** Firmware against the reference version (newer is fine; the M series cannot run airOS 8). */
+const FW_STATE = { ok: ['aggiornato', 'good'], old: ['da aggiornare', 'warn'], legacy: ['serie M, non aggiornabile', ''], unknown: ['versione non letta', ''] };
+/** Customer state from the RADIUS account and the CRM (admins with ISP Billing). */
+const ACCOUNT_STATE = {
+  online: ['attivo, PPPoE online', 'good'],
+  offline: ['attivo, PPPoE offline', 'bad'],
+  services_suspended: ['servizi sospesi', 'warn'],
+  suspended: ['sospeso', 'warn'],
+  terminating: ['in cessazione', 'warn'],
+  terminated: ['cessato', 'bad'],
+  unknown: ['stato non letto', ''],
+};
+/** Plan of a PPPoE account: "30M/3M" from the speeds, else the profile name. */
+const planOf = (r) => (r?.speed ? `${r.speed.down}M/${r.speed.up}M` : r?.profile || null);
 /** Admins with the CRM connected: from the RADIUS state. */
 const RADIUS_ISSUES = {
   pppoe_offline: ['PPPoE offline', 'bad'],
@@ -106,6 +120,15 @@ export async function healthView({ user }) {
     ...(admin ? [h('option', { value: 'assigned' }, 'Assegnate a un installatore'), h('option', { value: 'unassigned' }, 'Non assegnate')] : []),
   );
   const q = h('input', { placeholder: 'Cliente, MAC, AP, installatore…' });
+  // firmware (state or exact version), customer state and plan from ISP Billing: filled after loading
+  const fw = h('select', {});
+  const account = h('select', {});
+  const plan = h('select', {});
+  const fill = (sel, options) => {
+    const keep = sel.value;
+    mount(sel, ...options.map(([v, label]) => h('option', { value: v }, label)));
+    if ([...sel.options].some((o) => o.value === keep)) sel.value = keep;
+  };
   const selected = new Set();
   let data = null;
   /** The PPPoE account panel, built once (it keeps its own filter). */
@@ -116,7 +139,10 @@ export async function healthView({ user }) {
     return data.cpes
       .filter((c) => (filter.value === 'all' ? true : filter.value === 'issues' ? c.issues.length > 0 : c.issues.includes(filter.value)))
       .filter((c) => (origin.value === 'app' ? c.source === 'app' : origin.value === 'uisp' ? c.source === 'uisp' : origin.value === 'assigned' ? !!c.assignedTo : origin.value === 'unassigned' ? !c.assignedTo : true))
-      .filter((c) => !term || [c.deviceName, c.mac, c.now?.apName, c.installer, c.ssid, c.assignedTo?.username, c.radius?.username, c.radius?.customerName].some((x) => (x ?? '').toLowerCase().includes(term)));
+      .filter((c) => !fw.value || (fw.value.startsWith('v:') ? c.firmware?.version === fw.value.slice(2) : c.firmware?.state === fw.value))
+      .filter((c) => !account.value || (account.value === 'none' ? 'radius' in c && !c.radius : c.radius?.state === account.value))
+      .filter((c) => !plan.value || planOf(c.radius) === plan.value)
+      .filter((c) => !term || [c.deviceName, c.mac, c.now?.apName, c.installer, c.ssid, c.assignedTo?.username, c.radius?.username, c.radius?.customerName, planOf(c.radius)].some((x) => (x ?? '').toLowerCase().includes(term)));
   };
 
   /** Admin: assign the selected CPEs to an installer (or remove the assignment). */
@@ -157,6 +183,60 @@ export async function healthView({ user }) {
     );
   }
 
+  /** Options of the firmware, customer-state and plan filters, from the data just loaded. */
+  function fillFilters() {
+    const versions = data.firmwareVersions ?? [];
+    fill(fw, [
+      ['', 'Tutti i firmware'],
+      ...Object.entries(FW_STATE).map(([k, [label]]) => [k, `Firmware ${label}`]),
+      ...versions.map((v) => [`v:${v.version}`, `Versione ${v.version} (${v.count})`]),
+    ]);
+    if (!data.cpes.some((c) => 'radius' in c)) return;
+    const count = (pred) => data.cpes.filter(pred).length;
+    fill(account, [
+      ['', 'Tutti gli stati'],
+      ...Object.entries(ACCOUNT_STATE).map(([k, [label]]) => [k, `${label} (${count((c) => c.radius?.state === k)})`]),
+      ['none', `senza account PPPoE (${count((c) => 'radius' in c && !c.radius)})`],
+    ]);
+    const plans = new Map();
+    for (const c of data.cpes) {
+      const p = planOf(c.radius);
+      if (p) plans.set(p, (plans.get(p) ?? 0) + 1);
+    }
+    fill(plan, [['', 'Tutti i profili'], ...[...plans.entries()].sort((a, b) => b[1] - a[1]).map(([p, n]) => [p, `${p} (${n})`])]);
+  }
+
+  /** CPEs per firmware version: a click filters the list on that version. */
+  function firmwareSummary() {
+    const versions = data.firmwareVersions ?? [];
+    if (!versions.length) return null;
+    return card(
+      h('h2', {}, 'Firmware delle CPE'),
+      h(
+        'div',
+        { class: 'fw-chips' },
+        versions.map((v) =>
+          h(
+            'button',
+            {
+              type: 'button',
+              class: `fw-chip${fw.value === `v:${v.version}` ? ' on' : ''}`,
+              title: FW_STATE[v.state]?.[0] ?? '',
+              onclick: () => ((fw.value = fw.value === `v:${v.version}` ? '' : `v:${v.version}`), render()),
+            },
+            badge(v.version, FW_STATE[v.state]?.[1] ?? ''),
+            h('span', { class: 'count' }, String(v.count)),
+          ),
+        ),
+      ),
+      h(
+        'p',
+        { class: 'small muted' },
+        `Riferimento ${data.targetFirmware}: uguale o più recente è a posto, più vecchio è "da aggiornare". La serie M (airOS 6) non può passare all’8.x: è solo un’informazione, non un problema. Clic su una versione per vedere quelle CPE.`,
+      ),
+    );
+  }
+
   function render() {
     const t = data.totals;
     const rows = visible();
@@ -194,6 +274,7 @@ export async function healthView({ user }) {
         h('p', { class: 'small muted' }, `${nms('Stato UISP', 'Stato')} del ${fmtDate(data.generatedAt)}. "Segnale calato": almeno ${data.thresholds.signalDropDb} dB in meno rispetto al collaudo (solo CPE installate con l’app).`),
         data.uisp ? null : h('div', { class: 'notice warn' }, nms('UISP non raggiungibile: stato attuale non disponibile.', 'Stato attuale non disponibile, riprova più tardi.')),
       ),
+      firmwareSummary(),
       admin ? assignBar(rows) : null,
       card(
         h('h2', {}, `CPE (${rows.length})`),
@@ -203,9 +284,21 @@ export async function healthView({ user }) {
                 ...(admin ? [{ label: '', render: check }] : []),
                 { label: 'Cliente', render: (c) => h('div', {}, c.deviceName || '—', h('div', { class: 'small muted mono' }, c.mac)) },
                 { label: 'Problemi', render: (c) => (c.issues.length ? h('div', { class: 'btns' }, c.issues.map((i) => badge(ALL_ISSUES[i]?.[0] ?? i, ALL_ISSUES[i]?.[1] ?? ''))) : badge('ok', 'good')) },
-                ...(withRadius ? [{ label: 'PPPoE', render: (c) => pppoeCell(c.radius) }] : []),
+                ...(withRadius
+                  ? [
+                      { label: 'PPPoE', render: (c) => pppoeCell(c.radius) },
+                      { label: 'Profilo', render: (c) => (planOf(c.radius) ? h('span', { class: 'plan' }, planOf(c.radius)) : h('span', { class: 'small muted' }, '—')) },
+                    ]
+                  : []),
                 { label: 'Segnale collaudo → ora', render: (c) => `${c.acceptanceSignal ?? '—'} → ${c.now?.signal ?? '—'} dBm${c.signalDelta != null ? ` (${c.signalDelta > 0 ? '+' : ''}${c.signalDelta})` : ''}` },
                 { label: 'LAN', render: (c) => (c.now?.ethMbps ? `${c.now.ethMbps}${c.now.ethHalfDuplex ? ' half' : ''}` : '—') },
+                {
+                  label: 'Firmware',
+                  render: (c) =>
+                    c.firmware
+                      ? h('div', {}, c.firmware.version, c.firmware.state !== 'ok' ? h('div', {}, badge(FW_STATE[c.firmware.state]?.[0] ?? c.firmware.state, FW_STATE[c.firmware.state]?.[1] ?? '')) : null)
+                      : h('span', { class: 'small muted' }, '—'),
+                },
                 { label: 'AP', render: (c) => c.now?.apName ?? c.ssid ?? '—' },
                 {
                   label: 'Origine',
@@ -231,10 +324,14 @@ export async function healthView({ user }) {
 
   async function load() {
     data = await api('/api/cpe-health');
+    fillFilters();
     render();
   }
   filter.onchange = render;
   origin.onchange = render;
+  fw.onchange = render;
+  account.onchange = render;
+  plan.onchange = render;
   q.oninput = render;
   const reload = h('button', { type: 'button' }, 'Aggiorna');
   reload.onclick = () => busy(reload, load);
@@ -255,7 +352,11 @@ export async function healthView({ user }) {
       reload,
       csv,
     ),
-    card(h('div', { class: 'row' }, field('Mostra', filter), field('Origine', origin), field('Cerca', q))),
+    card(
+      h('div', { class: 'row' }, field('Mostra', filter), field('Origine', origin), field('Firmware', fw), field('Cerca', q)),
+      // customer state and plan: admins with ISP Billing connected (the selects stay empty otherwise)
+      admin ? h('div', { class: 'row crm-filters' }, field('Stato cliente (ISP Billing)', account), field('Profilo RADIUS', plan)) : null,
+    ),
     out,
   );
 }
