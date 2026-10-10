@@ -6,6 +6,11 @@ object DeviceGuess {
 
     fun guess(vendor: String?, ports: Set<Int>, hostname: String? = null, isGateway: Boolean = false, ubntModel: String? = null): String {
         val name = hostname.orEmpty()
+        // factory hostnames and models name the product (E410-…, BRN…, ShellyPlus…, cnPilot…)
+        val hint = it.cdanet.cpeconfigurator.tools.topology.ProductHints.of(hostname, ubntModel)
+        if (ubntModel == null && hint?.type != null) {
+            return if (hint.vendor in it.cdanet.cpeconfigurator.tools.topology.ProductHints.GENERIC) hint.type.label else "${hint.type.label} ${hint.vendor}"
+        }
         return when {
             ubntModel != null -> "Ubiquiti $ubntModel"
             v(vendor, "Ubiquiti") -> if (20443 in ports || 20080 in ports) "Ubiquiti (CPE CDA Net)" else "Ubiquiti"
@@ -15,6 +20,10 @@ object DeviceGuess {
             554 in ports -> "Dispositivo RTSP (telecamera?)"
             v(vendor, "Hewlett", "HP Inc", "Brother", "Epson", "Canon", "Kyocera", "Ricoh", "Xerox", "Lexmark", "Konica", "Sharp") ||
                 9100 in ports || 515 in ports -> "Stampante"
+            v(vendor, "Cambium", "Mimosa", "Siklu", "Radwin", "Intracom", "SIAE") -> "Radio / access point"
+            v(vendor, "Ruckus", "Aruba", "Meraki", "Extreme Networks", "Engenius", "Edimax", "Grandstream Networks") && 5060 !in ports -> "Access point"
+            v(vendor, "Yealink", "Fanvil", "Snom", "Gigaset", "Polycom", "Avaya", "Alcatel-Lucent Enterprise") || 5060 in ports -> "Telefono VoIP"
+            v(vendor, "Teltonika", "DrayTek", "Zyxel", "Sagemcom", "Technicolor", "FiberHome", "Sercomm", "Askey", "Arcadyan") -> "Router / gateway"
             v(vendor, "Apple") || 62078 in ports || 548 in ports -> "Apple (iPhone/iPad/Mac)"
             8008 in ports || 8009 in ports || v(vendor, "Google") -> "Chromecast / Google"
             v(vendor, "Espressif", "Tuya", "Shelly", "Sonoff", "Itead", "Xiaomi", "Broadlink") -> "IoT / domotica"
