@@ -14,7 +14,7 @@ import type { ModuleKey } from '../services/modules.ts';
 import { isAp, isPtp, type UispDevice } from '../services/uisp.ts';
 import { approxPoint, roughDistance } from '../domain/approx.ts';
 import { estimateAt, MAX_LINK_M, rankCoverage, type ApModel } from '../domain/coverage-model.ts';
-import { estimateForAp, pointingConfig, terrainBetween, terrainSampler } from '../services/terrain.ts';
+import { estimateForAp, obstacles, pointingConfig, terrainBetween, terrainSampler } from '../services/terrain.ts';
 
 interface JobRow {
   id: string;
@@ -112,9 +112,9 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     const heights = pointingConfig(db);
     const point = { lat: q.lat, lon: q.lon };
     // the terrain towards every AP, as in Visibilità: a hill in the way lowers the expected signal
-    const at = await terrainSampler(ctx.dem, [point, ...inRange]);
+    const at = await terrainSampler(ctx.terrain, [point, ...inRange]);
     const estimateFor = (a: (typeof inRange)[number]) => {
-      const e = estimateForAp(models.get(a.id), a, point, at, { cpeM: q.height ?? heights.cpeHeightM, apM: heights.apHeightM }, radio);
+      const e = estimateForAp(models.get(a.id), a, point, at, { cpeM: q.height ?? heights.cpeHeightM, apM: heights.apHeightM }, radio, obstacles(ctx));
       return e && { ...e, basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null };
     };
     const served = (a: { id: string }) => {
@@ -171,7 +171,8 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     const cellM = (2 * radiusM) / n;
     const mPerLat = 111_320;
     const mPerLon = 111_320 * Math.cos((ap.location.lat * Math.PI) / 180);
-    const at = await terrainSampler(ctx.dem, [ap.location], radiusM + 500);
+    const at = await terrainSampler(ctx.terrain, [ap.location], radiusM + 500);
+    const obs = obstacles(ctx);
     const target = { lat: ap.location.lat, lon: ap.location.lon, gpsAltitude: ap.altitude, siteHeight: ap.siteHeight, frequency: ap.frequency };
     const cells: Array<{ lat: number; lon: number; dbm: number; confidence: string; blocked?: true }> = [];
     for (let i = 0; i < n; i++) {
@@ -182,7 +183,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
         if (d > radiusM) continue;
         const b = ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360;
         const cell = { lat: ap.location.lat + dy / mPerLat, lon: ap.location.lon + dx / mPerLon };
-        const terrain = at ? terrainBetween(at, cell, heights.cpeHeightM, target, heights.apHeightM, Math.max(90, cellM / 3), 64) : null;
+        const terrain = at ? terrainBetween(at, cell, heights.cpeHeightM, target, heights.apHeightM, obs, Math.max(40, cellM / 8), 240) : null;
         const e = estimateAt(m, d, b, ap.frequency, radio, terrain);
         if (e.signalDbm === null) continue;
         cells.push({
@@ -199,7 +200,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       customers: m.samples.length,
       // the real customers of the whole network compared with the theory of the settings, dB
       calibrationDb: m.prior,
-      // customers left out of the model: their position in UISP is the AP's or more than 20 km away
+      // customers left out of the model: at the AP itself or more than 20 km away
       ignored: m.ignored,
       terrain: at !== null,
       antenna: m.antenna,

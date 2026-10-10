@@ -288,7 +288,7 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                 Text(
                     if (s.cells.isEmpty()) "Simulazione non possibile: ${if (s.customers > 0) "troppo pochi clienti con segnale e posizione" else "nessun cliente con posizione"}."
                     else "${if (s.theoretical) "Nessun cliente da cui calibrare" else "Calibrata su ${s.customers} clienti"}" +
-                        (if (s.ignored > 0) " (${s.ignored} con posizione non valida in UISP, esclusi)" else "") +
+                        (if (s.ignored > 0) " (${s.ignored} sull'AP o oltre 20 km, esclusi dal calcolo)" else "") +
                         " · raggio ${km(s.radiusM)} · ${Math.round(100.0 * good / s.cells.size)}% dell'area sopra ${s.minDbm} dBm",
                     style = MaterialTheme.typography.bodySmall,
                 )

@@ -15,6 +15,7 @@ import type { Outages } from './services/outages.ts';
 import type { Notifier } from './services/notify.ts';
 import type { Telegram } from './services/telegram.ts';
 import type { Dem } from './services/dem.ts';
+import type { TerrainStore } from './services/terrain-store.ts';
 import type { ServerSettings } from './services/server-settings.ts';
 
 export interface AppContext {
@@ -38,6 +39,8 @@ export interface AppContext {
   oui: Oui;
   outages: Outages;
   dem: Dem;
+  /** TINITALY terrain and WorldCover land cover imported by the admin (SRTM where missing). */
+  terrain: TerrainStore;
   serverSettings: ServerSettings;
   notify: Notifier;
   version: string;

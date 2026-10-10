@@ -40,6 +40,7 @@ import { uispRoutes } from './routes/uisp.ts';
 import { mapRoutes } from './routes/map.ts';
 import { networkRoutes } from './routes/network.ts';
 import { pointingRoutes } from './routes/pointing.ts';
+import { terrainRoutes } from './routes/terrain.ts';
 import { serverSettingsRoutes } from './routes/server-settings.ts';
 import { infraRoutes } from './routes/infra.ts';
 import { guideRoutes } from './routes/guide.ts';
@@ -48,6 +49,7 @@ import { firmwareRoutes } from './routes/firmware.ts';
 import { privacyRoutes } from './routes/privacy.ts';
 import { createServerSettings } from './services/server-settings.ts';
 import { createDem } from './services/dem.ts';
+import { createTerrainStore } from './services/terrain-store.ts';
 
 const CSP = [
   "default-src 'self'",
@@ -94,6 +96,7 @@ export async function buildApp(
   const modules = createModules(db);
   const oui = createOui(cfg.ouiDir, { ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) });
   const telegram = createTelegram(db, sealer, { fetchImpl: opts.fetchImpl, ...(opts.telegramIntervalMs !== undefined ? { minIntervalMs: opts.telegramIntervalMs } : {}) });
+  const dem = createDem({ dir: cfg.dem.dir, baseUrl: cfg.dem.url, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) });
   const ctx: AppContext = {
     cfg,
     db,
@@ -112,7 +115,8 @@ export async function buildApp(
     oui,
     outages: undefined as unknown as Outages,
     serverSettings,
-    dem: createDem({ dir: cfg.dem.dir, baseUrl: cfg.dem.url, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
+    dem,
+    terrain: createTerrainStore({ dir: cfg.terrainDir, dem, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
     notify: undefined as unknown as Notifier,
     version,
   };
@@ -211,6 +215,7 @@ export async function buildApp(
   mapRoutes(app, ctx);
   networkRoutes(app, ctx);
   pointingRoutes(app, ctx);
+  terrainRoutes(app, ctx);
   serverSettingsRoutes(app, ctx);
   infraRoutes(app, ctx);
   guideRoutes(app, ctx);

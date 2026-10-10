@@ -317,40 +317,40 @@ export function createUisp(opts: UispOptions) {
     },
 
     /**
-     * Coverage model of each AP from its customers (position of the CPE or of its site, signal).
-     * Positions stay on the server: callers expose only estimates.
+     * Inputs of the coverage model: every AP serving customers (position, antenna azimuth), its
+     * customers (position of the CPE or of its site, signal, the UISP device) and the network
+     * calibration. Positions stay on the server: callers expose only estimates and aggregates.
+     * [radio]: EIRP and CPE gain of the theory the customers calibrate (Impostazioni server).
      */
-    /** [radio]: EIRP and CPE gain of the theory the customers calibrate (Impostazioni server). */
-    async apModels(apIds: string[], radio?: RadioDefaults) {
-      const want = new Set(apIds);
+    async modelInputs(radio?: RadioDefaults) {
       const [ds, ss] = await Promise.all([devices(), sites().catch(() => [] as UispSite[])]);
       const siteLoc = new Map(ss.map((s) => [s.id, s.location]));
-      const apLoc = new Map(ds.filter(isAp).map((d) => [d.id, d.location ?? (d.siteId ? (siteLoc.get(d.siteId) ?? null) : null)]));
-      const apDev = new Map(ds.filter(isAp).map((d) => [d.id, d]));
-      // customers of every AP: the network calibration uses them all, the models only the wanted APs
-      const clients = new Map<string, ClientSample[]>();
+      const siteHeight = new Map(ss.map((s) => [s.id, s.height ?? null]));
+      const posOf = (d: UispDevice) => d.location ?? (d.siteId ? (siteLoc.get(d.siteId) ?? null) : null);
+      const clients = new Map<string, Array<ClientSample & { device: UispDevice }>>();
       for (const d of ds) {
         if (!d.apId || isAp(d)) continue;
-        const loc = d.location ?? (d.siteId ? (siteLoc.get(d.siteId) ?? null) : null);
+        const loc = posOf(d);
         if (!loc) continue;
-        clients.set(d.apId, [...(clients.get(d.apId) ?? []), { lat: loc.lat, lon: loc.lon, signal: d.status === 'active' ? d.signal : null }]);
+        clients.set(d.apId, [...(clients.get(d.apId) ?? []), { lat: loc.lat, lon: loc.lon, signal: d.status === 'active' ? d.signal : null, device: d }]);
       }
       // azimuth set in UISP: the sector of the antenna instead of the one guessed from the customers
-      const headingOf = (ap: UispDevice | undefined) => (ap?.heading != null ? { center: ap.heading, width: sectorWidth(ap.model) } : null);
+      const aps = ds
+        .filter((d) => isAp(d))
+        .map((d) => ({ device: d, location: posOf(d), siteHeight: d.siteId ? (siteHeight.get(d.siteId) ?? null) : null, heading: d.heading != null ? { center: d.heading, width: sectorWidth(d.model) } : null, clients: clients.get(d.id) ?? [] }))
+        .filter((a): a is typeof a & { location: LatLon } => a.location !== null);
       const r = radio ?? { eirpDbm: 30, cpeGainDbi: 23 };
-      const prior =
-        networkCalibrationDb(
-          [...apDev.values()]
-            .filter((ap) => !isPtp(ap) && apLoc.get(ap.id))
-            .map((ap) => ({ ap: apLoc.get(ap.id)!, clients: clients.get(ap.id) ?? [], heading: headingOf(ap), freqMHz: ap.frequency })),
-          r,
-        ) ?? 0;
+      // customers of every AP: the network calibration uses them all
+      const prior = networkCalibrationDb(aps.filter((a) => !isPtp(a.device)).map((a) => ({ ap: a.location, clients: a.clients, heading: a.heading, freqMHz: a.device.frequency })), r) ?? 0;
+      return { aps, prior, radio: r };
+    },
+
+    /** Coverage model of each AP from its customers (see modelInputs). */
+    async apModels(apIds: string[], radio?: RadioDefaults) {
+      const want = new Set(apIds);
+      const { aps, prior, radio: r } = await this.modelInputs(radio);
       const out = new Map<string, ApModel>();
-      for (const id of want) {
-        const loc = apLoc.get(id);
-        const ap = apDev.get(id);
-        if (loc) out.set(id, buildApModel(loc, clients.get(id) ?? [], headingOf(ap), ap?.frequency ?? null, r, prior));
-      }
+      for (const a of aps) if (want.has(a.device.id)) out.set(a.device.id, buildApModel(a.location, a.clients, a.heading, a.device.frequency, r, prior));
       return out;
     },
 
