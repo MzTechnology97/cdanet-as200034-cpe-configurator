@@ -224,6 +224,38 @@ class TopologyTest {
     }
 
     @Test
+    fun wideSweepIgnoresUnreachableAndBlanketRefusals() {
+        val ipScanner = it.cdanet.cpeconfigurator.tools.pro.IpScanner
+        val ip = it.cdanet.cpeconfigurator.network.Ip
+        // Android reports "No route to host" as a ConnectException too: not a live network
+        assertTrue(ipScanner.isRefused(java.net.ConnectException("failed to connect to /192.168.5.1 (port 80): connect failed: ECONNREFUSED (Connection refused)")))
+        assertTrue(!ipScanner.isRefused(java.net.ConnectException("failed to connect to /192.168.5.1 (port 80): connect failed: EHOSTUNREACH (No route to host)")))
+        val nets = ip.slash24s(ip.parseCidr("192.168.0.0/16"))
+        val Open = it.cdanet.cpeconfigurator.tools.pro.IpScanner.Answer.Open
+        val Refused = it.cdanet.cpeconfigurator.tools.pro.IpScanner.Answer.Refused
+        val None = it.cdanet.cpeconfigurator.tools.pro.IpScanner.Answer.None
+        // a few networks: open and refused both count
+        val few = nets.mapIndexed { i, n -> n to when (i) { 1 -> Open; 2 -> Refused; else -> None } }
+        assertEquals(listOf("192.168.1.0/24", "192.168.2.0/24"), ipScanner.chooseActive(few).map { it.toString() })
+        // everything refused (a firewall rejecting all): only the open ones are real
+        val all = nets.mapIndexed { i, n -> n to if (i == 88) Open else Refused }
+        assertEquals(listOf("192.168.88.0/24"), ipScanner.chooseActive(all).map { it.toString() })
+        // ping: a genuine reply, not an unreachable or a forged echo
+        assertEquals(4, ipScanner.pingReply("PING 192.168.10.1 (192.168.10.1) 56(84) bytes of data.\n64 bytes from 192.168.10.1: icmp_seq=1 ttl=255 time=4.82 ms\n", "192.168.10.1"))
+        assertEquals(null, ipScanner.pingReply("64 bytes from 192.168.2.77: icmp_seq=0 ttl=255 time=0.000 ms\nwrong data byte #16 should be 0x10 but was 0xa\n", "192.168.2.77"))
+        assertEquals(null, ipScanner.pingReply("From 192.168.10.1 icmp_seq=1 Destination Host Unreachable\n", "192.168.5.9"))
+        // a router intercepting DNS: port 53 "open" on a phantom address is not a host
+        val dns = it.cdanet.cpeconfigurator.tools.pro.IpScanner.Canary(ports = setOf(53))
+        assertTrue(!dns.alive(setOf(53), refused = false))
+        assertTrue(dns.alive(setOf(53, 80), refused = false))
+        assertTrue(dns.alive(emptySet(), refused = true))
+        // a firewall refusing every address: refusals prove nothing
+        assertTrue(!it.cdanet.cpeconfigurator.tools.pro.IpScanner.Canary(refuses = true).alive(emptySet(), refused = true))
+        // every address accepts connections (transparent proxy, emulator NAT): nothing is trusted
+        assertEquals(emptyList<String>(), ipScanner.chooseActive(nets.map { it to Open }).map { it.toString() })
+    }
+
+    @Test
     fun withoutSnmpEverythingHangsFromTheGateway() {
         val t = Topology.build(hosts, emptyList(), "192.168.1.1")
         assertEquals("base", t.mode)

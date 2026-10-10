@@ -13,7 +13,11 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
@@ -50,6 +54,7 @@ import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.lerp
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.drawText
@@ -175,7 +180,35 @@ private fun DeviceIcon(type: DeviceType, size: Dp, iconSize: Dp, ghost: Boolean,
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun TopologyGraphView(graph: Graph, selected: String?, title: String = "Topologia di rete", onSelect: (String?) -> Unit) {
+fun TopologyGraphView(
+    graph: Graph,
+    selected: String?,
+    title: String = "Topologia di rete",
+    modifier: Modifier = Modifier,
+    /** Shown in a full-screen dialog: the graph takes all the height, "Chiudi" calls [onClose]. */
+    fullScreen: Boolean = false,
+    onClose: () -> Unit = {},
+    onSelect: (String?) -> Unit,
+) {
+    var full by remember { mutableStateOf(false) }
+    if (full) {
+        androidx.compose.ui.window.Dialog(
+            onDismissRequest = { full = false },
+            properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
+        ) {
+            androidx.compose.material3.Surface(Modifier.fillMaxSize()) {
+                Column(Modifier.fillMaxSize().systemBarsPadding().padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    TopologyGraphView(graph, selected, title, Modifier.weight(1f), fullScreen = true, onClose = { full = false }, onSelect = onSelect)
+                    selected?.let { id ->
+                        Box(Modifier.heightIn(max = 260.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+                            TopologyNodeCard(graph, id, null) { onSelect(null) }
+                        }
+                    }
+                }
+            }
+        }
+    }
     var infraOnly by rememberSaveable { mutableStateOf(graph.nodes.size > 60) }
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -206,23 +239,36 @@ fun TopologyGraphView(graph: Graph, selected: String?, title: String = "Topologi
     val faint = if (dark) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)
     val wireless = if (dark) Color(0xFF38BDF8) else WirelessBlue
 
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        BoxWithConstraints(Modifier.fillMaxWidth()) {
-            val fit = (maxWidth.value / layout.width).coerceIn(0.3f, 1f)
-            var scale by remember(layout) { mutableFloatStateOf(fit) }
-            var offset by remember(layout) { mutableStateOf(Offset.Zero) }
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+    Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        BoxWithConstraints(if (fullScreen) Modifier.fillMaxWidth().weight(1f) else Modifier.fillMaxWidth()) {
+            // whole graph in view: by width inline, by width and height at full screen (controls and legend aside)
+            val fit = (if (fullScreen) minOf(maxWidth.value / layout.width, (maxHeight.value - 140f) / layout.height) else maxWidth.value / layout.width)
+                .coerceIn(0.2f, 1f)
+            var scale by remember(layout, fit) { mutableFloatStateOf(fit) }
+            var offset by remember(layout, fit) { mutableStateOf(Offset.Zero) }
+            var area by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+            /** Buttons zoom around the center of the view. */
+            fun zoomBy(f: Float) {
+                val newScale = (scale * f).coerceIn(0.2f, 3f)
+                val center = Offset(area.width / 2f, area.height / 2f)
+                offset = (offset - center) * (newScale / scale) + center
+                scale = newScale
+            }
+            Column(if (fullScreen) Modifier.fillMaxSize() else Modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(selected = infraOnly, onClick = { infraOnly = !infraOnly }, label = { Text("Solo apparati di rete") })
                     FilterChip(selected = ports, onClick = { ports = !ports }, label = { Text("Porte") })
+                    OutlinedButton(onClick = { zoomBy(1 / 1.4f) }) { Text("−") }
+                    OutlinedButton(onClick = { zoomBy(1.4f) }) { Text("+") }
                     OutlinedButton(onClick = { scale = fit; offset = Offset.Zero }) { Text("Adatta") }
+                    if (fullScreen) OutlinedButton(onClick = onClose) { Text("Chiudi") }
+                    else OutlinedButton(onClick = { full = true }) { Text("Schermo intero") }
                     OutlinedButton(onClick = { export("PNG") }, enabled = exporting == null) { Text(if (exporting == "PNG") "PNG…" else "PNG") }
                     OutlinedButton(onClick = { export("PDF") }, enabled = exporting == null) { Text(if (exporting == "PDF") "PDF…" else "PDF") }
                 }
                 Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(560.dp)
+                    (if (fullScreen) Modifier.fillMaxWidth().weight(1f) else Modifier.fillMaxWidth().height(560.dp))
+                        .onSizeChanged { area = it }
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
                         .clipToBounds()
