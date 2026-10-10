@@ -95,6 +95,10 @@ button:hover { border-color: var(--brand); }
 button.primary { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
 button.danger { color: var(--bad); }
 .bad-text { color: var(--bad); }
+/* Clienti: record details (label, value) and installation sites */
+.row.kv { gap: 12px; padding: 2px 0; }
+.row.kv > span:first-child { min-width: 170px; }
+.site { margin-top: 14px; padding-top: 10px; border-top: 1px solid var(--line, #e5e7eb); }
 button:disabled { opacity: .55; cursor: progress; }
 .btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .code-editor { width: 100%; min-height: 420px; font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: .82rem; line-height: 1.45; white-space: pre; overflow: auto; tab-size: 2; }

@@ -11,6 +11,9 @@ import type { CrmClient, CrmSettings } from './crm.ts';
 
 export interface RadiusInfo {
   accountId: string;
+  customerId: string;
+  /** Installation site of the account (an address of the customer). */
+  addressId: string;
   username: string;
   /** "Attivo", "Sospeso", "Terminato" as in ISP Billing. */
   accountStatus: string;
@@ -90,6 +93,8 @@ export function createCrmSync(db: Db, crm: CrmSettings, opts: { concurrency?: nu
 
   const toInfo = (r: Row): RadiusInfo => ({
     accountId: s(r.account_id),
+    customerId: s(r.customer_id),
+    addressId: s(r.address_id),
     username: s(r.username),
     accountStatus: s(r.account_status),
     profile: s(r.profile),
@@ -134,11 +139,39 @@ export function createCrmSync(db: Db, crm: CrmSettings, opts: { concurrency?: nu
       };
       await Promise.all(Array.from({ length: opts.concurrency ?? 4 }, worker));
 
+      // addresses (installation sites, main one included) of the customers with a live account
+      const addresses = new Map<string, Row[]>();
+      const custQueue = [...new Set(live.map((a) => s(a.customer_id)).filter(Boolean))];
+      const addrWorker = async () => {
+        for (let id = custQueue.shift(); id; id = custQueue.shift()) {
+          try {
+            const d = (await client.call('GET', `/api/modules/crm/customers/${encodeURIComponent(id)}/additional-addresses?include_main=1`, undefined, 10_000)) as Row[] | null;
+            addresses.set(id, Array.isArray(d) ? d : []);
+          } catch {
+            // kept from the previous sync below
+          }
+        }
+      };
+      await Promise.all(Array.from({ length: opts.concurrency ?? 4 }, addrWorker));
+      const previousAddresses = db.prepare('SELECT * FROM crm_addresses').all() as Row[];
+      const coord = (v: unknown) => {
+        const n = Number(v);
+        return v !== null && v !== '' && Number.isFinite(n) && n !== 0 ? n : null;
+      };
+
       const now = nowIso();
       const ins = db.prepare(
         `INSERT INTO crm_radius(account_id, customer_id, username, account_status, profile, static_ip, cpe_type, customer_name, customer_status,
-           customer_group, services_suspended, online, mac, client_ip, session_seconds, checked_at)
-         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           customer_group, services_suspended, online, mac, client_ip, session_seconds, checked_at, address_id)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      );
+      const insCustomer = db.prepare(
+        `INSERT INTO crm_customers(customer_id, name, internal_code, type, status, group_name, phone, phone2, email, address_line1, address_line2, city, postal_code, state_code)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      );
+      const insAddress = db.prepare(
+        `INSERT OR REPLACE INTO crm_addresses(address_id, customer_id, description, address_line1, address_line2, city, postal_code, state_code, lat, lng, is_main)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
       );
       db.exec('BEGIN');
       try {
@@ -167,7 +200,29 @@ export function createCrmSync(db: Db, crm: CrmSettings, opts: { concurrency?: nu
             st ? (s(st.client_ip) || null) : ((prev?.client_ip as string | null) ?? null),
             st ? (typeof st.session_duration === 'number' ? st.session_duration : null) : ((prev?.session_seconds as number | null) ?? null),
             st ? now : ((prev?.checked_at as string | null) ?? null),
+            s(a.address_id),
           );
+        }
+        db.exec('DELETE FROM crm_customers');
+        for (const c of customers) {
+          const name = s(c.customer_name) || s(c.business_name) || [s(c.first_name), s(c.last_name)].filter(Boolean).join(' ');
+          insCustomer.run(
+            s(c.customer_id), name, s(c.internal_code), s(c.type), s(c.status), s(c.group_name), s(c.phone_number), s(c.phone_number2),
+            s(c.notification_general_email), s(c.address_line1), s(c.address_line2), s(c.city), s(c.postal_code), s(c.state_code),
+          );
+        }
+        db.exec('DELETE FROM crm_addresses');
+        for (const r of previousAddresses) {
+          if (addresses.has(s(r.customer_id))) continue; // replaced by the fresh read below
+          insAddress.run(r.address_id as string, r.customer_id as string, s(r.description), s(r.address_line1), s(r.address_line2), s(r.city), s(r.postal_code), s(r.state_code), r.lat as number | null, r.lng as number | null, r.is_main as number);
+        }
+        for (const [customerId, list] of addresses) {
+          for (const ad of list) {
+            insAddress.run(
+              s(ad.address_id), customerId, s(ad.description), s(ad.address_line1), s(ad.address_line2), s(ad.city), s(ad.postal_code), s(ad.state_code),
+              coord(ad.lat), coord(ad.lng), ad.is_main === true || ad.is_main === 1 ? 1 : 0,
+            );
+          }
         }
         db.exec('COMMIT');
       } catch (e) {

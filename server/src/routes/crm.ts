@@ -3,7 +3,10 @@ import { z } from 'zod';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
-import { isSuspended } from '../services/crm-sync.ts';
+import { isSuspended, type RadiusInfo } from '../services/crm-sync.ts';
+import { distanceM, type LatLon } from '../domain/geo.ts';
+import { isAp } from '../services/uisp.ts';
+import { radiusView } from '../domain/health.ts';
 
 /**
  * RADIUS state from the CRM for the NOC (admins only): last sync, sync on demand and the account
@@ -62,5 +65,114 @@ export function crmRoutes(app: FastifyInstance, ctx: AppContext) {
       })
       .sort((a, b) => Number(b.suspended) - Number(a.suspended) || Number(a.online ?? 2) - Number(b.online ?? 2) || a.customerName.localeCompare(b.customerName));
     return { ...ctx.crmSync.state(), total: rows.length, rows: rows.slice(0, q.limit) };
+  });
+
+  // ---- Clienti: anagrafiche e sedi di installazione ------------------------------------------
+
+  type Customer = { customer_id: string; name: string; internal_code: string; type: string; status: string; group_name: string; phone: string; phone2: string; email: string; address_line1: string; address_line2: string; city: string; postal_code: string; state_code: string };
+  type Address = { address_id: string; customer_id: string; description: string; address_line1: string; address_line2: string; city: string; postal_code: string; state_code: string; lat: number | null; lng: number | null; is_main: number };
+  const addressText = (a: { address_line1: string; address_line2: string; city: string; postal_code: string; state_code: string }) =>
+    [[a.address_line1, a.address_line2].filter(Boolean).join(' '), [a.postal_code, a.city, a.state_code ? `(${a.state_code})` : ''].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+
+  /**
+   * Everything needed to list customers: their installation sites (the address of each account),
+   * the PPPoE session and the CPE in UISP (session MAC, or PPPoE user of the installation), with
+   * the distance between the CRM position and the UISP one. A UISP position equal to the one of
+   * an AP or a site (within 15 m) is suspicious: UISP gives it to CPEs without their own.
+   */
+  async function customerIndex() {
+    const customers = ctx.db.prepare('SELECT * FROM crm_customers').all() as Customer[];
+    const addresses = new Map((ctx.db.prepare('SELECT * FROM crm_addresses').all() as Address[]).map((a) => [a.address_id, a]));
+    const accounts = new Map<string, RadiusInfo[]>();
+    for (const r of ctx.crmSync.all()) {
+      if (r.accountStatus === 'Terminato') continue;
+      accounts.set(r.customerId, [...(accounts.get(r.customerId) ?? []), r]);
+    }
+    const devices = ctx.uisp ? await ctx.uisp.allDevices().catch(() => []) : [];
+    const byMac = new Map(devices.filter((d) => d.mac).map((d) => [d.mac!, d]));
+    const anchors: LatLon[] = devices.filter((d) => isAp(d) && d.location).map((d) => d.location!);
+    if (ctx.uisp) for (const site of await ctx.uisp.sites().catch(() => [])) if (site.location) anchors.push(site.location);
+    const jobMac = new Map(
+      (ctx.db.prepare("SELECT lower(pppoe_user) u, mac FROM provisioning_jobs WHERE status = 'success' AND pppoe_user <> '' ORDER BY created_at").all() as Array<{ u: string; mac: string }>).map((r) => [r.u, r.mac]),
+    );
+    const view = (c: Customer) => {
+      const accs = accounts.get(c.customer_id) ?? [];
+      const sites = accs.map((r) => {
+        const a = addresses.get(r.addressId);
+        const mac = r.mac ?? jobMac.get(r.username.toLowerCase()) ?? null;
+        const d = mac ? byMac.get(mac) : undefined;
+        const crmPos = a && a.lat !== null && a.lng !== null ? { lat: a.lat, lon: a.lng } : null;
+        const uispPos = d?.location ?? null;
+        return {
+          addressId: r.addressId,
+          description: a?.description ?? '',
+          address: a ? addressText(a) : '',
+          isMain: a ? a.is_main === 1 : null,
+          position: crmPos,
+          account: { ...radiusView(r), accountId: r.accountId, mac: r.mac },
+          cpe: d ? { id: d.id, name: d.name, mac: d.mac, model: d.model, status: d.status, signal: d.signal, apName: d.apName, position: uispPos } : null,
+          distanceM: crmPos && uispPos ? Math.round(distanceM(crmPos, uispPos)) : null,
+          suspicious: uispPos ? anchors.some((p) => distanceM(p, uispPos) < 15) : false,
+        };
+      });
+      return {
+        customerId: c.customer_id,
+        name: c.name,
+        code: c.internal_code,
+        type: c.type,
+        status: c.status,
+        group: c.group_name,
+        phone: c.phone,
+        phone2: c.phone2,
+        email: c.email,
+        mainAddress: addressText(c),
+        suspended: c.status === 'suspended' || sites.some((x) => x.account.suspended),
+        sites,
+      };
+    };
+    return { customers, view };
+  }
+
+  app.get('/api/admin/crm/customers', admin, async (req) => {
+    const q = z
+      .object({
+        filter: z.enum(['all', 'with_accounts', 'suspended', 'offline', 'mismatch', 'nocoords']).default('with_accounts'),
+        q: z.string().trim().max(80).default(''),
+        limit: z.coerce.number().int().min(1).max(1000).default(200),
+      })
+      .parse(req.query);
+    const { customers, view } = await customerIndex();
+    const needle = q.q.toLowerCase();
+    const rows = customers
+      .map(view)
+      .filter((c) => {
+        if (q.filter === 'with_accounts' && !c.sites.length) return false;
+        if (q.filter === 'suspended' && !c.suspended) return false;
+        if (q.filter === 'offline' && !c.sites.some((x) => x.account.online === false && !x.account.suspended)) return false;
+        if (q.filter === 'mismatch' && !c.sites.some((x) => (x.distanceM ?? 0) > 100)) return false;
+        if (q.filter === 'nocoords' && !c.sites.some((x) => !x.position)) return false;
+        if (!needle) return true;
+        return [c.name, c.code, c.phone, c.email, c.mainAddress, ...c.sites.flatMap((x) => [x.address, x.account.username, x.cpe?.name, x.cpe?.mac, x.cpe?.apName])].some((v) => v?.toLowerCase().includes(needle));
+      })
+      .sort((a, b) => (q.filter === 'mismatch' ? Math.max(...b.sites.map((x) => x.distanceM ?? 0)) - Math.max(...a.sites.map((x) => x.distanceM ?? 0)) : 0) || a.name.localeCompare(b.name));
+    return { ...ctx.crmSync.state(), total: rows.length, rows: rows.slice(0, q.limit) };
+  });
+
+  /** One customer; a site without coordinates is placed from its address (local geocoder, approximate). */
+  app.get('/api/admin/crm/customers/:id', admin, async (req) => {
+    const id = z.string().trim().min(1).max(20).parse((req.params as { id: string }).id);
+    const { customers, view } = await customerIndex();
+    const c = customers.find((x) => x.customer_id === id);
+    if (!c) throw new HttpError(404, 'customer_not_found');
+    const v = view(c);
+    const sites = await Promise.all(
+      v.sites.map(async (x) => {
+        if (x.position || !x.address) return { ...x, approximate: false };
+        const hit = (await ctx.geocoder.search(x.address).catch(() => []))[0];
+        return { ...x, position: hit ? { lat: hit.lat, lon: hit.lon } : null, approximate: !!hit };
+      }),
+    );
+    recordEvent(ctx.db, req.user!.id, 'crm.customer.view', v.name, `cliente ${id}`);
+    return { ...v, sites };
   });
 }

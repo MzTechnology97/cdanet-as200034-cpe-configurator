@@ -31,6 +31,12 @@ Con il connettore attivo il server copia ogni 10 minuti (prima volta un minuto d
 
 Velocità del piano dal nome del profilo (`CDA-NET-HOME-30-6` → 30/6 Mbit/s).
 
+## Clienti (console)
+
+**Clienti** (solo amministratori): le anagrafiche copiate a ogni sincronizzazione (tabelle `crm_customers` e `crm_addresses`, migrazione 23) con le **sedi di installazione**: la sede di un account è il suo `address_id`, quasi sempre un indirizzo aggiuntivo del cliente, letto con `additional-addresses?include_main=1`. Per ogni sede: indirizzo e coordinate del CRM, sessione PPPoE, CPE in UISP (MAC della sessione o utente PPPoE dell'installazione) e distanza tra le due posizioni; la posizione UISP uguale a quella di un AP o di un sito (entro 15 m) è segnalata come sospetta. Filtri: con PPPoE, offline, sospesi, sede e CPE distanti oltre 100 m, sede senza coordinate, tutte. La scheda del cliente mostra la mappa; una sede senza coordinate viene posizionata dall'indirizzo con il geocoder locale (approssimativa). Ogni scheda aperta finisce nel Registro attività (`crm.customer.view`). Solo letture.
+
+Sul campo (10/10/2026): 695 sedi su 696 hanno già le coordinate nel CRM; distanza dalla CPE in UISP mediana 13 m, ma 282 oltre 100 m e 89 oltre 5 km. La correzione si farà da una pagina di revisione caso per caso (serve il permesso di scrittura sui Clienti nella chiave).
+
 ## Prossimi passi
 
 Decisi con l'utente (vedi la [ROADMAP](ROADMAP.md)):

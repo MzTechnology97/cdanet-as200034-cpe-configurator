@@ -405,6 +405,40 @@ const MIGRATIONS: string[] = [
   CREATE INDEX crm_radius_mac ON crm_radius(mac);
   CREATE INDEX crm_radius_username ON crm_radius(username COLLATE NOCASE);
   `,
+  // 23: CRM customers and their addresses (installation sites) for the console "Clienti" page
+  `
+  ALTER TABLE crm_radius ADD COLUMN address_id TEXT NOT NULL DEFAULT '';
+  CREATE TABLE crm_customers(
+    customer_id TEXT PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '',
+    internal_code TEXT NOT NULL DEFAULT '',
+    type TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT '',
+    group_name TEXT NOT NULL DEFAULT '',
+    phone TEXT NOT NULL DEFAULT '',
+    phone2 TEXT NOT NULL DEFAULT '',
+    email TEXT NOT NULL DEFAULT '',
+    address_line1 TEXT NOT NULL DEFAULT '',
+    address_line2 TEXT NOT NULL DEFAULT '',
+    city TEXT NOT NULL DEFAULT '',
+    postal_code TEXT NOT NULL DEFAULT '',
+    state_code TEXT NOT NULL DEFAULT ''
+  );
+  CREATE TABLE crm_addresses(
+    address_id TEXT PRIMARY KEY,
+    customer_id TEXT NOT NULL,
+    description TEXT NOT NULL DEFAULT '',
+    address_line1 TEXT NOT NULL DEFAULT '',
+    address_line2 TEXT NOT NULL DEFAULT '',
+    city TEXT NOT NULL DEFAULT '',
+    postal_code TEXT NOT NULL DEFAULT '',
+    state_code TEXT NOT NULL DEFAULT '',
+    lat REAL,
+    lng REAL,
+    is_main INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE INDEX crm_addresses_customer ON crm_addresses(customer_id);
+  `,
 ];
 
 export function openDatabase(path: string): Db {
