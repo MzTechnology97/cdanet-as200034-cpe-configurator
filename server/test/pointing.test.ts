@@ -92,6 +92,9 @@ describe('Puntamento: terreno e tilt', () => {
     assert.ok(ap.tiltDeg > 0 && ap.tiltDeg < 1, String(ap.tiltDeg));
     assert.equal(typeof ap.lat, 'number');
 
+    // the configured antenna height is used only by APs without altitude in UISP: the admin sees which
+    const cfg = (await app.inject({ method: 'GET', url: '/api/admin/pointing/config', headers: H })).json();
+    assert.ok(cfg.apSources.fallback.includes('AP N2 D01'), JSON.stringify(cfg.apSources));
     await app.inject({ method: 'PUT', url: '/api/admin/pointing/config', headers: H, payload: { apHeightM: 30, cpeHeightM: 4 } });
     await app.inject({ method: 'POST', url: '/api/admin/users', headers: H, payload: { username: 'tecnico', password: 'Installer-Pass-123' } });
     const tid = (await app.inject({ method: 'GET', url: '/api/admin/assignments', headers: H })).json().users[0].id;

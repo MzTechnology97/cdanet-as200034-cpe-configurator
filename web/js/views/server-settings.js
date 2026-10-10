@@ -309,12 +309,37 @@ function pointingSettings() {
           await api('/api/admin/pointing/config', { method: 'PUT', body: { apHeightM: Number(ap.value) || 0, cpeHeightM: Number(cpe.value) || 0 } });
           toast('Altezze salvate');
         });
+      const src = c.apSources;
+      // which APs really use the antenna height set here: only those without altitude in UISP
+      const usage = !src
+        ? h('p', { class: 'small muted' }, 'UISP non collegato: non si sa quanti AP usano questo valore.')
+        : h(
+            'div',
+            { class: 'small' },
+            h(
+              'p',
+              {},
+              `Su ${src.total} AP: ${src.gps} con l’altitudine GPS in UISP, ${src.siteHeight} con l’altezza del sito in UISP, `,
+              h('b', {}, `${src.fallback.length} senza nessuno dei due`),
+              src.fallback.length ? ': per questi vale l’altezza impostata qui.' : ': l’altezza impostata qui oggi non viene usata.',
+            ),
+            src.fallback.length
+              ? h('details', {}, h('summary', {}, `Vedi i ${src.fallback.length} AP senza altitudine (completala in UISP per non usare il valore qui)`), h('p', { class: 'muted' }, src.fallback.join(', ')))
+              : null,
+          );
       mount(
         box,
         card(
           h('h2', {}, 'Puntamento nell’app'),
-          h('p', { class: 'small muted' }, 'Per il tilt verso gli AP l’app usa l’altitudine del terreno (modello SRTM, scaricato dal server solo per le zone usate) più queste altezze dal suolo.'),
-          h('div', { class: 'row' }, field('Altezza antenne AP (m dal suolo)', ap), field('Altezza CPE predefinita (m dal suolo)', cpe)),
+          h('p', { class: 'small muted' }, 'Per tilt, visibilità e segnale verso un AP servono l’altitudine dell’AP e quella della CPE. Il terreno viene dal modello SRTM (scaricato dal server solo per le zone usate).'),
+          h(
+            'ul',
+            { class: 'small plain' },
+            h('li', {}, h('b', {}, 'AP: '), 'si usa prima l’altitudine GPS dell’AP registrata in UISP, poi l’altezza del suo sito in UISP sopra il terreno. Solo se UISP non ha nessuno dei due vale l’altezza antenne qui sotto: non si somma mai ai dati di UISP.'),
+            h('li', {}, h('b', {}, 'CPE: '), 'terreno più l’altezza dal suolo. Quella qui sotto è solo il valore di partenza: il tecnico la cambia nell’app per ogni installazione.'),
+          ),
+          h('div', { class: 'row' }, field('Altezza antenne AP (m dal suolo), solo per AP senza altitudine in UISP', ap), field('Altezza CPE di partenza (m dal suolo)', cpe)),
+          usage,
           c.dem ? null : h('div', { class: 'notice warn' }, 'Modello del terreno disattivato (DEM_URL vuoto): il tilt non viene calcolato.'),
           h('div', { class: 'btns' }, save),
         ),
