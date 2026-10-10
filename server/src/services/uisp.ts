@@ -1,6 +1,6 @@
 import { HttpError } from '../auth.ts';
 import { parseMac } from '../domain/policy.ts';
-import { buildApModel, sectorWidth, type ApModel, type ClientSample } from '../domain/coverage-model.ts';
+import { buildApModel, networkCalibrationDb, sectorWidth, type ApModel, type ClientSample, type RadioDefaults } from '../domain/coverage-model.ts';
 import { bearingDeg, cardinal, distanceM, isValidLatLon, type LatLon } from '../domain/geo.ts';
 
 /**
@@ -320,26 +320,36 @@ export function createUisp(opts: UispOptions) {
      * Coverage model of each AP from its customers (position of the CPE or of its site, signal).
      * Positions stay on the server: callers expose only estimates.
      */
-    async apModels(apIds: string[]) {
+    /** [radio]: EIRP and CPE gain of the theory the customers calibrate (Impostazioni server). */
+    async apModels(apIds: string[], radio?: RadioDefaults) {
       const want = new Set(apIds);
       const [ds, ss] = await Promise.all([devices(), sites().catch(() => [] as UispSite[])]);
       const siteLoc = new Map(ss.map((s) => [s.id, s.location]));
       const apLoc = new Map(ds.filter(isAp).map((d) => [d.id, d.location ?? (d.siteId ? (siteLoc.get(d.siteId) ?? null) : null)]));
       const apDev = new Map(ds.filter(isAp).map((d) => [d.id, d]));
+      // customers of every AP: the network calibration uses them all, the models only the wanted APs
       const clients = new Map<string, ClientSample[]>();
       for (const d of ds) {
-        if (!d.apId || !want.has(d.apId) || isAp(d)) continue;
+        if (!d.apId || isAp(d)) continue;
         const loc = d.location ?? (d.siteId ? (siteLoc.get(d.siteId) ?? null) : null);
         if (!loc) continue;
         clients.set(d.apId, [...(clients.get(d.apId) ?? []), { lat: loc.lat, lon: loc.lon, signal: d.status === 'active' ? d.signal : null }]);
       }
+      // azimuth set in UISP: the sector of the antenna instead of the one guessed from the customers
+      const headingOf = (ap: UispDevice | undefined) => (ap?.heading != null ? { center: ap.heading, width: sectorWidth(ap.model) } : null);
+      const r = radio ?? { eirpDbm: 30, cpeGainDbi: 23 };
+      const prior =
+        networkCalibrationDb(
+          [...apDev.values()]
+            .filter((ap) => !isPtp(ap) && apLoc.get(ap.id))
+            .map((ap) => ({ ap: apLoc.get(ap.id)!, clients: clients.get(ap.id) ?? [], heading: headingOf(ap), freqMHz: ap.frequency })),
+          r,
+        ) ?? 0;
       const out = new Map<string, ApModel>();
       for (const id of want) {
         const loc = apLoc.get(id);
         const ap = apDev.get(id);
-        // azimuth set in UISP: the sector of the antenna instead of the one guessed from the customers
-        const heading = ap?.heading != null ? { center: ap.heading, width: sectorWidth(ap.model) } : null;
-        if (loc) out.set(id, buildApModel(loc, clients.get(id) ?? [], heading));
+        if (loc) out.set(id, buildApModel(loc, clients.get(id) ?? [], headingOf(ap), ap?.frequency ?? null, r, prior));
       }
       return out;
     },

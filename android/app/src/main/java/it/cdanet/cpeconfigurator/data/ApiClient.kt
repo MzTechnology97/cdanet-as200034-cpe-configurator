@@ -415,11 +415,13 @@ class ApiClient(
     suspend fun coverage(lat: Double, lon: Double): CoverageDto = AppJson.decodeFromString(CoverageDto.serializer(), coverageJson(lat, lon))
 
     /** The same answer as is, for the embedded map (positions, approximate areas, served sectors). */
-    suspend fun coverageJson(lat: Double, lon: Double): String = request("GET", "/api/coverage?lat=$lat&lon=$lon&limit=5")
+    /** [heightM]: CPE above the ground, for the terrain towards each AP (null: the server default). */
+    suspend fun coverageJson(lat: Double, lon: Double, heightM: Double? = null): String =
+        request("GET", "/api/coverage?lat=$lat&lon=$lon&limit=5" + (heightM?.let { "&height=$it" } ?: ""))
 
     /** Admins: more APs and a wider radius (the server ignores both for installers). */
-    suspend fun coverageJson(lat: Double, lon: Double, limit: Int, km: Int?): String =
-        request("GET", "/api/coverage?lat=$lat&lon=$lon&limit=$limit" + (km?.let { "&km=$it" } ?: ""))
+    suspend fun coverageJson(lat: Double, lon: Double, limit: Int, km: Int?, heightM: Double? = null): String =
+        request("GET", "/api/coverage?lat=$lat&lon=$lon&limit=$limit" + (km?.let { "&km=$it" } ?: "") + (heightM?.let { "&height=$it" } ?: ""))
 
     /** "Stato rete" as is: admins get every AP with its position (base map of Verifica copertura). */
     suspend fun networkStatusJson(): String = request("GET", "/api/network/status")

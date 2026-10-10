@@ -178,6 +178,10 @@ data class SignalEstimateDto(
     val nearby: Int? = null,
     /** The AP has no customers yet: free-space estimate (less accurate). */
     val theoretical: Boolean = false,
+    /** Beyond the farthest realistic link (20 km). */
+    val tooFar: Boolean = false,
+    /** Hills between the point and the AP (null: elevation model not available). */
+    val terrain: TerrainEffectDto? = null,
 ) {
     /** "−63 dBm (−67…−59) · affidabilità alta · fuori dal settore servito"; null if there is no estimate. */
     fun describe(): String? = signalDbm?.let { s ->
@@ -186,8 +190,10 @@ data class SignalEstimateDto(
             "affidabilità $confidence",
             if (inSector == false) "fuori dal settore servito" else null,
             if (beyondServed) "più lontano dei clienti attuali" else null,
+            if (tooFar) "oltre 20 km: troppo lontano" else null,
+            terrain?.describe(),
             // no customers on the AP yet: free-space estimate from the radio parameters
-            if (theoretical) "stima teorica: AP senza clienti" else basis?.let { b -> "da $b clienti" },
+            if (theoretical) "stima teorica: AP senza clienti" else basis?.let { b -> "calibrata su $b clienti" },
         ).joinToString(" · ")
     }
 }
@@ -524,6 +530,16 @@ data class CoverageAp(
 )
 
 /** What the app shows of a radio simulation (the map gets the whole answer). */
+/** Terrain between the point and the AP: the same profile as Visibilità. */
+@Serializable
+data class TerrainEffectDto(val verdict: String = "clear", val lossDb: Double = 0.0) {
+    fun describe(): String = when (verdict) {
+        "blocked" -> "ostruito dal terreno (−${Math.round(lossDb)} dB)"
+        "fresnel" -> "una collina sfiora la linea di vista (−${Math.round(lossDb)} dB)"
+        else -> "terreno libero"
+    }
+}
+
 @Serializable
 data class SimulationInfoDto(
     val ap: SimulationApDto,
@@ -532,6 +548,12 @@ data class SimulationInfoDto(
     val radiusM: Int = 0,
     val minDbm: Int = -75,
     val theoretical: Boolean = false,
+    /** Customers left out: their position in UISP is the AP's or more than 20 km away. */
+    val ignored: Int = 0,
+    /** The terrain was considered (elevation model available). */
+    val terrain: Boolean = false,
+    /** Antenna pattern from the azimuth set in UISP. */
+    val antenna: Boolean = false,
 )
 
 @Serializable

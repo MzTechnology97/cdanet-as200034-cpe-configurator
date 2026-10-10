@@ -13,7 +13,8 @@ import { parseMac, SSID_PARTS, TARGET_FIRMWARE } from '../domain/policy.ts';
 import type { ModuleKey } from '../services/modules.ts';
 import { isAp, isPtp, type UispDevice } from '../services/uisp.ts';
 import { approxPoint, roughDistance } from '../domain/approx.ts';
-import { estimateOrTheory, rankCoverage, type ApModel } from '../domain/coverage-model.ts';
+import { estimateAt, MAX_LINK_M, rankCoverage, type ApModel } from '../domain/coverage-model.ts';
+import { estimateForAp, pointingConfig, terrainBetween, terrainSampler } from '../services/terrain.ts';
 
 interface JobRow {
   id: string;
@@ -83,13 +84,21 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.get('/api/coverage', mod('coverage'), async (req) => {
     const q = z
-      .object({ lat: z.coerce.number(), lon: z.coerce.number(), limit: z.coerce.number().int().min(1).max(50).default(5), km: z.coerce.number().min(1).max(200).optional() })
+      .object({
+        lat: z.coerce.number(),
+        lon: z.coerce.number(),
+        limit: z.coerce.number().int().min(1).max(50).default(5),
+        km: z.coerce.number().min(1).max(200).optional(),
+        /** Height of the CPE above the ground, for the terrain (default: Puntamento settings). */
+        height: z.coerce.number().min(0).max(100).optional(),
+      })
       .parse(req.query);
     // admins: no limits (up to 50 APs, the distance they ask up to 200 km); installers, from the
     // web or the app alike: the number set in Impostazioni server, within the configured radius
     const isAdmin = req.user!.role === 'admin';
     const limit = isAdmin ? q.limit : ctx.cfg.installerCoverageAps;
-    const maxKm = isAdmin ? (q.km ?? ctx.uispSettings.coverageMaxKm) : ctx.uispSettings.coverageMaxKm;
+    // never beyond the farthest realistic link (20 km), whatever is asked or configured
+    const maxKm = Math.min(MAX_LINK_M / 1000, isAdmin ? (q.km ?? ctx.uispSettings.coverageMaxKm) : ctx.uispSettings.coverageMaxKm);
     if (!isValidLatLon(q.lat, q.lon)) throw new HttpError(400, 'invalid_position');
     // Installers check coverage only on the POPs/APs assigned to them by the admin.
     const keys = req.user!.role === 'admin' ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
@@ -97,15 +106,16 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     // every AP within range is rated, the limit comes last: a good AP a bit farther away is not
     // hidden by closer ones with a worse signal
     const inRange = await uisp().nearestAps({ lat: q.lat, lon: q.lon }, 500, maxKm, allow);
-    const models = await uisp().apModels(inRange.map((a) => a.id)).catch(() => new Map<string, ApModel>());
-    const clientsShown = !keys || ctx.outages.config().installerClients;
     const radio = { eirpDbm: ctx.cfg.coverageEirpDbm, cpeGainDbi: ctx.cfg.coverageCpeGainDbi };
-    const estimateFor = (a: { id: string; distanceM: number; bearing: number; frequency: number | null }) => {
-      const m = models.get(a.id);
-      if (!m) return null;
-      // bearing from the AP towards the point = reverse of the pointing direction; no customers: theory
-      const e = estimateOrTheory(m, a.distanceM, (a.bearing + 180) % 360, a.frequency, radio);
-      return { ...e, basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null };
+    const models = await uisp().apModels(inRange.map((a) => a.id), radio).catch(() => new Map<string, ApModel>());
+    const clientsShown = !keys || ctx.outages.config().installerClients;
+    const heights = pointingConfig(db);
+    const point = { lat: q.lat, lon: q.lon };
+    // the terrain towards every AP, as in Visibilità: a hill in the way lowers the expected signal
+    const at = await terrainSampler(ctx.dem, [point, ...inRange]);
+    const estimateFor = (a: (typeof inRange)[number]) => {
+      const e = estimateForAp(models.get(a.id), a, point, at, { cpeM: q.height ?? heights.cpeHeightM, apM: heights.apHeightM }, radio);
+      return e && { ...e, basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null };
     };
     const served = (a: { id: string }) => {
       const m = models.get(a.id);
@@ -138,29 +148,32 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
 
   /**
    * Admin, Copertura: radio simulation of one AP. Expected signal of a new CPE on a grid around
-   * it, learned from the customers already connected (distance, direction, nearby customers);
-   * obstacles are not considered (that is the line-of-sight profile). Cells with no estimate are
-   * left out.
+   * it: the same model as Copertura (theory calibrated by the customers, antenna pattern when UISP
+   * has the azimuth) and the terrain between every cell and the AP (hills, not buildings or trees).
+   * Out to where the signal falls to −80 dBm in the main lobe, at most 20 km (farthest real link).
    */
   app.get('/api/admin/coverage/simulation', mod('coverage', admin), async (req) => {
     const q = z.object({ apId: z.string().min(1).max(80) }).parse(req.query);
     const ap = (await uisp().apsWithLocation()).find((a) => a.id === q.apId && !isPtp(a));
     if (!ap) throw new HttpError(404, 'ap_not_found');
-    const m = (await uisp().apModels([ap.id])).get(ap.id);
-    if (!m) throw new HttpError(404, 'ap_not_found');
     const radio = { eirpDbm: ctx.cfg.coverageEirpDbm, cpeGainDbi: ctx.cfg.coverageCpeGainDbi };
+    const m = (await uisp().apModels([ap.id], radio)).get(ap.id);
+    if (!m) throw new HttpError(404, 'ap_not_found');
+    const heights = pointingConfig(db);
     const theoretical = !m.fit;
     const base = { ap: { id: ap.id, name: ap.name, lat: ap.location.lat, lon: ap.location.lon }, minDbm: ctx.cfg.thresholds.signalMin, goodDbm: ctx.cfg.thresholds.signalGood, theoretical };
-    // learned: out to 1.5 times the customers served; theory: to where the signal falls to −80 dBm.
-    // At least 1.5 km, at most 15 km; 40 x 40 cells.
-    const f = ap.frequency && ap.frequency > 1000 ? ap.frequency : 5600;
-    const reach = 1000 * 10 ** ((radio.eirpDbm + radio.cpeGainDbi - 4 + 80 - 32.44 - 20 * Math.log10(f)) / 20);
-    const radiusM = Math.round(Math.min(15000, Math.max(1500, theoretical ? reach : (m.servedM ?? 2000) * 1.5)));
+    // reach: main lobe, no terrain, model down to −80 dBm; at least 1.5 km, at most 20 km
+    const main = m.sector ? m.sector.center : 0;
+    let reach = 1500;
+    while (reach < MAX_LINK_M && (estimateAt(m, reach + 500, main, ap.frequency, radio).signalDbm ?? -999) >= -80) reach += 500;
+    const radiusM = Math.min(MAX_LINK_M, Math.max(1500, reach));
     const n = 40;
     const cellM = (2 * radiusM) / n;
     const mPerLat = 111_320;
     const mPerLon = 111_320 * Math.cos((ap.location.lat * Math.PI) / 180);
-    const cells: Array<{ lat: number; lon: number; dbm: number; confidence: string }> = [];
+    const at = await terrainSampler(ctx.dem, [ap.location], radiusM + 500);
+    const target = { lat: ap.location.lat, lon: ap.location.lon, gpsAltitude: ap.altitude, siteHeight: ap.siteHeight, frequency: ap.frequency };
+    const cells: Array<{ lat: number; lon: number; dbm: number; confidence: string; blocked?: true }> = [];
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
         const dx = -radiusM + (i + 0.5) * cellM;
@@ -168,12 +181,34 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
         const d = Math.hypot(dx, dy);
         if (d > radiusM) continue;
         const b = ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360;
-        const e = estimateOrTheory(m, d, b, ap.frequency, radio);
+        const cell = { lat: ap.location.lat + dy / mPerLat, lon: ap.location.lon + dx / mPerLon };
+        const terrain = at ? terrainBetween(at, cell, heights.cpeHeightM, target, heights.apHeightM, Math.max(90, cellM / 3), 64) : null;
+        const e = estimateAt(m, d, b, ap.frequency, radio, terrain);
         if (e.signalDbm === null) continue;
-        cells.push({ lat: Math.round((ap.location.lat + dy / mPerLat) * 1e6) / 1e6, lon: Math.round((ap.location.lon + dx / mPerLon) * 1e6) / 1e6, dbm: e.signalDbm, confidence: e.confidence });
+        cells.push({
+          lat: Math.round(cell.lat * 1e6) / 1e6,
+          lon: Math.round(cell.lon * 1e6) / 1e6,
+          dbm: e.signalDbm,
+          confidence: e.confidence,
+          ...(terrain?.verdict === 'blocked' ? { blocked: true as const } : {}),
+        });
       }
     }
-    return { ...base, customers: m.samples.length, cells, cellM: Math.round(cellM), radiusM, sector: m.sector, servedM: m.servedM };
+    return {
+      ...base,
+      customers: m.samples.length,
+      // the real customers of the whole network compared with the theory of the settings, dB
+      calibrationDb: m.prior,
+      // customers left out of the model: their position in UISP is the AP's or more than 20 km away
+      ignored: m.ignored,
+      terrain: at !== null,
+      antenna: m.antenna,
+      cells,
+      cellM: Math.round(cellM),
+      radiusM,
+      sector: m.sector,
+      servedM: m.servedM,
+    };
   });
 
   // ---- UISP status of a provisioned CPE -----------------------------------------------

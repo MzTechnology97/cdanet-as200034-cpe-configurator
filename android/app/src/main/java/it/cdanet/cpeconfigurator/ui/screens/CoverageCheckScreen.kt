@@ -160,7 +160,8 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
         scope.launch {
             busy = "check"
             try {
-                val json = if (admin) c.api.coverageJson(lat, lon, 10, null) else c.api.coverageJson(lat, lon)
+                val h = height.replace(',', '.').toDoubleOrNull()?.takeIf { it in 0.5..100.0 }
+                val json = if (admin) c.api.coverageJson(lat, lon, 10, null, h) else c.api.coverageJson(lat, lon, h)
                 result = AppJson.decodeFromString(CoverageDto.serializer(), json)
                 resultJson = json
                 point = CheckedPoint(lat, lon, label ?: runCatching { c.api.reverseGeocode(lat, lon)?.label }.getOrNull()?.takeIf { it.isNotBlank() } ?: String.format(java.util.Locale.US, "%.5f, %.5f", lat, lon))
@@ -223,6 +224,13 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
     LaunchedEffect(page, simJson) { page?.evaluateJavascript(if (simJson != null) "window.cdaSimulation($simJson)" else "window.cdaClearSimulation()", null) }
 
     val heightM = height.replace(',', '.').toDoubleOrNull()?.takeIf { it in 0.5..100.0 }
+    // the CPE height changes the terrain towards each AP: check the same point again
+    LaunchedEffect(heightM) {
+        val p = point ?: return@LaunchedEffect
+        if (heightM == null) return@LaunchedEffect
+        kotlinx.coroutines.delay(800)
+        check(p.lat, p.lon, p.label)
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
@@ -266,7 +274,7 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                 { v -> height = v.filter { ch -> ch.isDigit() || ch == ',' || ch == '.' }.take(5) },
                 keyboardType = KeyboardType.Decimal,
                 placeholder = "es. 6",
-                supporting = if (height.isNotBlank() && heightM == null) "Da 0,5 a 100 m" else "Per la visibilità verso l'AP: dal terreno all'antenna montata.",
+                supporting = if (height.isNotBlank() && heightM == null) "Da 0,5 a 100 m" else "Dal terreno all'antenna montata: conta per il segnale stimato e la visibilità.",
                 isError = height.isNotBlank() && heightM == null,
             )
         }
@@ -279,7 +287,9 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                 val good = s.cells.count { it.dbm >= s.minDbm }
                 Text(
                     if (s.cells.isEmpty()) "Simulazione non possibile: ${if (s.customers > 0) "troppo pochi clienti con segnale e posizione" else "nessun cliente con posizione"}."
-                    else "${if (s.theoretical) "Nessun cliente da cui imparare" else "Da ${s.customers} clienti"} · raggio ${km(s.radiusM)} · ${Math.round(100.0 * good / s.cells.size)}% dell'area sopra ${s.minDbm} dBm",
+                    else "${if (s.theoretical) "Nessun cliente da cui calibrare" else "Calibrata su ${s.customers} clienti"}" +
+                        (if (s.ignored > 0) " (${s.ignored} con posizione non valida in UISP, esclusi)" else "") +
+                        " · raggio ${km(s.radiusM)} · ${Math.round(100.0 * good / s.cells.size)}% dell'area sopra ${s.minDbm} dBm",
                     style = MaterialTheme.typography.bodySmall,
                 )
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -292,8 +302,11 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                     }
                 }
                 Text(
-                    if (s.theoretical) "Stima teorica in spazio libero (l'AP non ha ancora clienti con segnale): margine ±8 dB, non considera ostacoli. Per un punto preciso usa Visibilità."
-                    else "Segnale atteso per una CPE nuova, stimato dai clienti già collegati. Non considera ostacoli: per un punto preciso usa Visibilità. Colori tenui: stima poco affidabile.",
+                    "Segnale atteso per una CPE nuova: potenza dell'AP, spazio libero" +
+                        (if (s.antenna) ", diagramma dell'antenna" else "") +
+                        (if (s.terrain) " e colline tra ogni punto e l'AP (non edifici e alberi)" else " (terreno non disponibile: colline non considerate)") +
+                        (if (s.theoretical) ". Stima teorica, margine ±8 dB: l'AP non ha clienti con segnale." else ". I clienti collegati la correggono, di più quanti più sono.") +
+                        " Area vuota: nessuna copertura (sotto −90 dBm). Colori tenui: stima poco affidabile. Per un punto preciso usa Visibilità.",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
