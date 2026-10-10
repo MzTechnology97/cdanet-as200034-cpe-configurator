@@ -15,6 +15,7 @@ import { isAp, isPtp, type UispDevice } from '../services/uisp.ts';
 import { approxPoint, roughDistance } from '../domain/approx.ts';
 import { estimateAt, MAX_LINK_M, rankCoverage, type ApModel } from '../domain/coverage-model.ts';
 import { estimateForAp, obstacles, pointingConfig, terrainBetween, terrainSampler } from '../services/terrain.ts';
+import { failuresNear, fieldFailures } from '../services/field-samples.ts';
 
 interface JobRow {
   id: string;
@@ -127,13 +128,19 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       const m = models.get(a.id);
       return m && m.sector ? { center: m.sector.center, width: m.sector.width, servedM: m.servedM } : null;
     };
+    // installations given up near here for radio reasons (no signal, no link, obstacles)
+    const failed = fieldFailures(db);
     const ranked = rankCoverage(
-      inRange.map((a) => ({ ...a, estimate: estimateFor(a), load: loadOf(a.id) })),
+      inRange.map((a) => ({ ...a, estimate: estimateFor(a), load: loadOf(a.id), failures: failuresNear(failed, point, a.name).sameAp })),
       ctx.cfg.thresholds.signalMin,
     );
     // installers: only the APs worth a try (no inactive ones, none whose best case is below the minimum)
     const useful = keys ? ranked.filter((a) => a.rating !== 'non attivo' && a.rating !== 'improbabile') : ranked;
-    const aps = useful.slice(0, limit);
+    // nobody gets the APs weaker than the threshold of Impostazioni server (those without an estimate stay)
+    const cut = ctx.cfg.coverageHideBelowDbm;
+    const weak = (a: (typeof useful)[number]) => cut > -100 && a.estimate?.signalDbm != null && a.estimate.signalDbm < cut;
+    const shown = useful.filter((a) => !weak(a));
+    const aps = shown.slice(0, limit);
     return {
       maxKm,
       restricted: !!keys,
@@ -141,6 +148,10 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       minSignalDbm: ctx.cfg.thresholds.signalMin,
       inRange: inRange.length,
       discarded: ranked.length - useful.length,
+      hiddenWeak: useful.length - shown.length,
+      /** Installations given up for radio reasons within 300 m of the point (any AP). */
+      failuresNearby: failuresNear(failed, point, null).any,
+      hideBelowDbm: ctx.cfg.coverageHideBelowDbm,
       aps: aps.map(({ lat, lon, siteId: _site, gpsAltitude: _alt, siteHeight: _h, ...a }) => {
         const m = a.ssid ? SSID_PARTS.exec(a.ssid) : null;
         const base = { ...a, node: m ? Number(m[1]) : null, district: m ? Number(m[2]) : null, relay: m?.[3] ? Number(m[3]) : null };

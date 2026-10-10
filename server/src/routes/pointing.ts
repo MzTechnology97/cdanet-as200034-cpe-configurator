@@ -7,6 +7,7 @@ import { approxPoint, roughDistance } from '../domain/approx.ts';
 import { distanceM, isValidLatLon } from '../domain/geo.ts';
 import { lineOfSight, pathPoints, resolveApAltitude } from '../domain/los.ts';
 import { MAX_LINK_M, rankCoverage, type ApModel } from '../domain/coverage-model.ts';
+import { failuresNear, fieldFailures } from '../services/field-samples.ts';
 import { buildProfile, estimateForAp, obstacles, pointingConfig, profileEffect, terrainSampler } from '../services/terrain.ts';
 import { elevationAngle } from '../services/dem.ts';
 
@@ -68,8 +69,9 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
       const e = estimateForAp(models.get(a.id), a, { lat: q.lat, lon: q.lon }, at, { cpeM: height, apM: c.apHeightM }, radio, obstacles(ctx));
       return e && { ...e, basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null, capacityMbps: ctx.apLoad.capacity(a.id, e.signalDbm) };
     };
+    const failed = fieldFailures(db);
     const ranked = rankCoverage(
-      inRange.map((a) => ({ ...a, estimate: estimateFor(a), load: (() => { const l = ctx.apLoad.load(a.id); return l && (keys ? { level: l.level } : l); })() })),
+      inRange.map((a) => ({ ...a, estimate: estimateFor(a), load: (() => { const l = ctx.apLoad.load(a.id); return l && (keys ? { level: l.level } : l); })(), failures: failuresNear(failed, { lat: q.lat, lon: q.lon }, a.name).sameAp })),
       ctx.cfg.thresholds.signalMin,
     );
     const useful = keys ? ranked.filter((a) => a.rating !== 'non attivo' && a.rating !== 'improbabile') : ranked;
@@ -99,6 +101,7 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
           tiltDeg: altitude !== null && from !== null ? elevationAngle(a.distanceM, from, altitude) : null,
           estimate: a.estimate,
           load: a.load,
+          failures: a.failures,
           rating: a.rating,
         };
         return keys ? { ...base, distanceM: roughDistance(a.distanceM, ctx.cfg.installerDistanceStepM), approx: approxPoint(lat, lon, `ap:${a.id}`, ctx.cfg.jwtSecret) } : { ...base, distanceM: a.distanceM, lat, lon };

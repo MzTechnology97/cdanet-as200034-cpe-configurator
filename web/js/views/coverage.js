@@ -50,7 +50,7 @@ export function estimateCell(e) {
 export function apTable(aps, admin = true) {
   return table(
     [
-      { label: 'Valutazione', render: (a) => (a.rating ? badge(...RATING[a.rating]) : '—') },
+      { label: 'Valutazione', render: (a) => h('div', {}, a.rating ? badge(...RATING[a.rating]) : '—', a.failures ? h('div', { class: 'small' }, `${a.failures} ${a.failures === 1 ? 'installazione fallita' : 'installazioni fallite'} qui vicino verso questo AP`) : null) },
       { label: 'AP', render: (a) => h('div', {}, h('b', {}, a.name || a.id), h('div', { class: 'small muted' }, a.siteName ?? '')) },
       { label: 'SSID', render: (a) => h('span', { class: 'mono' }, a.ssid ?? '—') },
       { label: 'Distanza', render: (a) => km(a.distanceM) },
@@ -135,7 +135,9 @@ export async function coverageView({ user } = {}) {
             ? [coverageMap(la, lo, r.aps), apTable(r.aps, admin)]
             : h('div', { class: 'notice warn' }, r.restricted && !r.assignedCount
                 ? 'Nessun POP/AP assegnato al tuo account: chiedi all’amministratore.'
-                : r.discarded
+                : r.hiddenWeak
+                  ? `Nessun AP con segnale stimato migliore di ${r.hideBelowDbm} dBm: ${r.hiddenWeak === 1 ? 'l’unico AP utile è più debole' : `${r.hiddenWeak} AP sono più deboli`} e non ${r.hiddenWeak === 1 ? 'viene mostrato' : 'vengono mostrati'} (Impostazioni server).`
+                  : r.discarded
                   ? `Nessun AP utilizzabile: ${r.discarded === 1 ? 'l’unico AP' : `tutti i ${r.discarded} AP`} entro ${r.maxKm} km ${r.discarded === 1 ? 'ha' : 'hanno'} un segnale stimato insufficiente o non ${r.discarded === 1 ? 'è attivo' : 'sono attivi'}.`
                   : nms(`Nessun AP con posizione entro ${r.maxKm} km: verifica la posizione o le coordinate degli AP in UISP.`, `Nessun AP${r.restricted ? ' tra quelli assegnati' : ''} entro ${r.maxKm} km da questo punto.`)),
           r.aps.length
@@ -144,7 +146,8 @@ export async function coverageView({ user } = {}) {
                 { class: 'small muted' },
                 `Ordinati dal segnale stimato migliore (minimo per il collaudo: ${r.minSignalDbm} dBm); a parità, il più vicino. ${r.inRange} AP valutati entro ${r.maxKm} km`,
                 r.discarded ? `, ${r.discarded} scartati perché non attivi o con segnale stimato insufficiente` : '',
-                r.aps.length < r.inRange - (r.discarded ?? 0) ? `, mostrati i primi ${r.aps.length}` : '',
+                r.hiddenWeak ? `, ${r.hiddenWeak} non mostrati perché più deboli di ${r.hideBelowDbm} dBm` : '',
+                r.aps.length < r.inRange - (r.discarded ?? 0) - (r.hiddenWeak ?? 0) ? `, mostrati i primi ${r.aps.length}` : '',
                 '.',
               )
             : null,
