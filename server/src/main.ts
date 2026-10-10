@@ -23,11 +23,13 @@ const stopSync = cfg.releases.githubRepo
 
 ctx.notify.start();
 ctx.outages.start();
+ctx.crmSync.start();
 
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, 'shutting down');
   ctx.notify.stop();
   ctx.outages.stop();
+  ctx.crmSync.stop();
   stopSync();
   clearInterval(housekeeping);
   await app.close();

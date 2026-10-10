@@ -67,6 +67,8 @@
   <li><b>Gruppo del NOC</b> (facoltativo): chat ID del gruppo (pulsante <i>Trova chat ID</i>) ed eventi da inviare: provisioning fallito, CPE da accettare in UISP, UISP giù/su, sicurezza, guasti Enel, riepilogo serale all'ora scelta.</li>
 </ul>
 <p>Nei messaggi non compaiono mai nome, indirizzo o posizione del cliente. Per avere il link allo storico imposta l'<b>indirizzo pubblico della console</b> in Impostazioni server. <i>Invia messaggio di prova</i> e <i>Anteprima riepilogo</i> verificano la configurazione.</p>
+<h3>CRM · ISP Billing</h3>
+<p>Indirizzo, <b>API ID</b> e <b>API key</b> di una chiave creata in ISP Billing (Dashboard → API) con i soli permessi di lettura che servono; <i>Testa connessione</i> prova un modulo alla volta. La chiave resta cifrata sul server. Con il connettore attivo il server copia ogni 10 minuti lo <b>stato RADIUS</b>: account PPPoE, profilo, cliente, sospensioni e sessione in corso (online, IP, MAC della CPE). <i>Sincronizza stato RADIUS</i> lo aggiorna subito (circa un minuto). Gli installatori non vedono mai questa fonte.</p>
 <h3>OpenStreetMap (ricerca indirizzi)</h3>
 <p>Converte gli indirizzi in coordinate per Copertura e provisioning. Con il servizio locale (Nominatim nello stesso server) gli indirizzi cercati non escono dalla rete; la regione si sceglie in Impostazioni server → Infrastruttura.</p>
 <figure><img data-guide="admin-connectors.jpg" alt="Connettori"><figcaption>Connettori: UISP (token impostato, mai mostrato) e Telegram.</figcaption></figure>
@@ -138,6 +140,7 @@
 
 <h2 id="g-salute">12. Salute CPE e Statistiche</h2>
 <p><b>Salute CPE</b> mostra tutte le CPE dei clienti presenti in UISP: offline, non trovate, segnale debole, <b>segnale calato</b> (almeno 6 dB sotto il collaudo, solo CPE installate con l'app), porta LAN lenta, da accettare, capacità bassa, firmware. Filtri per origine (installate con l'app, solo UISP, assegnate o no) e ricerca.</p>
+<p>Con il CRM collegato compaiono anche la colonna <b>PPPoE</b> (sessione online, offline o sospesa, utente, profilo e cliente) e due problemi in più: <b>PPPoE offline</b> (la CPE è online in UISP ma la sessione no: il cliente è senza Internet) e <b>account sospeso</b> (account, cliente o servizio sospeso in ISP Billing). La CPE si abbina all'account con il MAC della sessione o con l'utente PPPoE dell'installazione. Il riquadro <b>Account PPPoE</b> elenca anche le sessioni offline, i sospesi e gli account senza CPE in rete (PPPoE dal router o dall'ONT del cliente). In <b>Stato rete</b> ogni AP mostra le sessioni PPPoE delle sue CPE.</p>
 <p>Con <b>Assegna CPE agli installatori</b> dai a un installatore anche CPE montate prima dell'app o da altri: compaiono nelle sue <i>Le mie CPE</i>. Suggerimento: filtra per AP e usa <i>Seleziona tutte le filtrate</i>.</p>
 <p><b>Statistiche</b>: installazioni riuscite e fallite per mese, per installatore e per modello, collaudi, segnale medio e velocità media.</p>
 <figure><img data-guide="admin-health.jpg" alt="Salute CPE"><figcaption>Salute CPE: 7 CPE, 2 offline, 1 con segnale calato.</figcaption></figure>

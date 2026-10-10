@@ -1,6 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
+import { isSuspended } from '../services/crm-sync.ts';
 
 /** AP state shown in "Stato rete". */
 export type ApState = 'ok' | 'degraded' | 'down';
@@ -32,6 +33,20 @@ export function networkRoutes(app: FastifyInstance, ctx: AppContext) {
       ? new Map()
       : await ctx.uisp.apModels([...inf.pops.flatMap((p) => p.aps), ...inf.apsWithoutPop].map((a) => a.id)).catch(() => new Map());
     const showClients = !keys || ctx.outages.config().installerClients;
+    // admins with the CRM: PPPoE sessions of the CPEs of each AP (matched by MAC), suspended accounts apart
+    const pppoe = new Map<string, { online: number; offline: number; suspended: number }>();
+    if (!keys && ctx.crmSync.available()) {
+      const { byMac } = ctx.crmSync.index();
+      for (const d of await ctx.uisp.allDevices().catch(() => [])) {
+        const r = d.apId && d.mac ? byMac.get(d.mac) : undefined;
+        if (!r || !d.apId) continue;
+        const c = pppoe.get(d.apId) ?? { online: 0, offline: 0, suspended: 0 };
+        if (isSuspended(r)) c.suspended++;
+        else if (r.online === true) c.online++;
+        else if (r.online === false) c.offline++;
+        pppoe.set(d.apId, c);
+      }
+    }
     // Enel outages near a POP/AP (when the user also has Guasti Enel).
     const power = new Set<string>();
     if (ctx.modules.stateFor(u.id).power_outages) {
@@ -60,6 +75,7 @@ export function networkRoutes(app: FastifyInstance, ctx: AppContext) {
               lon: a.lon,
               locationFrom: a.locationFrom,
               stations: a.stations,
+              pppoe: pppoe.get(a.id) ?? null,
               served: (() => {
                 const m = sectors.get(a.id);
                 return m?.sector ? { center: m.sector.center, width: m.sector.width, servedM: m.servedM } : null;

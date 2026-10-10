@@ -7,6 +7,7 @@ import { nowIso, recordEvent } from '../db.ts';
 import { toCsv } from '../domain/csv.ts';
 import { configDrift } from '../domain/drift.ts';
 import { installedHealth, type InstalledJob } from '../domain/health.ts';
+import type { RadiusInfo } from '../services/crm-sync.ts';
 import { FIELD_THRESHOLDS } from './field.ts';
 import { isValidLatLon } from '../domain/geo.ts';
 import { parseMac, SSID_PARTS, TARGET_FIRMWARE } from '../domain/policy.ts';
@@ -294,7 +295,16 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       }
     }
     const t = { ...FIELD_THRESHOLDS, targetFirmware: TARGET_FIRMWARE, signalDropDb: 6 };
-    const h = installedHealth(rows, byMac, t);
+    // admins with the CRM connected: the RADIUS account of each CPE, by session MAC or by the PPPoE user of the installation
+    let radiusOf: ((j: InstalledJob) => RadiusInfo | null) | undefined;
+    if (admin && ctx.crmSync.available()) {
+      const idx = ctx.crmSync.index();
+      const pppoe = new Map(
+        (db.prepare("SELECT id, lower(pppoe_user) u FROM provisioning_jobs WHERE status = 'success' AND pppoe_user <> ''").all() as Array<{ id: string; u: string }>).map((r) => [r.id, r.u]),
+      );
+      radiusOf = (j) => idx.byMac.get(j.mac) ?? (j.jobId && pppoe.has(j.jobId) ? (idx.byUser.get(pppoe.get(j.jobId)!) ?? null) : null);
+    }
+    const h = installedHealth(rows, byMac, t, radiusOf);
     return {
       generatedAt: nowIso(),
       uisp: !!ctx.uisp && uispOk,
@@ -363,14 +373,22 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
   app.get('/api/cpe-health.csv', { preHandler: [ctx.auth.requireUser, ctx.modules.require('cpe_health'), ctx.modules.require('csv_export')] }, async (req, reply) => {
     if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
     const h = await cpeHealth(req);
-    const label: Record<string, string> = { offline: 'offline', not_in_uisp: 'non trovata in UISP', pending: 'da accettare', weak_signal: 'segnale debole', signal_drop: 'segnale calato', ethernet: 'porta LAN', low_capacity: 'capacità bassa', firmware: 'firmware' };
+    const label: Record<string, string> = { offline: 'offline', not_in_uisp: 'non trovata in UISP', pending: 'da accettare', weak_signal: 'segnale debole', signal_drop: 'segnale calato', ethernet: 'porta LAN', low_capacity: 'capacità bassa', firmware: 'firmware', pppoe_offline: 'PPPoE offline', account_suspended: 'account sospeso' };
+    const withRadius = h.cpes.some((c) => 'radius' in c);
     const rows = h.cpes.map((c) => [
       (c.createdAt ?? '').slice(0, 10), c.source === 'app' ? 'app' : 'UISP', c.deviceName, c.model, c.mac, c.ssid, c.installer, c.assignedTo?.username ?? '', c.now?.status ?? '', c.acceptanceSignal ?? '', c.now?.signal ?? '', c.signalDelta ?? '',
       c.now?.ethMbps ? `${c.now.ethMbps}${c.now.ethHalfDuplex ? ' half' : ''}` : '', c.now?.firmware ?? '', c.now?.apName ?? '', c.issues.map((i) => label[i] ?? i).join(', '),
+      // admins with the CRM: the RADIUS account of the CPE
+      ...(withRadius
+        ? (() => {
+            const r = 'radius' in c ? c.radius : null;
+            return [r?.username ?? '', r?.profile ?? '', r ? (r.suspended ? 'sospeso' : r.accountStatus) : '', r?.online == null ? '' : r.online ? 'online' : 'offline'];
+          })()
+        : []),
     ]);
     recordEvent(db, req.user!.id, 'cpe_health.export', `${rows.length} CPE`, '');
     reply.header('Content-Type', 'text/csv; charset=utf-8').header('Content-Disposition', `attachment; filename="salute-cpe-${h.generatedAt.slice(0, 10)}.csv"`);
-    return '﻿' + toCsv([['Installata il', 'Origine', 'Cliente', 'Modello', 'MAC', 'SSID', 'Installatore', 'Assegnata a', 'Stato', 'Segnale al collaudo', 'Segnale ora', 'Differenza dB', 'Porta LAN', 'Firmware', 'AP', 'Problemi'], ...rows]);
+    return '﻿' + toCsv([['Installata il', 'Origine', 'Cliente', 'Modello', 'MAC', 'SSID', 'Installatore', 'Assegnata a', 'Stato', 'Segnale al collaudo', 'Segnale ora', 'Differenza dB', 'Porta LAN', 'Firmware', 'AP', 'Problemi', ...(withRadius ? ['Utente PPPoE', 'Profilo', 'Account', 'Sessione PPPoE'] : [])], ...rows]);
   });
 
   // ---- Admin actions ------------------------------------------------------------------------
