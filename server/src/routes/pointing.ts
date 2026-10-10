@@ -43,7 +43,12 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
     return { ...DEFAULT, ...(r ? (JSON.parse(r.value) as Partial<PointingConfig>) : {}) };
   };
 
-  app.get('/api/admin/pointing/config', { preHandler: ctx.auth.requireAdmin }, async () => ({ ...config(), dem: ctx.dem.enabled }));
+  // with how many APs actually use the configured antenna height (those without altitude in UISP)
+  app.get('/api/admin/pointing/config', { preHandler: ctx.auth.requireAdmin }, async () => ({
+    ...config(),
+    dem: ctx.dem.enabled,
+    apSources: ctx.uisp ? await ctx.uisp.apAltitudeSources().catch(() => null) : null,
+  }));
 
   app.put('/api/admin/pointing/config', { preHandler: ctx.auth.requireAdmin }, async (req) => {
     const b = z.object({ apHeightM: z.number().min(0).max(200), cpeHeightM: z.number().min(0).max(100) }).strict().parse(req.body);
