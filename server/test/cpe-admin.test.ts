@@ -44,6 +44,20 @@ describe('Stato CPE (admins): one CPE as in the UISP app', () => {
     assert.equal((put.body as { overrideGlobal: boolean }).overrideGlobal, false);
     const events = db.prepare("SELECT action FROM events WHERE action LIKE 'cpe.%'").all().map((e) => (e as { action: string }).action);
     assert.deepEqual(events.sort(), ['cpe.backup', 'cpe.backup_apply', 'cpe.meta', 'cpe.refresh', 'cpe.restart', 'cpe.upgrade'].sort());
+    assert.equal(r.json().crm, undefined, 'no CRM connected: no customer block');
+
+    // wireless parameters: read from the CPE, written back whole with only the changes (keys untouched)
+    assert.equal(c.wireless.txPowerRange.max, 24);
+    const w = await call('PUT', '/api/admin/cpe/cpe-old/wireless', { txPower: 18, ackAuto: false, ackDistanceM: 3000, ssid: 'CDA-NET-N2-D02' });
+    assert.equal(w.statusCode, 200, w.body);
+    const wput = uisp.calls.filter((x) => x.method === 'PUT' && x.path === '/devices/airmaxes/cpe-old/config/wireless').at(-1)!.body as Record<string, unknown>;
+    assert.deepEqual([wput.txPower, wput.isACKAutoDistanceEnabled, wput.ackDistance, wput.ssid, wput.mode], [18, false, 3000, 'CDA-NET-N2-D02', 'sta-ptmp']);
+    assert.equal((wput.securityConfig as { presharedKey: string }).presharedKey, 'chiave-segreta-wpa', 'the key goes back unchanged');
+    const tooHot = await call('PUT', '/api/admin/cpe/cpe-old/wireless', { txPower: 30 });
+    assert.equal(tooHot.json().error, 'wireless_value_out_of_range');
+    assert.equal((await call('PUT', '/api/admin/cpe/cpe-old/wireless', { channelWidth: 30 })).statusCode, 400);
+    assert.equal((await call('PUT', '/api/admin/cpe/cpe-old/wireless', { presharedKey: 'x' })).statusCode, 400, 'keys cannot be changed from here');
+    assert.ok(!JSON.stringify((await call('GET', '/api/admin/cpe/cpe-old')).json()).includes('chiave-segreta-wpa'));
 
     // APs are not managed from here; installers have no access
     assert.equal((await call('GET', '/api/admin/cpe/ap-n2')).statusCode, 409);

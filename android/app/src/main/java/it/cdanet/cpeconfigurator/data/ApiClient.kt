@@ -371,6 +371,35 @@ class ApiClient(
 
     suspend fun cpeHealth(): CpeHealthDto = AppJson.decodeFromString(CpeHealthDto.serializer(), request("GET", "/api/cpe-health"))
 
+    // ---- admin "Stato CPE" (UISP API through the server) ----
+    suspend fun adminCpe(deviceId: String): AdminCpeDto =
+        AppJson.decodeFromString(AdminCpeDto.serializer(), request("GET", "/api/admin/cpe/${java.net.URLEncoder.encode(deviceId, "UTF-8")}"))
+
+    suspend fun adminCpeStats(deviceId: String, range: String): SignalHistoryDto =
+        AppJson.decodeFromString(SignalHistoryDto.serializer(), request("GET", "/api/admin/cpe/${java.net.URLEncoder.encode(deviceId, "UTF-8")}/statistics?range=$range"))
+
+    /** refresh, restart, upgrade, backups, backups/{id}/apply */
+    suspend fun adminCpeAction(deviceId: String, action: String) {
+        request("POST", "/api/admin/cpe/${java.net.URLEncoder.encode(deviceId, "UTF-8")}/$action")
+    }
+
+    /** Only the changed wireless parameters: the server rewrites the rest of the configuration as it is. */
+    suspend fun adminCpeWireless(deviceId: String, body: JsonObject) {
+        request("PUT", "/api/admin/cpe/${java.net.URLEncoder.encode(deviceId, "UTF-8")}/wireless", body)
+    }
+
+    suspend fun adminCpeMeta(deviceId: String, alias: String?, note: String?, maintenance: Boolean) {
+        request(
+            "PUT",
+            "/api/admin/cpe/${java.net.URLEncoder.encode(deviceId, "UTF-8")}/meta",
+            buildJsonObject {
+                put("alias", alias?.ifBlank { null })
+                put("note", note?.ifBlank { null })
+                put("maintenance", maintenance)
+            },
+        )
+    }
+
     suspend fun signalHistory(jobId: String, range: String): SignalHistoryDto =
         AppJson.decodeFromString(SignalHistoryDto.serializer(), request("GET", "/api/provisioning/jobs/$jobId/uisp/statistics?range=$range"))
 

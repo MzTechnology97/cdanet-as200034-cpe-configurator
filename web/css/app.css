@@ -245,6 +245,9 @@ button.link { background: none; border: none; color: var(--brand); padding: 4px 
 .los-axis { font-size: 11px; fill: var(--muted); }
 .sim-info { margin-top: 8px; }
 .more-aps { margin-top: 12px; }
+.wireless-edit { margin-top: 12px; }
+.wireless-edit > summary { cursor: pointer; font-weight: 600; padding: 6px 0; }
+.crm-contacts { display: flex; flex-wrap: wrap; gap: 4px 18px; margin: 10px 0; }
 .fw-chips { display: flex; flex-wrap: wrap; gap: 6px; }
 .fw-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 3px 10px 3px 4px; border-radius: 999px; }
 .fw-chip.on { border-color: var(--brand); }

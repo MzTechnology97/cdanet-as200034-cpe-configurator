@@ -16,6 +16,45 @@ const dur = (s) => {
   return d ? `${d} g ${h_} h` : `${h_} h ${Math.floor((s % 3600) / 60)} min`;
 };
 const v = (x, unit = '') => (x == null || x === '' ? '—' : `${x}${unit}`);
+/** Customer state from ISP Billing (RADIUS account and CRM). */
+const ACCOUNT = {
+  online: ['attivo, PPPoE online', 'good'],
+  offline: ['attivo, PPPoE offline', 'bad'],
+  services_suspended: ['servizi sospesi', 'warn'],
+  suspended: ['sospeso', 'warn'],
+  terminating: ['in cessazione', 'warn'],
+  terminated: ['cessato', 'bad'],
+  unknown: ['stato non letto', ''],
+};
+
+/** The customer of the CPE in ISP Billing: record, installation site, PPPoE account and plan. */
+function crmCard(crm) {
+  if (crm === undefined) return null; // CRM not connected
+  if (crm === null) return card(h('h2', {}, 'Cliente (ISP Billing)'), h('p', { class: 'small muted' }, 'Nessun account PPPoE di ISP Billing collegato a questa CPE (né per MAC della sessione né per l’utente PPPoE dell’installazione).'));
+  const a = crm.account;
+  const cu = crm.customer;
+  const st = ACCOUNT[a.state] ?? [a.state, ''];
+  const tel = (n) => (n ? h('a', { href: `tel:${n.replace(/\s+/g, '')}` }, n) : null);
+  return card(
+    h('h2', {}, 'Cliente (ISP Billing)'),
+    h('p', {}, h('b', {}, cu.name || '—'), cu.code ? h('span', { class: 'small muted' }, ` · codice ${cu.code}`) : null, ' ', badge(st[0], st[1])),
+    h(
+      'div',
+      { class: 'grid' },
+      stat('Utente PPPoE', h('span', { class: 'mono' }, a.username)),
+      stat('Profilo', a.speed ? `${a.speed.down}M/${a.speed.up}M` : v(a.profile)),
+      stat('Account', v(a.status)),
+      stat('IP della sessione', v(a.clientIp)),
+      stat('IP statico', v(a.staticIp)),
+      stat('Stato cliente', v(cu.status)),
+      stat('Gruppo', v(cu.group)),
+      stat('Tipo', v(cu.type)),
+    ),
+    h('div', { class: 'crm-contacts small' }, cu.phone ? h('div', {}, '📞 ', tel(cu.phone), cu.phone2 ? [' · ', tel(cu.phone2)] : null) : null, cu.email ? h('div', {}, '✉ ', h('a', { href: `mailto:${cu.email}` }, cu.email)) : null, cu.address ? h('div', {}, 'Residenza: ', cu.address) : null),
+    crm.site ? h('p', { class: 'small' }, h('b', {}, 'Sede di installazione: '), [crm.site.description, crm.site.address].filter(Boolean).join(' · ') || '—', crm.site.lat != null ? [' · ', h('a', { href: `https://www.openstreetmap.org/?mlat=${crm.site.lat}&mlon=${crm.site.lon}#map=18/${crm.site.lat}/${crm.site.lon}`, target: '_blank', rel: 'noopener' }, 'mappa')] : null) : null,
+    h('p', { class: 'small muted' }, `Dati di ISP Billing${a.checkedAt ? ` aggiornati il ${fmtDate(a.checkedAt)}` : ''}. La password PPPoE non viene mostrata.`),
+  );
+}
 
 export async function cpeView({ params }) {
   const id = params.get('id') ?? '';
@@ -32,6 +71,57 @@ export async function cpeView({ params }) {
       toast(typeof done === 'function' ? done(r) : done);
       if (opts.reload !== false) setTimeout(load, opts.delay ?? 1500);
     });
+  }
+
+  /** Wireless parameters: only the changed ones are sent; the server rewrites the rest as it is. */
+  function wirelessEditor(c) {
+    const w = c.wireless;
+    const ssid = h('input', { value: w.ssid ?? '', maxlength: 32 });
+    const tx = h('input', { type: 'number', step: 1, value: w.txPower ?? '', min: w.txPowerRange?.min, max: w.txPowerRange?.max });
+    const atpc = h('input', { type: 'checkbox' });
+    atpc.checked = !!w.atpc;
+    const gain = h('input', { type: 'number', step: 0.5, min: 0, max: 40, value: w.antennaGain ?? '' });
+    const cable = h('input', { type: 'number', step: 0.5, min: 0, max: 20, value: w.cableLoss ?? 0 });
+    const ackAuto = h('input', { type: 'checkbox' });
+    ackAuto.checked = !!w.ackAuto;
+    const ack = h('input', { type: 'number', step: 100, min: 100, max: 100000, value: w.ackDistanceM ?? '' });
+    const cwAuto = h('input', { type: 'checkbox' });
+    cwAuto.checked = !!w.autoChannelWidth;
+    const cw = h('select', {}, ...(w.channelWidths.length ? w.channelWidths : [w.channelWidth].filter(Boolean)).map((x) => h('option', { value: x, selected: x === w.channelWidth }, `${x} MHz`)));
+    const save = h('button', { type: 'button', class: 'primary' }, 'Applica alla CPE');
+    save.onclick = () => {
+      const body = {};
+      const numOrNull = (el) => (el.value === '' ? null : Number(el.value));
+      if (ssid.value.trim() && ssid.value.trim() !== (w.ssid ?? '')) body.ssid = ssid.value.trim();
+      if (numOrNull(tx) !== null && numOrNull(tx) !== w.txPower) body.txPower = numOrNull(tx);
+      if (atpc.checked !== !!w.atpc) body.atpc = atpc.checked;
+      if (numOrNull(gain) !== null && numOrNull(gain) !== w.antennaGain) body.antennaGain = numOrNull(gain);
+      if (numOrNull(cable) !== null && numOrNull(cable) !== (w.cableLoss ?? 0)) body.cableLoss = numOrNull(cable);
+      if (ackAuto.checked !== !!w.ackAuto) body.ackAuto = ackAuto.checked;
+      if (!ackAuto.checked && numOrNull(ack) !== null && numOrNull(ack) !== w.ackDistanceM) body.ackDistanceM = numOrNull(ack);
+      if (cwAuto.checked !== !!w.autoChannelWidth) body.autoChannelWidth = cwAuto.checked;
+      if (!cwAuto.checked && Number(cw.value) !== w.channelWidth) body.channelWidth = Number(cw.value);
+      if (!Object.keys(body).length) return toast('Nessuna modifica');
+      const what = Object.keys(body).length;
+      act(
+        save,
+        `Applicare ${what === 1 ? 'la modifica' : `le ${what} modifiche`} ai parametri wireless di ${c.name}?${body.ssid ? ` La CPE si aggancerà alla rete "${body.ssid}".` : ''} La CPE può scollegarsi per qualche secondo; un valore sbagliato (SSID, larghezza di canale) può lasciare il cliente senza Internet.`,
+        '/wireless',
+        'Parametri inviati alla CPE',
+        { method: 'PUT', body, delay: 6000 },
+      );
+    };
+    return h(
+      'details',
+      { class: 'wireless-edit' },
+      h('summary', {}, 'Modifica parametri wireless'),
+      h('div', { class: 'row' }, field('SSID a cui agganciarsi', ssid), field(`Potenza TX (dBm${w.txPowerRange ? `, ${w.txPowerRange.min}…${w.txPowerRange.max}` : ''})`, tx), field('Guadagno antenna (dBi)', gain), field('Perdita cavo (dB)', cable)),
+      h('label', { class: 'check' }, atpc, 'Controllo automatico della potenza (ATPC)'),
+      h('div', { class: 'row' }, h('label', { class: 'check' }, ackAuto, 'Distanza ACK automatica'), field('Distanza ACK (m)', ack)),
+      h('div', { class: 'row' }, h('label', { class: 'check' }, cwAuto, 'Larghezza di canale automatica'), field('Larghezza di canale', cw)),
+      h('div', { class: 'btns' }, save),
+      h('p', { class: 'small muted' }, 'Il server rilegge la configurazione dalla CPE e cambia solo questi valori: chiavi Wi-Fi e altri parametri restano come sono. Solo con la CPE online.'),
+    );
   }
 
   function render() {
@@ -129,7 +219,9 @@ export async function cpeView({ params }) {
           stat('Distanza ACK', v(r.ackDistanceM, ' m')),
         ),
         c.online ? null : h('p', { class: 'small muted' }, 'Configurazione wireless disponibile solo con la CPE online.'),
+        c.wireless ? wirelessEditor(c) : null,
       ),
+      crmCard(d.crm),
       card(h('h2', {}, 'Storico segnale'), h('div', { class: 'row' }, field('Periodo', range)), chart),
       card(
         h('h2', {}, 'Interfacce'),

@@ -294,7 +294,126 @@ data class CpeHealthItemDto(
     /** Who installed it (admin view) and the installer it is assigned to, if any. */
     val installer: String = "",
     val assignedTo: AssignedUserDto? = null,
+    /** UISP device id: admins open the CPE management from the row. */
+    val deviceId: String? = null,
 )
+
+/** Admin "Stato CPE": one CPE as in the UISP app (GET /api/admin/cpe/{deviceId}); no Wi-Fi keys. */
+@Serializable
+data class AdminCpeDto(
+    val cpe: AdminCpeViewDto,
+    val backups: List<AdminBackupDto> = emptyList(),
+    /** The customer in ISP Billing; absent (null) when the CRM is not connected or no account matches. */
+    val crm: AdminCrmDto? = null,
+)
+
+@Serializable
+data class AdminCrmDto(val account: AdminCrmAccountDto, val customer: AdminCrmCustomerDto? = null, val site: AdminCrmSiteDto? = null)
+
+@Serializable
+data class AdminCrmAccountDto(
+    val username: String = "",
+    val status: String = "",
+    val state: String = "unknown",
+    val profile: String = "",
+    val speed: PlanSpeedDto? = null,
+    val staticIp: String? = null,
+    val online: Boolean? = null,
+    val clientIp: String? = null,
+    val checkedAt: String? = null,
+)
+
+@Serializable
+data class PlanSpeedDto(val down: Int = 0, val up: Int = 0)
+
+@Serializable
+data class AdminCrmCustomerDto(
+    val name: String = "",
+    val code: String? = null,
+    val type: String? = null,
+    val status: String? = null,
+    val group: String? = null,
+    val phone: String? = null,
+    val phone2: String? = null,
+    val email: String? = null,
+    val address: String? = null,
+)
+
+@Serializable
+data class AdminCrmSiteDto(val description: String? = null, val address: String? = null, val lat: Double? = null, val lon: Double? = null)
+
+/** Editable wireless parameters of a CPE (online only). */
+@Serializable
+data class AdminWirelessDto(
+    val ssid: String? = null,
+    val txPower: Double? = null,
+    val txPowerRange: TxRangeDto? = null,
+    val atpc: Boolean? = null,
+    val antennaGain: Double? = null,
+    val cableLoss: Double? = null,
+    val ackAuto: Boolean? = null,
+    val ackDistanceM: Double? = null,
+    val autoChannelWidth: Boolean? = null,
+    val channelWidth: Double? = null,
+    val channelWidths: List<Double> = emptyList(),
+)
+
+@Serializable
+data class TxRangeDto(val min: Double = -10.0, val max: Double = 30.0)
+
+@Serializable
+data class AdminCpeViewDto(
+    val id: String,
+    val name: String = "",
+    val alias: String? = null,
+    val note: String? = null,
+    val maintenance: Boolean = false,
+    val model: String? = null,
+    val modelName: String? = null,
+    val mac: String? = null,
+    val serial: String? = null,
+    val ip: String? = null,
+    val site: String? = null,
+    val ap: String? = null,
+    val status: String = "unknown",
+    val online: Boolean = false,
+    val lastSeen: String? = null,
+    val uptimeSec: Long? = null,
+    val cpu: Double? = null,
+    val ram: Double? = null,
+    val temperature: Double? = null,
+    val firmware: AdminFirmwareDto = AdminFirmwareDto(),
+    val radio: AdminRadioDto = AdminRadioDto(),
+    val interfaces: List<AdminInterfaceDto> = emptyList(),
+    val wireless: AdminWirelessDto? = null,
+)
+
+@Serializable
+data class AdminFirmwareDto(val current: String? = null, val compatible: Boolean? = null, val canUpgrade: Boolean = false, val upgradeTo: String? = null, val upgradeStatus: String? = null, val upgradeProgress: Double? = null)
+
+@Serializable
+data class AdminRadioDto(
+    val mode: String? = null,
+    val frequency: Double? = null,
+    val channelWidth: Double? = null,
+    val signal: Double? = null,
+    val remoteSignal: Double? = null,
+    val distanceM: Double? = null,
+    val txPower: Double? = null,
+    val antennaGain: Double? = null,
+    val downlinkMbps: Double? = null,
+    val uplinkMbps: Double? = null,
+    val ssid: String? = null,
+    val security: String? = null,
+    val ackDistanceM: Double? = null,
+    val autoChannelWidth: Boolean? = null,
+)
+
+@Serializable
+data class AdminInterfaceDto(val name: String = "", val type: String? = null, val enabled: Boolean? = null, val plugged: Boolean? = null, val speed: String? = null)
+
+@Serializable
+data class AdminBackupDto(val id: String, val timestamp: String? = null, val type: String? = null)
 
 @Serializable
 data class AssignedUserDto(val id: Int = 0, val username: String = "")
