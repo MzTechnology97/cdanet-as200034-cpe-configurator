@@ -37,14 +37,13 @@ const ALL_ISSUES = { ...ISSUES, ...RADIUS_ISSUES };
 /** PPPoE session of a CPE: online, offline or suspended, with user, plan and customer. */
 function pppoeCell(r) {
   if (!r) return h('span', { class: 'small muted' }, '—');
-  const st = ACCOUNT_STATE[r.state];
-  const state = st && !['online', 'offline'].includes(r.state) ? badge(st[0], st[1]) : r.suspended ? badge('sospeso', 'warn') : r.online === true ? badge('online', 'good') : r.online === false ? badge('offline', 'bad') : badge('?', '');
+  const state = r.suspended ? badge('sospeso', 'warn') : r.online === true ? badge('online', 'good') : r.online === false ? badge('offline', 'bad') : badge('?', '');
   return h(
     'div',
     {},
     state,
     h('div', { class: 'small mono' }, r.username),
-    h('div', { class: 'small muted' }, [r.customerName, r.clientIp].filter(Boolean).join(' · ')),
+    h('div', { class: 'small muted' }, [r.customerName, r.speed ? `${r.speed.down}/${r.speed.up} Mbit/s` : r.profile, r.clientIp].filter(Boolean).join(' · ')),
   );
 }
 
