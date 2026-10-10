@@ -72,6 +72,8 @@ const envSchema = z.object({
   SIGNAL_DROP_DB: int(6, 1, 30),
   // nearest APs an installer gets from a coverage check (web and app alike)
   INSTALLER_COVERAGE_APS: int(5, 1, 20),
+  // distances from POPs/APs shown to installers are rounded to this (metres)
+  INSTALLER_DISTANCE_STEP_M: int(50, 10, 2000),
   // theoretical estimate for APs without customers: EIRP of the AP and gain of the CPE antenna
   COVERAGE_AP_EIRP_DBM: int(30, 10, 60),
   COVERAGE_CPE_GAIN_DBI: int(23, 0, 40),
@@ -155,6 +157,7 @@ export interface Config {
   /** Thresholds of the acceptance test, field diagnosis, Salute CPE and coverage ranking. */
   thresholds: { signalGood: number; signalMin: number; cinrMin: number; chainDelta: number; capacityMinMbps: number; ethMinMbps: number; signalDropDb: number };
   installerCoverageAps: number;
+  installerDistanceStepM: number;
   coverageEirpDbm: number;
   coverageCpeGainDbi: number;
   minAndroidVersion: string;
@@ -246,6 +249,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
       signalDropDb: e.SIGNAL_DROP_DB,
     },
     installerCoverageAps: e.INSTALLER_COVERAGE_APS,
+    installerDistanceStepM: e.INSTALLER_DISTANCE_STEP_M,
     coverageEirpDbm: e.COVERAGE_AP_EIRP_DBM,
     coverageCpeGainDbi: e.COVERAGE_CPE_GAIN_DBI,
     minAndroidVersion: e.MIN_ANDROID_VERSION,

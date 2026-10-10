@@ -16,5 +16,9 @@ export function approxPoint(lat: number, lon: number, id: string, secret: Uint8A
   return { lat: r(snap(lat) + off(0)), lon: r(snap(lon) + off(2)), radiusM: APPROX_RADIUS_M };
 }
 
-/** Distances shown to installers: rounded (50 m below 1 km, 100 m above). */
-export const roughDistance = (m: number) => (m < 1000 ? Math.round(m / 50) * 50 : Math.round(m / 100) * 100);
+/**
+ * Distances from POPs/APs shown to installers, rounded to [stepM] (Impostazioni server, 50 m by
+ * default): with the exact direction they get for pointing, a fine distance would give the AP
+ * position away. Never 0: a very close AP shows one step.
+ */
+export const roughDistance = (m: number, stepM = 50) => Math.max(stepM, Math.round(m / stepM) * stepM);

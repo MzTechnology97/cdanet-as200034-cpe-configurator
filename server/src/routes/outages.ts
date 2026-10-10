@@ -25,8 +25,8 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
       ? list
       : list.map((o) => ({
           ...o,
-          impact: o.impact.map((i) => ({ ...i, distanceM: roughDistance(i.distanceM), stations: ctx.outages.config().installerClients ? i.stations : null })),
-          zones: o.zones.map((z) => (z.distanceM != null ? { ...z, distanceM: roughDistance(z.distanceM) } : z)),
+          impact: o.impact.map((i) => ({ ...i, distanceM: roughDistance(i.distanceM, ctx.cfg.installerDistanceStepM), stations: ctx.outages.config().installerClients ? i.stations : null })),
+          zones: o.zones.map((z) => (z.distanceM != null ? { ...z, distanceM: roughDistance(z.distanceM, ctx.cfg.installerDistanceStepM) } : z)),
         }));
 
   const view = (u: AuthUser) => ({

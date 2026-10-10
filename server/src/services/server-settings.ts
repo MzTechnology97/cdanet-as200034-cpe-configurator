@@ -146,6 +146,11 @@ export const SERVER_SETTINGS: Def[] = [
     get: (c) => c.installerCoverageAps, set: (c, v) => (c.installerCoverageAps = (v as number | undefined) ?? 5),
   },
   {
+    key: 'installerDistanceStepM', env: 'INSTALLER_DISTANCE_STEP_M', group: 'Copertura per gli installatori', label: 'Arrotondamento delle distanze mostrate agli installatori (m)', kind: 'int', min: 10, max: 2000,
+    help: 'Gli installatori non vedono le coordinate di POP e AP, solo un’area approssimativa sulla mappa. Per puntare ricevono però la direzione esatta dalla loro posizione: con una distanza precisa potrebbero risalire al punto esatto dell’AP. Questo valore arrotonda le distanze che vedono (Copertura, AP vicini, Visibilità, Guasti Enel): con 50 m l’AP si individua entro circa 50 m, con 500 m entro qualche centinaio di metri. Puntamento, tilt e visibilità non peggiorano: li calcola il server con i dati esatti. Gli amministratori vedono sempre le distanze esatte.',
+    get: (c) => c.installerDistanceStepM, set: (c, v) => (c.installerDistanceStepM = (v as number | undefined) ?? 50),
+  },
+  {
     key: 'coverageEirpDbm', env: 'COVERAGE_AP_EIRP_DBM', group: 'Simulazione radio (AP senza clienti)', label: 'Potenza irradiata dagli AP (EIRP, dBm)', kind: 'int', min: 10, max: 60,
     help: 'Per gli AP che non hanno ancora clienti la copertura si stima in teoria (spazio libero). 30 dBm è il limite in Italia per la banda 5,47–5,725 GHz. Gli AP con clienti usano i segnali reali e questo valore non conta.',
     get: (c) => c.coverageEirpDbm, set: (c, v) => (c.coverageEirpDbm = (v as number | undefined) ?? 30),
