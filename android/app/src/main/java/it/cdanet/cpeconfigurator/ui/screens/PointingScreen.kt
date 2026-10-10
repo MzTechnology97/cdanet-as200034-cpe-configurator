@@ -42,6 +42,7 @@ import it.cdanet.cpeconfigurator.data.PointingApDto
 import it.cdanet.cpeconfigurator.data.PointingDto
 import it.cdanet.cpeconfigurator.field.CompassSensor
 import it.cdanet.cpeconfigurator.field.CompassTarget
+import it.cdanet.cpeconfigurator.field.RoofAltitude
 import it.cdanet.cpeconfigurator.network.LocationHelper
 import it.cdanet.cpeconfigurator.ui.BusyButton
 import it.cdanet.cpeconfigurator.ui.EmbeddedMap
@@ -69,6 +70,9 @@ fun PointingScreen(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (
     var busy by remember { mutableStateOf(false) }
     var saved by remember { mutableStateOf<String?>(null) }
     var height by remember { mutableStateOf("") }
+    // on the roof with the CPE: height from the phone's GPS altitude (manual typing turns it off)
+    var onRoof by remember { mutableStateOf(false) }
+    var roofNote by remember { mutableStateOf<Pair<String, Boolean>?>(null) }
     var tab by remember { mutableIntStateOf(1) }
     var los by remember { mutableStateOf<it.cdanet.cpeconfigurator.data.PointingApDto?>(null) }
     los?.let { a ->
@@ -80,23 +84,45 @@ fun PointingScreen(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (
         error = null
         saved = null
         val user = c.session.state.value?.user?.id
-        val loc = runCatching { LocationHelper(context).current() }.getOrElse {
+        val (loc, gps) = runCatching {
+            if (onRoof) LocationHelper(context).currentWithAltitude() else LocationHelper(context).current() to null
+        }.getOrElse {
             error = it.message
             busy = false
             return
         }
+        fun metres(v: Double) = if (v % 1.0 == 0.0) v.roundToInt().toString() else v.toString().replace('.', ',')
+        // GPS altitude minus terrain = height of the CPE; null if not usable (the reason is shown)
+        fun roofHeight(ground: Double?): Double? {
+            if (!onRoof) return null
+            return when (val r = RoofAltitude.heightAboveGround(gps, ground)) {
+                is RoofAltitude.Result.Height -> {
+                    roofNote = "Altezza dal GPS: ${metres(r.metres)} m dal suolo (telefono a ${r.mslM.roundToInt()} m s.l.m. ±${r.accuracyM.roundToInt()} m, terreno ${ground?.roundToInt()} m)." to true
+                    height = metres(r.metres)
+                    r.metres
+                }
+                is RoofAltitude.Result.Unusable -> {
+                    roofNote = r.why to false
+                    null
+                }
+            }
+        }
         runCatching {
-            c.api.pointing(loc.latitude, loc.longitude, height.replace(',', '.').toDoubleOrNull())
+            var d = c.api.pointing(loc.latitude, loc.longitude, height.replace(',', '.').toDoubleOrNull())
+            // the terrain altitude comes with the answer: ask again with the height from the GPS
+            roofHeight(d.from.ground)?.let { h -> if (kotlin.math.abs(h - d.from.height) >= 0.5) d = c.api.pointing(loc.latitude, loc.longitude, h) }
+            d
         }.onSuccess { d ->
             data = d
             user?.let { u -> c.pointingCache.put(u, d) }
-            if (height.isBlank()) height = d.from.height.let { if (it % 1.0 == 0.0) it.roundToInt().toString() else it.toString() }
+            if (height.isBlank()) height = metres(d.from.height)
         }.onFailure { e ->
             // no network on the roof: the APs saved here before (or with the day's work orders)
             val hit = c.pointingCache.near(user, loc.latitude, loc.longitude)
             if (hit != null) {
                 data = hit.first.data
                 saved = PointingCache.describe(hit.first, hit.second)
+                roofHeight(hit.first.data.from.ground)
             } else {
                 error = e.message + " · Nessun dato salvato vicino: apri Trova l'AP con la rete (gli interventi di oggi si salvano da soli)."
             }
@@ -131,15 +157,40 @@ fun PointingScreen(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (
         }
         Column(Modifier.weight(1f).verticalScroll(rememberScrollState()).padding(horizontal = 14.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Field("Altezza CPE dal suolo (m)", height, { height = it }, Modifier.weight(1f), keyboardType = KeyboardType.Decimal)
+                Field(
+                    "Altezza CPE dal suolo (m)",
+                    height,
+                    {
+                        height = it
+                        // typed by hand: the GPS no longer decides
+                        if (onRoof) {
+                            onRoof = false
+                            roofNote = null
+                        }
+                    },
+                    Modifier.weight(1f),
+                    keyboardType = KeyboardType.Decimal,
+                )
                 BusyButton("Aggiorna", busy, Modifier.width(130.dp), primary = false) { scope.launch { load() } }
             }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                androidx.compose.material3.Switch(
+                    checked = onRoof,
+                    onCheckedChange = { on ->
+                        onRoof = on
+                        roofNote = null
+                        if (on) scope.launch { load() }
+                    },
+                )
+                Text("  Sono sul tetto con la CPE: altezza dal GPS del telefono", style = MaterialTheme.typography.bodyMedium)
+            }
+            roofNote?.let { (text, ok) -> Notice(text, if (ok) NoticeKind.Good else NoticeKind.Warn) }
             if (d == null) {
                 Text(if (busy) "Ricerca della posizione e degli AP…" else "")
                 return@Column
             }
             Text(
-                d.from.altitude?.let { "Tu: ${it.roundToInt()} m s.l.m. (terreno ${d.from.ground?.roundToInt()} m + ${d.from.height} m) · antenne AP a ${d.apHeightM.roundToInt()} m dal suolo" }
+                d.from.altitude?.let { "Tu: ${it.roundToInt()} m s.l.m. (terreno ${d.from.ground?.roundToInt()} m + ${d.from.height.toString().removeSuffix(".0").replace('.', ',')} m) · antenne AP a ${d.apHeightM.roundToInt()} m dal suolo" }
                     ?: "Altitudine non disponibile: il tilt non viene calcolato",
                 style = MaterialTheme.typography.bodySmall,
             )

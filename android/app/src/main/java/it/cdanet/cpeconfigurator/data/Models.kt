@@ -455,6 +455,10 @@ data class ProvisionResult(
 @Serializable
 data class PendingResult(val jobId: String, val result: ProvisionResult, val label: String)
 
+/** A queued result the server refused for good, with its reason (shown to the installer). */
+@Serializable
+data class RejectedResult(val jobId: String, val label: String, val reason: String)
+
 @Serializable
 data class JobDto(
     val id: String,

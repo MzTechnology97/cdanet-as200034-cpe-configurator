@@ -82,7 +82,7 @@ Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). 
 
 ## Già rilasciato
 
-- v1.32.29: guida installatore aggiornata con la nuova Scansione LAN (host attivi, griglia IP, topologia, discovery, porte) e dati di esempio per tutte le schede nelle build di sviluppo.
+- v1.32.31: guida installatore aggiornata con la nuova Scansione LAN (host attivi, griglia IP, topologia, discovery, porte) e dati di esempio per tutte le schede nelle build di sviluppo.
 - v1.32.24: Scansione LAN con radar e contatore dal vivo, topologia automatica a fine scansione con le due fasi indicate, produttori e tipi dell'elenco dal grafo (SNMP, impronte, nomi di fabbrica).
 - v1.32.21: Scansione LAN riprogettata (radar, riepilogo per tipo, griglia degli indirizzi, schede host tecniche, discovery multi-vendor con quadro dei protocolli, porte con mappa e banner), orizzontale e tablet su due colonne, nuvoletta dei dispositivi a schermo intero, PNG/PDF salvati in Download.
 - v1.32.19: scansione senza host fantasma (DNS intercettato dal router, "No route to host"), mappa automatica a fine scansione, zoom e schermo intero.

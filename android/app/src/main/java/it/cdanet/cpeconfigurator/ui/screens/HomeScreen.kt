@@ -100,6 +100,7 @@ private class Today(val todo: Int?, val outages: Int?, val cpeIssues: Int?)
 fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) -> Unit, onLogin: () -> Unit) {
     val session by c.session.state.collectAsState()
     val pending by c.resultQueue.pending.collectAsState()
+    val refused by c.resultQueue.rejected.collectAsState()
     val acc by c.acceptanceQueue.pending.collectAsState()
     val prov by c.provisioning.state.collectAsState()
     val install by c.install.state.collectAsState()
@@ -132,6 +133,11 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
         }
         if (acc.isNotEmpty()) Notice("${acc.size} collaudi in attesa di invio (foto comprese): partiranno appena c'è rete.", NoticeKind.Info)
         if (pending.isNotEmpty()) Notice("${pending.size} esiti in attesa di invio al server: partiranno appena torni online.", NoticeKind.Info)
+        if (refused.isNotEmpty()) Notice(
+            if (refused.size == 1) "L'esito di ${refused[0].label} è stato rifiutato dal server: vedi Installazioni → Da completare."
+            else "${refused.size} esiti rifiutati dal server: vedi Installazioni → Da completare.",
+            NoticeKind.Bad,
+        )
 
         if (!offline && modules["work_orders"] != false) {
             Enter(order++) { WorkOrdersToday(c, onOpen) }
