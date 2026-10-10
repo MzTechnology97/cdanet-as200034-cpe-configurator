@@ -73,7 +73,7 @@ fun screenIcon(s: Screen): Int? = when (s) {
     Screen.Settings -> R.drawable.ic_settings
     Screen.History -> R.drawable.ic_history
     Screen.Notifications -> R.drawable.ic_notifications
-    Screen.CpeHealth -> R.drawable.ic_monitor_heart
+    Screen.CpeHealth, Screen.CpeAdmin -> R.drawable.ic_monitor_heart
     Screen.NetStatus, Screen.NetHub -> R.drawable.ic_hub
     Screen.Outages -> R.drawable.ic_power_off
     Screen.Coverage -> R.drawable.ic_map

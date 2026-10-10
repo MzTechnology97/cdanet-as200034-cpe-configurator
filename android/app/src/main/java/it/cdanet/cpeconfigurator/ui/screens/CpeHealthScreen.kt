@@ -157,9 +157,6 @@ fun CpeHealthScreen(c: AppContainer, onRepoint: (() -> Unit)? = null) {
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        // admins: one CPE managed as in the UISP app
-        var manage by remember { mutableStateOf<String?>(null) }
-        manage?.let { id -> CpeAdminDialog(c, id) { manage = null } }
         if (shown.isNotEmpty()) SectionCard {
             shown.take(limit).forEachIndexed { i, cpe ->
                 if (i > 0) HorizontalDivider()
@@ -167,7 +164,8 @@ fun CpeHealthScreen(c: AppContainer, onRepoint: (() -> Unit)? = null) {
                     onToggle = { open = if (open == cpe.mac) null else cpe.mac },
                     onHistory = { history = if (history == cpe.mac) null else cpe.mac },
                     onRepoint = if (cpe.issues.any { it in REPOINT }) onRepoint else null,
-                    onManage = if (admin) cpe.deviceId?.let { id -> { manage = id } } else null)
+                    // admins: the CPE as in the UISP app, on its own screen
+                    onManage = if (admin) cpe.deviceId?.let { id -> { c.adminCpeId.value = id; c.openAdminCpe.tryEmit(Unit) } } else null)
             }
         }
         if (shown.size > limit) {

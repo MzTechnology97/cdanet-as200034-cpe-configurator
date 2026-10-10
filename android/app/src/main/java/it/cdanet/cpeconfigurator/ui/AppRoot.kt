@@ -78,6 +78,7 @@ import it.cdanet.cpeconfigurator.ui.screens.AlignmentScreen
 import it.cdanet.cpeconfigurator.ui.screens.CameraScreen
 import it.cdanet.cpeconfigurator.ui.screens.CompassScreen
 import it.cdanet.cpeconfigurator.ui.screens.CoverageCheckScreen
+import it.cdanet.cpeconfigurator.ui.screens.CpeAdminScreen
 import it.cdanet.cpeconfigurator.ui.screens.CpeHealthScreen
 import it.cdanet.cpeconfigurator.ui.screens.CpeWebScreen
 import it.cdanet.cpeconfigurator.ui.screens.DiagnosisScreen
@@ -144,6 +145,8 @@ enum class Screen(val title: String, val scroll: Boolean = true, val wide: Boole
     Diag("Diagnostica di rete", scroll = false),
     Devices("Apparati in LAN", scroll = false),
     Search("Cerca"),
+    // admins: one CPE managed as in the UISP app (opened from Salute CPE)
+    CpeAdmin("Gestione CPE", scroll = false),
 }
 
 /** The four areas of the bottom bar. */
@@ -246,6 +249,8 @@ fun AppRoot(c: AppContainer) {
         LoginScreen(c, update = update, onUpdate = { update = it }, onOffline = { offline = true })
         return
     }
+    // Salute CPE asks for the admin CPE screen (admins only, the list offers it only to them)
+    LaunchedEffect(Unit) { c.openAdminCpe.collect { if (c.session.isAdmin) go(Screen.CpeAdmin) } }
     LaunchedEffect(session?.user?.id) {
         if (session != null) {
             allowAutoLogin()
@@ -458,6 +463,7 @@ fun AppRoot(c: AppContainer) {
                     Screen.Snmp -> WifiRequired(c, "alla Wi-Fi della rete locale da analizzare", "Gli apparati SNMP si interrogano in rete locale.") { SnmpScreen(c) }
                     Screen.Camera -> WifiRequired(c, "alla Wi-Fi della rete delle telecamere", "ONVIF, SADP e RTSP funzionano sulla rete locale.") { CameraScreen(c) }
                     Screen.Remote -> RemoteScreen(c)
+                    Screen.CpeAdmin -> c.adminCpeId.collectAsState().value?.let { CpeAdminScreen(c, it) }
                     Screen.RouterOs -> WifiRequired(c, "alla Wi-Fi della rete del MikroTik", "La consultazione avviene in SSH verso il router in rete locale.") { RouterOsScreen(c) }
                     Screen.History -> HistoryScreen(
                         c,
