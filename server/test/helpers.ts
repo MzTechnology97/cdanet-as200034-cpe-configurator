@@ -28,7 +28,7 @@ export const SAMPLE_TEMPLATE = [
 
 export function testConfig(overrides: Record<string, string> = {}) {
   const dir = mkdtempSync(join(tmpdir(), 'cdanet-test-'));
-  return loadConfig(
+  const cfg = loadConfig(
     {
       JWT_SECRET: 'test-jwt-secret-0123456789abcdefghijklmnopqrstuvwxyz',
       ADMIN_USERNAME: ADMIN.username,
@@ -38,6 +38,8 @@ export function testConfig(overrides: Record<string, string> = {}) {
       ANDROID_RELEASE_DIR: join(dir, 'releases'),
       PHOTOS_DIR: join(dir, 'photos'),
       INFRA_DIR: join(dir, 'infra'),
+      FIRMWARE_DIR: join(dir, 'firmware'),
+      MAP_FILE: join(dir, 'basemap.pmtiles'),
       CPE_ADMIN_PASSWORD: 'Cpe-Admin-Secret-1',
       // every AP listed unless a test sets the threshold (Impostazioni server: −70 dBm by default)
       COVERAGE_HIDE_BELOW_DBM: '-100',
@@ -47,6 +49,13 @@ export function testConfig(overrides: Record<string, string> = {}) {
     },
     randomBytes(32),
   );
+  // Disk caches of every test app in a directory of its own: with DB_PATH=':memory:' they default to
+  // tmpdir()/cdanet-*-<pid>, never removed, and a reused pid (Windows) would hand one test the
+  // terrain tiles downloaded by another (e.g. the 1500 m ridge of coverage-sim in pointing).
+  cfg.ouiDir = join(dir, 'oui');
+  cfg.dem.dir = join(dir, 'dem');
+  cfg.terrainDir = join(dir, 'terrain');
+  return cfg;
 }
 
 export async function testApp(overrides: Record<string, string> = {}) {
