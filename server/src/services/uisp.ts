@@ -545,6 +545,20 @@ export function createUisp(opts: UispOptions) {
       });
     },
 
+    // ---- Load of an AP (Copertura): numbers only, no keys ----------------------------------------
+    /** Stations of an airMAX AP (airtime, noise, capacity per CPE); null for other radios or offline. */
+    async apStations(deviceId: string): Promise<unknown[] | null> {
+      const r = await call('GET', `/devices/airmaxes/${encodeURIComponent(deviceId)}/stations`).catch(() => null);
+      return Array.isArray(r) ? r : null;
+    },
+    /** Last week of hourly statistics of a device (airtime, utilization, traffic per interface). */
+    async weekStatistics(deviceId: string): Promise<Record<string, unknown> | null> {
+      const period = RANGE_MS.week;
+      const q = new URLSearchParams({ interval: 'week', start: String(Date.now() - period), period: String(period) });
+      const r = await call('GET', `/devices/${encodeURIComponent(deviceId)}/statistics?${q}`).catch(() => null);
+      return r && typeof r === 'object' ? (r as Record<string, unknown>) : null;
+    },
+
     // ---- Admin "Stato CPE": one device as in the UISP app (routes verified on UISP 3.1.65) ----
     /** Full UISP detail of a device (identity, overview, firmware/upgrade, meta, location…). */
     async deviceDetail(deviceId: string) {

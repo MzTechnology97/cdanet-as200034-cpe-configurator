@@ -16,6 +16,7 @@ import type { Notifier } from './services/notify.ts';
 import type { Telegram } from './services/telegram.ts';
 import type { Dem } from './services/dem.ts';
 import type { TerrainStore } from './services/terrain-store.ts';
+import type { ApLoadService } from './services/ap-load.ts';
 import type { ServerSettings } from './services/server-settings.ts';
 
 export interface AppContext {
@@ -33,6 +34,8 @@ export interface AppContext {
   crm: CrmSettings;
   /** RADIUS state copied from the CRM for the NOC (admins only). */
   crmSync: CrmSync;
+  /** Load of the APs and capacity curve, refreshed hourly from UISP. */
+  apLoad: ApLoadService;
   geocoder: Geocoder;
   telegram: Telegram;
   modules: Modules;

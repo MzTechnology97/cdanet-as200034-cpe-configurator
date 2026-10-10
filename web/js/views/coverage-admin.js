@@ -1,7 +1,7 @@
 import { api } from '../api.js';
 import { badge, busy, card, field, fmtDate, h, mount, pageHead, table, toast } from '../dom.js';
 import { createMap, fit, legend, popup, towards, MAP_COLORS as C } from '../map.js';
-import { estimateCell, orientArrows, osmLink, RATING } from './coverage.js';
+import { estimateCell, loadCell, orientArrows, osmLink, RATING } from './coverage.js';
 
 /**
  * Copertura for admins: every AP on the map, one search box (address, coordinates, AP name or a
@@ -21,6 +21,16 @@ const SCALE = [
   [-999, '#dc2626', 'sotto −80'],
 ];
 const scaleColor = (dbm) => SCALE.find(([min]) => dbm >= min)[1];
+/** Capacity scale of the simulation (downlink of the radio link), Mbit/s. */
+const CAP_SCALE = [
+  [150, '#15803d', 'oltre 150 Mbit/s'],
+  [100, '#22c55e', '100–150'],
+  [50, '#a3e635', '50–100'],
+  [25, '#facc15', '25–50'],
+  [10, '#f97316', '10–25'],
+  [-1, '#dc2626', 'sotto 10'],
+];
+const capColor = (mbps) => CAP_SCALE.find(([min]) => mbps >= min)[1];
 /** Tallest mast worth suggesting for a CPE (same limit as the app). */
 const MAX_MAST_M = 12;
 const dec = (n) => String(n).replace('.', ',');
@@ -170,6 +180,7 @@ export async function adminCoverageView() {
           { label: 'Distanza', render: (a) => km(a.distanceM) },
           { label: 'Puntamento', render: (a) => h('span', { class: 'bearing' }, h('span', { class: 'arrow', 'data-deg': a.bearing }, '↑'), ` ${a.bearing}° ${a.direction}`) },
           { label: 'Segnale stimato', render: (a) => estimateCell(a.estimate) },
+          { label: 'Carico (20–23)', render: (a) => loadCell(a.load) },
           { label: 'Client', render: (a) => a.stations ?? '—' },
           { label: 'Frequenza', render: (a) => (a.frequency ? `${a.frequency} MHz` : '—') },
           {
@@ -237,26 +248,38 @@ export async function adminCoverageView() {
     const half = d.cellM / 2;
     const mPerLat = 111320;
     const mPerLon = 111320 * Math.cos((d.ap.lat * Math.PI) / 180);
-    for (const c of d.cells) {
-      if (c.dbm < d.minDbm - 15) continue; // clearly no coverage: left blank, not a red disc
-      L.rectangle(
-        [
-          [c.lat - half / mPerLat, c.lon - half / mPerLon],
-          [c.lat + half / mPerLat, c.lon + half / mPerLon],
-        ],
-        { stroke: false, fillColor: scaleColor(c.dbm), fillOpacity: d.theoretical ? 0.3 : c.confidence === 'bassa' ? 0.18 : 0.38, interactive: false },
-      ).addTo(simLayer);
-    }
-    // learned: the area already served; theory: the sector of the antenna (azimuth from UISP)
-    if (d.sector && (d.servedM || d.theoretical)) {
-      const reach = d.servedM || d.radiusM;
-      const pts = [[d.ap.lat, d.ap.lon]];
-      for (let i = 0; i <= 24; i++) pts.push(towards(d.ap.lat, d.ap.lon, d.sector.center - d.sector.width / 2 + (d.sector.width * i) / 24, reach));
-      L.polygon(pts, { color: '#0f172a', weight: 1.5, fill: false, dashArray: '4 5', interactive: false }).addTo(simLayer);
-    }
-    L.circleMarker([d.ap.lat, d.ap.lon], { radius: 8, color: '#0f172a', weight: 3, fillColor: '#ffffff', fillOpacity: 1, interactive: false }).addTo(simLayer);
+    // signal or capacity of a new link: same cells, two scales
+    const draw = (mode) => {
+      simLayer.clearLayers();
+      for (const c of d.cells) {
+        if (c.dbm < d.minDbm - 15) continue; // clearly no coverage: left blank, not a red disc
+        const color = mode === 'cap' ? (c.cap == null ? null : capColor(c.cap)) : scaleColor(c.dbm);
+        if (!color) continue;
+        L.rectangle(
+          [
+            [c.lat - half / mPerLat, c.lon - half / mPerLon],
+            [c.lat + half / mPerLat, c.lon + half / mPerLon],
+          ],
+          { stroke: false, fillColor: color, fillOpacity: d.theoretical ? 0.3 : c.confidence === 'bassa' ? 0.18 : 0.38, interactive: false },
+        ).addTo(simLayer);
+      }
+      // learned: the area already served; theory: the sector of the antenna (azimuth from UISP)
+      if (d.sector && (d.servedM || d.theoretical)) {
+        const reach = d.servedM || d.radiusM;
+        const pts = [[d.ap.lat, d.ap.lon]];
+        for (let i = 0; i <= 24; i++) pts.push(towards(d.ap.lat, d.ap.lon, d.sector.center - d.sector.width / 2 + (d.sector.width * i) / 24, reach));
+        L.polygon(pts, { color: '#0f172a', weight: 1.5, fill: false, dashArray: '4 5', interactive: false }).addTo(simLayer);
+      }
+      L.circleMarker([d.ap.lat, d.ap.lon], { radius: 8, color: '#0f172a', weight: 3, fillColor: '#ffffff', fillOpacity: 1, interactive: false }).addTo(simLayer);
+      mount(legendBox, legend((mode === 'cap' ? CAP_SCALE : SCALE).map(([, color, text]) => [color, text])));
+    };
+    const legendBox = h('div', {});
+    const mode = h('select', {}, h('option', { value: 'dbm' }, 'Segnale'), d.capacity ? h('option', { value: 'cap' }, 'Capacità del collegamento') : null);
+    mode.onchange = () => draw(mode.value);
+    draw('dbm');
     if (!point) m.fitBounds(L.latLng(d.ap.lat, d.ap.lon).toBounds(d.radiusM * 2.1));
     const good = d.cells.filter((c) => c.dbm >= d.minDbm).length;
+    const fast = d.cells.filter((c) => c.dbm >= d.minDbm && (c.cap ?? 0) >= 50).length;
     mount(
       simBox,
       h(
@@ -266,18 +289,21 @@ export async function adminCoverageView() {
         h(
           'span',
           { class: 'small muted' },
-          ` · ${d.theoretical ? 'nessun cliente da cui calibrare' : `calibrata su ${d.customers} clienti`}${d.ignored ? ` (${d.ignored} sull’AP o oltre 20 km, esclusi dal calcolo)` : ''} · raggio ${km(d.radiusM)} · ${Math.round((100 * good) / d.cells.length)}% dell’area sopra ${d.minDbm} dBm`,
+          ` · ${d.theoretical ? 'nessun cliente da cui calibrare' : `calibrata su ${d.customers} clienti`}${d.ignored ? ` (${d.ignored} sull’AP o oltre 20 km, esclusi dal calcolo)` : ''} · raggio ${km(d.radiusM)} · ${Math.round((100 * good) / d.cells.length)}% dell’area sopra ${d.minDbm} dBm${d.capacity ? `, ${Math.round((100 * fast) / d.cells.length)}% con almeno 50 Mbit/s` : ''}`,
         ),
         ' ',
         clearBtn(),
-        legend(SCALE.map(([, color, text]) => [color, text])),
+        h('div', { class: 'row' }, field('Mostra', mode)),
+        legendBox,
+        d.load ? h('div', { class: 'small' }, 'Carico serale dell’AP: ', loadCell(d.load)) : null,
         h(
           d.theoretical ? 'div' : 'p',
           { class: d.theoretical ? 'notice warn' : 'small muted' },
-          `Segnale atteso per una CPE nuova: potenza irradiata dell’AP e guadagno della CPE (Impostazioni server → Simulazione radio), spazio libero${d.antenna ? ', diagramma dell’antenna (azimut da UISP)' : ''}${d.terrain ? ' e terreno tra ogni punto e l’AP (colline; edifici e alberi non sono nel modello)' : ' (terreno non disponibile: le colline non sono considerate)'}. `,
+          `Segnale atteso per una CPE nuova: potenza irradiata dell’AP e guadagno della CPE (Impostazioni server → Simulazione radio), spazio libero${d.antenna ? ', diagramma dell’antenna (azimut da UISP)' : ''}${d.terrain ? ', terreno, edifici e alberi tra ogni punto e l’AP (dove scaricati in Terreno e ostacoli)' : ' (terreno non disponibile: le colline non sono considerate)'}. `,
           d.theoretical
             ? 'Stima teorica, margine ±8 dB: l’AP non ha ancora clienti con segnale da cui calibrarla.'
             : 'I clienti già collegati correggono la teoria, con un peso che cresce con il loro numero: pochi clienti, stima vicina alla teoria.',
+          d.capacity ? ' Capacità: dal segnale stimato con la curva segnale → capacità delle CPE reali della rete (e di come va questo AP); è la velocità del collegamento radio, la sera condivisa con gli altri clienti dell’AP.' : '',
           ' Area vuota: nessuna copertura (sotto −90 dBm). Colori tenui: stima poco affidabile. Tratteggio: settore dell’antenna o area già servita. Per un punto preciso usa Visibilità.',
         ),
       ),

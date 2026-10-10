@@ -182,6 +182,8 @@ data class SignalEstimateDto(
     val tooFar: Boolean = false,
     /** Hills between the point and the AP (null: elevation model not available). */
     val terrain: TerrainEffectDto? = null,
+    /** Downlink capacity of the new link from the curve of the real CPEs, Mbit/s. */
+    val capacityMbps: Int? = null,
 ) {
     /** "−63 dBm (−67…−59) · affidabilità alta · fuori dal settore servito"; null if there is no estimate. */
     fun describe(): String? = signalDbm?.let { s ->
@@ -192,6 +194,7 @@ data class SignalEstimateDto(
             if (beyondServed) "più lontano dei clienti attuali" else null,
             if (tooFar) "oltre 20 km: troppo lontano" else null,
             terrain?.describe(),
+            capacityMbps?.let { "capacità ~$it Mbit/s" },
             // no customers on the AP yet: free-space estimate from the radio parameters
             if (theoretical) "stima teorica: AP senza clienti" else basis?.let { b -> "calibrata su $b clienti" },
         ).joinToString(" · ")
@@ -218,6 +221,8 @@ data class PointingApDto(
     val estimate: SignalEstimateDto? = null,
     /** buono, possibile, senza stima, improbabile, non attivo: the list comes sorted best first. */
     val rating: String? = null,
+    /** Load of the AP in the evening (installers: the verdict only). */
+    val load: ApLoadDto? = null,
 )
 
 /** "Trova l'AP": nearest APs from the installation point with altitude and tilt. */
@@ -527,6 +532,8 @@ data class CoverageAp(
     val estimate: SignalEstimateDto? = null,
     /** buono, possibile, senza stima, improbabile, non attivo: the list comes sorted best first. */
     val rating: String? = null,
+    /** Load of the AP in the evening (installers: the verdict only). */
+    val load: ApLoadDto? = null,
 )
 
 /** What the app shows of a radio simulation (the map gets the whole answer). */
@@ -568,13 +575,43 @@ data class SimulationInfoDto(
     val terrain: Boolean = false,
     /** Antenna pattern from the azimuth set in UISP. */
     val antenna: Boolean = false,
+    /** Load of the AP in the evening. */
+    val load: ApLoadDto? = null,
+    /** The cells carry the capacity of a new link (cap). */
+    val capacity: Boolean = false,
 )
 
 @Serializable
 data class SimulationApDto(val id: String = "", val name: String = "")
 
 @Serializable
-data class SimulationCellDto(val dbm: Double)
+data class SimulationCellDto(val dbm: Double, val cap: Double? = null)
+
+/** Load of an AP at the evening peak (20–23): verdict and, for admins, the numbers behind it. */
+@Serializable
+data class ApLoadDto(
+    /** libero, medio, carico */
+    val level: String? = null,
+    val eveningAirtimePct: Double? = null,
+    val eveningUtilizationPct: Double? = null,
+    val eveningPeakMbps: Double? = null,
+    val capacityMbps: Double? = null,
+    val stations: Int? = null,
+    val cpeAirtimePct: Double? = null,
+    val snrDb: Double? = null,
+    val noiseDbm: Double? = null,
+) {
+    fun describe(): String? = level?.let { l ->
+        fun n(v: Double?) = v?.let { if (it % 1.0 == 0.0) it.toInt().toString() else "%.1f".format(java.util.Locale.ITALY, it) }
+        listOfNotNull(
+            "AP $l la sera",
+            eveningAirtimePct?.let { "airtime ${n(it)}%" },
+            eveningPeakMbps?.let { "picco ${n(it)}" + (capacityMbps?.let { c -> "/${n(c)}" } ?: "") + " Mbit/s" },
+            cpeAirtimePct?.let { "${n(it)}% per CPE" },
+            snrDb?.let { "SNR ${n(it)} dB" },
+        ).joinToString(" · ")
+    }
+}
 
 @Serializable
 data class CoverageDto(

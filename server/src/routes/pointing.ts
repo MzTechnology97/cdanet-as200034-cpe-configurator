@@ -66,10 +66,10 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
     const at = await terrainSampler(ctx.terrain, [{ lat: q.lat, lon: q.lon }, ...inRange]);
     const estimateFor = (a: (typeof inRange)[number]) => {
       const e = estimateForAp(models.get(a.id), a, { lat: q.lat, lon: q.lon }, at, { cpeM: height, apM: c.apHeightM }, radio, obstacles(ctx));
-      return e && { ...e, basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null };
+      return e && { ...e, basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null, capacityMbps: ctx.apLoad.capacity(a.id, e.signalDbm) };
     };
     const ranked = rankCoverage(
-      inRange.map((a) => ({ ...a, estimate: estimateFor(a) })),
+      inRange.map((a) => ({ ...a, estimate: estimateFor(a), load: (() => { const l = ctx.apLoad.load(a.id); return l && (keys ? { level: l.level } : l); })() })),
       ctx.cfg.thresholds.signalMin,
     );
     const useful = keys ? ranked.filter((a) => a.rating !== 'non attivo' && a.rating !== 'improbabile') : ranked;
@@ -98,6 +98,7 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
           altitudeFrom,
           tiltDeg: altitude !== null && from !== null ? elevationAngle(a.distanceM, from, altitude) : null,
           estimate: a.estimate,
+          load: a.load,
           rating: a.rating,
         };
         return keys ? { ...base, distanceM: roughDistance(a.distanceM, ctx.cfg.installerDistanceStepM), approx: approxPoint(lat, lon, `ap:${a.id}`, ctx.cfg.jwtSecret) } : { ...base, distanceM: a.distanceM, lat, lon };

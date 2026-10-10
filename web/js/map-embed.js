@@ -181,7 +181,19 @@ window.cdaCoverageBase = async (d) => {
 };
 
 /** Radio simulation of one AP (data of /api/admin/coverage/simulation): estimated signal cells and the sector. */
-window.cdaSimulation = async (d) => {
+/** Capacity scale (downlink of the radio link, Mbit/s), as in the console. */
+const CAP_SCALE = [
+  [150, '#15803d'],
+  [100, '#22c55e'],
+  [50, '#a3e635'],
+  [25, '#facc15'],
+  [10, '#f97316'],
+  [-1, '#dc2626'],
+];
+const capColor = (v) => CAP_SCALE.find(([min]) => v >= min)[1];
+
+/** [mode]: "dbm" (signal, default) or "cap" (capacity of the link). Keeps the view when only the mode changes. */
+window.cdaSimulation = async (d, mode = 'dbm') => {
   const map = await ready;
   if (!map || !d?.ap) return;
   const L = window.L;
@@ -192,12 +204,14 @@ window.cdaSimulation = async (d) => {
   const mPerLon = 111320 * Math.cos((d.ap.lat * Math.PI) / 180);
   for (const c of d.cells ?? []) {
     if (c.dbm < (d.minDbm ?? -75) - 15) continue; // clearly no coverage: left blank, not a red disc
+    const color = mode === 'cap' ? (c.cap == null ? null : capColor(c.cap)) : simColor(c.dbm);
+    if (!color) continue;
     L.rectangle(
       [
         [c.lat - half / mPerLat, c.lon - half / mPerLon],
         [c.lat + half / mPerLat, c.lon + half / mPerLon],
       ],
-      { stroke: false, fillColor: simColor(c.dbm), fillOpacity: d.theoretical ? 0.3 : c.confidence === 'bassa' ? 0.18 : 0.38, interactive: false },
+      { stroke: false, fillColor: color, fillOpacity: d.theoretical ? 0.3 : c.confidence === 'bassa' ? 0.18 : 0.38, interactive: false },
     ).addTo(simLayer);
   }
   if (d.sector && (d.servedM || d.theoretical)) {
@@ -207,9 +221,12 @@ window.cdaSimulation = async (d) => {
     L.polygon(pts, { color: '#0f172a', weight: 1.5, fill: false, dashArray: '4 5', interactive: false }).addTo(simLayer);
   }
   L.circleMarker([d.ap.lat, d.ap.lon], { radius: 8, color: '#0f172a', weight: 3, fillColor: '#ffffff', fillOpacity: 1, interactive: false }).addTo(simLayer);
-  map.fitBounds(L.latLng(d.ap.lat, d.ap.lon).toBounds(d.radiusM * 2.1));
+  if (lastSim !== d.ap.id) map.fitBounds(L.latLng(d.ap.lat, d.ap.lon).toBounds(d.radiusM * 2.1));
+  lastSim = d.ap.id;
 };
+let lastSim = null;
 
 window.cdaClearSimulation = async () => {
+  lastSim = null;
   simLayer?.clearLayers();
 };
