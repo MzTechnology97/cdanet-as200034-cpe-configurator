@@ -80,6 +80,9 @@ fun AcceptanceScreen(c: AppContainer) {
     var testingInternet by remember { mutableStateOf(false) }
     val photos = remember { mutableStateListOf<PendingPhoto>() }
     var notes by remember { mutableStateOf("") }
+    // height of the CPE above the ground: every installation is different, the technician types it
+    var heightText by remember { mutableStateOf("") }
+    val cpeHeight = it.cdanet.cpeconfigurator.field.parseCpeHeight(heightText)
     var sending by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var done by remember { mutableStateOf<String?>(null) }
@@ -125,7 +128,7 @@ fun AcceptanceScreen(c: AppContainer) {
     }
 
     val report: AcceptanceReport? = if (samples.size >= Acceptance.SAMPLES) {
-        Acceptance.build(samples.toList(), c.field.thresholds, c.field.targetFirmware, internet ?: InternetTest(false, note = "Non misurato"), notes)
+        Acceptance.build(samples.toList(), c.field.thresholds, c.field.targetFirmware, internet ?: InternetTest(false, note = "Non misurato"), notes, cpeHeightM = cpeHeight)
     } else {
         null
     }
@@ -138,6 +141,16 @@ fun AcceptanceScreen(c: AppContainer) {
             KeyValue("Cliente", j.deviceName.ifBlank { j.pppoeUser })
             KeyValue("CPE", "${j.model} · ${j.mac}")
             KeyValue("SSID", j.ssid)
+            it.cdanet.cpeconfigurator.ui.Field(
+                "Altezza della CPE dal suolo (m)",
+                heightText,
+                { v -> heightText = v.filter { ch -> ch.isDigit() || ch == ',' || ch == '.' }.take(5) },
+                modifier = Modifier.fillMaxWidth(),
+                keyboardType = androidx.compose.ui.text.input.KeyboardType.Decimal,
+                placeholder = "es. 7,5",
+                supporting = if (heightText.isNotBlank() && cpeHeight == null) "Da 0,5 a 100 m" else "Obbligatoria: dal terreno all'antenna montata. Va nel verbale.",
+                isError = heightText.isNotBlank() && cpeHeight == null,
+            )
         }
 
         WifiRequired(c, "alla Wi-Fi della CPE (management, es. \"LBE-5AC-Gen2:xxxx\") oppure a quella del router del cliente", "Misure e test Internet richiedono la rete locale; foto e note funzionano comunque.") {
@@ -235,7 +248,10 @@ fun AcceptanceScreen(c: AppContainer) {
         activeOrder?.let { Text("Intervento: ${it.customer}${if (it.address.isNotBlank()) " · ${it.address}" else ""}. Il collaudo si salva solo entro ${WorkOrderPosition.MAX_M} m dall'indirizzo.", style = MaterialTheme.typography.bodySmall) }
         // the reason it was not saved, next to the button (also shown at the top)
         error?.let { msg -> it.cdanet.cpeconfigurator.ui.Notice(msg, it.cdanet.cpeconfigurator.ui.NoticeKind.Bad) }
-        BusyButton("Salva e invia collaudo", sending, Modifier.fillMaxWidth(), enabled = report != null || photos.isNotEmpty()) {
+        if (report != null && cpeHeight == null) {
+            it.cdanet.cpeconfigurator.ui.Notice("Inserisci l'altezza della CPE dal suolo (in alto, Installazione) per salvare il collaudo.", it.cdanet.cpeconfigurator.ui.NoticeKind.Warn)
+        }
+        BusyButton("Salva e invia collaudo", sending, Modifier.fillMaxWidth(), enabled = (report != null && cpeHeight != null) || (report == null && photos.isNotEmpty())) {
             scope.launch {
                 sending = true
                 error = null
@@ -247,6 +263,8 @@ fun AcceptanceScreen(c: AppContainer) {
                     c.acceptanceQueue.enqueue(j.id, j.deviceName.ifBlank { j.mac }, report, photos.map { it.jpeg to it.caption })
                     photos.clear()
                     c.acceptanceQueue.sync()
+                    // refused by the server for good: say so, never "registered"
+                    c.acceptanceQueue.rejected.value[j.id]?.let { why -> throw IllegalStateException("Il server ha rifiutato il collaudo: $why") }
                     done = if (c.acceptanceQueue.isPending(j.id)) {
                         "Senza rete: collaudo${if (n > 0) " e $n foto" else ""} in coda sul telefono, invio automatico appena torna la connessione."
                     } else {

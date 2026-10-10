@@ -296,20 +296,11 @@ export function createUisp(opts: UispOptions) {
       };
     },
 
-    /** Nearest APs within maxKm (never the whole network). */
     /** APs with a position (device or site), for the power-outage zones. */
     async apsWithLocation() {
       return aps();
     },
 
-    /**
-     * POPs and APs exactly as UISP knows them (name, address, coordinates and where the
-     * position comes from): nothing is typed by hand in CDA Net.
-     */
-    /**
-     * Coverage model of each AP from its customers (position of the CPE or of its site, signal).
-     * Positions stay on the server: callers expose only estimates.
-     */
     /**
      * Where the altitude of each AP comes from (Impostazioni server → Puntamento): its own GPS
      * altitude in UISP, the height of its site, or neither (then the configured antenna height).
@@ -325,6 +316,10 @@ export function createUisp(opts: UispOptions) {
       };
     },
 
+    /**
+     * Coverage model of each AP from its customers (position of the CPE or of its site, signal).
+     * Positions stay on the server: callers expose only estimates.
+     */
     async apModels(apIds: string[]) {
       const want = new Set(apIds);
       const [ds, ss] = await Promise.all([devices(), sites().catch(() => [] as UispSite[])]);
@@ -362,6 +357,10 @@ export function createUisp(opts: UispOptions) {
       return m;
     },
 
+    /**
+     * POPs and APs exactly as UISP knows them (name, address, coordinates and where the
+     * position comes from): nothing is typed by hand in CDA Net.
+     */
     async infrastructure() {
       const [ds, ss] = await Promise.all([devices(), sites()]);
       const pops = ss.filter((s) => s.type !== 'endpoint');
@@ -407,7 +406,7 @@ export function createUisp(opts: UispOptions) {
       };
     },
 
-    /** Nearest APs; [allow] limits them (installers: only the assigned POPs/APs). */
+    /** Nearest APs within maxKm (never the whole network); [allow] limits them (installers: only the assigned POPs/APs). */
     async nearestAps(from: LatLon, limit: number, maxKm: number, allow?: (ap: { id: string; siteId: string | null }) => boolean) {
       return (await aps())
         // coverage targets: PtMP APs only, never the PtP backhaul links

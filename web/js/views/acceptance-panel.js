@@ -35,6 +35,7 @@ function measures(a) {
     ['PPPoE', a.pppoe?.enabled ? a.pppoe.ip || 'non attivo' : '—'],
     ['Internet (dal cliente)', a.internet?.tested ? `${n(a.internet.downloadMbps, '↓ Mbit/s', 1)} · ${n(a.internet.uploadMbps, '↑ Mbit/s', 1)} · ping ${n(a.internet.pingMs, 'ms')}` : a.internet?.note || 'non misurato'],
     ['Firmware', a.cpe?.firmware || '—'],
+    ['Altezza CPE dal suolo', a.cpeHeightM != null ? `${String(a.cpeHeightM).replace('.', ',')} m` : '—'],
   ];
 }
 

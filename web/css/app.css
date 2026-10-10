@@ -232,6 +232,17 @@ button.link { background: none; border: none; color: var(--brand); padding: 4px 
 .state-chip .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; }
 .state-chip .count { font-variant-numeric: tabular-nums; color: var(--muted); font-size: .78rem; }
 .net-table td { vertical-align: middle; }
+.los-chart { width: 100%; height: auto; max-height: 300px; display: block; margin: 8px 0; }
+.los-ground { fill: #d6d3d1; stroke: #a8a29e; stroke-width: 1; }
+.los-line { fill: none; stroke: #2563eb; stroke-width: 2; }
+.los-fresnel { fill: none; stroke: #f59e0b; stroke-width: 1.5; stroke-dasharray: 5 4; }
+.los-worst { fill: #dc2626; }
+.los-axis { font-size: 11px; fill: var(--muted); }
+.sim-info { margin-top: 8px; }
+.more-aps { margin-top: 12px; }
+.more-aps > summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
+@media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .los-ground { fill: #44403c; stroke: #78716c; } }
+:root[data-theme="dark"] .los-ground { fill: #44403c; stroke: #78716c; }
 .net-table tr.pop-row > td { background: color-mix(in srgb, var(--brand) 5%, var(--surface-2)); padding-top: 12px; padding-bottom: 10px; border-bottom: 1px solid var(--line); }
 .net-table tr.pop-row:hover > td { background: color-mix(in srgb, var(--brand) 5%, var(--surface-2)); }
 .pop-head { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; }
