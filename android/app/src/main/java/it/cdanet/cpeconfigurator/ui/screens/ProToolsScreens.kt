@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import it.cdanet.cpeconfigurator.BuildConfig
 import it.cdanet.cpeconfigurator.core.AppContainer
 import it.cdanet.cpeconfigurator.network.Ip
 import it.cdanet.cpeconfigurator.tools.UbntDiscovery
@@ -58,6 +59,10 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.launch
 import androidx.compose.material3.FilterChip
+import it.cdanet.cpeconfigurator.tools.topology.Topology
+import it.cdanet.cpeconfigurator.tools.topology.TopologyDemo
+import it.cdanet.cpeconfigurator.tools.topology.LinkKind
+import it.cdanet.cpeconfigurator.tools.topology.TopoGraph
 import it.cdanet.cpeconfigurator.tools.topology.TopologyRun
 import it.cdanet.cpeconfigurator.tools.topology.TopologyScanner
 
@@ -102,6 +107,30 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
     var communities by remember { mutableStateOf("public") }
     var topo by remember { mutableStateOf<TopologyRun?>(null) }
     var topoBusy by remember { mutableStateOf<String?>(null) }
+    var selectedNode by remember { mutableStateOf<String?>(null) }
+    var wide by remember { mutableStateOf(true) }
+    var wideRange by remember { mutableStateOf("192.168.0.0/16") }
+
+    /** Scans [targets] one after the other and adds what it finds (several subnets: wide sweep, routers' subnets). */
+    suspend fun scanAll(net: android.net.Network, targets: List<Ip.Cidr>) {
+        val wl = c.network.wifiLink()
+        val selfIps = wl?.addresses.orEmpty().map { it.substringBefore('/') }.toSet()
+        val ubntJob: kotlinx.coroutines.Deferred<List<it.cdanet.cpeconfigurator.tools.UbntDevice>>? =
+            if (ubnt) scope.async { runCatching { UbntDiscovery.discover(c.network, 3_000) }.getOrDefault(emptyList()) } else null
+        progress = IpScanner.Progress(0, 1, 0, "Avvio")
+        val ubntList = ubntJob?.await().orEmpty()
+        targets.forEachIndexed { i, t ->
+            val label = if (targets.size > 1) "Subnet ${i + 1}/${targets.size} ($t) · " else ""
+            val found = IpScanner(net).scan(t, icmp, ubntList, wl?.gateway, selfIps, wl?.dns?.firstOrNull { it.contains('.') }) { p -> progress = p.copy(phase = label + p.phase) }
+            progress = IpScanner.Progress(1, 1, found.size, "Produttori (IEEE)")
+            val vendors = if (c.session.token != null) runCatching { c.api.macVendors(found.mapNotNull { it.mac }) }.getOrDefault(emptyMap()) else emptyMap()
+            val known = hosts.map { it.ip }.toSet()
+            hosts += found.filter { it.ip !in known }.map { h ->
+                val v = h.mac?.let { vendors[it] }
+                h.copy(vendor = v, kind = DeviceGuess.guess(v, h.ports.toSet(), h.hostname ?: h.netbios, h.isGateway, h.ubnt?.fullModel ?: h.ubnt?.model))
+            }
+        }
+    }
 
     fun start() {
         error = null
@@ -110,19 +139,13 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
             try {
                 val net = c.network.wifiNetwork() ?: throw IllegalStateException("Collegati alla Wi-Fi della LAN da scansionare")
                 val parsed = Ip.parseScanCidr(cidr, minPrefix = 22)
-                val wl = c.network.wifiLink()
-                val selfIps = wl?.addresses.orEmpty().map { it.substringBefore('/') }.toSet()
-                val ubntJob: kotlinx.coroutines.Deferred<List<it.cdanet.cpeconfigurator.tools.UbntDevice>>? =
-                    if (ubnt) async { runCatching { UbntDiscovery.discover(c.network, 3_000) }.getOrDefault(emptyList()) } else null
-                progress = IpScanner.Progress(0, 1, 0, "Avvio")
-                val ubntList = ubntJob?.await().orEmpty()
-                val found = IpScanner(net).scan(parsed, icmp, ubntList, wl?.gateway, selfIps, wl?.dns?.firstOrNull { it.contains('.') }) { progress = it }
-                progress = IpScanner.Progress(1, 1, found.size, "Produttori (IEEE)")
-                val vendors = if (c.session.token != null) runCatching { c.api.macVendors(found.mapNotNull { it.mac }) }.getOrDefault(emptyMap()) else emptyMap()
-                hosts += found.map { h ->
-                    val v = h.mac?.let { vendors[it] }
-                    h.copy(vendor = v, kind = DeviceGuess.guess(v, h.ports.toSet(), h.hostname ?: h.netbios, h.isGateway, h.ubnt?.fullModel ?: h.ubnt?.model))
+                // wide: the /24 of the range that answer, after the subnet of the field (16 at most)
+                val extra = if (!wide) emptyList() else {
+                    val range = Ip.parseCidr(wideRange)
+                    IpScanner(net).activeSubnets(range) { progress = it }
+                        .filter { it.network !in parsed.network..parsed.broadcast }
                 }
+                scanAll(net, (listOf(parsed) + extra).take(17))
             } catch (e: kotlinx.coroutines.CancellationException) {
                 throw e
             } catch (e: Exception) {
@@ -140,6 +163,8 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
             Field("Subnet (fino a /22)", cidr, { cidr = it.trim() }, keyboardType = KeyboardType.Uri, supporting = link?.let { "Wi-Fi ${it.wifiSsid ?: ""} · gateway ${it.gateway ?: "—"}" })
             SwitchRow("Ping ICMP per gli host che non rispondono su TCP", icmp) { icmp = it }
             SwitchRow("Discovery Ubiquiti (modello, firmware, MAC)", ubnt) { ubnt = it }
+            SwitchRow("Scansione ampia: cerca anche le altre subnet in uso", wide) { wide = it }
+            if (wide) Field("Intervallo (fino a /16)", wideRange, { wideRange = it.trim() }, keyboardType = KeyboardType.Uri, supporting = "Prova i gateway tipici (.1, .254) di ogni /24 e scansiona quelle attive (al massimo 16).")
             if (job == null) BusyButton("Avvia scansione", false, Modifier.fillMaxWidth()) { start() }
             else OutlinedButton(onClick = { job?.cancel() }, modifier = Modifier.fillMaxWidth()) { Text("Interrompi") }
             progress?.let { p ->
@@ -164,18 +189,29 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
             }
             if (showMap) {
                 SectionCard("Topologia") {
-                    SwitchRow("SNMP (LLDP/CDP, tabelle MAC degli switch, ARP del router)", useSnmp) { useSnmp = it }
+                    SwitchRow("SNMP (LLDP, CDP, vicini MikroTik, stazioni Ubiquiti, tabelle MAC, ARP)", useSnmp) { useSnmp = it }
                     if (useSnmp) Field("Community SNMP v2c (separate da virgola)", communities, { communities = it }, supporting = "Predefinita: public. Le community restano sul telefono.")
                     SwitchRow("Discovery multi-vendor (MikroTik, Ubiquiti, Hikvision, Dahua, ONVIF, UPnP, mDNS, Netgear)", useDiscovery) { useDiscovery = it }
                     BusyButton(topoBusy ?: "Costruisci mappa", topoBusy != null, Modifier.fillMaxWidth(), enabled = topoBusy == null && job == null) {
                         scope.launch {
                             topoBusy = "Avvio…"
+                            selectedNode = null
                             runCatching {
+                                // the Wi-Fi gateway, or (scanning a LAN the phone reaches through a router) its .1/.254
+                                val ips = hosts.map { it.ip }
+                                val gw = link?.gateway?.takeIf { it in ips }
+                                    ?: hosts.firstOrNull { it.isGateway }?.ip
+                                    ?: ips.firstOrNull { it.endsWith(".1") } ?: ips.firstOrNull { it.endsWith(".254") } ?: link?.gateway
                                 TopologyScanner(c.network).run(
                                     hosts.toList(),
-                                    link?.gateway,
+                                    gw,
                                     if (useSnmp) communities.split(',').map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("public") } else emptyList(),
                                     useDiscovery,
+                                    fingerprints = true,
+                                    vendorOf = { macs ->
+                                        if (c.session.token == null) emptyMap()
+                                        else c.api.macVendors(macs).mapNotNull { (k, v) -> v?.let { k to it } }.toMap()
+                                    },
                                 ) { topoBusy = it }
                             }.onSuccess { r ->
                                 topo = r
@@ -186,17 +222,56 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
                             topoBusy = null
                         }
                     }
+                    // debug builds only: a fictitious office LAN to try the graph without a real network
+                    if (BuildConfig.DEBUG) TextButton(onClick = {
+                        selectedNode = null
+                        topo = TopologyRun(Topology.build(TopologyDemo.hosts, TopologyDemo.snmp, TopologyDemo.GATEWAY, fingerprints = TopologyDemo.fingerprints), emptyList(), TopologyDemo.hosts, TopologyDemo.snmp)
+                    }) { Text("Dati di esempio (solo build di sviluppo)") }
                     val t = topo?.result
                     Text(
                         when {
-                            t == null -> "Mappa base dal gateway (dispositivi raggruppati per tipo). \"Costruisci mappa\" prova SNMP e discovery per la topologia reale."
-                            t.mode == "snmp" -> "Topologia da SNMP: ${t.snmpDevices} apparati, ${t.links} collegamenti LLDP/CDP, ${t.placedOnPorts} dispositivi collocati sulla porta dello switch; gli altri sotto il gateway."
-                            else -> "Nessun apparato ha risposto via SNMP: mappa base dal gateway."
+                            t == null -> "Mappa base dal gateway (dispositivi raggruppati per tipo). \"Costruisci mappa\" prova SNMP e discovery per il grafo reale della rete."
+                            t.mode == "snmp" -> "Grafo da SNMP: ${t.snmpDevices} apparati letti · collegamenti ${t.count(LinkKind.Lldp) + t.count(LinkKind.Cdp) + t.count(LinkKind.Mndp)} LLDP/CDP/MikroTik, ${t.count(LinkKind.Wireless)} wireless, ${t.count(LinkKind.Fdb)} dalle tabelle MAC, ${t.count(LinkKind.Assumed)} presunti."
+                            else -> "Nessun apparato ha risposto via SNMP: tutti i dispositivi sono collegati al gateway come presunti."
                         },
                         style = MaterialTheme.typography.bodySmall,
                     )
                     val open = { h: ScanHost -> filter = h.ip; openHost = h.ip; showMap = false }
-                    if (t != null) NetworkMapView(t.layout, open) else NetworkMapView(hosts.toList(), link?.gateway, open)
+                    // subnets the routers declare on their interfaces and that are not scanned yet
+                    val scanned = hosts.mapNotNull { Ip.parse(it.ip) }
+                    val more = topo?.devices.orEmpty().flatMap { it.subnets }.distinct()
+                        .mapNotNull { runCatching { Ip.parseCidr(it) }.getOrNull() }
+                        .filter { cidr -> cidr.prefix >= 16 && Ip.isPrivate(Ip.format(cidr.network)) && scanned.none { it in cidr.network..cidr.broadcast } }
+                    if (more.isNotEmpty() && job == null) {
+                        Text("Subnet dichiarate dai router e non ancora scansionate: ${more.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
+                        OutlinedButton(onClick = {
+                            job = scope.launch {
+                                try {
+                                    val net = c.network.wifiNetwork() ?: throw IllegalStateException("Collegati alla Wi-Fi della LAN da scansionare")
+                                    scanAll(net, more.flatMap { if (it.prefix >= 22) listOf(it) else Ip.slash24s(it) }.take(16))
+                                } catch (e: kotlinx.coroutines.CancellationException) {
+                                    throw e
+                                } catch (e: Exception) {
+                                    error = e.message ?: e.toString()
+                                } finally {
+                                    progress = null
+                                    job = null
+                                }
+                            }
+                        }) { Text("Scansiona anche queste subnet, poi ricostruisci la mappa") }
+                    }
+                    if (t != null) {
+                        TopologyGraphView(t.graph, selectedNode, "Topologia di rete $cidr") { selectedNode = it }
+                        selectedNode?.let { id ->
+                            TopologyNodeCard(t.graph, id, t.graph.byId[id]?.host?.let { h -> { open(h) } }) { selectedNode = null }
+                        }
+                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                            OutlinedButton(onClick = { shareCsv(context, "Collegamenti di rete", TopoGraph.csv(t.graph)) }) { Text("Collegamenti CSV") }
+                            OutlinedButton(onClick = { shareCsv(context, "Dispositivi di rete", TopoGraph.devicesCsv(t.graph)) }) { Text("Dispositivi CSV") }
+                        }
+                    } else {
+                        NetworkMapView(hosts.toList(), link?.gateway, open)
+                    }
                 }
                 topo?.found?.takeIf { it.isNotEmpty() }?.let { found ->
                     SectionCard("Discovery: ${found.size} dispositivi") {

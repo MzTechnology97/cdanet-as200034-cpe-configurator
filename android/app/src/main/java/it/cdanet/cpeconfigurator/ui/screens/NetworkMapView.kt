@@ -31,7 +31,7 @@ import it.cdanet.cpeconfigurator.tools.pro.NetworkMap
 import it.cdanet.cpeconfigurator.tools.pro.NetworkMapLayout
 import it.cdanet.cpeconfigurator.tools.pro.ScanHost
 
-private fun categoryColor(c: MapCategory?): Color = when (c) {
+internal fun categoryColor(c: MapCategory?): Color = when (c) {
     MapCategory.Network -> Color(0xFFF59E0B)
     MapCategory.Ubiquiti -> Color(0xFF0EA5E9)
     MapCategory.MikroTik -> Color(0xFF6366F1)

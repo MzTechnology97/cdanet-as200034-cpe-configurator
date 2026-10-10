@@ -96,6 +96,31 @@ object VendorDiscovery {
             """</e:Header><e:Body><d:Probe><d:Types>dn:NetworkVideoTransmitter</d:Types></d:Probe></e:Body></e:Envelope>"""
         ).toByteArray(Charsets.UTF_8)
 
+    /** Generic WS-Discovery probe (no type filter): Windows PCs, printers, scanners, cameras answer. */
+    fun wsdProbe(): ByteArray = (
+        """<?xml version="1.0" encoding="UTF-8"?><e:Envelope xmlns:e="http://www.w3.org/2003/05/soap-envelope" xmlns:w="http://schemas.xmlsoap.org/ws/2004/08/addressing" """ +
+            """xmlns:d="http://schemas.xmlsoap.org/ws/2005/04/discovery"><e:Header><w:MessageID>uuid:${UUID.randomUUID()}</w:MessageID>""" +
+            """<w:To e:mustUnderstand="true">urn:schemas-xmlsoap-org:ws:2005:04:discovery</w:To><w:Action e:mustUnderstand="true">http://schemas.xmlsoap.org/ws/2005/04/discovery/Probe</w:Action>""" +
+            """</e:Header><e:Body><d:Probe/></e:Body></e:Envelope>"""
+        ).toByteArray(Charsets.UTF_8)
+
+    /** Device type from the WS-Discovery Types (printer, computer, scanner, camera). */
+    fun parseWsd(xml: String, src: String?): Found? {
+        if (!xml.contains("ProbeMatch")) return null
+        val types = Regex("<[^>]*:Types[^>]*>([^<]+)").find(xml)?.groupValues?.get(1)?.trim().orEmpty()
+        val xaddrs = Regex("<[^>]*XAddrs[^>]*>([^<]+)").find(xml)?.groupValues?.get(1).orEmpty()
+        val ip = Regex("https?://([0-9.]+)").find(xaddrs)?.groupValues?.get(1) ?: src ?: return null
+        val t = types.lowercase()
+        val kind = when {
+            "printdevicetype" in t || "print" in t -> "Stampante"
+            "scandevicetype" in t || "scan" in t -> "Scanner"
+            "networkvideotransmitter" in t -> "Telecamera / NVR"
+            "computer" in t -> "PC / server Windows"
+            else -> "Dispositivo WS-Discovery"
+        }
+        return Found(ip, "WSD", "WS-Discovery", details = mapOf("Tipo" to kind, "Types" to types.take(120)))
+    }
+
     fun parseOnvif(xml: String, src: String?): Found? {
         if (!xml.contains("ProbeMatch")) return null
         val xaddrs = Regex("<[^>]*XAddrs[^>]*>([^<]+)").find(xml)?.groupValues?.get(1).orEmpty()
@@ -137,6 +162,8 @@ object VendorDiscovery {
         "_device-info._tcp.local", "_workstation._tcp.local", "_ssh._tcp.local", "_rtsp._tcp.local", "_axis-video._tcp.local", "_sonos._tcp.local",
         "_spotify-connect._tcp.local", "_hue._tcp.local", "_shelly._tcp.local", "_esphomelib._tcp.local", "_androidtvremote2._tcp.local",
         "_amzn-wplay._tcp.local", "_qdiscover._tcp.local", "_scanner._tcp.local", "_uscan._tcp.local", "_mqtt._tcp.local",
+        "_rfb._tcp.local", "_sftp-ssh._tcp.local", "_companion-link._tcp.local", "_matter._tcp.local", "_hap._udp.local", "_ptp._tcp.local",
+        "_nvstream._tcp.local", "_googlezone._tcp.local", "_dosvc._tcp.local", "_ipp-tls._tcp.local", "_daap._tcp.local", "_sleep-proxy._udp.local",
     )
 
     fun mdnsQuery(names: List<String>): ByteArray {
@@ -299,6 +326,14 @@ object VendorDiscovery {
         send(s, probe, "239.255.255.250", 3702)
         val out = linkedMapOf<String, Found>()
         listen(s, ms) { b, l, src -> parseOnvif(String(b, 0, l, Charsets.UTF_8), src)?.let { out[it.ip] = it } }
+        out.values.toList()
+    }
+
+    fun wsd(ms: Long): List<Found> = boundSocket(null).use { s ->
+        val probe = wsdProbe()
+        send(s, probe, "239.255.255.250", 3702)
+        val out = linkedMapOf<String, Found>()
+        listen(s, ms) { b, l, src -> parseWsd(String(b, 0, l, Charsets.UTF_8), src)?.let { out.putIfAbsent(it.ip, it) } }
         out.values.toList()
     }
 

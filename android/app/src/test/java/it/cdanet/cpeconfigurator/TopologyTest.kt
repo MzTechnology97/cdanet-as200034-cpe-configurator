@@ -4,9 +4,16 @@ import it.cdanet.cpeconfigurator.tools.discovery.VendorDiscovery
 import it.cdanet.cpeconfigurator.tools.pro.ScanHost
 import it.cdanet.cpeconfigurator.tools.topology.Neighbor
 import it.cdanet.cpeconfigurator.tools.topology.SnmpDevice
+import it.cdanet.cpeconfigurator.tools.discovery.Fingerprint
+import it.cdanet.cpeconfigurator.tools.topology.DeviceClassifier
+import it.cdanet.cpeconfigurator.tools.topology.DeviceEvidence
+import it.cdanet.cpeconfigurator.tools.topology.DeviceType
+import it.cdanet.cpeconfigurator.tools.topology.LinkKind
+import it.cdanet.cpeconfigurator.tools.topology.VendorBadges
+import it.cdanet.cpeconfigurator.tools.topology.TopoGraph
 import it.cdanet.cpeconfigurator.tools.topology.Topology
+import it.cdanet.cpeconfigurator.tools.topology.TopologyDemo
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -47,28 +54,186 @@ class TopologyTest {
     )
 
     @Test
-    fun buildsTheRealTreeFromSnmp() {
+    fun buildsTheGraphFromLldpAndMacTables() {
         val t = Topology.build(hosts, listOf(router, core, access), "192.168.1.1")
         assertEquals("snmp", t.mode)
         assertEquals(3, t.snmpDevices)
-        assertTrue(t.links >= 2)
-        val nodes = t.layout.nodes.associateBy { it.id }
-        assertEquals("gw-mikrotik", nodes.getValue("gw").label)
-        // camera on core port gi5, PC on the access switch port3
-        assertTrue(nodes.getValue("host:192.168.1.64").sub.startsWith("porta gi5"))
-        assertTrue(nodes.getValue("host:192.168.1.20").sub.startsWith("porta port3"))
-        assertTrue(t.layout.edges.any { it.from == "gw" && it.to == "dev:192.168.1.2" })
-        assertTrue(t.layout.edges.any { it.from == "dev:192.168.1.2" && it.to == "dev:192.168.1.3" })
-        // the device without MAC info stays under the gateway
-        assertTrue(t.layout.edges.any { it.to == "host:192.168.1.30" })
-        assertEquals(2, t.placedOnPorts)
+        val g = t.graph
+        fun link(a: String, b: String) = g.links.firstOrNull { (it.a == "ip:$a" && it.b == "ip:$b") || (it.a == "ip:$b" && it.b == "ip:$a") }
+        // LLDP: router-core (seen from the core, ports on both sides) and core-access
+        val rc = link("192.168.1.1", "192.168.1.2")!!
+        assertEquals(LinkKind.Lldp, rc.kind)
+        assertEquals("ether2", g.portOn(rc, "ip:192.168.1.1"))
+        assertEquals("gi1", g.portOn(rc, "ip:192.168.1.2"))
+        assertEquals(LinkKind.Lldp, link("192.168.1.2", "192.168.1.3")!!.kind)
+        // MAC tables: camera on the core access port gi5, PC on the access switch port3 (not on the core's gi8 link)
+        val cam = link("192.168.1.2", "192.168.1.64")!!
+        assertEquals(LinkKind.Fdb, cam.kind)
+        assertEquals("gi5", g.portOn(cam, "ip:192.168.1.2"))
+        assertEquals("port3", g.portOn(link("192.168.1.3", "192.168.1.20")!!, "ip:192.168.1.3"))
+        // nothing known about .30: presumed behind the gateway
+        assertEquals(LinkKind.Assumed, link("192.168.1.1", "192.168.1.30")!!.kind)
+        assertTrue(g.links.any { it.a == TopoGraph.INTERNET && it.b == "ip:192.168.1.1" })
     }
 
     @Test
-    fun withoutSnmpItIsTheBaseMap() {
+    fun keepsLoopsGhostsWirelessAndMergesBothSides() {
+        val g = Topology.build(TopologyDemo.hosts, TopologyDemo.snmp, TopologyDemo.GATEWAY).graph
+        fun links(a: String, b: String) = g.links.filter { (it.a == a && it.b == b) || (it.a == b && it.b == a) }
+        // the ring core - warehouse - first floor: three switch links, each seen from both sides once
+        val ring = listOf("ip:192.168.88.2" to "ip:192.168.88.3", "ip:192.168.88.3" to "ip:192.168.88.4", "ip:192.168.88.2" to "ip:192.168.88.4")
+        for ((a, b) in ring) {
+            val l = links(a, b)
+            assertEquals("$a-$b", 1, l.size)
+            assertEquals(LinkKind.Lldp, l[0].kind)
+        }
+        // router-core seen by MikroTik (router) and LLDP (core): one link, strongest kind, both protocols
+        val rc = links("ip:192.168.88.1", "ip:192.168.88.2").single()
+        assertEquals(setOf("LLDP", "MikroTik"), rc.seenBy)
+        assertEquals("ether2", g.portOn(rc, "ip:192.168.88.1"))
+        assertEquals(1000L, rc.speedMbps)
+        // the ONT outside the subnet is a ghost behind ether5
+        val ont = g.nodes.single { it.label == "ONT-Fibra" }
+        assertTrue(ont.ghost)
+        assertEquals("ether5", g.portOn(links("ip:192.168.88.1", ont.id).single(), "ip:192.168.88.1"))
+        // wireless: AP to both stations with the signal; the station's own view merged into the same link
+        val pbe = links("ip:192.168.88.20", "ip:192.168.88.21").single()
+        assertEquals(LinkKind.Wireless, pbe.kind)
+        assertEquals(-58, pbe.signalDbm)
+        assertEquals(-66, links("ip:192.168.88.20", "ip:192.168.88.22").single().signalDbm)
+        // the camera behind the PowerBeam: on its LAN port, not on the core's gi3
+        assertEquals("eth0", g.portOn(links("ip:192.168.88.21", "ip:192.168.88.70").single(), "ip:192.168.88.21"))
+        // the AP has no LLDP: placed on the core's gi3 from the MAC table
+        assertEquals(LinkKind.Fdb, links("ip:192.168.88.2", "ip:192.168.88.20").single().kind)
+        // the TV has no MAC: presumed
+        assertEquals(LinkKind.Assumed, links("ip:192.168.88.1", "ip:192.168.88.150").single().kind)
+        // every node has at least one link and the CSV lists them all
+        assertTrue(g.nodes.all { n -> g.links.any { it.a == n.id || it.b == n.id } })
+        assertEquals(g.links.size - 1 + 1, TopoGraph.csv(g).size)
+    }
+
+    @Test
+    fun layoutIsATreeFromInternetWithRedundantLinksApart() {
+        val g = Topology.build(TopologyDemo.hosts, TopologyDemo.snmp, TopologyDemo.GATEWAY, fingerprints = TopologyDemo.fingerprints).graph
+        val full = TopoGraph.layout(g)
+        assertEquals(g.nodes.size, full.nodes.size)
+        // no two boxes overlap
+        for (a in full.nodes) for (b in full.nodes) if (a !== b) {
+            val overlap = a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+            assertTrue("${a.node.label} / ${b.node.label}", !overlap)
+        }
+        // every node but Internet has exactly one parent; the ring adds exactly one redundant link
+        assertEquals(g.nodes.size - 1, full.tree.size)
+        assertEquals(g.links.size - full.tree.size, full.extra.size)
+        assertTrue(full.extra.any { setOf(it.a, it.b) == setOf("ip:192.168.88.3", "ip:192.168.88.4") })
+        // Internet on top, then the gateway, then the core switch; clients drawn small under their device
+        val y = full.byId.mapValues { it.value.y }
+        assertTrue(y.getValue(TopoGraph.INTERNET) < y.getValue("ip:192.168.88.1"))
+        assertTrue(y.getValue("ip:192.168.88.1") < y.getValue("ip:192.168.88.2"))
+        assertEquals("ip:192.168.88.2", full.parentOf["ip:192.168.88.51"])
+        assertTrue(full.byId.getValue("ip:192.168.88.51").client)
+        // the phone hangs from the AP by its wireless link, not from the core MAC table
+        assertEquals("ip:192.168.88.20", full.parentOf["ip:192.168.88.140"])
+        val infra = TopoGraph.layout(g, infraOnly = true)
+        assertTrue(infra.nodes.all { it.node.infra })
+        assertEquals(g.nodes.count { !it.infra }, infra.nodes.sumOf { it.hidden })
+    }
+
+    @Test
+    fun classifiesTypesAndVendors() {
+        val g = Topology.build(TopologyDemo.hosts, TopologyDemo.snmp, TopologyDemo.GATEWAY, fingerprints = TopologyDemo.fingerprints).graph
+        fun type(ip: String) = g.byId.getValue("ip:$ip").type
+        assertEquals(DeviceType.Router, type("192.168.88.1"))
+        assertEquals(DeviceType.Switch, type("192.168.88.2"))
+        assertEquals(DeviceType.Switch, type("192.168.88.4"))
+        assertEquals(DeviceType.AccessPoint, type("192.168.88.20"))
+        assertEquals(DeviceType.Cpe, type("192.168.88.21"))
+        assertEquals(DeviceType.Nvr, type("192.168.88.50"))
+        assertEquals(DeviceType.Camera, type("192.168.88.51"))
+        assertEquals(DeviceType.Camera, type("192.168.88.70"))
+        assertEquals(DeviceType.Computer, type("192.168.88.100"))
+        assertEquals(DeviceType.Printer, type("192.168.88.110"))
+        assertEquals(DeviceType.Nas, type("192.168.88.120"))
+        assertEquals(DeviceType.VoipPhone, type("192.168.88.130"))
+        assertEquals(DeviceType.Phone, type("192.168.88.140"))
+        assertEquals(DeviceType.Tv, type("192.168.88.150"))
+        assertEquals(DeviceType.Ont, g.nodes.single { it.label == "ONT-Fibra" }.type)
+        assertEquals("UBNT", VendorBadges.of(g.byId.getValue("ip:192.168.88.20").vendor)?.short)
+        assertEquals("MT", VendorBadges.of("Routerboard.com")?.short)
+        assertNull(VendorBadges.of("Sconosciuto Srl"))
+        // vendor from the SNMP enterprise number when the MAC says nothing
+        assertEquals("MikroTik", DeviceClassifier.vendor(DeviceEvidence(sysObjectId = "1.3.6.1.4.1.14988.1")))
+        assertEquals(DeviceType.Firewall, DeviceClassifier.classify(DeviceEvidence(fingerprints = listOf("HTTP title: FortiGate"))))
+        assertEquals(DeviceType.Switch, DeviceClassifier.classify(DeviceEvidence(capabilities = setOf("bridge"))))
+        assertEquals(DeviceType.AccessPoint, DeviceClassifier.classify(DeviceEvidence(capabilities = setOf("bridge", "wlan access point"))))
+        assertEquals(DeviceType.Unknown, DeviceClassifier.classify(DeviceEvidence()))
+    }
+
+    @Test
+    fun recognisesProductsFromFactoryHostnames() {
+        fun of(name: String) = DeviceClassifier.classify(DeviceEvidence(hostname = name)) to DeviceClassifier.vendor(DeviceEvidence(hostname = name))
+        assertEquals(DeviceType.AccessPoint to "Cambium", of("E410-1A2B3C"))
+        assertEquals(DeviceType.Cpe to "Cambium", of("ePMP-Force300-CASA"))
+        assertEquals(DeviceType.AccessPoint to "Ubiquiti", of("U6-Lite-ufficio"))
+        assertEquals(DeviceType.Switch to "MikroTik", of("CRS326-24G"))
+        assertEquals(DeviceType.Router to "Teltonika", of("RUT955"))
+        assertEquals(DeviceType.Printer to "Brother", of("BRN3C2AF4123456"))
+        assertEquals(DeviceType.VoipPhone to "Yealink", of("SIP-T46U"))
+        assertEquals(DeviceType.Camera to "Hikvision", of("DS-2CD2143G2-I"))
+        assertEquals(DeviceType.Iot, of("shellyplus1pm-a8032ab12345").first)
+        assertEquals(DeviceType.Server, of("pve-01").first)
+        assertNull(of("pve-01").second) // a category, not a vendor
+        // the gateway stays a router even if its name says access point
+        assertEquals(DeviceType.Router, DeviceClassifier.classify(DeviceEvidence(hostname = "U6-Lite", isGateway = true)))
+        // and the scanner list says it too
+        assertEquals("Access point Cambium", it.cdanet.cpeconfigurator.tools.pro.DeviceGuess.guess(null, emptySet(), "E410-1A2B3C"))
+        assertEquals("CMB", VendorBadges.of("Cambium Networks Limited")?.short)
+        assertEquals("RKS", VendorBadges.of("Ruckus Wireless")?.short)
+    }
+
+    @Test
+    fun parsesFingerprintsCapabilitiesAndSubnets() {
+        val http = "HTTP/1.1 401 Unauthorized\r\nServer: App-webs/\r\nWWW-Authenticate: Digest realm=\"IP Camera(C1234)\"\r\n\r\n<html><title>Login</title></html>"
+        assertEquals(listOf("HTTP Server: App-webs/", "HTTP realm: IP Camera(C1234)", "HTTP title: Login"), Fingerprint.parseHttp(http))
+        assertEquals("SSH: ROSSSH", Fingerprint.parseSshBanner("SSH-2.0-ROSSSH\r\n"))
+        assertNull(Fingerprint.parseSshBanner("HTTP/1.1 400"))
+        assertEquals("SIP: Yealink SIP-T46U", Fingerprint.parseAgent("SIP/2.0 200 OK\r\nUser-Agent: Yealink SIP-T46U\r\n\r\n", "SIP"))
+        assertTrue(String(Fingerprint.sipOptions("192.168.1.10", "192.168.1.2")).startsWith("OPTIONS sip:192.168.1.10 SIP/2.0"))
+        // LLDP capabilities BITS: 0x28 = bridge + router
+        assertEquals(setOf("bridge", "router"), Topology.capabilities(byteArrayOf(0x28)))
+        assertEquals(setOf("wlan access point"), Topology.capabilities(byteArrayOf(0x10, 0)))
+        assertEquals("192.168.10.0/24", Topology.subnetOf("192.168.10.5", "255.255.255.0"))
+        assertEquals("192.168.0.0/16", Topology.subnetOf("192.168.3.1", "255.255.0.0"))
+        assertNull(Topology.subnetOf("127.0.0.1", "255.0.0.0"))
+        assertNull(Topology.subnetOf("10.0.0.1", "255.255.255.255"))
+        val wsd = "<s:Envelope><s:Body><d:ProbeMatches><d:ProbeMatch><d:Types>wsdp:Device wprt:PrintDeviceType</d:Types><d:XAddrs>http://192.168.1.40:5357/x</d:XAddrs></d:ProbeMatch></d:ProbeMatches></s:Body></s:Envelope>"
+        val f = VendorDiscovery.parseWsd(wsd, null)!!
+        assertEquals("192.168.1.40", f.ip)
+        assertEquals("Stampante", f.details["Tipo"])
+    }
+
+    @Test
+    fun wideSweepSplitsPrivateRangesInto24s() {
+        val nets = it.cdanet.cpeconfigurator.network.Ip.slash24s(it.cdanet.cpeconfigurator.network.Ip.parseCidr("192.168.0.0/16"))
+        assertEquals(256, nets.size)
+        assertEquals("192.168.0.0/24", nets.first().toString())
+        assertEquals("192.168.255.0/24", nets.last().toString())
+        assertEquals(4, it.cdanet.cpeconfigurator.network.Ip.slash24s(it.cdanet.cpeconfigurator.network.Ip.parseCidr("10.10.0.0/22")).size)
+        assertTrue(runCatching { it.cdanet.cpeconfigurator.network.Ip.slash24s(it.cdanet.cpeconfigurator.network.Ip.parseCidr("10.0.0.0/8")) }.isFailure)
+        assertTrue(runCatching { it.cdanet.cpeconfigurator.network.Ip.slash24s(it.cdanet.cpeconfigurator.network.Ip.parseCidr("8.8.0.0/16")) }.isFailure)
+    }
+
+    @Test
+    fun withoutSnmpEverythingHangsFromTheGateway() {
         val t = Topology.build(hosts, emptyList(), "192.168.1.1")
         assertEquals("base", t.mode)
-        assertNotNull(t.layout.nodes.firstOrNull { it.id == "gw" })
+        assertTrue(t.graph.links.filter { it.kind != LinkKind.Uplink }.all { it.kind == LinkKind.Assumed && it.a == "ip:192.168.1.1" })
+    }
+
+    @Test
+    fun macFromTableIndex() {
+        assertEquals("02:CD:00:00:00:15", Topology.macFromIndex("1.3.6.1.4.1.41112.1.4.7.1.2.1.2.205.0.0.0.21".split('.')))
+        assertNull(Topology.macFromIndex(listOf("1", "2")))
     }
 
     @Test

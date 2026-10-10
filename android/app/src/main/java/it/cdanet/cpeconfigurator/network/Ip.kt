@@ -60,6 +60,13 @@ object Ip {
         return Cidr(ip and mask, prefix)
     }
 
+    /** The /24 networks of a wider private range (a /16 at most) for the wide sweep. */
+    fun slash24s(range: Cidr): List<Cidr> {
+        require(range.prefix in 16..24) { "Scansione ampia: da /16 a /24" }
+        require(isPrivate(format(range.network))) { "Consentite solo reti private/CGNAT" }
+        return (0 until (1 shl (24 - range.prefix))).map { Cidr(range.network + (it.toLong() shl 8), 24) }
+    }
+
     /** Scans are limited to private /24 (or smaller) networks. */
     fun parseScanCidr(text: String, minPrefix: Int = 24): Cidr {
         val c = parseCidr(text)

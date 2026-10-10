@@ -2,6 +2,7 @@ package it.cdanet.cpeconfigurator.tools.topology
 
 import it.cdanet.cpeconfigurator.network.Ip
 import it.cdanet.cpeconfigurator.network.NetworkHelper
+import it.cdanet.cpeconfigurator.tools.discovery.Fingerprint
 import it.cdanet.cpeconfigurator.tools.discovery.Found
 import it.cdanet.cpeconfigurator.tools.discovery.VendorDiscovery
 import it.cdanet.cpeconfigurator.tools.pro.Sadp
@@ -15,11 +16,11 @@ import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 
 /** Result of "Costruisci mappa": the topology, the devices found by discovery and the enriched hosts. */
-data class TopologyRun(val result: TopologyResult, val found: List<Found>, val hosts: List<ScanHost>)
+data class TopologyRun(val result: TopologyResult, val found: List<Found>, val hosts: List<ScanHost>, val devices: List<SnmpDevice> = emptyList())
 
 /**
  * Local network map: multi-vendor discovery and SNMP (communities tried in order, `public` by
- * default) on the Wi-Fi network, then [Topology.build]. Everything stays on the phone.
+ * default) on the Wi-Fi network, then the graph ([TopoGraph]). Everything stays on the phone.
  */
 class TopologyScanner(private val network: NetworkHelper) {
 
@@ -30,6 +31,7 @@ class TopologyScanner(private val network: NetworkHelper) {
             f.protocol == "MNDP" -> "MikroTik ${f.model.orEmpty()}".trim()
             f.protocol == "SADP" || f.protocol == "Dahua" || f.protocol == "ONVIF" -> "Telecamera / NVR"
             f.protocol == "NSDP" -> "Switch / router Netgear"
+            f.protocol == "WSD" -> f.details["Tipo"].orEmpty()
             "internetgatewaydevice" in t || "wandevice" in t -> "Router / gateway"
             "printer" in t || "stampante" in t -> "Stampante"
             "mediarenderer" in t || "sonos" in t || "tv" in t -> "TV / multimedia"
@@ -51,7 +53,7 @@ class TopologyScanner(private val network: NetworkHelper) {
             if (fs.isEmpty()) h else h.copy(
                 hostname = h.hostname ?: fs.firstNotNullOfOrNull { it.name },
                 mac = h.mac ?: fs.firstNotNullOfOrNull { it.mac },
-                vendor = h.vendor ?: fs.firstOrNull { it.vendor !in setOf("UPnP", "mDNS", "ONVIF") }?.vendor,
+                vendor = h.vendor ?: fs.firstOrNull { it.vendor !in setOf("UPnP", "mDNS", "ONVIF", "WS-Discovery") }?.vendor,
                 kind = h.kind.ifBlank { fs.map { kindOf(it) }.firstOrNull { it.isNotBlank() }.orEmpty() },
             )
         }
@@ -61,20 +63,33 @@ class TopologyScanner(private val network: NetworkHelper) {
         return updated + extra
     }
 
-    suspend fun run(hosts: List<ScanHost>, gatewayIp: String?, communities: List<String>, discovery: Boolean, progress: (String) -> Unit): TopologyRun =
-        withContext(Dispatchers.IO) {
+    /**
+     * Discovery, SNMP and fingerprints on the Wi-Fi network, then the graph. [vendorOf] resolves MAC
+     * vendors (IEEE registry, through the server) for the MACs learned from the routers' ARP tables.
+     */
+    suspend fun run(
+        hosts: List<ScanHost>,
+        gatewayIp: String?,
+        communities: List<String>,
+        discovery: Boolean,
+        fingerprints: Boolean = true,
+        vendorOf: suspend (List<String>) -> Map<String, String> = { emptyMap() },
+        progress: (String) -> Unit,
+    ): TopologyRun {
+        val (found, merged, devices, prints) = withContext(Dispatchers.IO) {
             network.onWifi {
                 val lock = network.multicastLock()
                 lock.acquire()
                 try {
+                    val local = network.wifiLink()?.addresses?.map { it.substringBefore('/') }?.firstOrNull { Ip.parse(it) != null }
                     val found = if (!discovery) emptyList() else {
-                        progress("Discovery multi-vendor (MikroTik, Hikvision, Dahua, ONVIF, UPnP, mDNS, Netgear)…")
-                        val local = network.wifiLink()?.addresses?.map { it.substringBefore('/') }?.firstOrNull { Ip.parse(it) != null }
+                        progress("Discovery multi-vendor (MikroTik, Ubiquiti, Hikvision, Dahua, ONVIF, WS-Discovery, UPnP, mDNS, Netgear)…")
                         coroutineScope {
                             listOf(
                                 async { runCatching { VendorDiscovery.mndp(3500) }.getOrDefault(emptyList()) },
                                 async { runCatching { VendorDiscovery.dahua(3500) }.getOrDefault(emptyList()) },
                                 async { runCatching { VendorDiscovery.onvif(3500) }.getOrDefault(emptyList()) },
+                                async { runCatching { VendorDiscovery.wsd(3500) }.getOrDefault(emptyList()) },
                                 async { runCatching { VendorDiscovery.ssdp(3500) }.getOrDefault(emptyList()) },
                                 async { runCatching { VendorDiscovery.mdns(3500) }.getOrDefault(emptyList()) },
                                 async { runCatching { VendorDiscovery.nsdp(3500) }.getOrDefault(emptyList()) },
@@ -86,14 +101,14 @@ class TopologyScanner(private val network: NetworkHelper) {
                             ).awaitAll().flatten()
                         }
                     }
-                    val merged = merge(hosts, found)
+                    var merged = merge(hosts, found)
                     val devices = if (communities.isEmpty()) emptyList() else {
                         progress("SNMP su ${merged.size} host (community: ${communities.joinToString(", ")})…")
                         val gate = Semaphore(24)
                         val responders = coroutineScope {
                             merged.map { h -> async { gate.withPermit { Topology.probe(h.ip, communities)?.let { h.ip to it } } } }.awaitAll().filterNotNull()
                         }
-                        progress("Lettura di ${responders.size} apparati SNMP (LLDP/CDP, tabelle MAC, ARP)…")
+                        progress("Lettura di ${responders.size} apparati SNMP (LLDP, CDP, vicini MikroTik, stazioni Ubiquiti, tabelle MAC, ARP)…")
                         val slow = Semaphore(4)
                         coroutineScope {
                             responders.map { (ip, r) ->
@@ -106,11 +121,34 @@ class TopologyScanner(private val network: NetworkHelper) {
                             }.awaitAll()
                         }
                     }
-                    progress("Costruzione della mappa…")
-                    TopologyRun(Topology.build(merged, devices, gatewayIp), found, merged)
+                    // MACs the phone could not read (Android hides the ARP table): from the routers' ARP tables
+                    val arp = devices.flatMap { it.arp.entries }.associate { it.key to it.value.uppercase() }
+                    merged = merged.map { h -> if (h.mac == null && arp[h.ip] != null) h.copy(mac = arp[h.ip]) else h }
+                    val prints = if (!fingerprints) emptyMap() else {
+                        progress("Impronte dei servizi (web, SSH, RTSP, SIP) su ${merged.size} host…")
+                        val gate = Semaphore(12)
+                        coroutineScope {
+                            merged.filter { !it.isSelf }.map { h ->
+                                async { gate.withPermit { Fingerprint.probe(h.ip, h.ports.toSet(), local, { java.net.Socket() }, {}) } }
+                            }.awaitAll().filter { it.texts.isNotEmpty() }.associate { it.ip to it.texts }
+                        }
+                    }
+                    Quad(found, merged, devices, prints)
                 } finally {
                     lock.release()
                 }
             }
         }
+        // vendors of the MACs without one (outside the Wi-Fi binding: the registry is on the server)
+        val missing = merged.filter { it.vendor == null && it.mac != null }.mapNotNull { it.mac }.distinct()
+        val vendors = if (missing.isEmpty()) emptyMap() else {
+            progress("Produttori dai MAC (${missing.size})…")
+            runCatching { vendorOf(missing) }.getOrDefault(emptyMap())
+        }
+        val enriched = merged.map { h -> h.mac?.let { vendors[it] }?.let { v -> if (h.vendor == null) h.copy(vendor = v) else h } ?: h }
+        progress("Costruzione del grafo…")
+        return TopologyRun(Topology.build(enriched, devices, gatewayIp, found, prints), found, enriched, devices)
+    }
+
+    private data class Quad(val found: List<Found>, val merged: List<ScanHost>, val devices: List<SnmpDevice>, val prints: Map<String, List<String>>)
 }

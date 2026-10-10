@@ -144,6 +144,42 @@ class IpScanner(private val wifi: Network?) {
         }.awaitAll()
     }
 
+    /**
+     * Wide sweep: which /24 of [range] (up to a /16) are in use, from their usual gateway addresses
+     * (.1 and .254, also .253): a connection or a refusal on a common port proves the network exists.
+     */
+    suspend fun activeSubnets(range: Ip.Cidr, onProgress: (Progress) -> Unit): List<Ip.Cidr> = coroutineScope {
+        val nets = Ip.slash24s(range)
+        val done = AtomicInteger()
+        val gate = Semaphore(64)
+        val ports = listOf(80, 443, 22, 53, 8291)
+        nets.map { net ->
+            async(Dispatchers.IO) {
+                gate.withPermit {
+                    coroutineContext.ensureActive()
+                    val up = listOf(1L, 254L, 253L).any { last ->
+                        val ip = Ip.format(net.network + last)
+                        ports.any { port ->
+                            val s = socket()
+                            try {
+                                s.connect(InetSocketAddress(ip, port), 300)
+                                true
+                            } catch (_: ConnectException) {
+                                true
+                            } catch (_: Exception) {
+                                false
+                            } finally {
+                                runCatching { s.close() }
+                            }
+                        }
+                    }
+                    onProgress(Progress(done.incrementAndGet(), nets.size, 0, "Ricerca delle subnet attive in $range"))
+                    net.takeIf { up }
+                }
+            }
+        }.awaitAll().filterNotNull()
+    }
+
     /** Reverse name from the LAN DNS (the router knows its DHCP clients). */
     private fun ptr(ip: String, server: String): String? = runCatching {
         DatagramSocket().use { s ->
