@@ -272,6 +272,17 @@ export async function healthView({ user }) {
           'account_terminated' in t ? stat('CPE di clienti cessati', t.account_terminated) : null,
         ),
         h('p', { class: 'small muted' }, `${nms('Stato UISP', 'Stato')} del ${fmtDate(data.generatedAt)}. "Segnale calato": almeno ${data.thresholds.signalDropDb} dB in meno rispetto al collaudo (solo CPE installate con l’app).`),
+        data.stale?.count
+          ? h(
+              'p',
+              { class: 'small' },
+              showStale
+                ? `Mostrate anche ${data.stale.count} CPE offline da più di ${data.stale.months} mesi. `
+                : `${data.stale.count} CPE offline da più di ${data.stale.months} mesi non sono mostrate (probabilmente clienti dismessi ancora presenti in UISP). `,
+              h('button', { type: 'button', class: 'small-btn', onclick: (e) => busy(e.currentTarget, async () => ((showStale = !showStale), await load())) }, showStale ? 'Nascondile' : 'Mostrale'),
+              admin ? h('span', { class: 'muted' }, ' · il limite si cambia in Impostazioni server') : null,
+            )
+          : null,
         data.uisp ? null : h('div', { class: 'notice warn' }, nms('UISP non raggiungibile: stato attuale non disponibile.', 'Stato attuale non disponibile, riprova più tardi.')),
       ),
       firmwareSummary(),
@@ -332,8 +343,10 @@ export async function healthView({ user }) {
     );
   }
 
+  // CPEs offline for longer than the setting (Impostazioni server): hidden unless asked for
+  let showStale = false;
   async function load() {
-    data = await api('/api/cpe-health');
+    data = await api(`/api/cpe-health${showStale ? '?stale=1' : ''}`);
     fillFilters();
     render();
   }

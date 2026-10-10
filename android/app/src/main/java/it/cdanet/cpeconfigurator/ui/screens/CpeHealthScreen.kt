@@ -82,11 +82,12 @@ fun CpeHealthScreen(c: AppContainer, onRepoint: (() -> Unit)? = null) {
     var open by remember { mutableStateOf<String?>(null) }
     var history by remember { mutableStateOf<String?>(null) }
     val admin = c.session.isAdmin
+    var showStale by remember { mutableStateOf(false) }
 
     suspend fun load() {
         busy = true
         error = null
-        runCatching { c.api.cpeHealth() }.onSuccess { data = it }.onFailure { error = it.message }
+        runCatching { c.api.cpeHealth(showStale) }.onSuccess { data = it }.onFailure { error = it.message }
         busy = false
     }
     LaunchedEffect(c.refresh.collectAsState().value) { load() }
@@ -112,6 +113,17 @@ fun CpeHealthScreen(c: AppContainer, onRepoint: (() -> Unit)? = null) {
             modifier = Modifier.weight(1f),
         )
             RefreshButton(busy) { scope.launch { load() } }
+        }
+        d.stale?.takeIf { it.count > 0 }?.let { st ->
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(
+                    if (showStale) "Mostrate anche ${st.count} CPE offline da più di ${st.months} mesi" else "${st.count} CPE offline da più di ${st.months} mesi non mostrate (clienti probabilmente dismessi)",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.weight(1f),
+                )
+                TextButton(onClick = { showStale = !showStale; scope.launch { load() } }) { Text(if (showStale) "Nascondi" else "Mostra") }
+            }
         }
         OutlinedTextField(
             value = query,

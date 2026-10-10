@@ -369,7 +369,8 @@ class ApiClient(
         request("POST", "/api/admin/outages/zones", buildJsonObject { put("name", name); put("lat", lat); put("lon", lon); put("radiusKm", radiusKm) })
     }
 
-    suspend fun cpeHealth(): CpeHealthDto = AppJson.decodeFromString(CpeHealthDto.serializer(), request("GET", "/api/cpe-health"))
+    /** [stale]: also the CPEs offline for longer than the server setting (normally left out). */
+    suspend fun cpeHealth(stale: Boolean = false): CpeHealthDto = AppJson.decodeFromString(CpeHealthDto.serializer(), request("GET", "/api/cpe-health" + if (stale) "?stale=1" else ""))
 
     suspend fun signalHistory(jobId: String, range: String): SignalHistoryDto =
         AppJson.decodeFromString(SignalHistoryDto.serializer(), request("GET", "/api/provisioning/jobs/$jobId/uisp/statistics?range=$range"))

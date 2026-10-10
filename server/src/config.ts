@@ -70,6 +70,8 @@ const envSchema = z.object({
   CAPACITY_MIN_MBPS: int(100, 1, 2000),
   ETH_MIN_MBPS: int(100, 10, 1000),
   SIGNAL_DROP_DB: int(6, 1, 30),
+  // CPEs offline for longer than this are left out of Salute CPE and Stato rete (0 = never)
+  STALE_CPE_MONTHS: int(12, 0, 120),
   // nearest APs an installer gets from a coverage check (web and app alike)
   INSTALLER_COVERAGE_APS: int(5, 1, 20),
   // distances from POPs/APs shown to installers are rounded to this (metres)
@@ -157,6 +159,8 @@ export interface Config {
   /** Thresholds of the acceptance test, field diagnosis, Salute CPE and coverage ranking. */
   thresholds: { signalGood: number; signalMin: number; cinrMin: number; chainDelta: number; capacityMinMbps: number; ethMinMbps: number; signalDropDb: number };
   installerCoverageAps: number;
+  /** Months offline after which a CPE is considered gone (hidden in Salute CPE, not counted in Stato rete); 0 = never. */
+  staleCpeMonths: number;
   installerDistanceStepM: number;
   coverageEirpDbm: number;
   coverageCpeGainDbi: number;
@@ -249,6 +253,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
       signalDropDb: e.SIGNAL_DROP_DB,
     },
     installerCoverageAps: e.INSTALLER_COVERAGE_APS,
+    staleCpeMonths: e.STALE_CPE_MONTHS,
     installerDistanceStepM: e.INSTALLER_DISTANCE_STEP_M,
     coverageEirpDbm: e.COVERAGE_AP_EIRP_DBM,
     coverageCpeGainDbi: e.COVERAGE_CPE_GAIN_DBI,
