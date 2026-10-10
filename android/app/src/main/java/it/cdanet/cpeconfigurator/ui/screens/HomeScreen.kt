@@ -165,7 +165,8 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
             val cpe = cpeTabTitles(modules)
             if (!offline && cpe.isNotEmpty()) add(Shortcut("CPE collegata", "Diagnosi, puntamento, AP visibili, collaudo", R.drawable.ic_cell_tower, Area.Field, Dest(Screen.CpeHub)))
             if (!offline && "Puntamento" in cpe) add(Shortcut("Puntamento", "Segnale in tempo reale con bip", R.drawable.ic_signal_cellular_alt, Area.Field, Dest(Screen.CpeHub, "Puntamento")))
-            if (!offline && "AP vicini" in networkTabTitles(modules)) add(Shortcut("AP vicini", "Da qui o da un indirizzo", R.drawable.ic_explore, Area.Network, Dest(Screen.NetHub, "AP vicini")))
+            if (!offline && modules["coverage"] != false) add(Shortcut("Verifica copertura", "Un indirizzo è coperto? Prima del sopralluogo", R.drawable.ic_map, Area.Network, Dest(Screen.Coverage)))
+            if (!offline && "AP vicini" in networkTabTitles(modules)) add(Shortcut("AP vicini", "Sul posto: AP intorno a te, bussola e mirino", R.drawable.ic_explore, Area.Network, Dest(Screen.NetHub, "AP vicini")))
             if (modules["network_tools"] != false) add(Shortcut("Scansione LAN", "Apparati nella rete del cliente", R.drawable.ic_radar, Area.Tools, Dest(Screen.Lan)))
             if (!offline) add(Shortcut("Guida", "Installazione passo per passo", R.drawable.ic_menu_book, Area.Help, Dest(Screen.Guide)))
         }

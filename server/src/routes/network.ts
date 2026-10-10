@@ -39,7 +39,7 @@ export function networkRoutes(app: FastifyInstance, ctx: AppContext) {
       const { byMac } = ctx.crmSync.index();
       for (const d of await ctx.uisp.allDevices().catch(() => [])) {
         const r = d.apId && d.mac ? byMac.get(d.mac) : undefined;
-        if (!r || !d.apId) continue;
+        if (!r || !d.apId || r.accountStatus === 'Terminato') continue;
         const c = pppoe.get(d.apId) ?? { online: 0, offline: 0, suspended: 0 };
         if (isSuspended(r)) c.suspended++;
         else if (r.online === true) c.online++;

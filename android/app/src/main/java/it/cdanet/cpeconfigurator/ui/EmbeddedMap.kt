@@ -34,12 +34,14 @@ import it.cdanet.cpeconfigurator.network.TestTls
  * already received, and is re-run whenever it changes. [onReady] gets the page for live updates.
  */
 @Composable
-fun EmbeddedMap(c: AppContainer, script: String?, modifier: Modifier = Modifier, onReady: (WebView) -> Unit = {}) =
-    ServerPage(c, "/map-embed.html", "Mappa", script, modifier, onReady = onReady)
+fun EmbeddedMap(c: AppContainer, script: String?, modifier: Modifier = Modifier, bridge: Any? = null, onReady: (WebView) -> Unit = {}) =
+    ServerPage(c, "/map-embed.html", "Mappa", script, modifier, bridge = bridge, onReady = onReady)
 
 /**
  * A public page of our server (no session) in a WebView: [path] is loaded and links stay inside
  * only while they start with [insidePrefix] (default: the whole server); anything else opens outside.
+ * [bridge]: object with @JavascriptInterface methods the page calls as `window.CdaApp` (only our
+ * server's pages are loaded, links elsewhere open outside).
  * [document]: a page to read rather than a map, with pinch zoom and the back button going back
  * inside the page first (e.g. closing an enlarged photo) before leaving the screen.
  */
@@ -53,6 +55,7 @@ fun ServerPage(
     modifier: Modifier = Modifier,
     insidePrefix: String = "/",
     document: Boolean = false,
+    bridge: Any? = null,
     onReady: (WebView) -> Unit = {},
 ) {
     val baseUrl by produceState<String?>(null) { value = c.api.base().trimEnd('/') }
@@ -86,6 +89,7 @@ fun ServerPage(
                 setBackgroundColor(background)
                 settings.javaScriptEnabled = true
                 settings.domStorageEnabled = true
+                if (bridge != null) addJavascriptInterface(bridge, "CdaApp")
                 if (document) {
                     settings.setSupportZoom(true)
                     settings.builtInZoomControls = true

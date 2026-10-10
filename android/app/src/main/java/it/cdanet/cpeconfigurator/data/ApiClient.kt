@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.data
 
+import kotlinx.serialization.json.doubleOrNull
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.json.Json
@@ -384,6 +385,21 @@ class ApiClient(
 
     /** The same answer as is, for the embedded map (positions, approximate areas, served sectors). */
     suspend fun coverageJson(lat: Double, lon: Double): String = request("GET", "/api/coverage?lat=$lat&lon=$lon&limit=5")
+
+    /** Admins: more APs and a wider radius (the server ignores both for installers). */
+    suspend fun coverageJson(lat: Double, lon: Double, limit: Int, km: Int?): String =
+        request("GET", "/api/coverage?lat=$lat&lon=$lon&limit=$limit" + (km?.let { "&km=$it" } ?: ""))
+
+    /** "Stato rete" as is: admins get every AP with its position (base map of Verifica copertura). */
+    suspend fun networkStatusJson(): String = request("GET", "/api/network/status")
+
+    /** Admins: radio simulation of one AP (estimated signal of a new CPE all around it). */
+    suspend fun coverageSimulationJson(apId: String): String =
+        request("GET", "/api/admin/coverage/simulation?apId=" + java.net.URLEncoder.encode(apId, "UTF-8"))
+
+    /** Admins: default CPE height of Impostazioni server (metres above ground). */
+    suspend fun defaultCpeHeight(): Double? =
+        runCatching { AppJson.parseToJsonElement(request("GET", "/api/admin/pointing/config")).jsonObject["cpeHeightM"]?.jsonPrimitive?.doubleOrNull }.getOrNull()
 
     suspend fun geocode(query: String): List<GeocodeResult> =
         AppJson.decodeFromString(

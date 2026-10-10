@@ -34,6 +34,8 @@ function fakeCrm() {
     '1': { connection_status: 'online', mac_address: 'AA:BB:CC:DD:EE:FF', client_ip: '100.64.0.10', session_duration: 3600 },
     '2': { connection_status: 'offline', mac_address: '22:33:44:55:66:77', client_ip: null, session_duration: 0 },
     '3': { connection_status: 'offline', mac_address: null, client_ip: null, session_duration: 0 },
+    // NERI ceased: his last session was on the CPE now used by BIANCHI (the live account wins)
+    '4': { connection_status: 'offline', mac_address: '22:33:44:55:66:77', client_ip: null, session_duration: 0 },
   };
   // installation sites: ROSSI's has coordinates, VERDI's has none
   const addresses: Record<string, object[]> = {
@@ -85,7 +87,7 @@ describe('Stato RADIUS dal CRM per il NOC', () => {
     await call('PUT', '/api/admin/connectors/crm', { enabled: true, url: 'https://crm.test', apiId: API_ID, apiKey: API_KEY });
     const s = await ctx.crmSync.sync();
     assert.deepEqual([s.error, s.accounts, s.online, s.offline, s.suspended], [null, 4, 1, 1, 1]);
-    assert.ok(!crm.calls.includes('/api/modules/ispradius2/accounts/4/status'), 'terminated accounts are not polled');
+    assert.ok(crm.calls.includes('/api/modules/ispradius2/accounts/4/status'), 'terminated accounts too: their last session gives the CPE');
     assert.equal((await call('GET', '/api/admin/crm/radius/status')).json().accounts, 4);
 
     // Salute CPE: ROSSI online on its CPE, BIANCHI's CPE online but PPPoE down
@@ -95,6 +97,7 @@ describe('Stato RADIUS dal CRM per il NOC', () => {
     assert.deepEqual([rossi.radius.username, rossi.radius.online, rossi.radius.speed], ['rossi@cda', true, { down: 30, up: 6 }]);
     assert.ok(!rossi.issues.includes('pppoe_offline'));
     assert.ok(bianchi.issues.includes('pppoe_offline'));
+    assert.deepEqual([rossi.radius.state, bianchi.radius.state, bianchi.radius.username], ['online', 'offline', 'bianchi@cda'], 'the live account wins over the terminated one');
     assert.equal(h.totals.pppoe_offline, 1);
 
     // the account list for the NOC: filters, CPE matched by MAC, terminated accounts out
@@ -105,6 +108,8 @@ describe('Stato RADIUS dal CRM per il NOC', () => {
     const susp = (await call('GET', '/api/admin/crm/radius?filter=suspended')).json().rows;
     assert.deepEqual([susp.length, susp[0].username, susp[0].servicesSuspended], [1, 'verdi@cda', true]);
     assert.deepEqual((await call('GET', '/api/admin/crm/radius?filter=unmatched')).json().rows.map((r: { username: string }) => r.username), ['verdi@cda']);
+    const ceased = (await call('GET', '/api/admin/crm/radius?filter=terminated')).json().rows;
+    assert.deepEqual([ceased.length, ceased[0].username, ceased[0].state, ceased[0].cpe.name], [1, 'neri@cda', 'terminated', 'BIANCHI LUCA']);
 
     // Stato rete: PPPoE of the CPEs of AP N2
     const net = (await call('GET', '/api/network/status')).json();
@@ -132,5 +137,20 @@ describe('Stato RADIUS dal CRM per il NOC', () => {
     assert.equal((await call('GET', '/api/admin/crm/customers', undefined, T)).statusCode, 403);
     const mine = (await call('GET', '/api/cpe-health', undefined, T)).json();
     assert.ok(!JSON.stringify(mine).includes('rossi@cda') && !JSON.stringify(mine).includes('pppoe_offline'));
+  });
+});
+
+describe('Stato sintetico del cliente', () => {
+  it('orders terminated, terminating, suspended, services suspended, then the session', async () => {
+    const { radiusState } = await import('../src/services/crm-sync.ts');
+    const base = { accountStatus: 'Attivo', customerStatus: 'active', servicesSuspended: false, online: true as boolean | null };
+    assert.equal(radiusState(base), 'online');
+    assert.equal(radiusState({ ...base, online: false }), 'offline');
+    assert.equal(radiusState({ ...base, online: null }), 'unknown');
+    assert.equal(radiusState({ ...base, servicesSuspended: true }), 'services_suspended');
+    assert.equal(radiusState({ ...base, customerStatus: 'suspended', servicesSuspended: true }), 'suspended');
+    assert.equal(radiusState({ ...base, accountStatus: 'Sospeso' }), 'suspended');
+    assert.equal(radiusState({ ...base, customerStatus: 'termination_in_progress', accountStatus: 'Sospeso' }), 'terminating');
+    assert.equal(radiusState({ ...base, accountStatus: 'Terminato', customerStatus: 'suspended' }), 'terminated');
   });
 });

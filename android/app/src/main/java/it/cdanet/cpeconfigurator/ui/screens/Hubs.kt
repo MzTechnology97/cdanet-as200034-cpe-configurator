@@ -66,7 +66,8 @@ fun networkTabTitles(m: Map<String, Boolean>) = buildList {
         add("Guasti")
         add("Aree e avvisi")
     }
-    if (m["compass"] != false || m["coverage"] != false) add("AP vicini")
+    // on site, from where the phone is (Copertura, from an address, has its own area in the bottom bar)
+    if (m["compass"] != false) add("AP vicini")
 }
 
 fun cpeTabTitles(m: Map<String, Boolean>) = buildList {
@@ -156,39 +157,10 @@ fun NetworkHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit, onAim: (
             "Stato" -> HubTab(t, R.drawable.ic_hub) { NetworkStatusScreen(c) }
             "Guasti" -> HubTab(t, R.drawable.ic_power_off) { OutagesScreen(c, OutageSection.List) }
             "Aree e avvisi" -> HubTab(t, R.drawable.ic_my_location) { OutagesScreen(c, OutageSection.Areas) }
-            else -> HubTab(t, R.drawable.ic_explore, scroll = false) { NearApsPanel(c, onAim, onCompass) }
+            else -> HubTab(t, R.drawable.ic_explore, scroll = false) { PointingScreen(c, onAim = onAim, onCompass = onCompass) }
         }
     }
     TabbedHub(tabs, selected, onSelect)
-}
-
-/**
- * "AP vicini": one place for what were Trova l'AP (from here, with map, tilt and AR sight) and
- * Copertura (from an address, before going on site).
- */
-@Composable
-private fun NearApsPanel(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (CompassTarget) -> Unit) {
-    val modules by c.modules.collectAsState()
-    val here = modules["compass"] != false
-    val address = modules["coverage"] != false
-    var fromAddress by remember { mutableStateOf(!here) }
-    Column(Modifier.fillMaxSize()) {
-        if (here && address) {
-            SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp)) {
-                SegmentedButton(selected = !fromAddress, onClick = { fromAddress = false }, shape = SegmentedButtonDefaults.itemShape(0, 2)) { Text("Da qui") }
-                SegmentedButton(selected = fromAddress, onClick = { fromAddress = true }, shape = SegmentedButtonDefaults.itemShape(1, 2)) { Text("Da un indirizzo") }
-            }
-        }
-        Box(Modifier.weight(1f).fillMaxWidth()) {
-            if (fromAddress) {
-                Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(horizontal = 16.dp, vertical = 4.dp)) {
-                    CoverageScreen(c, onCompass = if (here) onCompass else null)
-                }
-            } else {
-                PointingScreen(c, onAim = onAim, onCompass = onCompass)
-            }
-        }
-    }
 }
 
 /** "CPE collegata": everything done with the CPE in hand, connecting to it once. */
