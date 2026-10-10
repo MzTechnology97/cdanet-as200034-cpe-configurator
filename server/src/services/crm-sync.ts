@@ -9,6 +9,20 @@ import type { CrmClient, CrmSettings } from './crm.ts';
  * installations of the app also by PPPoE user. Admins only: installers never see this source.
  */
 
+/**
+ * One state per account for the NOC filters, by priority: terminated (account or customer),
+ * terminating, suspended (account or customer), services suspended, then the session.
+ */
+export type RadiusState = 'terminated' | 'terminating' | 'suspended' | 'services_suspended' | 'offline' | 'online' | 'unknown';
+
+export function radiusState(r: Pick<RadiusInfo, 'accountStatus' | 'customerStatus' | 'servicesSuspended' | 'online'>): RadiusState {
+  if (r.accountStatus === 'Terminato' || r.customerStatus === 'terminated') return 'terminated';
+  if (r.customerStatus === 'termination_in_progress') return 'terminating';
+  if (r.accountStatus === 'Sospeso' || r.customerStatus === 'suspended') return 'suspended';
+  if (r.servicesSuspended) return 'services_suspended';
+  return r.online === true ? 'online' : r.online === false ? 'offline' : 'unknown';
+}
+
 export interface RadiusInfo {
   accountId: string;
   customerId: string;
@@ -127,7 +141,8 @@ export function createCrmSync(db: Db, crm: CrmSettings, opts: { concurrency?: nu
       const previous = new Map((db.prepare('SELECT * FROM crm_radius').all() as Row[]).map((r) => [s(r.account_id), r]));
       const live = accounts.filter((a) => s(a.status) !== 'Terminato');
       const sessions = new Map<string, Row>();
-      const queue = [...live];
+      // terminated accounts too: their last session tells which CPE belonged to a ceased customer
+      const queue = [...accounts];
       const worker = async () => {
         for (let a = queue.shift(); a; a = queue.shift()) {
           try {
@@ -195,7 +210,7 @@ export function createCrmSync(db: Db, crm: CrmSettings, opts: { concurrency?: nu
             s(c?.status),
             s(c?.group_name),
             suspendedCustomers.has(s(a.customer_id)) ? 1 : 0,
-            s(a.status) === 'Terminato' ? null : online,
+            online,
             mac,
             st ? (s(st.client_ip) || null) : ((prev?.client_ip as string | null) ?? null),
             st ? (typeof st.session_duration === 'number' ? st.session_duration : null) : ((prev?.session_seconds as number | null) ?? null),
@@ -266,9 +281,12 @@ export function createCrmSync(db: Db, crm: CrmSettings, opts: { concurrency?: nu
 
     all,
 
-    /** Lookup maps for a page: by session MAC (excluding terminated accounts) and by PPPoE user. */
+    /**
+     * Lookup maps for a page: by session MAC and by PPPoE user. Terminated accounts are included
+     * (a ceased customer whose CPE is still on the network), a live account always wins.
+     */
     index() {
-      const rows = all().filter((r) => r.accountStatus !== 'Terminato');
+      const rows = all().sort((a, b) => Number(b.accountStatus === 'Terminato') - Number(a.accountStatus === 'Terminato'));
       return {
         byMac: new Map(rows.filter((r) => r.mac).map((r) => [r.mac!, r])),
         byUser: new Map(rows.map((r) => [r.username.toLowerCase(), r])),

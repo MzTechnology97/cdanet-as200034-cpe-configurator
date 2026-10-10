@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
-import { isSuspended, type RadiusInfo } from '../services/crm-sync.ts';
+import { isSuspended, radiusState, type RadiusInfo } from '../services/crm-sync.ts';
 import { distanceM, type LatLon } from '../domain/geo.ts';
 import { isAp } from '../services/uisp.ts';
 import { radiusView } from '../domain/health.ts';
@@ -31,7 +31,7 @@ export function crmRoutes(app: FastifyInstance, ctx: AppContext) {
   app.get('/api/admin/crm/radius', admin, async (req) => {
     const q = z
       .object({
-        filter: z.enum(['all', 'offline', 'suspended', 'unmatched']).default('all'),
+        filter: z.enum(['all', 'offline', 'suspended', 'unmatched', 'terminated']).default('all'),
         q: z.string().trim().max(80).default(''),
         limit: z.coerce.number().int().min(1).max(2000).default(500),
       })
@@ -51,16 +51,18 @@ export function crmRoutes(app: FastifyInstance, ctx: AppContext) {
     const needle = q.q.toLowerCase();
     const rows = ctx.crmSync
       .all()
-      .filter((r) => r.accountStatus !== 'Terminato')
+      // terminated accounts only on request: the CPEs of ceased customers still on the network
+      .filter((r) => (q.filter === 'terminated') === (r.accountStatus === 'Terminato'))
       .map((r) => {
         const mac = r.mac ?? jobByUser.get(r.username.toLowerCase()) ?? null;
         const cpe = mac ? cpeByMac.get(mac) ?? null : null;
-        return { ...r, suspended: isSuspended(r), cpe: cpe ? { mac, ...cpe } : null };
+        return { ...r, state: radiusState(r), suspended: isSuspended(r), cpe: cpe ? { mac, ...cpe } : null };
       })
       .filter((r) => {
         if (q.filter === 'offline' && !(r.online === false && !r.suspended)) return false;
         if (q.filter === 'suspended' && !r.suspended) return false;
         if (q.filter === 'unmatched' && r.cpe) return false;
+        if (q.filter === 'terminated' && !r.cpe) return false;
         return !needle || [r.username, r.customerName, r.profile, r.mac, r.clientIp, r.cpe?.name, r.cpe?.apName].some((v) => v?.toLowerCase().includes(needle));
       })
       .sort((a, b) => Number(b.suspended) - Number(a.suspended) || Number(a.online ?? 2) - Number(b.online ?? 2) || a.customerName.localeCompare(b.customerName));
