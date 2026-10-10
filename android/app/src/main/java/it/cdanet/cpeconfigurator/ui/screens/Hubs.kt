@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import androidx.compose.foundation.layout.widthIn
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -93,6 +94,7 @@ fun TabbedHub(tabs: List<HubTab>, selected: Int, onSelect: (Int) -> Unit) {
         return
     }
     val index = selected.coerceIn(0, tabs.lastIndex)
+    val compactTabs = androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp < 500
     Column(Modifier.fillMaxSize()) {
         if (tabs.size > 1) {
             PrimaryScrollableTabRow(selectedTabIndex = index, edgePadding = 12.dp, containerColor = MaterialTheme.colorScheme.surface) {
@@ -101,7 +103,8 @@ fun TabbedHub(tabs: List<HubTab>, selected: Int, onSelect: (Int) -> Unit) {
                         selected = i == index,
                         onClick = { onSelect(i) },
                         text = { Text(t.title, maxLines = 1) },
-                        icon = { Icon(painterResource(t.icon), contentDescription = null, modifier = Modifier.size(20.dp)) },
+                        // low screens (phones in landscape): text only, the content gets the height
+                        icon = if (compactTabs) null else { { Icon(painterResource(t.icon), contentDescription = null, modifier = Modifier.size(20.dp)) } },
                     )
                 }
             }
@@ -213,11 +216,19 @@ fun CpeHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit, onAcceptance
 @Composable
 fun LanHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit, onPortScan: (String) -> Unit) {
     val tabs = listOf(
-        HubTab("Host attivi", R.drawable.ic_radar) { WifiRequired(c, LAN_WIFI, "Lo scanner esamina la subnet della Wi-Fi collegata.") { IpScannerScreen(c, onPortScan = onPortScan) } },
-        HubTab("Discovery", R.drawable.ic_device_hub) { WifiRequired(c, LAN_WIFI, "La discovery funziona solo sulla stessa LAN.") { DiscoveryScreen(c) } },
-        HubTab("Porte", R.drawable.ic_manage_search) { WifiRequired(c, LAN_WIFI, "Le porte di host privati si verificano dalla stessa rete locale.") { PortScannerScreen(c) } },
+        HubTab("Host attivi", R.drawable.ic_radar, scroll = false) { WifiRequired(c, LAN_WIFI, "Lo scanner esamina la subnet della Wi-Fi collegata.") { IpScannerScreen(c, onPortScan = onPortScan) } },
+        HubTab("Discovery", R.drawable.ic_device_hub) { ReadingColumn { WifiRequired(c, LAN_WIFI, "La discovery funziona solo sulla stessa LAN.") { LanDiscoveryScreen(c) } } },
+        HubTab("Porte", R.drawable.ic_manage_search) { ReadingColumn { WifiRequired(c, LAN_WIFI, "Le porte di host privati si verificano dalla stessa rete locale.") { PortScannerScreen(c) } } },
     )
     TabbedHub(tabs, selected, onSelect)
+}
+
+/** On a wide screen, keeps a single-column tab at a readable width, centered. */
+@Composable
+private fun ReadingColumn(content: @Composable () -> Unit) {
+    Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.TopCenter) {
+        Box(Modifier.widthIn(max = 760.dp)) { content() }
+    }
 }
 
 @Composable
