@@ -55,6 +55,20 @@ export interface CpeView {
     ackDistanceM: number | null;
     autoChannelWidth: boolean | null;
   };
+  /** Editable wireless parameters (online CPEs only: the configuration is read from the device). */
+  wireless: null | {
+    ssid: string | null;
+    txPower: number | null;
+    txPowerRange: { min: number; max: number } | null;
+    atpc: boolean | null;
+    antennaGain: number | null;
+    cableLoss: number | null;
+    ackAuto: boolean | null;
+    ackDistanceM: number | null;
+    autoChannelWidth: boolean | null;
+    channelWidth: number | null;
+    channelWidths: number[];
+  };
   interfaces: Array<{ name: string; type: string | null; enabled: boolean | null; plugged: boolean | null; speed: string | null; addresses: string[] }>;
   latestBackup: { id: string; at: string | null } | null;
   location: { lat: number; lon: number } | null;
@@ -117,6 +131,21 @@ export function cpeView(detail: unknown, interfaces: unknown, wireless: unknown,
       ackDistanceM: num(w.ackDistance),
       autoChannelWidth: bool(w.isAutoChannelWidthEnabled),
     },
+    wireless: Object.keys(w).length
+      ? {
+          ssid: str(w.ssid),
+          txPower: num(w.txPower),
+          txPowerRange: num(obj(obj(obj(w.boardInfo).radio1).txPowerRange).min) !== null ? { min: num(obj(obj(obj(w.boardInfo).radio1).txPowerRange).min)!, max: num(obj(obj(obj(w.boardInfo).radio1).txPowerRange).max)! } : null,
+          atpc: bool(w.atpcEnabled),
+          antennaGain: num(w.antennaGain),
+          cableLoss: num(w.cableLoss),
+          ackAuto: bool(w.isACKAutoDistanceEnabled),
+          ackDistanceM: num(w.ackDistance),
+          autoChannelWidth: bool(w.isAutoChannelWidthEnabled),
+          channelWidth: num(w.channelWidth),
+          channelWidths: arr(obj(obj(w.boardInfo).radio1).channelWidthList).map(num).filter((x): x is number => x !== null),
+        }
+      : null,
     interfaces: arr(interfaces).map((i) => {
       const o = obj(i);
       const ident = obj(o.identification);
@@ -146,4 +175,59 @@ export function unmsWithMeta(current: unknown, change: { alias?: string | null; 
   if (change.note !== undefined) meta.note = change.note || null;
   if (change.maintenance !== undefined) meta.maintenance = change.maintenance;
   return { ...c, meta };
+}
+
+/** Wireless parameters an admin can change from the console or the app. */
+export interface WirelessChange {
+  ssid?: string;
+  txPower?: number;
+  atpc?: boolean;
+  antennaGain?: number;
+  cableLoss?: number;
+  ackAuto?: boolean;
+  ackDistanceM?: number;
+  autoChannelWidth?: boolean;
+  channelWidth?: number;
+}
+
+/**
+ * Body for PUT /devices/airmaxes/{id}/config/wireless: the configuration just read from the device
+ * (keys and secrets included, untouched) with only the requested parameters changed, checked
+ * against the limits of the radio. Throws a message in Italian when a value is out of range.
+ */
+export function wirelessWithChanges(current: unknown, c: WirelessChange): Record<string, unknown> {
+  const cfg = { ...obj(current) };
+  const radio = obj(obj(cfg.boardInfo).radio1);
+  const range = obj(radio.txPowerRange);
+  const widths = arr(radio.channelWidthList).map(num).filter((x): x is number => x !== null);
+  if (c.ssid !== undefined) {
+    if (!/^[ -~]{1,32}$/.test(c.ssid)) throw new Error('SSID non valido (1-32 caratteri)');
+    cfg.ssid = c.ssid;
+  }
+  if (c.txPower !== undefined) {
+    const min = num(range.min) ?? -10;
+    const max = num(range.max) ?? 30;
+    if (!Number.isInteger(c.txPower) || c.txPower < min || c.txPower > max) throw new Error(`Potenza TX fuori dai limiti della radio (${min}…${max} dBm)`);
+    cfg.txPower = c.txPower;
+  }
+  if (c.atpc !== undefined) cfg.atpcEnabled = c.atpc;
+  if (c.antennaGain !== undefined) {
+    if (c.antennaGain < 0 || c.antennaGain > 40) throw new Error('Guadagno antenna fuori dai limiti (0…40 dBi)');
+    cfg.antennaGain = c.antennaGain;
+  }
+  if (c.cableLoss !== undefined) {
+    if (c.cableLoss < 0 || c.cableLoss > 20) throw new Error('Perdita del cavo fuori dai limiti (0…20 dB)');
+    cfg.cableLoss = c.cableLoss;
+  }
+  if (c.ackAuto !== undefined) cfg.isACKAutoDistanceEnabled = c.ackAuto;
+  if (c.ackDistanceM !== undefined) {
+    if (c.ackDistanceM < 100 || c.ackDistanceM > 100_000) throw new Error('Distanza ACK fuori dai limiti (100…100000 m)');
+    cfg.ackDistance = Math.round(c.ackDistanceM);
+  }
+  if (c.autoChannelWidth !== undefined) cfg.isAutoChannelWidthEnabled = c.autoChannelWidth;
+  if (c.channelWidth !== undefined) {
+    if (widths.length && !widths.includes(c.channelWidth)) throw new Error(`Larghezza di canale non supportata (${widths.join(', ')} MHz)`);
+    cfg.channelWidth = c.channelWidth;
+  }
+  return cfg;
 }

@@ -546,6 +546,12 @@ export function createUisp(opts: UispOptions) {
     async airmaxWireless(deviceId: string) {
       return call('GET', `/devices/airmaxes/${encodeURIComponent(deviceId)}/config/wireless`).catch(() => null);
     },
+    /** Writes the whole airMAX wireless configuration back (read it first: it carries the keys). */
+    async setAirmaxWireless(deviceId: string, body: unknown) {
+      const r = await call('PUT', `/devices/airmaxes/${encodeURIComponent(deviceId)}/config/wireless`, body, false, 60_000);
+      invalidate();
+      return r;
+    },
     /** UISP settings of the device: alias, note, maintenance mode (and ping/transmission overrides). */
     async deviceUnms(deviceId: string) {
       return call('GET', `/devices/${encodeURIComponent(deviceId)}/system/unms`);

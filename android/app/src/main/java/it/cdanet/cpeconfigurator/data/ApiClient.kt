@@ -383,6 +383,11 @@ class ApiClient(
         request("POST", "/api/admin/cpe/${java.net.URLEncoder.encode(deviceId, "UTF-8")}/$action")
     }
 
+    /** Only the changed wireless parameters: the server rewrites the rest of the configuration as it is. */
+    suspend fun adminCpeWireless(deviceId: String, body: JsonObject) {
+        request("PUT", "/api/admin/cpe/${java.net.URLEncoder.encode(deviceId, "UTF-8")}/wireless", body)
+    }
+
     suspend fun adminCpeMeta(deviceId: String, alias: String?, note: String?, maintenance: Boolean) {
         request(
             "PUT",

@@ -4,7 +4,8 @@ import { z } from 'zod';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
-import { cpeView, unmsWithMeta } from '../domain/cpe-view.ts';
+import { cpeView, unmsWithMeta, wirelessWithChanges } from '../domain/cpe-view.ts';
+import { radiusState } from '../services/crm-sync.ts';
 import { isAp, isPtp } from '../services/uisp.ts';
 
 const RANGES = ['day', 'week', 'month'] as const;
@@ -36,6 +37,53 @@ export function cpeAdminRoutes(app: FastifyInstance, ctx: AppContext) {
     return d;
   }
 
+  /**
+   * The customer in ISP Billing (CRM connected): the RADIUS account of the CPE, by the MAC of its
+   * PPPoE session or by the PPPoE user of the installation, then the customer and the installation
+   * site. undefined = CRM not connected; null = no account found for this CPE.
+   */
+  function crmOf(mac: string | null, jobId: string | undefined) {
+    if (!ctx.crmSync.available()) return undefined;
+    const idx = ctx.crmSync.index();
+    const user = jobId ? (db.prepare('SELECT lower(pppoe_user) u FROM provisioning_jobs WHERE id = ?').get(jobId) as { u: string } | undefined)?.u : undefined;
+    const r = (mac ? idx.byMac.get(mac) : undefined) ?? (user ? idx.byUser.get(user) : undefined);
+    if (!r) return null;
+    const customer = db.prepare('SELECT * FROM crm_customers WHERE customer_id = ?').get(r.customerId) as Record<string, string> | undefined;
+    const site = (r.addressId ? db.prepare('SELECT * FROM crm_addresses WHERE address_id = ?').get(r.addressId) : db.prepare('SELECT * FROM crm_addresses WHERE customer_id = ? ORDER BY is_main DESC LIMIT 1').get(r.customerId)) as
+      | Record<string, string | number | null>
+      | undefined;
+    const addr = (o: Record<string, unknown>) => [o.address_line1, o.address_line2, [o.postal_code, o.city].filter(Boolean).join(' '), o.state_code].filter(Boolean).join(', ');
+    return {
+      account: {
+        username: r.username,
+        status: r.accountStatus,
+        state: radiusState(r),
+        profile: r.profile,
+        speed: r.speed,
+        staticIp: r.staticIp || null,
+        online: r.online,
+        clientIp: r.clientIp,
+        sessionSeconds: r.sessionSeconds,
+        checkedAt: r.checkedAt,
+      },
+      customer: customer
+        ? {
+            id: r.customerId,
+            name: customer.name || r.customerName,
+            code: customer.internal_code || null,
+            type: customer.type || null,
+            status: customer.status || r.customerStatus,
+            group: customer.group_name || r.customerGroup || null,
+            phone: customer.phone || null,
+            phone2: customer.phone2 || null,
+            email: customer.email || null,
+            address: addr(customer) || null,
+          }
+        : { id: r.customerId, name: r.customerName, code: null, type: null, status: r.customerStatus, group: r.customerGroup || null, phone: null, phone2: null, email: null, address: null },
+      site: site ? { description: (site.description as string) || null, address: addr(site) || null, lat: (site.lat as number | null) ?? null, lon: (site.lng as number | null) ?? null } : null,
+    };
+  }
+
   const log = (req: FastifyRequest, action: string, d: { id: string; name: string }, detail = '') => recordEvent(db, req.user!.id, `cpe.${action}`, d.id, [d.name, detail].filter(Boolean).join(' · '));
 
   app.get('/api/admin/cpe/:deviceId', admin, async (req) => {
@@ -54,7 +102,7 @@ export function cpeAdminRoutes(app: FastifyInstance, ctx: AppContext) {
           | { id: string; createdAt: string }
           | undefined)
       : undefined;
-    return { cpe: cpeView(detail, interfaces, wireless, unms), backups, job: job ?? null };
+    return { cpe: cpeView(detail, interfaces, wireless, unms), backups, job: job ?? null, crm: crmOf(d.mac, job?.id) };
   });
 
   app.get('/api/admin/cpe/:deviceId/statistics', admin, async (req) => {
@@ -115,6 +163,38 @@ export function cpeAdminRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!known) throw new HttpError(404, 'backup_not_found');
     await uisp().applyBackup(d.id, backupId);
     log(req, 'backup_apply', d, known.timestamp ? `backup del ${known.timestamp}` : backupId);
+    return { ok: true };
+  });
+
+  /** Wireless parameters: the configuration is read from the CPE and written back with only these changed. */
+  app.put('/api/admin/cpe/:deviceId/wireless', admin, async (req) => {
+    const d = await cpeOf(req);
+    const b = z
+      .object({
+        ssid: z.string().min(1).max(32).optional(),
+        txPower: z.number().int().optional(),
+        atpc: z.boolean().optional(),
+        antennaGain: z.number().min(0).max(40).optional(),
+        cableLoss: z.number().min(0).max(20).optional(),
+        ackAuto: z.boolean().optional(),
+        ackDistanceM: z.number().min(100).max(100_000).optional(),
+        autoChannelWidth: z.boolean().optional(),
+        channelWidth: z.number().int().optional(),
+      })
+      .strict()
+      .parse(req.body);
+    if (!Object.keys(b).length) throw new HttpError(400, 'nothing_to_change');
+    if (d.status !== 'active') throw new HttpError(409, 'cpe_offline');
+    const current = await uisp().airmaxWireless(d.id);
+    if (!current) throw new HttpError(409, 'wireless_config_unavailable');
+    let body: Record<string, unknown>;
+    try {
+      body = wirelessWithChanges(current, b);
+    } catch (e) {
+      throw new HttpError(400, 'wireless_value_out_of_range', { detail: (e as Error).message });
+    }
+    await uisp().setAirmaxWireless(d.id, body);
+    log(req, 'wireless', d, Object.entries(b).map(([k, v]) => `${k}=${v}`).join(', '));
     return { ok: true };
   });
 

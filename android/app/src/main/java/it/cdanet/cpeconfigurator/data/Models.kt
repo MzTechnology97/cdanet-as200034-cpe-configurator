@@ -300,7 +300,66 @@ data class CpeHealthItemDto(
 
 /** Admin "Stato CPE": one CPE as in the UISP app (GET /api/admin/cpe/{deviceId}); no Wi-Fi keys. */
 @Serializable
-data class AdminCpeDto(val cpe: AdminCpeViewDto, val backups: List<AdminBackupDto> = emptyList())
+data class AdminCpeDto(
+    val cpe: AdminCpeViewDto,
+    val backups: List<AdminBackupDto> = emptyList(),
+    /** The customer in ISP Billing; absent (null) when the CRM is not connected or no account matches. */
+    val crm: AdminCrmDto? = null,
+)
+
+@Serializable
+data class AdminCrmDto(val account: AdminCrmAccountDto, val customer: AdminCrmCustomerDto? = null, val site: AdminCrmSiteDto? = null)
+
+@Serializable
+data class AdminCrmAccountDto(
+    val username: String = "",
+    val status: String = "",
+    val state: String = "unknown",
+    val profile: String = "",
+    val speed: PlanSpeedDto? = null,
+    val staticIp: String? = null,
+    val online: Boolean? = null,
+    val clientIp: String? = null,
+    val checkedAt: String? = null,
+)
+
+@Serializable
+data class PlanSpeedDto(val down: Int = 0, val up: Int = 0)
+
+@Serializable
+data class AdminCrmCustomerDto(
+    val name: String = "",
+    val code: String? = null,
+    val type: String? = null,
+    val status: String? = null,
+    val group: String? = null,
+    val phone: String? = null,
+    val phone2: String? = null,
+    val email: String? = null,
+    val address: String? = null,
+)
+
+@Serializable
+data class AdminCrmSiteDto(val description: String? = null, val address: String? = null, val lat: Double? = null, val lon: Double? = null)
+
+/** Editable wireless parameters of a CPE (online only). */
+@Serializable
+data class AdminWirelessDto(
+    val ssid: String? = null,
+    val txPower: Double? = null,
+    val txPowerRange: TxRangeDto? = null,
+    val atpc: Boolean? = null,
+    val antennaGain: Double? = null,
+    val cableLoss: Double? = null,
+    val ackAuto: Boolean? = null,
+    val ackDistanceM: Double? = null,
+    val autoChannelWidth: Boolean? = null,
+    val channelWidth: Double? = null,
+    val channelWidths: List<Double> = emptyList(),
+)
+
+@Serializable
+data class TxRangeDto(val min: Double = -10.0, val max: Double = 30.0)
 
 @Serializable
 data class AdminCpeViewDto(
@@ -326,6 +385,7 @@ data class AdminCpeViewDto(
     val firmware: AdminFirmwareDto = AdminFirmwareDto(),
     val radio: AdminRadioDto = AdminRadioDto(),
     val interfaces: List<AdminInterfaceDto> = emptyList(),
+    val wireless: AdminWirelessDto? = null,
 )
 
 @Serializable

@@ -116,6 +116,11 @@ describe('Stato RADIUS dal CRM per il NOC', () => {
     const ap = net.pops.flatMap((p: { aps: object[] }) => p.aps).find((a: { id: string }) => a.id === 'ap-n2');
     assert.deepEqual(ap.pppoe, { online: 1, offline: 1, suspended: 0 });
 
+    // Stato CPE (admin): the customer from ISP Billing next to the UISP data
+    const card = (await call('GET', '/api/admin/cpe/cpe-1')).json();
+    assert.deepEqual([card.crm.account.username, card.crm.account.state, card.crm.account.speed], ['rossi@cda', 'online', { down: 30, up: 6 }]);
+    assert.ok(card.crm.customer.name, JSON.stringify(card.crm));
+
     // Clienti: records with their installation sites, PPPoE and CPE
     const list = (await call('GET', '/api/admin/crm/customers')).json();
     assert.equal(list.total, 3, 'customers with a live account (NERI is terminated)');
