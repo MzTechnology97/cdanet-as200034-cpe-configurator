@@ -37,6 +37,13 @@ describe('UISP client', () => {
     assert.ok(calls.every((c) => c.token === 'tok-secret'));
   });
 
+  it('tells where the altitude of each AP comes from', async () => {
+    const { uisp } = fakeUisp();
+    const src = await uisp.apAltitudeSources();
+    assert.equal(src.total, src.gps + src.siteHeight + src.fallback.length);
+    assert.ok(src.total >= 2);
+  });
+
   it('falls back to PUT when POST /authorize is not available', async () => {
     const { uisp, calls } = fakeUisp({ authorizeMethod: 'PUT' });
     await uisp.authorize('cpe-1', 'site-n2');
