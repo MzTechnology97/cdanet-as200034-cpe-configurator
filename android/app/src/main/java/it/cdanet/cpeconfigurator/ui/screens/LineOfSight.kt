@@ -53,14 +53,17 @@ fun LineOfSightDialog(c: AppContainer, lat: Double, lon: Double, apId: String, a
                                 "clear" -> "Visibilità libera: nessun rilievo sulla linea e zona di Fresnel libera."
                                 "fresnel" -> "Si vede, ma il terreno entra nella zona di Fresnel: il segnale può calare. " +
                                     if (d.raiseCpeM <= MAX_MAST_M) "Alza il palo di ${fmt(d.raiseCpeM)} m." else "Meglio un altro AP."
-                                else -> "Ostruita dal terreno a ${km(d.worst?.d ?: 0)} dalla CPE. " +
+                                else -> "Ostruita ${if (d.buildings) "da edifici" else "dal terreno"} a ${km(d.worst?.d ?: 0)} dalla CPE. " +
                                     if (d.raiseCpeM <= MAX_MAST_M) "Serve un palo più alto di ${fmt(d.raiseCpeM)} m oppure un altro AP." else "Nessun palo realistico la libera: scegli un altro AP."
                             },
                             when (d.verdict) { "clear" -> NoticeKind.Good; "fresnel" -> NoticeKind.Warn; else -> NoticeKind.Bad },
                         )
                         ProfileChart(d)
+                        if (d.foliageM > 0) Text("La linea di vista attraversa ${d.foliageM} m di vegetazione: il segnale cala per il fogliame.", style = MaterialTheme.typography.bodySmall)
                         Text(
-                            "${km(d.distanceM)} · CPE a ${fmt(d.cpeHeightM)} m dal suolo · ${d.frequencyMhz} MHz. Solo terreno: edifici e alberi non sono nel modello, verifica a vista.",
+                            "${km(d.distanceM)} · CPE a ${fmt(d.cpeHeightM)} m dal suolo · ${d.frequencyMhz} MHz. " +
+                                if (d.terrainSource == "tinitaly") "Terreno a 10 m con edifici (grigio) e alberi (verde) della mappa del suolo, ad altezze medie: verifica a vista."
+                                else "Solo terreno (modello a 30 m): edifici e alberi non sono nel calcolo, verifica a vista.",
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
@@ -83,7 +86,7 @@ private fun ProfileChart(d: LosDto) {
         if (pts.size < 2) return@Canvas
         val maxD = pts.last().d.toFloat().coerceAtLeast(1f)
         val lo = pts.minOf { minOf(it.ground, it.fresnel60) } - 5
-        val hi = pts.maxOf { maxOf(it.ground, it.los) } + 10
+        val hi = pts.maxOf { maxOf(it.top ?: it.ground, it.los) } + 10
         fun x(v: Int) = v / maxD * size.width
         fun y(v: Double) = ((hi - v) / (hi - lo) * size.height).toFloat()
         val terrain = Path().apply {
@@ -93,6 +96,13 @@ private fun ProfileChart(d: LosDto) {
             close()
         }
         drawPath(terrain, groundFill)
+        // obstacles of the land cover standing on the ground: buildings grey, trees green
+        val barW = (size.width / pts.size).coerceAtLeast(2f)
+        pts.forEach { p ->
+            val top = p.top ?: return@forEach
+            val color = if (p.obstacle == "edificio") ground.copy(alpha = 0.55f) else androidx.compose.ui.graphics.Color(0xFF2E7D32).copy(alpha = 0.45f)
+            drawRect(color, Offset(x(p.d) - barW / 2, y(top)), androidx.compose.ui.geometry.Size(barW, y(p.ground) - y(top)))
+        }
         drawPath(Path().apply { pts.forEachIndexed { i, p -> if (i == 0) moveTo(x(p.d), y(p.ground)) else lineTo(x(p.d), y(p.ground)) } }, ground, style = Stroke(2.dp.toPx()))
         // lower edge of 60% of the Fresnel zone (dashed) and the line of sight
         drawPath(
@@ -105,7 +115,7 @@ private fun ProfileChart(d: LosDto) {
         drawCircle(sight, 5.dp.toPx(), Offset(size.width, y(pts.last().los)))
         d.worst?.takeIf { d.verdict != "clear" }?.let { w ->
             val p = pts.minByOrNull { kotlin.math.abs(it.d - w.d) }!!
-            drawCircle(st.bad, 6.dp.toPx(), Offset(x(p.d), y(p.ground)))
+            drawCircle(st.bad, 6.dp.toPx(), Offset(x(p.d), y(if (p.obstacle == "edificio") p.top ?: p.ground else p.ground)))
         }
     }
 }

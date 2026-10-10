@@ -18,9 +18,11 @@ export const RATING = { buono: ['buono', 'good'], possibile: ['possibile', 'warn
 /** What the hills between the point and the AP do to the signal (same profile as Visibilità). */
 const TERRAIN = {
   clear: () => 'terreno libero fino all’AP',
-  fresnel: (db) => `una collina sfiora la linea di vista (−${Math.round(db)} dB)`,
-  blocked: (db) => `ostruito dal terreno (−${Math.round(db)} dB): verifica con Visibilità`,
+  fresnel: (db, t) => `${t.buildings ? 'degli edifici sfiorano' : 'una collina sfiora'} la linea di vista (−${Math.round(db)} dB)`,
+  blocked: (db, t) => `ostruito ${t.buildings ? 'da edifici' : 'dal terreno'} (−${Math.round(db)} dB): verifica con Visibilità`,
 };
+/** Terrain line, and the trees crossed by the line of sight (land cover). */
+const terrainText = (t) => [TERRAIN[t.verdict](t.lossDb - (t.foliageDb ?? 0), t), t.foliageM ? `attraversa ${t.foliageM} m di vegetazione (−${Math.round(t.foliageDb)} dB)` : null].filter(Boolean).join(' · ');
 
 /** Expected signal of a new CPE: theory, terrain and the customers already on the AP. */
 export function estimateCell(e) {
@@ -35,7 +37,7 @@ export function estimateCell(e) {
     e.inSector === false ? h('div', { class: 'small' }, 'fuori dal settore già servito') : null,
     e.beyondServed ? h('div', { class: 'small' }, 'più lontano dei clienti attuali') : null,
     e.tooFar ? h('div', { class: 'small' }, 'oltre 20 km: troppo lontano per un aggancio') : null,
-    e.terrain ? h('div', { class: 'small' }, TERRAIN[e.terrain.verdict](e.terrain.lossDb)) : null,
+    e.terrain ? h('div', { class: 'small' }, terrainText(e.terrain)) : null,
     e.theoretical
       ? h('div', { class: 'small muted' }, 'stima teorica: l’AP non ha ancora clienti')
       : e.basis != null

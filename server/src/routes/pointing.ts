@@ -7,7 +7,7 @@ import { approxPoint, roughDistance } from '../domain/approx.ts';
 import { distanceM, isValidLatLon } from '../domain/geo.ts';
 import { lineOfSight, pathPoints, resolveApAltitude } from '../domain/los.ts';
 import { MAX_LINK_M, rankCoverage, type ApModel } from '../domain/coverage-model.ts';
-import { estimateForAp, pointingConfig, terrainSampler } from '../services/terrain.ts';
+import { buildProfile, estimateForAp, obstacles, pointingConfig, profileEffect, terrainSampler } from '../services/terrain.ts';
 import { elevationAngle } from '../services/dem.ts';
 
 export { resolveApAltitude } from '../domain/los.ts';
@@ -63,9 +63,9 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
     const clientsShown = !keys || ctx.outages.config().installerClients;
     const height = q.height ?? c.cpeHeightM;
     // the terrain towards every AP, as in Visibilità: a hill in the way lowers the expected signal
-    const at = await terrainSampler(ctx.dem, [{ lat: q.lat, lon: q.lon }, ...inRange]);
+    const at = await terrainSampler(ctx.terrain, [{ lat: q.lat, lon: q.lon }, ...inRange]);
     const estimateFor = (a: (typeof inRange)[number]) => {
-      const e = estimateForAp(models.get(a.id), a, { lat: q.lat, lon: q.lon }, at, { cpeM: height, apM: c.apHeightM }, radio);
+      const e = estimateForAp(models.get(a.id), a, { lat: q.lat, lon: q.lon }, at, { cpeM: height, apM: c.apHeightM }, radio, obstacles(ctx));
       return e && { ...e, basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null };
     };
     const ranked = rankCoverage(
@@ -117,29 +117,39 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
       .parse(req.query);
     if (!isValidLatLon(q.lat, q.lon)) throw new HttpError(400, 'invalid_position');
     if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
-    if (!ctx.dem.enabled) throw new HttpError(503, 'dem_not_configured');
     const keys = req.user!.role === 'admin' ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
     const allow = keys ? (a: { id: string; siteId: string | null }) => keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`)) : undefined;
     // any AP within range: the list may have ranked a farther one first (admins: as far as Copertura goes)
     const aps = await ctx.uisp.nearestAps({ lat: q.lat, lon: q.lon }, 500, keys ? ctx.uispSettings.coverageMaxKm : 200, allow);
     const ap = aps.find((a) => a.id === q.apId);
     if (!ap) throw new HttpError(404, 'ap_not_found');
-    const D = distanceM({ lat: q.lat, lon: q.lon }, { lat: ap.lat, lon: ap.lon });
-    const n = Math.max(16, Math.min(96, Math.round(D / 60)));
-    const pts = pathPoints({ lat: q.lat, lon: q.lon }, { lat: ap.lat, lon: ap.lon }, n);
-    const ground = await Promise.all(pts.map((p) => ctx.dem.elevation(p.lat, p.lon)));
-    if (ground.some((g) => g === null)) throw new HttpError(503, 'dem_unavailable');
     const height = q.height ?? c.cpeHeightM;
-    const from = ground[0]! + height;
-    const { altitude } = resolveApAltitude(ap.gpsAltitude, ground[n]!, ap.siteHeight ?? c.apHeightM);
-    const freq = ap.frequency && ap.frequency > 1000 ? ap.frequency : 5600;
-    const r = lineOfSight(pts.map((p, i) => ({ d: p.f * D, ground: ground[i]! })), from, altitude ?? ground[n]! + c.apHeightM, freq);
+    // the same profile as the expected signal: TINITALY (or SRTM), buildings and trees of the land cover
+    const at = await terrainSampler(ctx.terrain, [{ lat: q.lat, lon: q.lon }, ap], 500);
+    if (!at) throw new HttpError(503, 'dem_not_configured');
+    const p = buildProfile(at, { lat: q.lat, lon: q.lon }, height, ap, c.apHeightM, obstacles(ctx), 25, 400);
+    if (!p) throw new HttpError(503, 'dem_unavailable');
+    const solid = p.d.map((d, i) => ({ d, ground: p.ground[i]! + (p.obstacle[i]?.kind === 'edificio' ? p.obstacle[i]!.h : 0) }));
+    const r = lineOfSight(solid, p.from, p.to, p.freq);
+    const effect = profileEffect(p);
+    // chart: bare ground (with the earth bulge) and the obstacle standing on it, for the drawing
+    const R_EFF = 6371000 * (4 / 3);
+    const chart = r.chart.map((pt, i) => {
+      const bulge = (p.d[i]! * (p.D - p.d[i]!)) / (2 * R_EFF);
+      const o = p.obstacle[i];
+      return { ...pt, ground: Math.round((p.ground[i]! + bulge) * 10) / 10, ...(o ? { obstacle: o.kind, top: Math.round((p.ground[i]! + bulge + o.h) * 10) / 10 } : {}) };
+    });
     return {
       ap: { id: ap.id, name: ap.name },
-      distanceM: keys ? roughDistance(D, ctx.cfg.installerDistanceStepM) : Math.round(D),
+      distanceM: keys ? roughDistance(p.D, ctx.cfg.installerDistanceStepM) : Math.round(p.D),
       cpeHeightM: height,
-      frequencyMhz: freq,
+      frequencyMhz: p.freq,
+      terrainSource: at.fine ? 'tinitaly' : 'srtm',
+      lossDb: effect.lossDb,
+      foliageM: effect.foliageM ?? 0,
+      buildings: effect.buildings ?? false,
       ...r,
+      chart,
     };
   });
 }

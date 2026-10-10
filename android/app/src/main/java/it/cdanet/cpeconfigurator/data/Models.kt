@@ -532,11 +532,25 @@ data class CoverageAp(
 /** What the app shows of a radio simulation (the map gets the whole answer). */
 /** Terrain between the point and the AP: the same profile as Visibilità. */
 @Serializable
-data class TerrainEffectDto(val verdict: String = "clear", val lossDb: Double = 0.0) {
-    fun describe(): String = when (verdict) {
-        "blocked" -> "ostruito dal terreno (−${Math.round(lossDb)} dB)"
-        "fresnel" -> "una collina sfiora la linea di vista (−${Math.round(lossDb)} dB)"
-        else -> "terreno libero"
+data class TerrainEffectDto(
+    val verdict: String = "clear",
+    val lossDb: Double = 0.0,
+    /** Tree crowns crossed by the line of sight (land cover), m and dB. */
+    val foliageM: Int? = null,
+    val foliageDb: Double? = null,
+    /** Buildings, not the bare ground, block or enter the Fresnel zone. */
+    val buildings: Boolean = false,
+) {
+    fun describe(): String {
+        val ground = Math.round(lossDb - (foliageDb ?: 0.0))
+        return listOfNotNull(
+            when (verdict) {
+                "blocked" -> if (buildings) "ostruito da edifici (−$ground dB)" else "ostruito dal terreno (−$ground dB)"
+                "fresnel" -> if (buildings) "degli edifici sfiorano la linea di vista (−$ground dB)" else "una collina sfiora la linea di vista (−$ground dB)"
+                else -> "terreno libero"
+            },
+            foliageM?.takeIf { it > 0 }?.let { "attraversa $it m di vegetazione (−${Math.round(foliageDb ?: 0.0)} dB)" },
+        ).joinToString(" · ")
     }
 }
 
@@ -749,7 +763,15 @@ data class ApiErrorDto(val error: String = "", val minVersion: String? = null, v
 
 /** Line of sight towards an AP over the terrain (chart points in metres). */
 @Serializable
-data class LosPointDto(val d: Int, val ground: Double, val los: Double, val fresnel60: Double)
+data class LosPointDto(
+    val d: Int,
+    val ground: Double,
+    val los: Double,
+    val fresnel60: Double,
+    /** Obstacle of the land cover standing on the ground here ("edificio", "alberi") and its top. */
+    val obstacle: String? = null,
+    val top: Double? = null,
+)
 
 @Serializable
 data class LosWorstDto(val d: Int = 0, val clearanceM: Double = 0.0, val fresnel60M: Double = 0.0)
@@ -763,6 +785,14 @@ data class LosDto(
     val worst: LosWorstDto? = null,
     val raiseCpeM: Double = 0.0,
     val chart: List<LosPointDto> = emptyList(),
+    /** "tinitaly" (10 m) or "srtm" (~30 m). */
+    val terrainSource: String = "srtm",
+    /** Total loss over the path (hills, buildings, trees), dB. */
+    val lossDb: Double = 0.0,
+    /** Metres of tree crowns crossed by the line of sight. */
+    val foliageM: Int = 0,
+    /** Buildings are what blocks or enters the Fresnel zone. */
+    val buildings: Boolean = false,
 )
 
 /** An airOS image of the target version the server offers for the field upgrade. */

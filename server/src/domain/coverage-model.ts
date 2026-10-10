@@ -35,7 +35,7 @@ interface Sample {
 
 export interface ApModel {
   samples: Sample[];
-  /** Customers left out: position on the AP itself or farther than any real link (UISP data to fix). */
+  /** Customers left out: on the AP itself (at the POP) or beyond 20 km: they say nothing about a new point. */
   ignored: number;
   /** Antenna sector: azimuth from UISP (with the beamwidth of the model) or the arc of the customers. */
   sector: { center: number; width: number } | null;
@@ -53,6 +53,11 @@ export interface ApModel {
 export interface TerrainEffect {
   verdict: 'clear' | 'fresnel' | 'blocked';
   lossDb: number;
+  /** Metres of the line of sight inside tree crowns (land cover), and their share of [lossDb]. */
+  foliageM?: number;
+  foliageDb?: number;
+  /** Buildings (land cover) are what blocks or enters the Fresnel zone, not the bare ground. */
+  buildings?: boolean;
 }
 
 export interface SignalEstimate {
@@ -157,7 +162,7 @@ const median = (v: number[]) => {
 /** The customers of one AP as the model uses them: plausible positions only. */
 function samplesOf(ap: LatLon, clients: ClientSample[]) {
   const all = clients.map((c) => ({ d: distanceM(ap, c), b: bearingDeg(ap, c), s: c.signal }));
-  // a CPE "on" the AP has the AP's or the site's position; one beyond any real link is misplaced
+  // a CPE at the AP itself (at the POP) or beyond 20 km says nothing about the coverage of a new point
   return { all, samples: all.filter((s) => s.d >= MIN_SAMPLE_M && s.d <= MAX_LINK_M) };
 }
 
