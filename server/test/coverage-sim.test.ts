@@ -24,6 +24,11 @@ describe('Copertura: radio simulation of an AP (admins)', () => {
     for (const c of s.cells) assert.ok(typeof c.dbm === 'number' && typeof c.lat === 'number' && typeof c.lon === 'number');
     if (s.cells.length) assert.ok(s.radiusM >= 1500 && s.cellM > 0);
 
+    // an AP with no customers: theoretical simulation instead of nothing
+    const fresh = (await app.inject({ method: 'GET', url: '/api/admin/coverage/simulation?apId=ap-n7', headers: H })).json();
+    assert.equal(fresh.theoretical, true, JSON.stringify({ ...fresh, cells: fresh.cells?.length }));
+    assert.ok(fresh.cells.length > 100);
+    assert.ok(fresh.cells.every((c: { confidence: string }) => c.confidence === 'bassa'));
     assert.equal((await app.inject({ method: 'GET', url: '/api/admin/coverage/simulation?apId=nope', headers: H })).statusCode, 404);
     assert.equal((await app.inject({ method: 'GET', url: '/api/admin/coverage/simulation?apId=ap-n2', headers: T })).statusCode, 403, 'installers: no simulation');
   });

@@ -64,6 +64,9 @@ const envSchema = z.object({
   PROVISION_JOB_TTL_MINUTES: int(30, 5, 240),
   // nearest APs an installer gets from a coverage check (web and app alike)
   INSTALLER_COVERAGE_APS: int(5, 1, 20),
+  // theoretical estimate for APs without customers: EIRP of the AP and gain of the CPE antenna
+  COVERAGE_AP_EIRP_DBM: int(30, 10, 60),
+  COVERAGE_CPE_GAIN_DBI: int(23, 0, 40),
   MIN_ANDROID_VERSION: z.string().regex(/^\d+\.\d+\.\d+$/).default('1.0.0'),
   // the Android app must be on the latest published release (older ones cannot log in)
   APP_FORCE_LATEST: z.enum(['0', '1']).default('1'),
@@ -142,6 +145,8 @@ export interface Config {
   };
   jobTtlMinutes: number;
   installerCoverageAps: number;
+  coverageEirpDbm: number;
+  coverageCpeGainDbi: number;
   minAndroidVersion: string;
   auditRetentionDays: number;
   releases: {
@@ -222,6 +227,8 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     },
     jobTtlMinutes: e.PROVISION_JOB_TTL_MINUTES,
     installerCoverageAps: e.INSTALLER_COVERAGE_APS,
+    coverageEirpDbm: e.COVERAGE_AP_EIRP_DBM,
+    coverageCpeGainDbi: e.COVERAGE_CPE_GAIN_DBI,
     minAndroidVersion: e.MIN_ANDROID_VERSION,
     auditRetentionDays: e.GDPR_AUDIT_RETENTION_DAYS,
     releases: {

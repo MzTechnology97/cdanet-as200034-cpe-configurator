@@ -27,7 +27,11 @@ export function estimateCell(e) {
     badge(`affidabilità ${e.confidence}`, CONF[e.confidence] ?? ''),
     e.inSector === false ? h('div', { class: 'small' }, 'fuori dal settore già servito') : null,
     e.beyondServed ? h('div', { class: 'small' }, 'più lontano dei clienti attuali') : null,
-    e.basis != null ? h('div', { class: 'small muted' }, `stima da ${e.basis} clienti${e.nearby ? `, ${e.nearby} vicini` : ''}`) : null,
+    e.theoretical
+      ? h('div', { class: 'small muted' }, 'stima teorica: l’AP non ha ancora clienti')
+      : e.basis != null
+        ? h('div', { class: 'small muted' }, `stima da ${e.basis} clienti${e.nearby ? `, ${e.nearby} vicini` : ''}`)
+        : null,
   );
 }
 

@@ -171,15 +171,18 @@ data class SignalEstimateDto(
     val basis: Int? = null,
     val beyondServed: Boolean = false,
     val nearby: Int? = null,
+    /** The AP has no customers yet: free-space estimate (less accurate). */
+    val theoretical: Boolean = false,
 ) {
-    /** "−63 dBm (−67…−59) · affidabilità alta · fuori dal settore servito", or null without customers. */
+    /** "−63 dBm (−67…−59) · affidabilità alta · fuori dal settore servito"; null if there is no estimate. */
     fun describe(): String? = signalDbm?.let { s ->
         listOfNotNull(
             "Segnale stimato $s dBm ($low…$high)",
             "affidabilità $confidence",
             if (inSector == false) "fuori dal settore servito" else null,
             if (beyondServed) "più lontano dei clienti attuali" else null,
-            basis?.let { b -> "da $b clienti" },
+            // no customers on the AP yet: free-space estimate from the radio parameters
+            if (theoretical) "stima teorica: AP senza clienti" else basis?.let { b -> "da $b clienti" },
         ).joinToString(" · ")
     }
 }
