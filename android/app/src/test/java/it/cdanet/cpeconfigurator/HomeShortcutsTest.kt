@@ -2,6 +2,7 @@ package it.cdanet.cpeconfigurator
 
 import it.cdanet.cpeconfigurator.ui.Screen
 import it.cdanet.cpeconfigurator.ui.screens.DEFAULT_SHORTCUTS
+import it.cdanet.cpeconfigurator.ui.screens.hubTabTitles
 import it.cdanet.cpeconfigurator.ui.screens.moveShortcut
 import it.cdanet.cpeconfigurator.ui.screens.resolveShortcuts
 import it.cdanet.cpeconfigurator.ui.screens.shortcutCatalog
@@ -54,6 +55,28 @@ class HomeShortcutsTest {
         val ids = shortcutCatalog(all, admin = true, offline = false).map { it.id }
         assertEquals(ids.size, ids.toSet().size)
         assertTrue(DEFAULT_SHORTCUTS.all { it in ids })
+    }
+
+    @Test
+    fun everyShortcutLandsOnARealTab() {
+        for (admin in listOf(true, false)) {
+            for (s in shortcutCatalog(all, admin, offline = false)) {
+                val tab = s.dest.tab ?: continue
+                assertTrue("${s.id} → ${s.dest.screen}/$tab", tab in hubTabTitles(s.dest.screen, all, admin))
+            }
+        }
+    }
+
+    @Test
+    fun everyToolHasAShortcut() {
+        // every entry of Strumenti and every tab of the customer's-network tools
+        val ids = shortcutCatalog(all, admin = false, offline = false).map { it.id }
+        val tools = listOf("cpe", "lan", "lan_discovery", "ports", "wifi", "net_diag", "net_diag_adv", "devices", "snmp", "cameras", "routeros", "remote", "guide")
+        assertEquals(emptyList<String>(), tools - ids.toSet())
+        assertTrue("search" in ids && "settings" in ids)
+        // without login: the local tools and Impostazioni, Scansione LAN first among them
+        val offline = shortcutCatalog(all, admin = false, offline = true).map { it.id }
+        assertEquals(listOf("lan", "lan_discovery", "ports", "wifi", "net_diag", "net_diag_adv", "devices", "snmp", "cameras", "routeros", "remote", "settings"), offline)
     }
 
     @Test

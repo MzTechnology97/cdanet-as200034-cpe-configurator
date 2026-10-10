@@ -49,6 +49,7 @@ import it.cdanet.cpeconfigurator.ui.ErrorBanner
 import it.cdanet.cpeconfigurator.ui.ListHeader
 import it.cdanet.cpeconfigurator.ui.Notice
 import it.cdanet.cpeconfigurator.ui.NoticeKind
+import it.cdanet.cpeconfigurator.ui.Screen
 import it.cdanet.cpeconfigurator.ui.StatusChip
 import it.cdanet.cpeconfigurator.ui.WifiRequired
 import kotlinx.coroutines.launch
@@ -184,13 +185,29 @@ fun CpeHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit, onAcceptance
     TabbedHub(tabs, selected, onSelect)
 }
 
+/** Tabs of the customer's-network tools (pure: Home shortcuts open one of them). */
+val LAN_TABS = listOf("Host attivi", "Discovery", "Porte")
+val DIAG_TABS = listOf("Base", "Avanzata")
+val DEVICES_TABS = listOf("SNMP", "TVCC")
+
+/** Tabs of an area with tabs (empty for a plain screen): where a Home shortcut lands. */
+fun hubTabTitles(s: Screen, m: Map<String, Boolean>, admin: Boolean): List<String> = when (s) {
+    Screen.Installations -> installTabTitles(m, admin)
+    Screen.NetHub -> networkTabTitles(m)
+    Screen.CpeHub -> cpeTabTitles(m)
+    Screen.Lan -> LAN_TABS
+    Screen.Diag -> DIAG_TABS
+    Screen.Devices -> DEVICES_TABS
+    else -> emptyList()
+}
+
 /** Network tools grouped: 6 entries instead of 10. */
 @Composable
 fun LanHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit, onPortScan: (String) -> Unit) {
     val tabs = listOf(
-        HubTab("Host attivi", R.drawable.ic_radar, scroll = false) { WifiRequired(c, LAN_WIFI, "Lo scanner esamina la subnet della Wi-Fi collegata.") { IpScannerScreen(c, onPortScan = onPortScan) } },
-        HubTab("Discovery", R.drawable.ic_device_hub) { ReadingColumn { WifiRequired(c, LAN_WIFI, "La discovery funziona solo sulla stessa LAN.") { LanDiscoveryScreen(c) } } },
-        HubTab("Porte", R.drawable.ic_manage_search) { ReadingColumn { WifiRequired(c, LAN_WIFI, "Le porte di host privati si verificano dalla stessa rete locale.") { PortScannerScreen(c) } } },
+        HubTab(LAN_TABS[0], R.drawable.ic_radar, scroll = false) { WifiRequired(c, LAN_WIFI, "Lo scanner esamina la subnet della Wi-Fi collegata.") { IpScannerScreen(c, onPortScan = onPortScan) } },
+        HubTab(LAN_TABS[1], R.drawable.ic_device_hub) { ReadingColumn { WifiRequired(c, LAN_WIFI, "La discovery funziona solo sulla stessa LAN.") { LanDiscoveryScreen(c) } } },
+        HubTab(LAN_TABS[2], R.drawable.ic_manage_search) { ReadingColumn { WifiRequired(c, LAN_WIFI, "Le porte di host privati si verificano dalla stessa rete locale.") { PortScannerScreen(c) } } },
     )
     TabbedHub(tabs, selected, onSelect)
 }
@@ -207,8 +224,8 @@ private fun ReadingColumn(content: @Composable () -> Unit) {
 fun DiagHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit) {
     TabbedHub(
         listOf(
-            HubTab("Base", R.drawable.ic_speed) { NetworkScreen(c) },
-            HubTab("Avanzata", R.drawable.ic_query_stats) { NetDiagScreen(c) },
+            HubTab(DIAG_TABS[0], R.drawable.ic_speed) { NetworkScreen(c) },
+            HubTab(DIAG_TABS[1], R.drawable.ic_query_stats) { NetDiagScreen(c) },
         ),
         selected,
         onSelect,
@@ -219,8 +236,8 @@ fun DiagHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit) {
 fun DevicesHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit) {
     TabbedHub(
         listOf(
-            HubTab("SNMP", R.drawable.ic_memory) { WifiRequired(c, LAN_WIFI, "Gli apparati SNMP si interrogano in rete locale.") { SnmpScreen(c) } },
-            HubTab("TVCC", R.drawable.ic_videocam) { WifiRequired(c, "alla Wi-Fi della rete delle telecamere", "ONVIF, SADP e RTSP funzionano sulla rete locale.") { CameraScreen(c) } },
+            HubTab(DEVICES_TABS[0], R.drawable.ic_memory) { WifiRequired(c, LAN_WIFI, "Gli apparati SNMP si interrogano in rete locale.") { SnmpScreen(c) } },
+            HubTab(DEVICES_TABS[1], R.drawable.ic_videocam) { WifiRequired(c, "alla Wi-Fi della rete delle telecamere", "ONVIF, SADP e RTSP funzionano sulla rete locale.") { CameraScreen(c) } },
         ),
         selected,
         onSelect,
