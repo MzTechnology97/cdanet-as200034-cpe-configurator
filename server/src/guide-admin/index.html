@@ -153,6 +153,13 @@
 <p>Le notifiche partono su Telegram (gruppo del NOC e personali) e sul telefono (app → Guasti Enel → "Avvisami dei guasti").</p>
 <p><b>Stato rete</b>: tutti i POP e gli AP, raggiungibili o no, con molte CPE offline (almeno il 30%, probabile problema di settore) e guasto Enel vicino.</p>
 <p>Sulla mappa un <b>clic</b> su un AP mostra le sue informazioni; un <b>doppio clic</b> apre o chiude il suo <b>fascio</b>, cioè l'area già servita dai clienti (puoi aprirne più di uno, <i>Chiudi tutti i fasci</i> li richiude). I pulsanti <i>in funzione</i>, <i>molte CPE offline</i> e <i>non raggiungibile</i> mostrano o nascondono gli AP in quello stato, sulla mappa e nella lista; la ricerca filtra entrambe e con Invio porta la mappa sul primo risultato. Nella lista gli AP sono raggruppati per POP, con le CPE online, l'ultimo contatto e i pulsanti <i>Mappa</i> e <i>Fascio</i>.</p>
+<p><b>Copertura</b> (solo amministratori; gli installatori hanno la loro verifica, con i limiti di Impostazioni server):</p>
+<ul>
+  <li><b>Una sola ricerca</b>: scrivi un indirizzo, delle coordinate (<i>37.56, 14.27</i>) o il nome di un AP, oppure clicca sulla mappa, che mostra tutti gli AP.</li>
+  <li><b>AP consigliati per il punto</b>: il server valuta tutti gli AP entro la distanza scelta e li ordina per segnale stimato. In cima c'è il giudizio (copertura probabile, da verificare, improbabile). Quelli improbabili o spenti restano chiusi sotto <i>Altri AP nel raggio</i>.</li>
+  <li><b>Simula</b> (anche dal clic su un AP della mappa): colora l'area attorno all'AP con il segnale atteso per una CPE nuova, stimato dai clienti già collegati (scala da oltre −60 a sotto −80 dBm, tratteggio: area già servita). Non considera gli ostacoli.</li>
+  <li><b>Visibilità</b>: profilo del terreno dal punto all'AP con la linea di vista e il 60% della zona di Fresnel, all'<b>altezza della CPE</b> indicata per quel punto. Dice se la linea è libera, quanto alzare la CPE o, oltre un palo di 12 m, di scegliere un altro AP.</li>
+</ul>
 <figure><img data-guide="admin-outages.jpg" alt="Guasti Enel"><figcaption>Guasti Enel: un guasto MT a 556 m dal POP Demo Monte.</figcaption></figure>
 <figure><img data-guide="admin-network.jpg" alt="Stato rete"><figcaption>Stato rete.</figcaption></figure>
 
