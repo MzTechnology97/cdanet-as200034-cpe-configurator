@@ -283,6 +283,7 @@ private fun ToDoPanel(c: AppContainer, onResume: () -> Unit, onAcceptance: (JobD
     val prov by c.provisioning.state.collectAsState()
     val install by c.install.state.collectAsState()
     val pending by c.resultQueue.pending.collectAsState()
+    val refused by c.resultQueue.rejected.collectAsState()
     val acc by c.acceptanceQueue.pending.collectAsState()
     var jobs by remember { mutableStateOf<List<JobDto>?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
@@ -296,6 +297,13 @@ private fun ToDoPanel(c: AppContainer, onResume: () -> Unit, onAcceptance: (JobD
     val items = jobs?.let { toDoItems(it) }.orEmpty()
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ErrorBanner(error) { error = null }
+        // results sent from the queue and refused by the server: never silently lost
+        refused.forEach { r ->
+            it.cdanet.cpeconfigurator.ui.Notice(
+                "Esito di ${r.label} rifiutato dal server: ${r.reason}. Rifai l'installazione o avvisa il NOC.",
+                it.cdanet.cpeconfigurator.ui.NoticeKind.Bad,
+            ) { scope.launch { c.resultQueue.dismissRejected(r.jobId) } }
+        }
         if (jobs == null && busy) it.cdanet.cpeconfigurator.ui.SkeletonRows(3)
         ListHeader(if (jobs == null) "Da completare" else if (items.isEmpty()) "Tutto in ordine" else "${items.size} da completare", busy) { scope.launch { load() } }
         if (install.mode != null || (prov.pkg != null && prov.phase != Phase.Done)) {
