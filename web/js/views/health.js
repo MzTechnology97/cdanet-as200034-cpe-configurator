@@ -111,6 +111,8 @@ export async function healthView({ user }) {
     h('option', { value: 'all' }, 'Tutte'),
     ...Object.entries(admin ? ALL_ISSUES : ISSUES).map(([k, [label]]) => h('option', { value: k }, `Solo: ${label}`)),
   );
+  // online/offline now (UISP), together with the problem filter
+  const state = h('select', {}, h('option', { value: '' }, 'Tutte'), h('option', { value: 'online' }, 'Online'), h('option', { value: 'offline' }, 'Offline'));
   const origin = h(
     'select',
     {},
@@ -138,6 +140,8 @@ export async function healthView({ user }) {
     const term = q.value.trim().toLowerCase();
     return data.cpes
       .filter((c) => (filter.value === 'all' ? true : filter.value === 'issues' ? c.issues.length > 0 : c.issues.includes(filter.value)))
+      // not found in the network: neither online nor offline (a problem of its own)
+      .filter((c) => !state.value || (state.value === 'online' ? c.now?.status === 'active' : !!c.now && c.now.status !== 'active'))
       .filter((c) => (origin.value === 'app' ? c.source === 'app' : origin.value === 'uisp' ? c.source === 'uisp' : origin.value === 'assigned' ? !!c.assignedTo : origin.value === 'unassigned' ? !c.assignedTo : true))
       .filter((c) => !fw.value || (fw.value.startsWith('v:') ? c.firmware?.version === fw.value.slice(2) : c.firmware?.state === fw.value))
       .filter((c) => !account.value || (account.value === 'none' ? 'radius' in c && !c.radius : c.radius?.state === account.value))
@@ -351,6 +355,7 @@ export async function healthView({ user }) {
     render();
   }
   filter.onchange = render;
+  state.onchange = render;
   origin.onchange = render;
   fw.onchange = render;
   account.onchange = render;
@@ -376,7 +381,7 @@ export async function healthView({ user }) {
       csv,
     ),
     card(
-      h('div', { class: 'row' }, field('Mostra', filter), field('Origine', origin), field('Firmware', fw), field('Cerca', q)),
+      h('div', { class: 'row' }, field('Stato', state), field('Problemi', filter), field('Origine', origin), field('Firmware', fw), field('Cerca', q)),
       // customer state and plan: admins with ISP Billing connected (the selects stay empty otherwise)
       admin ? h('div', { class: 'row crm-filters' }, field('Stato cliente (ISP Billing)', account), field('Profilo RADIUS', plan)) : null,
     ),
