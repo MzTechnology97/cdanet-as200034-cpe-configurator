@@ -63,6 +63,10 @@ class AppContainer(context: Context) {
     /** Host chosen in the IP scanner for the port scanner. */
     val portScanTarget = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
+    /** Admin "Gestione CPE": the UISP device to show, and a request to open the screen. */
+    val adminCpeId = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
+    val openAdminCpe = kotlinx.coroutines.flow.MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+
     /** AP selected in Copertura for the compass. */
     val compassTarget = kotlinx.coroutines.flow.MutableStateFlow<it.cdanet.cpeconfigurator.field.CompassTarget?>(null)
 
