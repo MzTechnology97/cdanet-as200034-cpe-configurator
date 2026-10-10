@@ -25,6 +25,7 @@ ctx.notify.start();
 ctx.outages.start();
 ctx.crmSync.start();
 ctx.apLoad.start();
+ctx.optimizer.start();
 
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, 'shutting down');
@@ -32,6 +33,7 @@ const shutdown = async (signal: string) => {
   ctx.outages.stop();
   ctx.crmSync.stop();
   ctx.apLoad.stop();
+  ctx.optimizer.stop();
   stopSync();
   clearInterval(housekeeping);
   await app.close();

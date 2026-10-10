@@ -907,3 +907,49 @@ data class AdvisorFindingDto(
 
 @Serializable
 data class AdvisorCpeDto(val id: String? = null, val name: String = "", val mac: String? = null)
+
+/** IA-AP automatic optimisation: state and the last runs (newest first). */
+@Serializable
+data class OptimizerDto(val enabled: Boolean = false, val active: String? = null, val runs: List<OptimizerRunDto> = emptyList())
+
+@Serializable
+data class ChannelDto(val centre: Int, val width: Int)
+
+@Serializable
+data class LinkSummaryDto(
+    val stations: Int = 0,
+    val capacityMbps: Int = 0,
+    val medianSnrDb: Double? = null,
+    val weakestDbm: Double? = null,
+)
+
+@Serializable
+data class TryResultDto(
+    val centre: Int,
+    val width: Int,
+    val verdict: String = "",
+    val capacityRatio: Double? = null,
+    val missing: List<String> = emptyList(),
+    val after: LinkSummaryDto = LinkSummaryDto(),
+)
+
+@Serializable
+data class OptimizerRunDto(
+    val id: String,
+    val apName: String = "",
+    val mode: String = "",
+    val by: String = "",
+    val requestedAt: String = "",
+    val startAt: String = "",
+    val state: String = "",
+    val step: String = "",
+    val original: ChannelDto? = null,
+    val candidates: List<ChannelDto> = emptyList(),
+    val baseline: LinkSummaryDto? = null,
+    val results: List<TryResultDto> = emptyList(),
+    val outcome: String? = null,
+    val kept: ChannelDto? = null,
+    val missing: List<String> = emptyList(),
+    val endedAt: String? = null,
+    val error: String? = null,
+)
