@@ -134,6 +134,8 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
     var typeFilter by remember { mutableStateOf<it.cdanet.cpeconfigurator.tools.topology.DeviceType?>(null) }
     var options by remember { mutableStateOf(false) }
     var topoSettings by remember { mutableStateOf(false) }
+    /** Debug "Dati di esempio": the fictitious office Wi-Fi in the panel instead of the real one. */
+    var demo by remember { mutableStateOf(false) }
     var startedAt by remember { mutableStateOf(0L) }
     var elapsed by remember { mutableStateOf(0L) }
     var useSnmp by remember { mutableStateOf(true) }
@@ -213,6 +215,7 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
         topo = null
         selectedNode = null
         typeFilter = null
+        demo = false
         live.clear()
         startedAt = System.currentTimeMillis()
         elapsed = 0
@@ -267,10 +270,10 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
                     ScanRadar(shownOnRadar, job != null || topoBusy != null, progress?.let { if (it.total > 0) it.done / it.total.toFloat() else null }, size = 128.dp)
                     Spacer(Modifier.width(14.dp))
                     Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-                        MonoFact("Wi-Fi", link?.wifiSsid?.trim('"') ?: "—")
-                        MonoFact("Questo telefono", link?.addresses?.firstOrNull { it.contains('.') } ?: "—")
-                        MonoFact("Gateway", link?.gateway ?: "—")
-                        MonoFact("DNS", link?.dns?.firstOrNull { it.contains('.') } ?: "—")
+                        MonoFact("Wi-Fi", if (demo) "CDA-UFFICIO" else link?.wifiSsid?.trim('"') ?: "—")
+                        MonoFact("Questo telefono", if (demo) "192.168.88.199/24" else link?.addresses?.firstOrNull { it.contains('.') } ?: "—")
+                        MonoFact("Gateway", if (demo) TopologyDemo.GATEWAY else link?.gateway ?: "—")
+                        MonoFact("DNS", if (demo) TopologyDemo.GATEWAY else link?.dns?.firstOrNull { it.contains('.') } ?: "—")
                     }
                 }
                 Field("Subnet (fino a /22)", cidr, { cidr = it.trim() }, keyboardType = KeyboardType.Uri, leadingIcon = R.drawable.ic_lan)
@@ -301,6 +304,15 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
                     Modifier.fillMaxWidth(),
                 ) { start() }
                 else OutlinedButton(onClick = { job?.cancel() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Interrompi") }
+                // debug builds only: the fictitious office LAN (guide screenshots, tries without a network)
+                if (BuildConfig.DEBUG && hosts.isEmpty() && job == null) TextButton(onClick = {
+                    cidr = "192.168.88.0/24"
+                    demo = true
+                    val result = Topology.build(TopologyDemo.hosts, TopologyDemo.snmp, TopologyDemo.GATEWAY, fingerprints = TopologyDemo.fingerprints)
+                    val list = it.cdanet.cpeconfigurator.tools.topology.hostsFromGraph(TopologyDemo.scannerHosts, result.graph)
+                    hosts += list
+                    topo = TopologyRun(result, TopologyDemo.found, list, TopologyDemo.snmp)
+                }) { Text("Dati di esempio (solo build di sviluppo)") }
                 // phase 2: SNMP, discovery and fingerprints right after the scan (no fixed length)
                 if (job == null) topoBusy?.let { phase ->
                     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -648,6 +660,12 @@ fun PortScannerScreen(c: AppContainer) {
                 SwitchRow("Mostra anche porte chiuse/filtrate", showClosed) { showClosed = it }
                 if (job == null) BusyButton("Avvia scansione", false, Modifier.fillMaxWidth()) { start() }
                 else OutlinedButton(onClick = { job?.cancel() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Interrompi") }
+                // debug builds only: the demo router (guide screenshots)
+                if (BuildConfig.DEBUG && job == null && results.isEmpty()) TextButton(onClick = {
+                    host = TopologyDemo.GATEWAY
+                    results = TopologyDemo.routerPorts
+                    elapsed = 2300
+                }) { Text("Dati di esempio (solo build di sviluppo)") }
                 if (job != null && done.second > 0) {
                     LinearProgressIndicator(progress = { done.first / done.second.toFloat() }, modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)))
                     Text("${done.first}/${done.second} porte · ${openLive.size} aperte", style = MaterialTheme.typography.labelSmall, fontFamily = FontFamily.Monospace)

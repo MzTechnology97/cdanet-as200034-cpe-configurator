@@ -1,6 +1,7 @@
 package it.cdanet.cpeconfigurator.tools.topology
 
 import it.cdanet.cpeconfigurator.tools.UbntDevice
+import it.cdanet.cpeconfigurator.tools.pro.PortState
 import it.cdanet.cpeconfigurator.tools.pro.ScanHost
 
 /**
@@ -103,4 +104,75 @@ object TopologyDemo {
             wireless = listOf(WirelessPeer(mac(20), "AP-cortile", "192.168.88.20", -59)),
         ),
     )
+
+    /** Open ports of the demo devices, for the scanner's "Dati di esempio" (guide screenshots). */
+    private val openPorts: Map<String, List<Int>> = mapOf(
+        GATEWAY to listOf(22, 53, 80, 8291),
+        "192.168.88.2" to listOf(80, 443),
+        "192.168.88.3" to listOf(80),
+        "192.168.88.4" to listOf(22, 443),
+        "192.168.88.20" to listOf(22, 80, 443),
+        "192.168.88.21" to listOf(22, 80, 443),
+        "192.168.88.22" to listOf(22, 80, 443),
+        "192.168.88.50" to listOf(80, 554, 8000),
+        "192.168.88.51" to listOf(80, 554, 8000),
+        "192.168.88.52" to listOf(80, 554, 8000),
+        "192.168.88.70" to listOf(80, 554, 37777),
+        "192.168.88.100" to listOf(139, 445, 3389),
+        "192.168.88.101" to listOf(139, 445),
+        "192.168.88.102" to listOf(139, 445, 3389),
+        "192.168.88.110" to listOf(80, 443, 631, 9100),
+        "192.168.88.120" to listOf(22, 80, 443, 445, 5000),
+        "192.168.88.130" to listOf(80, 443, 5060),
+        "192.168.88.140" to listOf(62078),
+        "192.168.88.150" to listOf(8001, 8002),
+    )
+
+    /** The demo LAN as the scanner sees it: same devices, with their open ports. */
+    val scannerHosts: List<ScanHost> get() = hosts.map { it.copy(ports = openPorts[it.ip].orEmpty(), how = "TCP") }
+
+    /** What the vendor discovery protocols answer on the demo LAN. */
+    val found: List<it.cdanet.cpeconfigurator.tools.discovery.Found> = run {
+        fun f(ip: String, p: String, v: String, name: String? = null, model: String? = null, mac: String? = null, fw: String? = null, details: Map<String, String> = emptyMap()) =
+            it.cdanet.cpeconfigurator.tools.discovery.Found(ip, p, v, name, model, mac, fw, details)
+        listOf(
+            f(GATEWAY, "MNDP", "MikroTik", "router-ufficio", "RB4011iGS+", mac(1), "7.16.1", mapOf("Interfaccia" to "bridge-lan")),
+            f(GATEWAY, "SSDP", "UPnP", "router-ufficio", "RouterOS", details = mapOf("Tipo" to "InternetGatewayDevice")),
+            f("192.168.88.20", "Ubiquiti", "Ubiquiti", "AP-cortile", "LiteAP AC", mac(20), "XC.v8.7.11", mapOf("SSID" to "CDA-UFFICIO", "Uptime" to "10 g 0 h")),
+            f("192.168.88.21", "Ubiquiti", "Ubiquiti", "PBE-capannone", "PowerBeam 5AC Gen2", mac(21), "XC.v8.7.11", mapOf("SSID" to "CDA-UFFICIO", "Uptime" to "6 g 22 h")),
+            f("192.168.88.22", "Ubiquiti", "Ubiquiti", "NBE-custode", "NanoBeam 5AC Gen2", mac(22), "XC.v8.7.11", mapOf("SSID" to "CDA-UFFICIO", "Uptime" to "5 g 18 h")),
+            f("192.168.88.50", "SADP", "Hikvision", "NVR-ufficio", "DS-7608NI-K2", mac(50), "V4.62.210"),
+            f("192.168.88.51", "SADP", "Hikvision", "cam-ingresso", "DS-2CD2143G2-I", mac(51), "V5.7.3"),
+            f("192.168.88.51", "ONVIF", "ONVIF", "cam-ingresso", "DS-2CD2143G2-I"),
+            f("192.168.88.52", "SADP", "Hikvision", "cam-parcheggio", "DS-2CD2T47G2-L", mac(52), "V5.7.3"),
+            f("192.168.88.70", "Dahua", "Dahua", "cam-capannone", "IPC-HDW2431T-AS", mac(70), "2.800.0000000.33"),
+            f("192.168.88.70", "ONVIF", "ONVIF", "cam-capannone", "IPC-HDW2431T-AS"),
+            f("192.168.88.110", "WSD", "WS-Discovery", "stampante-piano1", "Brother HL-L2350DW", details = mapOf("Tipo" to "Stampante")),
+            f("192.168.88.110", "mDNS", "mDNS", "stampante-piano1", "Brother HL-L2350DW", details = mapOf("Servizio" to "_ipp._tcp")),
+            f("192.168.88.120", "mDNS", "Synology", "NAS-backup", "DS220+", details = mapOf("Servizio" to "_smb._tcp")),
+            f("192.168.88.3", "NSDP", "Netgear", "sw-magazzino", "GS108Tv3", mac(3), "7.0.0.15"),
+            f("192.168.88.150", "SSDP", "Samsung", "Smart TV sala", "QE55Q60", details = mapOf("Tipo" to "MediaRenderer")),
+        )
+    }
+
+    /** The demo router seen by the port scanner ("Rapida" profile), for the guide screenshots. */
+    val routerPorts: List<it.cdanet.cpeconfigurator.tools.pro.PortResult> = run {
+        val open = mapOf(
+            22 to ("SSH-2.0-ROSSSH" to null),
+            53 to (null to null),
+            80 to ("HTTP/1.1 200 OK · Server: (none) · RouterOS router configuration page" to null),
+            443 to ("HTTP/1.1 200 OK · RouterOS" to "TLSv1.3 · CN router-ufficio · autofirmato · scade 03/2027"),
+            8291 to (null to null),
+            8728 to (null to null),
+        )
+        val closed = setOf(21, 23, 25, 110, 143, 993, 8080, 8443)
+        it.cdanet.cpeconfigurator.tools.pro.Ports.PRESETS.values.first().sorted().map { port ->
+            val svc = it.cdanet.cpeconfigurator.tools.pro.Ports.service(port)
+            when (port) {
+                in open -> it.cdanet.cpeconfigurator.tools.pro.PortResult(port, PortState.Open, svc, 1 + port % 4, open.getValue(port).first, open.getValue(port).second)
+                in closed -> it.cdanet.cpeconfigurator.tools.pro.PortResult(port, PortState.Closed, svc, 1)
+                else -> it.cdanet.cpeconfigurator.tools.pro.PortResult(port, PortState.Filtered, svc, null)
+            }
+        }
+    }
 }

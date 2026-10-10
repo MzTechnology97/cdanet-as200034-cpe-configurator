@@ -280,6 +280,8 @@ class TopologyTest {
         assertEquals(DeviceType.Iot, g.type("IoT / domotica Shelly"))
         assertEquals(DeviceType.VoipPhone, g.type("Telefono VoIP"))
         assertEquals(DeviceType.Unknown, g.type(""))
+        assertEquals(DeviceType.AccessPoint, g.type("Ubiquiti LiteAP AC"))
+        assertEquals(DeviceType.Cpe, g.type("Ubiquiti PowerBeam 5AC"))
     }
 
     @Test
