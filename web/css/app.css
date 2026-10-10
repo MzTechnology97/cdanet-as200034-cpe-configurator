@@ -241,6 +241,12 @@ button.link { background: none; border: none; color: var(--brand); padding: 4px 
 .los-axis { font-size: 11px; fill: var(--muted); }
 .sim-info { margin-top: 8px; }
 .more-aps { margin-top: 12px; }
+.fw-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.fw-chip { display: inline-flex; align-items: center; gap: 6px; min-height: 32px; padding: 3px 10px 3px 4px; border-radius: 999px; }
+.fw-chip.on { border-color: var(--brand); }
+.fw-chip .count { font-variant-numeric: tabular-nums; font-size: .85rem; }
+.plan { display: inline-block; padding: 2px 8px; border-radius: 8px; background: var(--surface-2); border: 1px solid var(--line); font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.crm-filters:has(select:empty) { display: none; }
 .more-aps > summary { cursor: pointer; color: var(--muted); padding: 6px 0; }
 @media (prefers-color-scheme: dark) { :root:not([data-theme="light"]) .los-ground { fill: #44403c; stroke: #78716c; } }
 :root[data-theme="dark"] .los-ground { fill: #44403c; stroke: #78716c; }

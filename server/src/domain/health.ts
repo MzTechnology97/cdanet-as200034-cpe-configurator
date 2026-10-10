@@ -65,6 +65,27 @@ export function firmwareIs(version: string, target: string): boolean {
   return new RegExp(`(^|[^0-9.])v?${target.replace(/\./g, '\\.')}(?![0-9])`).test(version);
 }
 
+/** "XC.qca956x.v8.7.11.46972…", "WA.v8.7.4", "8.7.4" → [8, 7, 11]; null if no version in it. */
+export function firmwareVersion(fw: string): [number, number, number] | null {
+  const m = /(?:^|[^0-9.])v?(\d+)\.(\d+)\.(\d+)/.exec(fw);
+  return m ? [Number(m[1]), Number(m[2]), Number(m[3])] : null;
+}
+
+/**
+ * Firmware of a CPE against the reference version: 'ok' when equal or newer (newer is fine),
+ * 'old' when older (to update), 'legacy' for the airMAX M series (XM/XW/TI, airOS 6), which
+ * cannot run airOS 8 at all, 'unknown' when no version can be read.
+ */
+export type FirmwareState = 'ok' | 'old' | 'legacy' | 'unknown';
+export function firmwareState(fw: string | null | undefined, target: string): FirmwareState {
+  const v = fw ? firmwareVersion(fw) : null;
+  const t = firmwareVersion(target);
+  if (!v || !t) return 'unknown';
+  if (v[0] < 8 && /^(XM|XW|TI)\./i.test(fw!.trim())) return 'legacy';
+  for (let i = 0; i < 3; i++) if (v[i] !== t[i]) return v[i]! > t[i]! ? 'ok' : 'old';
+  return 'ok';
+}
+
 export function nowOf(d: UispDevice): CpeNow {
   return {
     status: d.status,
@@ -90,7 +111,8 @@ export function issuesOf(job: InstalledJob, now: CpeNow | null, t: HealthThresho
   if (!offline && now.signal !== null && job.acceptanceSignal !== null && now.signal - job.acceptanceSignal <= -t.signalDropDb) issues.push('signal_drop');
   if (!offline && ((now.ethMbps !== null && now.ethMbps > 0 && now.ethMbps < t.ethMinMbps) || now.ethHalfDuplex)) issues.push('ethernet');
   if (!offline && now.dlCapacityMbps !== null && now.dlCapacityMbps > 0 && now.dlCapacityMbps < t.capacityMinMbps) issues.push('low_capacity');
-  if (now.firmware && !firmwareIs(now.firmware, t.targetFirmware)) issues.push('firmware');
+  // only an older firmware is a problem: newer is fine, the M series cannot be updated to 8.x
+  if (firmwareState(now.firmware, t.targetFirmware) === 'old') issues.push('firmware');
   // RADIUS (admins): a suspended customer is offline on purpose, not a fault
   if (radius) {
     if (suspended) issues.push('account_suspended');
@@ -111,6 +133,7 @@ export function installedHealth<J extends InstalledJob>(jobs: J[], byMac: Map<st
     return {
       ...j,
       now,
+      firmware: now?.firmware ? { version: firmwareVersion(now.firmware)?.join('.') ?? now.firmware, state: firmwareState(now.firmware, t.targetFirmware) } : null,
       signalDelta: now?.signal != null && j.acceptanceSignal != null ? Math.round(now.signal - j.acceptanceSignal) : null,
       issues: issuesOf(j, now, t, radius),
       ...(radiusOf ? { radius: radius ? radiusView(radius) : null } : {}),
@@ -119,7 +142,18 @@ export function installedHealth<J extends InstalledJob>(jobs: J[], byMac: Map<st
   const score = (c: (typeof cpes)[number]) => c.issues.reduce((s, i) => s + WEIGHT[i], 0);
   cpes.sort((a, b) => score(b) - score(a) || (a.signalDelta ?? 0) - (b.signalDelta ?? 0) || (b.createdAt ?? '').localeCompare(a.createdAt ?? ''));
   const count = (k: IssueKind) => cpes.filter((c) => c.issues.includes(k)).length;
+  // how many CPEs per firmware version (Salute CPE: where the "firmware" ones come from)
+  const versions = new Map<string, { version: string; state: FirmwareState; count: number }>();
+  for (const c of cpes) {
+    if (!c.firmware) continue;
+    const v = versions.get(c.firmware.version) ?? { ...c.firmware, count: 0 };
+    v.count++;
+    versions.set(c.firmware.version, v);
+  }
+  const firmwareVersions = [...versions.values()].sort((a, b) => b.count - a.count || b.version.localeCompare(a.version, 'en', { numeric: true }));
   return {
+    targetFirmware: t.targetFirmware,
+    firmwareVersions,
     totals: {
       cpes: cpes.length,
       ok: cpes.filter((c) => !c.issues.length).length,
