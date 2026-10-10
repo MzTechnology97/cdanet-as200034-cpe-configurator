@@ -19,6 +19,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -132,9 +133,50 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
         }
     }
 
+    /** The Wi-Fi gateway, or (scanning a LAN the phone reaches through a router) its .1/.254. */
+    fun gatewayIp(): String? {
+        val ips = hosts.map { it.ip }
+        return link?.gateway?.takeIf { it in ips }
+            ?: hosts.firstOrNull { it.isGateway }?.ip
+            ?: ips.firstOrNull { it.endsWith(".1") } ?: ips.firstOrNull { it.endsWith(".254") } ?: link?.gateway
+    }
+
+    /** SNMP + discovery + fingerprints: the real graph of the network, then the enriched host list. */
+    fun buildTopology() {
+        if (topoBusy != null || job != null || hosts.isEmpty()) return
+        topoBusy = "Avvio…"
+        selectedNode = null
+        scope.launch {
+            runCatching {
+                TopologyScanner(c.network).run(
+                    hosts.toList(),
+                    gatewayIp(),
+                    if (useSnmp) communities.split(',').map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("public") } else emptyList(),
+                    useDiscovery,
+                    fingerprints = true,
+                    vendorOf = { macs ->
+                        if (c.session.token == null) emptyMap()
+                        else c.api.macVendors(macs).mapNotNull { (k, v) -> v?.let { k to it } }.toMap()
+                    },
+                ) { topoBusy = it }
+            }.onSuccess { r ->
+                topo = r
+                // discovery enriches the host list (names, MACs, types, devices the scan missed)
+                hosts.clear()
+                hosts += r.hosts
+            }.onFailure { error = it.message ?: it.toString() }
+            topoBusy = null
+        }
+    }
+
+    // the map builds itself once the scan is over (or when it is opened after the scan)
+    LaunchedEffect(showMap, job) { if (showMap && job == null && topo == null) buildTopology() }
+
     fun start() {
         error = null
         hosts.clear()
+        topo = null
+        selectedNode = null
         job = scope.launch {
             try {
                 val net = c.network.wifiNetwork() ?: throw IllegalStateException("Collegati alla Wi-Fi della LAN da scansionare")
@@ -192,36 +234,7 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
                     SwitchRow("SNMP (LLDP, CDP, vicini MikroTik, stazioni Ubiquiti, tabelle MAC, ARP)", useSnmp) { useSnmp = it }
                     if (useSnmp) Field("Community SNMP v2c (separate da virgola)", communities, { communities = it }, supporting = "Predefinita: public. Le community restano sul telefono.")
                     SwitchRow("Discovery multi-vendor (MikroTik, Ubiquiti, Hikvision, Dahua, ONVIF, UPnP, mDNS, Netgear)", useDiscovery) { useDiscovery = it }
-                    BusyButton(topoBusy ?: "Costruisci mappa", topoBusy != null, Modifier.fillMaxWidth(), enabled = topoBusy == null && job == null) {
-                        scope.launch {
-                            topoBusy = "Avvio…"
-                            selectedNode = null
-                            runCatching {
-                                // the Wi-Fi gateway, or (scanning a LAN the phone reaches through a router) its .1/.254
-                                val ips = hosts.map { it.ip }
-                                val gw = link?.gateway?.takeIf { it in ips }
-                                    ?: hosts.firstOrNull { it.isGateway }?.ip
-                                    ?: ips.firstOrNull { it.endsWith(".1") } ?: ips.firstOrNull { it.endsWith(".254") } ?: link?.gateway
-                                TopologyScanner(c.network).run(
-                                    hosts.toList(),
-                                    gw,
-                                    if (useSnmp) communities.split(',').map { it.trim() }.filter { it.isNotEmpty() }.ifEmpty { listOf("public") } else emptyList(),
-                                    useDiscovery,
-                                    fingerprints = true,
-                                    vendorOf = { macs ->
-                                        if (c.session.token == null) emptyMap()
-                                        else c.api.macVendors(macs).mapNotNull { (k, v) -> v?.let { k to it } }.toMap()
-                                    },
-                                ) { topoBusy = it }
-                            }.onSuccess { r ->
-                                topo = r
-                                // discovery enriches the host list (names, MACs, types, devices the scan missed)
-                                hosts.clear()
-                                hosts += r.hosts
-                            }.onFailure { error = it.message ?: it.toString() }
-                            topoBusy = null
-                        }
-                    }
+                    BusyButton(topoBusy ?: if (topo == null) "Costruisci mappa" else "Ricostruisci mappa", topoBusy != null, Modifier.fillMaxWidth(), enabled = topoBusy == null && job == null) { buildTopology() }
                     // debug builds only: a fictitious office LAN to try the graph without a real network
                     if (BuildConfig.DEBUG) TextButton(onClick = {
                         selectedNode = null
@@ -230,7 +243,8 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
                     val t = topo?.result
                     Text(
                         when {
-                            t == null -> "Mappa base dal gateway (dispositivi raggruppati per tipo). \"Costruisci mappa\" prova SNMP e discovery per il grafo reale della rete."
+                            job != null -> "Scansione in corso: per ora tutti i dispositivi risultano collegati al gateway. Al termine il grafo si costruisce da solo con SNMP e discovery."
+                            t == null -> "Mappa base dal gateway. \"Costruisci mappa\" prova SNMP e discovery per il grafo reale della rete."
                             t.mode == "snmp" -> "Grafo da SNMP: ${t.snmpDevices} apparati letti · collegamenti ${t.count(LinkKind.Lldp) + t.count(LinkKind.Cdp) + t.count(LinkKind.Mndp)} LLDP/CDP/MikroTik, ${t.count(LinkKind.Wireless)} wireless, ${t.count(LinkKind.Fdb)} dalle tabelle MAC, ${t.count(LinkKind.Assumed)} presunti."
                             else -> "Nessun apparato ha risposto via SNMP: tutti i dispositivi sono collegati al gateway come presunti."
                         },
@@ -260,17 +274,16 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
                             }
                         }) { Text("Scansiona anche queste subnet, poi ricostruisci la mappa") }
                     }
-                    if (t != null) {
-                        TopologyGraphView(t.graph, selectedNode, "Topologia di rete $cidr") { selectedNode = it }
-                        selectedNode?.let { id ->
-                            TopologyNodeCard(t.graph, id, t.graph.byId[id]?.host?.let { h -> { open(h) } }) { selectedNode = null }
-                        }
-                        Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                            OutlinedButton(onClick = { shareCsv(context, "Collegamenti di rete", TopoGraph.csv(t.graph)) }) { Text("Collegamenti CSV") }
-                            OutlinedButton(onClick = { shareCsv(context, "Dispositivi di rete", TopoGraph.devicesCsv(t.graph)) }) { Text("Dispositivi CSV") }
-                        }
-                    } else {
-                        NetworkMapView(hosts.toList(), link?.gateway, open)
+                    // before SNMP and discovery (or while the scan runs): every device presumed under the gateway
+                    val snapshot = hosts.toList()
+                    val graph = t?.graph ?: remember(snapshot) { Topology.build(snapshot, emptyList(), gatewayIp()).graph }
+                    TopologyGraphView(graph, selectedNode, "Topologia di rete $cidr") { selectedNode = it }
+                    selectedNode?.let { id ->
+                        TopologyNodeCard(graph, id, graph.byId[id]?.host?.let { h -> { open(h) } }) { selectedNode = null }
+                    }
+                    if (t != null) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        OutlinedButton(onClick = { shareCsv(context, "Collegamenti di rete", TopoGraph.csv(t.graph)) }) { Text("Collegamenti CSV") }
+                        OutlinedButton(onClick = { shareCsv(context, "Dispositivi di rete", TopoGraph.devicesCsv(t.graph)) }) { Text("Dispositivi CSV") }
                     }
                 }
                 topo?.found?.takeIf { it.isNotEmpty() }?.let { found ->

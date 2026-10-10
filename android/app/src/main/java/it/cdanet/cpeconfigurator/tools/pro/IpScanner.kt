@@ -10,6 +10,7 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.net.ConnectException
 import java.net.DatagramPacket
@@ -45,11 +46,76 @@ data class ScanHost(
 class IpScanner(private val wifi: Network?) {
     companion object {
         val PROBE_PORTS = listOf(80, 443, 22, 445, 139, 53, 554, 8291, 8080, 62078, 9100, 3389, 7547, 8000, 20443, 5000)
+
+        /**
+         * Round trip of a genuine echo reply from [ip] in the output of `ping -c 1`, else null:
+         * "Destination Host Unreachable" from a router, or a forged reply (wrong data, as the
+         * emulator's NAT turns unreachables into replies) is no host.
+         */
+        fun pingReply(out: String, ip: String): Int? {
+            if ("wrong data" in out || "Unreachable" in out || "unreachable" in out) return null
+            val line = out.lineSequence().firstOrNull { it.contains("bytes from $ip:") } ?: return null
+            if (Regex("""icmp_seq=0\b""").containsMatchIn(line)) return null
+            return Regex("""time[=<]\s*([0-9.]+)""").find(line)?.groupValues?.get(1)?.toDouble()?.toInt()
+        }
+
+        /** A refusal by a host (RST), not "No route to host" or "Network unreachable" from the router. */
+        fun isRefused(e: ConnectException): Boolean =
+            e.message.orEmpty().let { it.contains("ECONNREFUSED") || it.contains("Connection refused", ignoreCase = true) }
+
+        /**
+         * Subnets with an open port, plus those that only refused, unless refusals come from most of
+         * the range: a firewall or a NAT that rejects every address does not mean the networks exist.
+         * When a quarter of the range or more answers, something (a transparent proxy, the emulator's
+         * NAT) answers for every address: no subnet is trusted.
+         */
+        fun chooseActive(answers: List<Pair<Ip.Cidr, Answer>>): List<Ip.Cidr> {
+            if (answers.size >= 16 && answers.count { it.second == Answer.Open } >= answers.size / 4) return emptyList()
+            val refused = answers.count { it.second == Answer.Refused }
+            val trustRefusals = refused <= maxOf(8, answers.size / 8)
+            return answers.filter { it.second == Answer.Open || (trustRefusals && it.second == Answer.Refused) }.map { it.first }
+        }
     }
 
     data class Progress(val done: Int, val total: Int, val found: Int, val phase: String)
 
+    /**
+     * What answers for addresses that cannot exist: routers that intercept DNS (UniFi, content
+     * filters) or transparent proxies "open" a port on every IP, and some firewalls refuse every
+     * connection. Such answers prove nothing about hosts beyond the router.
+     */
+    data class Canary(val ports: Set<Int> = emptySet(), val refuses: Boolean = false, val pings: Boolean = false) {
+        /** Is a host up, given its open ports and whether a port refused? */
+        fun alive(open: Set<Int>, refused: Boolean): Boolean = (open - ports).isNotEmpty() || (refused && !refuses)
+    }
+
     private fun socket() = wifi?.socketFactory?.createSocket() ?: java.net.Socket()
+
+    private fun probe(ip: String, port: Int, timeoutMs: Int): Answer {
+        val s = socket()
+        return try {
+            s.connect(InetSocketAddress(ip, port), timeoutMs)
+            Answer.Open
+        } catch (e: ConnectException) {
+            if (isRefused(e)) Answer.Refused else Answer.None
+        } catch (_: Exception) {
+            Answer.None
+        } finally {
+            runCatching { s.close() }
+        }
+    }
+
+    /** Probes documentation addresses (RFC 5737, never assigned) through the router: see [Canary]. */
+    suspend fun canary(ports: List<Int> = PROBE_PORTS): Canary = coroutineScope {
+        val answers = listOf("192.0.2.1", "198.51.100.1").flatMap { ip ->
+            ports.map { port -> async(Dispatchers.IO) { port to probe(ip, port, 400) } }
+        }.awaitAll()
+        Canary(
+            ports = answers.filter { it.second == Answer.Open }.map { it.first }.toSet(),
+            refuses = answers.any { it.second == Answer.Refused },
+            pings = withContext(Dispatchers.IO) { ping("192.0.2.1") != null },
+        )
+    }
 
     suspend fun scan(
         cidr: Ip.Cidr,
@@ -62,6 +128,9 @@ class IpScanner(private val wifi: Network?) {
         onProgress: (Progress) -> Unit,
     ): List<ScanHost> = coroutineScope {
         val ips = (cidr.first..cidr.last).map { Ip.format(it) }
+        // beyond the router (the phone is not in this subnet) answers may come from the router itself
+        val routed = self.none { it in ips }
+        val fake = if (routed) canary() else Canary()
         val alive = ConcurrentHashMap<String, Pair<Int, String>>() // ip -> latency, method
         val ports = ConcurrentHashMap<String, MutableSet<Int>>()
         val done = AtomicInteger()
@@ -73,6 +142,7 @@ class IpScanner(private val wifi: Network?) {
                 hostSem.withPermit {
                     coroutineContext.ensureActive()
                     val open = java.util.Collections.synchronizedSet(mutableSetOf<Int>())
+                    var refused = false
                     var best: Int? = null
                     coroutineScope {
                         PROBE_PORTS.map { port ->
@@ -83,8 +153,9 @@ class IpScanner(private val wifi: Network?) {
                                     s.connect(InetSocketAddress(ip, port), 350)
                                     open += port
                                     synchronized(open) { val ms = ((System.nanoTime() - t0) / 1e6).toInt(); best = minOf(best ?: ms, ms) }
-                                } catch (_: ConnectException) {
-                                    synchronized(open) { val ms = ((System.nanoTime() - t0) / 1e6).toInt(); best = minOf(best ?: ms, ms) }
+                                } catch (e: ConnectException) {
+                                    // a refusal proves the host is up; "No route to host" from a router does not
+                                    if (isRefused(e)) synchronized(open) { refused = true; val ms = ((System.nanoTime() - t0) / 1e6).toInt(); best = minOf(best ?: ms, ms) }
                                 } catch (_: Exception) {
                                 } finally {
                                     runCatching { s.close() }
@@ -92,15 +163,17 @@ class IpScanner(private val wifi: Network?) {
                             }
                         }.awaitAll()
                     }
-                    best?.let { alive[ip] = it to "TCP" }
-                    if (open.isNotEmpty()) ports[ip] = open
+                    if (fake.alive(open.toSet(), refused)) {
+                        best?.let { alive[ip] = it to "TCP" }
+                        (open - fake.ports).takeIf { it.isNotEmpty() }?.let { ports[ip] = it.toMutableSet() }
+                    }
                     onProgress(Progress(done.incrementAndGet(), ips.size * if (icmp) 2 else 1, alive.size, "Sondaggio TCP"))
                 }
             }
         }.awaitAll()
 
         // 2. ICMP for the hosts that did not answer on TCP.
-        if (icmp) {
+        if (icmp && !fake.pings) {
             val pingSem = Semaphore(16)
             ips.filter { !alive.containsKey(it) }.map { ip ->
                 async(Dispatchers.IO) {
@@ -146,39 +219,39 @@ class IpScanner(private val wifi: Network?) {
 
     /**
      * Wide sweep: which /24 of [range] (up to a /16) are in use, from their usual gateway addresses
-     * (.1 and .254, also .253): a connection or a refusal on a common port proves the network exists.
+     * (.1 and .254, also .253): a connection or a refusal (RST) on a common port proves the network exists.
+     * "No route to host" from the router (Android reports it as a ConnectException too) does not, nor
+     * what the router answers for any address (see [Canary]).
      */
     suspend fun activeSubnets(range: Ip.Cidr, onProgress: (Progress) -> Unit): List<Ip.Cidr> = coroutineScope {
         val nets = Ip.slash24s(range)
         val done = AtomicInteger()
         val gate = Semaphore(64)
-        val ports = listOf(80, 443, 22, 53, 8291)
+        val fake = canary(listOf(80, 443, 22, 53, 8291))
+        val ports = listOf(80, 443, 22, 53, 8291).filter { it !in fake.ports }
         nets.map { net ->
             async(Dispatchers.IO) {
                 gate.withPermit {
                     coroutineContext.ensureActive()
-                    val up = listOf(1L, 254L, 253L).any { last ->
+                    var answer = Answer.None
+                    for (last in listOf(1L, 254L, 253L)) {
                         val ip = Ip.format(net.network + last)
-                        ports.any { port ->
-                            val s = socket()
-                            try {
-                                s.connect(InetSocketAddress(ip, port), 300)
-                                true
-                            } catch (_: ConnectException) {
-                                true
-                            } catch (_: Exception) {
-                                false
-                            } finally {
-                                runCatching { s.close() }
-                            }
+                        for (port in ports) {
+                            val a = probe(ip, port, 300).let { if (it == Answer.Refused && fake.refuses) Answer.None else it }
+                            if (a.ordinal > answer.ordinal) answer = a
+                            if (answer == Answer.Open) break
                         }
+                        if (answer == Answer.Open) break
                     }
                     onProgress(Progress(done.incrementAndGet(), nets.size, 0, "Ricerca delle subnet attive in $range"))
-                    net.takeIf { up }
+                    net to answer
                 }
             }
-        }.awaitAll().filterNotNull()
+        }.awaitAll().let(::chooseActive)
     }
+
+    /** How a /24 answered the wide sweep: nothing, a refusal (RST) or an open port. */
+    enum class Answer { None, Refused, Open }
 
     /** Reverse name from the LAN DNS (the router knows its DHCP clients). */
     private fun ptr(ip: String, server: String): String? = runCatching {
@@ -197,8 +270,7 @@ class IpScanner(private val wifi: Network?) {
     private fun ping(ip: String): Int? = runCatching {
         val p = ProcessBuilder("/system/bin/ping", "-c", "1", "-W", "1", ip).redirectErrorStream(true).start()
         if (!p.waitFor(2500, TimeUnit.MILLISECONDS)) { p.destroyForcibly(); return null }
-        val out = p.inputStream.bufferedReader().readText()
-        Regex("""time[=<]\s*([0-9.]+)""").find(out)?.groupValues?.get(1)?.toDouble()?.toInt()
+        pingReply(p.inputStream.bufferedReader().readText(), ip)
     }.getOrNull()
 
     private fun netbios(ip: String): NetBiosInfo? = runCatching {
