@@ -257,10 +257,14 @@ fun AcceptanceScreen(c: AppContainer) {
                 error = null
                 try {
                     // the acceptance test of a work order happens at the customer's: GPS within 500 m
-                    activeOrder?.let { o -> WorkOrderPosition.verify(c, context, o) }
+                    // the position goes with the test: the server checks it against the work order too
+                    // (also when the app was restarted and does not know the order any more)
+                    val here = activeOrder?.let { o -> WorkOrderPosition.verify(c, context, o) }
+                        ?: runCatching { it.cdanet.cpeconfigurator.network.LocationHelper(context).current() }.getOrNull()
+                    val sent = report?.copy(position = here?.let { l -> it.cdanet.cpeconfigurator.field.AcceptancePosition(l.latitude, l.longitude, l.accuracy) })
                     // Always through the on-device queue: nothing is lost if the roof has no signal.
                     val n = photos.size
-                    c.acceptanceQueue.enqueue(j.id, j.deviceName.ifBlank { j.mac }, report, photos.map { it.jpeg to it.caption })
+                    c.acceptanceQueue.enqueue(j.id, j.deviceName.ifBlank { j.mac }, sent, photos.map { it.jpeg to it.caption })
                     photos.clear()
                     c.acceptanceQueue.sync()
                     // refused by the server for good: say so, never "registered"
@@ -301,7 +305,7 @@ object WorkOrderPosition {
             (accuracyM?.takeIf { it > 100 }?.let { " (precisione GPS ${it.toInt()} m: spostati all'aperto e riprova)" } ?: "")
     }
 
-    suspend fun verify(c: it.cdanet.cpeconfigurator.core.AppContainer, context: android.content.Context, o: it.cdanet.cpeconfigurator.data.WorkOrderDto) {
+    suspend fun verify(c: it.cdanet.cpeconfigurator.core.AppContainer, context: android.content.Context, o: it.cdanet.cpeconfigurator.data.WorkOrderDto): it.cdanet.cpeconfigurator.data.CpeLocation {
         val loc = runCatching { it.cdanet.cpeconfigurator.network.LocationHelper(context).current() }.getOrElse {
             throw IllegalStateException("Posizione GPS non disponibile: serve per verificare che il collaudo sia fatto all'indirizzo dell'intervento. ${it.message ?: ""}".trim())
         }
@@ -312,5 +316,6 @@ object WorkOrderPosition {
             else -> null
         }
         refusal(d, loc.accuracy, o.customer)?.let { throw IllegalStateException(it) }
+        return loc
     }
 }
