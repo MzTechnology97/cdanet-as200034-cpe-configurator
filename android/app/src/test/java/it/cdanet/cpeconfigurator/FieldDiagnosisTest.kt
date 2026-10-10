@@ -56,9 +56,12 @@ class FieldDiagnosisTest {
         assertEquals(Verdict.Ok, byTitle(checks, "Porta LAN (cavo)").verdict)
         assertEquals(Verdict.Ok, byTitle(checks, "Catene (polarizzazioni)").verdict)
         assertEquals(Verdict.Info, byTitle(checks, "PPPoE").verdict)
-        // the sample runs 8.7.18, not the CDA Net standard
-        assertEquals(Verdict.Warn, byTitle(checks, "Firmware").verdict)
-        assertEquals(Verdict.Warn, FieldDiagnosis.summary(checks))
+        // the sample runs 8.7.18, newer than the reference 8.7.4: fine
+        assertEquals(Verdict.Ok, byTitle(checks, "Firmware").verdict)
+        // older than the reference: to update
+        val newerTarget = FieldDiagnosis.checks(AirosStatus.parse(raw), t, targetFirmware = "8.8.0")
+        assertEquals(Verdict.Warn, byTitle(newerTarget, "Firmware").verdict)
+        assertEquals(Verdict.Warn, FieldDiagnosis.summary(newerTarget))
         assertFalse(FieldDiagnosis.report(AirosStatus.parse(raw), checks).contains("password", ignoreCase = true))
     }
 

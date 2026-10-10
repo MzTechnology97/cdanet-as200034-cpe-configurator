@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { buildApp } from '../src/app.ts';
 import { openDatabase } from '../src/db.ts';
-import { firmwareIs, installedHealth, type InstalledJob } from '../src/domain/health.ts';
+import { firmwareIs, firmwareState, firmwareVersion, installedHealth, type InstalledJob } from '../src/domain/health.ts';
 import { ethSpeed, normalizeDevice } from '../src/services/uisp.ts';
 import { fakeUisp } from './fake-uisp.ts';
 import { ADMIN, SAMPLE_TEMPLATE, testConfig } from './helpers.ts';
@@ -26,6 +26,19 @@ describe('Salute CPE installate', () => {
     assert.deepEqual(ethSpeed(undefined), { ethMbps: null, ethHalfDuplex: false });
     assert.ok(firmwareIs('XC.qca956x.v8.7.4.45112.210415.1103', '8.7.4'));
     assert.ok(!firmwareIs('XC.qca956x.v8.7.11', '8.7.4'));
+  });
+
+  it('firmware: newer than the reference is fine, older is to update, the M series cannot be updated', () => {
+    assert.equal(firmwareState('XC.qca956x.v8.7.4.45112.210415.1103', '8.7.4'), 'ok');
+    assert.equal(firmwareState('XC.qca956x.v8.7.11.46972.220614.0420', '8.7.4'), 'ok');
+    assert.equal(firmwareState('WA.ipq40xx.v8.7.18', '8.7.4'), 'ok');
+    assert.equal(firmwareState('XC.qca956x.v8.6.2', '8.7.4'), 'old');
+    assert.equal(firmwareState('WA.v8.5.12', '8.7.4'), 'old');
+    assert.equal(firmwareState('XW.ar934x.v6.3.11.33396.230425.1742', '8.7.4'), 'legacy');
+    assert.equal(firmwareState('XM.v6.1.7', '8.7.4'), 'legacy');
+    assert.equal(firmwareState('qualcosa', '8.7.4'), 'unknown');
+    assert.equal(firmwareState(null, '8.7.4'), 'unknown');
+    assert.deepEqual(firmwareVersion('XC.qca956x.v8.7.11.46972'), [8, 7, 11]);
   });
 
   it('compares the current state with the acceptance test', () => {
