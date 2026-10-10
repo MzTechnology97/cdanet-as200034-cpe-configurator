@@ -63,7 +63,8 @@ object DeviceGuess {
             "iphone" in k || "android" in k || "smartphone" in k -> DeviceType.Phone
             "tv" in k || "chromecast" in k || "multimedia" in k -> DeviceType.Tv
             "iot" in k || "domotica" in k -> DeviceType.Iot
-            else -> DeviceType.Unknown
+            // a model only ("Ubiquiti LiteAP AC", "PowerBeam 5AC"): the factory names
+            else -> it.cdanet.cpeconfigurator.tools.topology.ProductHints.of(kind)?.type ?: DeviceType.Unknown
         }
     }
 }

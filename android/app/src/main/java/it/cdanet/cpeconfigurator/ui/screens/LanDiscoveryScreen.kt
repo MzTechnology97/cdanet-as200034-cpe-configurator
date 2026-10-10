@@ -136,12 +136,18 @@ fun LanDiscoveryScreen(c: AppContainer) {
                 androidx.compose.foundation.layout.BoxWithConstraints(Modifier.fillMaxWidth()) {
                     // as many columns as fit (3 on a phone), cells stretched to the full width
                     val cols = (maxWidth / 112.dp).toInt().coerceIn(3, 9)
-                    val cell = (maxWidth - 6.dp * (cols - 1)) / cols
+                    val cell = (maxWidth - 6.dp * (cols - 1)) / cols - 1.dp // rounding must not push the last one to a new row
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                         scanner.protocols.forEach { p -> ProtocolCell(p, state[p], filter == p, Modifier.width(cell)) { if ((state[p] ?: 0) > 0) filter = if (filter == p) null else p } }
                     }
                 }
                 BusyButton(if (busy) "In ascolto…" else if (devices == null) "Avvia discovery" else "Ripeti discovery", busy, Modifier.fillMaxWidth()) { start() }
+                // debug builds only: what the protocols answer on the fictitious office LAN (guide screenshots)
+                if (it.cdanet.cpeconfigurator.BuildConfig.DEBUG && !busy && devices == null) TextButton(onClick = {
+                    val demo = it.cdanet.cpeconfigurator.tools.topology.TopologyDemo.found
+                    scanner.protocols.forEach { p -> state[p] = demo.count { f -> f.protocol == p } }
+                    devices = demo.groupBy { f -> f.ip }.map { (ip, fs) -> Discovered(ip, fs) }.sortedBy { d -> Ip.parse(d.ip) ?: Long.MAX_VALUE }
+                }) { Text("Dati di esempio (solo build di sviluppo)") }
             }
         }
         devices?.let { list ->
@@ -235,7 +241,12 @@ private fun DiscoveredRow(d: Discovered, kindOf: (Found) -> String, expanded: Bo
                     Text(d.name ?: d.model ?: d.vendor, style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     Text(d.ip, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        listOfNotNull(d.vendor, d.model?.takeIf { it != d.name }, kind.ifBlank { null }).distinct().joinToString(" · "),
+                        // the type without the vendor and model already shown ("Switch / router Netgear" → "Switch / router")
+                        listOfNotNull(
+                            d.vendor,
+                            d.model?.takeIf { it != d.name },
+                            listOfNotNull(d.vendor, d.model).fold(kind) { k, w -> k.replace(w, "", ignoreCase = true) }.trim().ifBlank { null },
+                        ).distinct().joinToString(" · "),
                         style = MaterialTheme.typography.labelMedium,
                         color = col,
                         maxLines = 1,
