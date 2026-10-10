@@ -115,14 +115,20 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     const at = await terrainSampler(ctx.terrain, [point, ...inRange]);
     const estimateFor = (a: (typeof inRange)[number]) => {
       const e = estimateForAp(models.get(a.id), a, point, at, { cpeM: q.height ?? heights.cpeHeightM, apM: heights.apHeightM }, radio, obstacles(ctx));
-      return e && { ...e, basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null };
+      // capacity of the new link from the curve of the real CPEs (and how this AP does on it)
+      return e && { ...e, basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null, capacityMbps: ctx.apLoad.capacity(a.id, e.signalDbm) };
+    };
+    // load of the AP in the evening (installers: only the verdict, admins every number)
+    const loadOf = (id: string) => {
+      const l = ctx.apLoad.load(id);
+      return l && (keys ? { level: l.level } : l);
     };
     const served = (a: { id: string }) => {
       const m = models.get(a.id);
       return m && m.sector ? { center: m.sector.center, width: m.sector.width, servedM: m.servedM } : null;
     };
     const ranked = rankCoverage(
-      inRange.map((a) => ({ ...a, estimate: estimateFor(a) })),
+      inRange.map((a) => ({ ...a, estimate: estimateFor(a), load: loadOf(a.id) })),
       ctx.cfg.thresholds.signalMin,
     );
     // installers: only the APs worth a try (no inactive ones, none whose best case is below the minimum)
@@ -173,6 +179,8 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     const mPerLon = 111_320 * Math.cos((ap.location.lat * Math.PI) / 180);
     const at = await terrainSampler(ctx.terrain, [ap.location], radiusM + 500);
     const obs = obstacles(ctx);
+    // capacity of a new link at each cell (curve of the real CPEs, this AP's factor)
+    const capOf = (dbm: number) => ctx.apLoad.capacity(ap.id, dbm);
     const target = { lat: ap.location.lat, lon: ap.location.lon, gpsAltitude: ap.altitude, siteHeight: ap.siteHeight, frequency: ap.frequency };
     const cells: Array<{ lat: number; lon: number; dbm: number; confidence: string; blocked?: true }> = [];
     for (let i = 0; i < n; i++) {
@@ -190,6 +198,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
           lat: Math.round(cell.lat * 1e6) / 1e6,
           lon: Math.round(cell.lon * 1e6) / 1e6,
           dbm: e.signalDbm,
+          ...(capOf(e.signalDbm) !== null ? { cap: capOf(e.signalDbm)! } : {}),
           confidence: e.confidence,
           ...(terrain?.verdict === 'blocked' ? { blocked: true as const } : {}),
         });
@@ -204,6 +213,8 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       ignored: m.ignored,
       terrain: at !== null,
       antenna: m.antenna,
+      load: ctx.apLoad.load(ap.id),
+      capacity: ctx.apLoad.curve() !== null,
       cells,
       cellM: Math.round(cellM),
       radiusM,

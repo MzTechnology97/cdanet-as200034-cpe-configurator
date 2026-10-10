@@ -38,6 +38,7 @@ export function estimateCell(e) {
     e.beyondServed ? h('div', { class: 'small' }, 'più lontano dei clienti attuali') : null,
     e.tooFar ? h('div', { class: 'small' }, 'oltre 20 km: troppo lontano per un aggancio') : null,
     e.terrain ? h('div', { class: 'small' }, terrainText(e.terrain)) : null,
+    e.capacityMbps ? h('div', { class: 'small' }, `capacità del collegamento ~${e.capacityMbps} Mbit/s`) : null,
     e.theoretical
       ? h('div', { class: 'small muted' }, 'stima teorica: l’AP non ha ancora clienti')
       : e.basis != null
@@ -56,11 +57,30 @@ export function apTable(aps, admin = true) {
       { label: 'Puntamento', render: (a) => h('span', { class: 'bearing' }, h('span', { class: 'arrow', style: null, 'data-deg': a.bearing }, '↑'), ` ${a.bearing}° ${a.direction}`) },
       { label: 'Segnale stimato', render: (a) => estimateCell(a.estimate) },
       { label: 'Stato', render: (a) => badge(a.status === 'active' ? 'online' : a.status, a.status === 'active' ? 'good' : 'bad') },
+      { label: 'Carico (20–23)', render: (a) => loadCell(a.load) },
       { label: 'Client', render: (a) => (a.stations ?? '—') },
       admin ? { label: 'Frequenza', render: (a) => (a.frequency ? `${a.frequency} MHz` : '—') } : null,
     ].filter(Boolean),
     aps,
   );
+}
+
+const LOAD = { libero: ['libero la sera', 'good'], medio: ['medio la sera', 'warn'], carico: ['carico la sera', 'bad'] };
+
+/** Evening load of the AP: the verdict, and for admins the numbers behind it. */
+export function loadCell(l) {
+  if (!l || !l.level) return h('span', { class: 'small muted' }, '—');
+  const n = (v, u) => (v === null || v === undefined ? null : `${v}${u}`);
+  const details = [
+    n(l.eveningAirtimePct, '% airtime'),
+    n(l.eveningUtilizationPct, '% canale'),
+    l.eveningPeakMbps != null ? `picco ${l.eveningPeakMbps}${l.capacityMbps ? `/${l.capacityMbps}` : ''} Mbit/s` : null,
+    n(l.stations, ' CPE'),
+    n(l.cpeAirtimePct, '% airtime per CPE'),
+    l.snrDb != null ? `SNR ${l.snrDb} dB` : null,
+    l.noiseDbm != null ? `rumore ${l.noiseDbm} dBm` : null,
+  ].filter(Boolean);
+  return h('div', {}, badge(...LOAD[l.level]), details.length ? h('div', { class: 'small muted' }, details.join(' · ')) : null);
 }
 
 /** Rotates the bearing arrows (inline styles are blocked by the CSP, so set them via CSSOM). */

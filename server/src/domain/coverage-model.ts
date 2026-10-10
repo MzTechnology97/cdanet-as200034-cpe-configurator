@@ -1,3 +1,4 @@
+import type { LoadLevel } from './ap-load.ts';
 import { bearingDeg, distanceM, type LatLon } from './geo.ts';
 
 /**
@@ -309,7 +310,13 @@ const RATING_ORDER: Record<CoverageRating, number> = { buono: 0, possibile: 1, '
 /** Rating of one AP: [minDbm] is the minimum signal accepted at the acceptance test. */
 type Estimated = Pick<SignalEstimate, 'signalDbm' | 'high' | 'inSector' | 'theoretical'> & Partial<Pick<SignalEstimate, 'tooFar' | 'terrain'>>;
 
-export function rateCoverage(status: string, e: Estimated | null, minDbm: number): CoverageRating {
+export function rateCoverage(status: string, e: Estimated | null, minDbm: number, load: LoadLevel | null = null): CoverageRating {
+  const r = rateSignal(status, e, minDbm);
+  // an AP saturated in the evening hours is never the advice: a new customer would slow everyone
+  return r === 'buono' && load === 'carico' ? 'possibile' : r;
+}
+
+function rateSignal(status: string, e: Estimated | null, minDbm: number): CoverageRating {
   if (status !== 'active') return 'non attivo';
   if (!e || e.signalDbm === null) return 'senza stima';
   if (e.tooFar) return 'improbabile'; // beyond any real link
@@ -324,8 +331,13 @@ export function rateCoverage(status: string, e: Estimated | null, minDbm: number
  * those without an estimate (by distance) and last the unlikely and the inactive ones. The limit is
  * applied after this, so a good AP a bit farther away is not hidden by closer, worse ones.
  */
-export function rankCoverage<T extends { distanceM: number; status: string; estimate: Estimated | null }>(aps: T[], minDbm: number): Array<T & { rating: CoverageRating }> {
+export function rankCoverage<T extends { distanceM: number; status: string; estimate: Estimated | null; load?: { level: LoadLevel | null } | null }>(aps: T[], minDbm: number): Array<T & { rating: CoverageRating }> {
+  // with the same rating, a busier AP counts as a few dB weaker
+  const score = (a: T) => (a.estimate?.signalDbm ?? -999) - LOAD_PENALTY_DB[a.load?.level ?? 'libero'];
   return aps
-    .map((a) => ({ ...a, rating: rateCoverage(a.status, a.estimate, minDbm) }))
-    .sort((a, b) => RATING_ORDER[a.rating] - RATING_ORDER[b.rating] || (b.estimate?.signalDbm ?? -999) - (a.estimate?.signalDbm ?? -999) || a.distanceM - b.distanceM);
+    .map((a) => ({ ...a, rating: rateCoverage(a.status, a.estimate, minDbm, a.load?.level ?? null) }))
+    .sort((a, b) => RATING_ORDER[a.rating] - RATING_ORDER[b.rating] || score(b) - score(a) || a.distanceM - b.distanceM);
 }
+
+/** How much a busy AP counts less in the ordering, dB. */
+const LOAD_PENALTY_DB: Record<LoadLevel, number> = { libero: 0, medio: 3, carico: 8 };

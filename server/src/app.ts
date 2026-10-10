@@ -50,6 +50,7 @@ import { privacyRoutes } from './routes/privacy.ts';
 import { createServerSettings } from './services/server-settings.ts';
 import { createDem } from './services/dem.ts';
 import { createTerrainStore } from './services/terrain-store.ts';
+import { createApLoad, type ApLoadService } from './services/ap-load.ts';
 
 const CSP = [
   "default-src 'self'",
@@ -109,6 +110,7 @@ export async function buildApp(
     connectors,
     crm: createCrmSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
     crmSync: undefined as unknown as CrmSync,
+    apLoad: undefined as unknown as ApLoadService,
     geocoder: createGeocoder({ ...cfg.geocoder, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
     telegram,
     modules,
@@ -121,6 +123,7 @@ export async function buildApp(
     version,
   };
   ctx.crmSync = createCrmSync(db, ctx.crm);
+  ctx.apLoad = createApLoad(db, () => ctx.uisp);
   ctx.outages = createOutages(db, {
     ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
     getUisp: () => ctx.uisp,

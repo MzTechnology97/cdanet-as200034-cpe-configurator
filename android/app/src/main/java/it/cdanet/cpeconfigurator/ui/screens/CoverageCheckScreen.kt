@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -70,6 +71,16 @@ private val SIM_SCALE = listOf(
     Color(0xFFFACC15) to "−70…−75",
     Color(0xFFF97316) to "−75…−80 (sotto il minimo)",
     Color(0xFFDC2626) to "sotto −80",
+)
+
+/** Capacity scale (downlink of the radio link), as in the console. */
+private val CAP_SCALE = listOf(
+    Color(0xFF15803D) to "oltre 150 Mbit/s",
+    Color(0xFF22C55E) to "100–150",
+    Color(0xFFA3E635) to "50–100",
+    Color(0xFFFACC15) to "25–50",
+    Color(0xFFF97316) to "10–25",
+    Color(0xFFDC2626) to "sotto 10",
 )
 
 /** "37.56, 14.27", "37,56 14,27", "37.56;14.27" → lat/lon; null when it is not a pair of coordinates. */
@@ -131,6 +142,7 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
     var baseAps by remember { mutableStateOf<List<BaseAp>>(emptyList()) }
     var sim by remember { mutableStateOf<SimulationInfoDto?>(null) }
     var simJson by remember { mutableStateOf<String?>(null) }
+    var simCapacity by remember { mutableStateOf(false) }
     var page by remember { mutableStateOf<WebView?>(null) }
     var los by remember { mutableStateOf<CoverageAp?>(null) }
 
@@ -221,7 +233,7 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
         val p = point
         if (resultJson != null && p != null) page?.evaluateJavascript("window.cdaCoverage(Object.assign($resultJson, { lat: ${p.lat}, lon: ${p.lon} }))", null)
     }
-    LaunchedEffect(page, simJson) { page?.evaluateJavascript(if (simJson != null) "window.cdaSimulation($simJson)" else "window.cdaClearSimulation()", null) }
+    LaunchedEffect(page, simJson, simCapacity) { page?.evaluateJavascript(if (simJson != null) "window.cdaSimulation($simJson, '${if (simCapacity) "cap" else "dbm"}')" else "window.cdaClearSimulation()", null) }
 
     val heightM = height.replace(',', '.').toDoubleOrNull()?.takeIf { it in 0.5..100.0 }
     // the CPE height changes the terrain towards each AP: check the same point again
@@ -283,17 +295,24 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
         if (busy == "check" || busy == "sim") Text(if (busy == "sim") "Simulazione in corso…" else "Valutazione degli AP…", style = MaterialTheme.typography.bodySmall)
 
         sim?.let { s ->
+            LaunchedEffect(s.ap.id) { simCapacity = false }
             SectionCard("Simulazione${if (s.theoretical) " teorica" else ""} · ${s.ap.name}") {
                 val good = s.cells.count { it.dbm >= s.minDbm }
                 Text(
                     if (s.cells.isEmpty()) "Simulazione non possibile: ${if (s.customers > 0) "troppo pochi clienti con segnale e posizione" else "nessun cliente con posizione"}."
                     else "${if (s.theoretical) "Nessun cliente da cui calibrare" else "Calibrata su ${s.customers} clienti"}" +
                         (if (s.ignored > 0) " (${s.ignored} sull'AP o oltre 20 km, esclusi dal calcolo)" else "") +
-                        " · raggio ${km(s.radiusM)} · ${Math.round(100.0 * good / s.cells.size)}% dell'area sopra ${s.minDbm} dBm",
+                        " · raggio ${km(s.radiusM)} · ${Math.round(100.0 * good / s.cells.size)}% dell'area sopra ${s.minDbm} dBm" +
+                        (if (s.capacity) ", ${Math.round(100.0 * s.cells.count { it.dbm >= s.minDbm && (it.cap ?: 0.0) >= 50 } / s.cells.size)}% con almeno 50 Mbit/s" else ""),
                     style = MaterialTheme.typography.bodySmall,
                 )
+                if (s.capacity) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = !simCapacity, onClick = { simCapacity = false }, label = { Text("Segnale") })
+                    FilterChip(selected = simCapacity, onClick = { simCapacity = true }, label = { Text("Capacità") })
+                }
+                s.load?.describe()?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium) }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    SIM_SCALE.forEach { (color, label) ->
+                    (if (simCapacity && s.capacity) CAP_SCALE else SIM_SCALE).forEach { (color, label) ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(color))
                             Spacer(Modifier.width(4.dp))
@@ -304,7 +323,8 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                 Text(
                     "Segnale atteso per una CPE nuova: potenza dell'AP, spazio libero" +
                         (if (s.antenna) ", diagramma dell'antenna" else "") +
-                        (if (s.terrain) " e colline tra ogni punto e l'AP (non edifici e alberi)" else " (terreno non disponibile: colline non considerate)") +
+                        (if (s.terrain) ", colline, edifici e alberi tra ogni punto e l'AP" else " (terreno non disponibile: colline non considerate)") +
+                        (if (s.capacity) ". Capacità: dal segnale con la curva delle CPE reali; la sera è condivisa con gli altri clienti dell'AP" else "") +
                         (if (s.theoretical) ". Stima teorica, margine ±8 dB: l'AP non ha clienti con segnale." else ". I clienti collegati la correggono, di più quanti più sono.") +
                         " Area vuota: nessuna copertura (sotto −90 dBm). Colori tenui: stima poco affidabile. Per un punto preciso usa Visibilità.",
                     style = MaterialTheme.typography.bodySmall,
@@ -334,6 +354,7 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                                 ap.estimate?.describe()?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium) }
+                                ap.load?.describe()?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = if (ap.load.level == "carico") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) }
                             }
                         }
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(start = 34.dp)) {

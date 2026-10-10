@@ -221,6 +221,7 @@ fun PointingScreen(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (
                                 style = MaterialTheme.typography.bodySmall,
                             )
                             a.estimate?.describe()?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium) }
+                            a.load?.describe()?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
                             if (a.status != "active") Text("AP non attivo", color = WarnAmber, style = MaterialTheme.typography.bodySmall)
                         }
                     }
