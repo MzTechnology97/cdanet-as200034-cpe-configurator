@@ -16,7 +16,8 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
-import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.foundation.layout.safeDrawing
+import androidx.compose.foundation.layout.windowInsetsPadding
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
@@ -32,6 +33,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -116,11 +118,11 @@ fun deviceColor(t: DeviceType): Color = when (t) {
 
 /** Dark theme: the app background is dark, colors and lines get lighter and stronger. */
 @Composable
-private fun isDark() = MaterialTheme.colorScheme.background.luminance() < 0.5f
+internal fun isDark() = MaterialTheme.colorScheme.background.luminance() < 0.5f
 
 /** The type color, lightened on a dark background so icons and borders stay readable. */
 @Composable
-private fun typeColor(t: DeviceType): Color = deviceColor(t).let { if (isDark()) lerp(it, Color.White, 0.38f) else it }
+internal fun typeColor(t: DeviceType): Color = deviceColor(t).let { if (isDark()) lerp(it, Color.White, 0.38f) else it }
 
 @Composable
 private fun linkColor(k: LinkKind): Color {
@@ -142,7 +144,7 @@ private fun DrawScope.linkStroke(k: LinkKind, boost: Float = 1f): Pair<Float, Pa
 
 /** Vendor badge (our own short label and color, not the trademark logo). */
 @Composable
-private fun Badge(vendor: String?, small: Boolean) {
+internal fun Badge(vendor: String?, small: Boolean) {
     val b = VendorBadges.of(vendor) ?: return
     Text(
         b.short,
@@ -155,7 +157,7 @@ private fun Badge(vendor: String?, small: Boolean) {
 }
 
 @Composable
-private fun DeviceIcon(type: DeviceType, size: Dp, iconSize: Dp, ghost: Boolean, selected: Boolean) {
+internal fun DeviceIcon(type: DeviceType, size: Dp, iconSize: Dp, ghost: Boolean, selected: Boolean) {
     val color = typeColor(type)
     Box(
         Modifier
@@ -196,15 +198,24 @@ fun TopologyGraphView(
             onDismissRequest = { full = false },
             properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false, decorFitsSystemWindows = false),
         ) {
+            // the whole screen, also beside the camera cutout (in landscape it is on a side), the
+            // content inside the safe area
+            val window = (androidx.compose.ui.platform.LocalView.current.parent as? androidx.compose.ui.window.DialogWindowProvider)?.window
+            androidx.compose.runtime.SideEffect {
+                window?.let { w ->
+                    if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.P) {
+                        w.attributes = w.attributes.apply { layoutInDisplayCutoutMode = android.view.WindowManager.LayoutParams.LAYOUT_IN_DISPLAY_CUTOUT_MODE_SHORT_EDGES }
+                    }
+                    w.setLayout(android.view.ViewGroup.LayoutParams.MATCH_PARENT, android.view.ViewGroup.LayoutParams.MATCH_PARENT)
+                }
+            }
             androidx.compose.material3.Surface(Modifier.fillMaxSize()) {
-                Column(Modifier.fillMaxSize().systemBarsPadding().padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                Column(
+                    Modifier.fillMaxSize().windowInsetsPadding(androidx.compose.foundation.layout.WindowInsets.safeDrawing).padding(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
                     Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                     TopologyGraphView(graph, selected, title, Modifier.weight(1f), fullScreen = true, onClose = { full = false }, onSelect = onSelect)
-                    selected?.let { id ->
-                        Box(Modifier.heightIn(max = 260.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
-                            TopologyNodeCard(graph, id, null) { onSelect(null) }
-                        }
-                    }
                 }
             }
         }
@@ -213,18 +224,28 @@ fun TopologyGraphView(
     val context = androidx.compose.ui.platform.LocalContext.current
     val scope = androidx.compose.runtime.rememberCoroutineScope()
     var exporting by remember { mutableStateOf<String?>(null) }
-    /** PNG or PDF of what is shown (all devices, or network devices only), then the share sheet. */
+    /** Last export saved in Downloads: file, its Uri and type, for "Apri" and "Condividi". */
+    var saved by remember { mutableStateOf<Triple<java.io.File, android.net.Uri, String>?>(null) }
+    /** PNG or PDF of what is shown (all devices, or network devices only), saved in Downloads (shared on Android 9 and older). */
     fun export(kind: String) {
         exporting = kind
+        val mime = if (kind == "PNG") "image/png" else "application/pdf"
         scope.launch {
-            val f = runCatching {
-                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
-                    if (kind == "PNG") TopologyExport.png(context, graph, infraOnly, title) else TopologyExport.pdf(context, graph, infraOnly, title)
+            val r = runCatching {
+                kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+                    val f = if (kind == "PNG") TopologyExport.png(context, graph, infraOnly, title) else TopologyExport.pdf(context, graph, infraOnly, title)
+                    f to TopologyExport.saveToDownloads(context, f, mime)
                 }
             }.getOrNull()
             exporting = null
-            if (f != null) TopologyExport.share(context, f, if (kind == "PNG") "image/png" else "application/pdf")
-            else android.widget.Toast.makeText(context, "Esportazione non riuscita", android.widget.Toast.LENGTH_SHORT).show()
+            when {
+                r == null -> android.widget.Toast.makeText(context, "Esportazione non riuscita", android.widget.Toast.LENGTH_SHORT).show()
+                r.second == null -> TopologyExport.share(context, r.first, mime)
+                else -> {
+                    saved = Triple(r.first, r.second!!, mime)
+                    android.widget.Toast.makeText(context, "Salvato in ${TopologyExport.DOWNLOAD_FOLDER}", android.widget.Toast.LENGTH_SHORT).show()
+                }
+            }
         }
     }
     var ports by rememberSaveable { mutableStateOf(true) }
@@ -239,14 +260,23 @@ fun TopologyGraphView(
     val faint = if (dark) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f) else MaterialTheme.colorScheme.outline.copy(alpha = 0.55f)
     val wireless = if (dark) Color(0xFF38BDF8) else WirelessBlue
 
+    // inline: tall, but within the screen in landscape (the page scrolls around it)
+    val inlineHeight = (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp - 150).coerceIn(260, 560).dp
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         BoxWithConstraints(if (fullScreen) Modifier.fillMaxWidth().weight(1f) else Modifier.fillMaxWidth()) {
             // whole graph in view: by width inline, by width and height at full screen (controls and legend aside)
-            val fit = (if (fullScreen) minOf(maxWidth.value / layout.width, (maxHeight.value - 140f) / layout.height) else maxWidth.value / layout.width)
-                .coerceIn(0.2f, 1f)
-            var scale by remember(layout, fit) { mutableFloatStateOf(fit) }
-            var offset by remember(layout, fit) { mutableStateOf(Offset.Zero) }
             var area by remember { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+            val density = androidx.compose.ui.platform.LocalDensity.current.density
+            // whole graph in view: by width inline (the page scrolls), by width and height at full screen
+            val fit = (if (area.width == 0) maxWidth.value / layout.width
+            else minOf(area.width / density / layout.width, if (fullScreen) area.height / density / layout.height else Float.MAX_VALUE))
+                .coerceIn(0.2f, 1f)
+            var scale by remember(layout) { mutableFloatStateOf(fit) }
+            var offset by remember(layout) { mutableStateOf(Offset.Zero) }
+            // fitted again when the view is measured or rotated, not when a line of text changes its height
+            /** Fitted view: centered horizontally when the graph is narrower than the map. */
+            fun fitted() = Offset(maxOf(0f, (area.width - layout.width * density * fit) / 2f), 0f)
+            LaunchedEffect(layout, area.width) { scale = fit; offset = fitted() }
             /** Buttons zoom around the center of the view. */
             fun zoomBy(f: Float) {
                 val newScale = (scale * f).coerceIn(0.2f, 3f)
@@ -260,14 +290,27 @@ fun TopologyGraphView(
                     FilterChip(selected = ports, onClick = { ports = !ports }, label = { Text("Porte") })
                     OutlinedButton(onClick = { zoomBy(1 / 1.4f) }) { Text("−") }
                     OutlinedButton(onClick = { zoomBy(1.4f) }) { Text("+") }
-                    OutlinedButton(onClick = { scale = fit; offset = Offset.Zero }) { Text("Adatta") }
+                    OutlinedButton(onClick = { scale = fit; offset = fitted() }) { Text("Adatta") }
                     if (fullScreen) OutlinedButton(onClick = onClose) { Text("Chiudi") }
                     else OutlinedButton(onClick = { full = true }) { Text("Schermo intero") }
                     OutlinedButton(onClick = { export("PNG") }, enabled = exporting == null) { Text(if (exporting == "PNG") "PNG…" else "PNG") }
                     OutlinedButton(onClick = { export("PDF") }, enabled = exporting == null) { Text(if (exporting == "PDF") "PDF…" else "PDF") }
                 }
+                saved?.let { (f, uri, mime) ->
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            "Salvato in ${TopologyExport.DOWNLOAD_FOLDER}: ${f.name}",
+                            style = MaterialTheme.typography.bodySmall,
+                            modifier = Modifier.weight(1f),
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                        )
+                        TextButton(onClick = { TopologyExport.open(context, uri, mime) }) { Text("Apri") }
+                        TextButton(onClick = { TopologyExport.share(context, f, mime) }) { Text("Condividi") }
+                    }
+                }
                 Box(
-                    (if (fullScreen) Modifier.fillMaxWidth().weight(1f) else Modifier.fillMaxWidth().height(560.dp))
+                    (if (fullScreen) Modifier.fillMaxWidth().weight(1f) else Modifier.fillMaxWidth().height(inlineHeight))
                         .onSizeChanged { area = it }
                         .clip(RoundedCornerShape(12.dp))
                         .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.4f))
@@ -388,6 +431,10 @@ fun TopologyGraphView(
                             }
                         }
                     }
+                    // at full screen the details open as a callout next to the device, inside the map
+                    if (fullScreen) selected?.let { id ->
+                        layout.byId[id]?.let { p -> NodeCallout(graph, id, p.x + p.w / 2, p.y, p.y + p.h, scale, offset, area) { onSelect(null) } }
+                    }
                 }
             }
         }
@@ -442,6 +489,58 @@ fun TopologyNodeCard(graph: Graph, id: String, onOpenHost: (() -> Unit)?, onClos
         Text("Collegamenti (${links.size})", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
         for (l in links) LinkLine(graph, l, id)
         onOpenHost?.let { OutlinedButton(onClick = it) { Text("Apri nell'elenco host") } }
+    }
+}
+
+/**
+ * Details of a device in a card pointing at it: below the device, or above when there is no room;
+ * [cx], [top], [bottom] are in graph units (dp before zoom), [area] is the visible map in px.
+ */
+@Composable
+private fun NodeCallout(graph: Graph, id: String, cx: Float, top: Float, bottom: Float, scale: Float, offset: Offset, area: androidx.compose.ui.unit.IntSize, onClose: () -> Unit) {
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    var size by remember(id) { mutableStateOf(androidx.compose.ui.unit.IntSize.Zero) }
+    val bg = MaterialTheme.colorScheme.surface
+    val edge = MaterialTheme.colorScheme.outlineVariant
+    with(density) {
+        val margin = 8.dp.toPx()
+        val arrow = 10.dp.toPx()
+        val x = offset.x + cx.dp.toPx() * scale
+        val yTop = offset.y + top.dp.toPx() * scale
+        val yBottom = offset.y + bottom.dp.toPx() * scale
+        val below = yBottom + arrow + size.height <= area.height - margin || yTop - arrow - size.height < margin
+        val left = (x - size.width / 2f).coerceIn(margin, maxOf(margin, area.width - size.width - margin))
+        val y = if (below) yBottom + arrow else yTop - arrow - size.height
+        val width = minOf(if (area.width > area.height) 380.dp else 320.dp, (area.width / density.density).dp - 16.dp)
+        Box(
+            Modifier
+                .offset { androidx.compose.ui.unit.IntOffset(left.toInt(), y.coerceIn(margin, maxOf(margin, area.height - size.height - margin)).toInt()) }
+                .width(width)
+                .onSizeChanged { size = it }
+                .alpha(if (size == androidx.compose.ui.unit.IntSize.Zero) 0f else 1f),
+        ) {
+            // the tip towards the device
+            Canvas(Modifier.matchParentSize()) {
+                val tip = (x - left).coerceIn(16.dp.toPx(), this.size.width - 16.dp.toPx())
+                val path = Path().apply {
+                    if (below) { moveTo(tip - arrow, 1f); lineTo(tip, -arrow); lineTo(tip + arrow, 1f) }
+                    else { moveTo(tip - arrow, this@Canvas.size.height - 1f); lineTo(tip, this@Canvas.size.height + arrow); lineTo(tip + arrow, this@Canvas.size.height - 1f) }
+                    close()
+                }
+                drawPath(path, bg)
+                drawPath(path, edge, style = Stroke(1.dp.toPx()))
+            }
+            androidx.compose.material3.Surface(
+                shape = RoundedCornerShape(14.dp),
+                color = bg,
+                shadowElevation = 6.dp,
+                border = androidx.compose.foundation.BorderStroke(1.dp, edge),
+            ) {
+                Box(Modifier.heightIn(max = minOf(300.dp, (area.height / density.density).dp - 40.dp).coerceAtLeast(120.dp)).verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(horizontal = 12.dp, vertical = 6.dp)) {
+                    TopologyNodeCard(graph, id, null, onClose)
+                }
+            }
+        }
     }
 }
 
