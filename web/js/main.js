@@ -7,6 +7,7 @@ import { coverageView } from './views/coverage.js';
 import { dashboardView } from './views/dashboard.js';
 import { eventsView } from './views/events.js';
 import { healthView } from './views/health.js';
+import { customersView } from './views/customers.js';
 import { jobsView } from './views/jobs.js';
 import { modulesView } from './views/modules-view.js';
 import { outagesView } from './views/outages.js';
@@ -34,6 +35,7 @@ const ROUTES = [
   { id: 'work-orders', icon: 'pending_actions', label: 'Interventi', installerLabel: 'I miei interventi', view: workOrdersView, module: 'work_orders' },
   { id: 'jobs', label: 'Storico provisioning', icon: 'history', view: jobsView },
   { id: 'health', icon: 'monitor_heart', label: 'Salute CPE', installerLabel: 'Le mie CPE', view: healthView, module: 'cpe_health' },
+  { id: 'customers', icon: 'my_location', label: 'Clienti', view: customersView, admin: true },
   { id: 'stats', icon: 'query_stats', label: 'Statistiche', view: statsView, admin: true, module: 'stats' },
   { id: 'outages', icon: 'power_off', label: 'Guasti Enel', view: outagesView, module: 'power_outages' },
   { id: 'network', icon: 'hub', label: 'Stato rete', view: networkView, module: 'network_status' },

@@ -15,13 +15,13 @@ const API_KEY = 'K3y-Segreta-IspBilling-0123456789';
  */
 function fakeCrm() {
   const accounts = [
-    { account_id: '1', customer_id: '10', username: 'rossi@cda', status: 'Attivo', profile_name: 'ISP37@CDA-NET-HOME-30-6-NEW', static_ip: '', cpe_type: 'ubiquiti' },
-    { account_id: '2', customer_id: '20', username: 'bianchi@cda', status: 'Attivo', profile_name: 'ISP37@CDA-NET-HOME-100-20', static_ip: '', cpe_type: 'ubiquiti' },
-    { account_id: '3', customer_id: '30', username: 'verdi@cda', status: 'Attivo', profile_name: 'ISP37@CDA-NET-HOME-FTTH', static_ip: '', cpe_type: 'generic' },
+    { account_id: '1', customer_id: '10', address_id: '101', username: 'rossi@cda', status: 'Attivo', profile_name: 'ISP37@CDA-NET-HOME-30-6-NEW', static_ip: '', cpe_type: 'ubiquiti' },
+    { account_id: '2', customer_id: '20', address_id: '201', username: 'bianchi@cda', status: 'Attivo', profile_name: 'ISP37@CDA-NET-HOME-100-20', static_ip: '', cpe_type: 'ubiquiti' },
+    { account_id: '3', customer_id: '30', address_id: '301', username: 'verdi@cda', status: 'Attivo', profile_name: 'ISP37@CDA-NET-HOME-FTTH', static_ip: '', cpe_type: 'generic' },
     { account_id: '4', customer_id: '40', username: 'neri@cda', status: 'Terminato', profile_name: 'x', static_ip: '', cpe_type: 'generic' },
   ];
   const customers = [
-    { customer_id: '10', customer_name: 'ROSSI MARIO', status: 'active', group_name: 'Abbonamento' },
+    { customer_id: '10', customer_name: 'ROSSI MARIO', status: 'active', group_name: 'Abbonamento', phone_number: '3330000001', address_line1: 'Via Sede Legale 1', city: 'Enna' },
     { customer_id: '20', customer_name: 'BIANCHI LUCA', status: 'active', group_name: 'Abbonamento' },
     { customer_id: '30', customer_name: 'VERDI ANNA', status: 'active', group_name: 'Ricaricabile' },
     { customer_id: '40', customer_name: 'NERI PIO', status: 'active', group_name: 'Abbonamento' },
@@ -35,6 +35,12 @@ function fakeCrm() {
     '2': { connection_status: 'offline', mac_address: '22:33:44:55:66:77', client_ip: null, session_duration: 0 },
     '3': { connection_status: 'offline', mac_address: null, client_ip: null, session_duration: 0 },
   };
+  // installation sites: ROSSI's has coordinates, VERDI's has none
+  const addresses: Record<string, object[]> = {
+    '10': [{ address_id: 100, description: 'Indirizzo principale', address_line1: 'Via Sede Legale 1', city: 'Enna', lat: '', lng: '', is_main: true }, { address_id: 101, description: 'Installazione', address_line1: 'Contrada Monte 5', city: 'Enna', postal_code: '94100', lat: '37.5701', lng: '14.2702', is_main: false }],
+    '20': [{ address_id: 201, description: 'Indirizzo principale', address_line1: 'Via Valle 2', city: 'Enna', lat: '37.6', lng: '14.1', is_main: true }],
+    '30': [{ address_id: 301, description: 'Indirizzo principale', address_line1: 'Via Senza Punto 3', city: 'Enna', lat: null, lng: null, is_main: true }],
+  };
   const calls: string[] = [];
   const page = (data: object[]) => Response.json({ status: 'OK', message: null, data: { data, max_items: 30, total: String(data.length), prev: null, next: null, pages: 1 } });
   const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
@@ -45,6 +51,8 @@ function fakeCrm() {
     if (url.pathname === '/api/modules/ispradius2/accounts') return page(accounts);
     if (url.pathname === '/api/modules/crm/customers') return page(customers);
     if (url.pathname === '/api/modules/subscription-services/service-instances') return page(instances);
+    const ad = /^\/api\/modules\/crm\/customers\/(\d+)\/additional-addresses$/.exec(url.pathname);
+    if (ad) return Response.json({ status: 'OK', data: addresses[ad[1]!] ?? [] });
     const st = /^\/api\/modules\/ispradius2\/accounts\/(\d+)\/status$/.exec(url.pathname);
     if (st) return Response.json({ status: 'OK', data: sessions[st[1]!] ?? { connection_status: 'offline' } });
     return Response.json({ status: 'ERROR', message: 'Permesso mancante' }, { status: 403 });
@@ -103,10 +111,25 @@ describe('Stato RADIUS dal CRM per il NOC', () => {
     const ap = net.pops.flatMap((p: { aps: object[] }) => p.aps).find((a: { id: string }) => a.id === 'ap-n2');
     assert.deepEqual(ap.pppoe, { online: 1, offline: 1, suspended: 0 });
 
+    // Clienti: records with their installation sites, PPPoE and CPE
+    const list = (await call('GET', '/api/admin/crm/customers')).json();
+    assert.equal(list.total, 3, 'customers with a live account (NERI is terminated)');
+    const rc = list.rows.find((c: { name: string }) => c.name === 'ROSSI MARIO');
+    assert.deepEqual([rc.phone, rc.mainAddress, rc.sites.length], ['3330000001', 'Via Sede Legale 1, Enna', 1]);
+    const site = rc.sites[0];
+    assert.deepEqual([site.address, site.position, site.account.username, site.cpe.name], ['Contrada Monte 5, 94100 Enna', { lat: 37.5701, lon: 14.2702 }, 'rossi@cda', 'ROSSI MARIO']);
+    assert.deepEqual((await call('GET', '/api/admin/crm/customers?filter=nocoords')).json().rows.map((c: { name: string }) => c.name), ['VERDI ANNA']);
+    assert.deepEqual((await call('GET', '/api/admin/crm/customers?filter=all')).json().total, 4);
+    assert.deepEqual((await call('GET', '/api/admin/crm/customers?q=contrada')).json().rows.map((c: { name: string }) => c.name), ['ROSSI MARIO']);
+    const one = (await call('GET', '/api/admin/crm/customers/30')).json();
+    assert.deepEqual([one.name, one.sites[0].position, one.sites[0].approximate], ['VERDI ANNA', null, false], 'no geocoder answer: no position');
+    assert.equal((await call('GET', '/api/admin/crm/customers/999')).statusCode, 404);
+
     // installers: no RADIUS anywhere
     await call('POST', '/api/admin/users', { username: 'tecnico', password: 'Installer-Pass-123' });
     const T = await login('tecnico', 'Installer-Pass-123');
     assert.equal((await call('GET', '/api/admin/crm/radius', undefined, T)).statusCode, 403);
+    assert.equal((await call('GET', '/api/admin/crm/customers', undefined, T)).statusCode, 403);
     const mine = (await call('GET', '/api/cpe-health', undefined, T)).json();
     assert.ok(!JSON.stringify(mine).includes('rossi@cda') && !JSON.stringify(mine).includes('pppoe_offline'));
   });
