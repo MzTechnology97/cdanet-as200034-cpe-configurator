@@ -18,7 +18,8 @@
     <li><a href="#g-nuovo-installatore">Un nuovo installatore, dall'account al primo intervento</a></li>
     <li><a href="#g-storico">Storico, accettazione in UISP e verbali</a></li>
     <li><a href="#g-salute">Salute CPE e Statistiche</a></li>
-    <li><a href="#g-guasti">Guasti Enel e Stato rete</a></li>
+    <li><a href="#g-guasti">Guasti Enel e Stato rete</a>
+      <ol><li><a href="#g-ia-ap">IA-AP, assistente della rete</a></li></ol></li>
     <li><a href="#g-aggiornamenti">Aggiornamenti di server e app</a></li>
     <li><a href="#g-privacy">Informativa privacy degli utenti</a></li>
     <li><a href="#g-registro">Registro attività e privacy</a></li>
@@ -184,6 +185,14 @@
   <li><b>Simula</b> (anche dal clic su un AP della mappa): colora l'area attorno all'AP con il segnale atteso per una CPE nuova, con lo stesso calcolo della stima per un punto: teoria, diagramma dell'antenna, terreno tra ogni cella e l'AP e calibrazione sui clienti (scala da oltre −60 a sotto −80 dBm, tratteggio: settore dell'antenna o area già servita). Arriva fin dove il segnale scende a −80 dBm, al massimo 20 km. Per un AP senza clienti la simulazione è <i>teorica</i> (vedi Impostazioni server → Simulazione radio).</li>
   <li><b>Visibilità</b>: profilo del terreno dal punto all'AP (con edifici e alberi, se scaricati) con la linea di vista e il 60% della zona di Fresnel, all'<b>altezza della CPE</b> indicata per quel punto. Dice se la linea è libera, quanto alzare la CPE o, oltre un palo di 12 m, di scegliere un altro AP.</li>
 </ul>
+<h3 id="g-ia-ap">IA-AP, assistente della rete</h3>
+<p>Console → <b>IA-AP</b> e app → Rete → <b>IA-AP</b>, solo per gli amministratori. Ogni ora, con i dati del carico, il server guarda tutti gli AP di UISP e le loro CPE e scrive cosa sistemare, dal più grave:</p>
+<ul>
+  <li><b>CPE</b>: SNR basso, modulazione molto sotto quella che il segnale permetterebbe, airtime eccessivo (una CPE lenta rallenta tutto l'AP), segnale in calo nella settimana, polarizzazioni sbilanciate, segnale molto sotto quello atteso dal modello di copertura, interferenza vista solo dal cliente, spostamento su un AP vicino più libero.</li>
+  <li><b>AP</b>: carico serale alto, tante CPE sotto la modulazione ideale, rumore alto, canale sovrapposto a un nostro AP vicino che lo vede, canale più libero, ampiezza da restringere o allargare.</li>
+</ul>
+<p>Il <b>canale suggerito</b> è scelto sullo spettro misurato dall'AP e dalle sue CPE (come airView), sempre intero dentro la banda di Impostazioni server → Assistente rete (predefinita 5120–5800 MHz) e mai sopra un nostro AP vicino o sul canale suggerito a un altro AP. Tiene conto della risposta in frequenza delle antenne: un canale che porterebbe il cliente più debole sotto il minimo del collaudo viene scartato. Di due AP sullo stesso canale ne viene spostato uno solo.</p>
+<p>Ogni avviso dice cosa fare; <i>Gestisci CPE</i> apre la scheda della CPE, <i>Ignora 7/90 giorni</i> lo nasconde (resta nello storico eventi), <i>Aggiorna ora</i> rilegge UISP. I <b>nuovi problemi critici</b> arrivano come notifica agli amministratori (non su Telegram). L'assistente non cambia nulla sui dispositivi: le modifiche si fanno in UISP.</p>
 <figure><img data-guide="admin-outages.jpg" alt="Guasti Enel"><figcaption>Guasti Enel: un guasto MT a 556 m dal POP Demo Monte.</figcaption></figure>
 <figure><img data-guide="admin-network.jpg" alt="Stato rete"><figcaption>Stato rete.</figcaption></figure>
 

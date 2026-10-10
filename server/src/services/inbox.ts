@@ -14,6 +14,7 @@ export const NOTIFY_KINDS = {
   work_order_reminder: { label: 'Promemoria degli interventi (24 h, 2 h, 1 h, 30 min prima)', audience: 'installer', telegram: true },
   work_order_late: { label: 'Intervento in ritardo o non fatto', audience: 'installer', telegram: true },
   work_order_noc: { label: 'Interventi in ritardo o non fatti (NOC)', audience: 'noc', telegram: true },
+  network_advice: { label: 'Assistente rete: nuovi problemi critici su AP e CPE', audience: 'noc', telegram: false },
 } as const;
 export type NotifyKind = keyof typeof NOTIFY_KINDS;
 export const isNotifyKind = (k: string): k is NotifyKind => k in NOTIFY_KINDS;

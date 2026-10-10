@@ -41,6 +41,7 @@ import { mapRoutes } from './routes/map.ts';
 import { networkRoutes } from './routes/network.ts';
 import { pointingRoutes } from './routes/pointing.ts';
 import { terrainRoutes } from './routes/terrain.ts';
+import { advisorRoutes } from './routes/advisor.ts';
 import { serverSettingsRoutes } from './routes/server-settings.ts';
 import { infraRoutes } from './routes/infra.ts';
 import { guideRoutes } from './routes/guide.ts';
@@ -51,6 +52,7 @@ import { createServerSettings } from './services/server-settings.ts';
 import { createDem } from './services/dem.ts';
 import { createTerrainStore } from './services/terrain-store.ts';
 import { createApLoad, type ApLoadService } from './services/ap-load.ts';
+import { createAdvisor, type Advisor } from './services/ap-advisor.ts';
 
 const CSP = [
   "default-src 'self'",
@@ -111,6 +113,7 @@ export async function buildApp(
     crm: createCrmSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
     crmSync: undefined as unknown as CrmSync,
     apLoad: undefined as unknown as ApLoadService,
+    advisor: undefined as unknown as Advisor,
     geocoder: createGeocoder({ ...cfg.geocoder, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
     telegram,
     modules,
@@ -123,7 +126,8 @@ export async function buildApp(
     version,
   };
   ctx.crmSync = createCrmSync(db, ctx.crm);
-  ctx.apLoad = createApLoad(db, () => ctx.uisp);
+  ctx.advisor = createAdvisor(ctx);
+  ctx.apLoad = createApLoad(db, () => ctx.uisp, undefined, (inputs) => ctx.advisor.run(inputs));
   ctx.outages = createOutages(db, {
     ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}),
     getUisp: () => ctx.uisp,
@@ -219,6 +223,7 @@ export async function buildApp(
   networkRoutes(app, ctx);
   pointingRoutes(app, ctx);
   terrainRoutes(app, ctx);
+  advisorRoutes(app, ctx);
   serverSettingsRoutes(app, ctx);
   infraRoutes(app, ctx);
   guideRoutes(app, ctx);

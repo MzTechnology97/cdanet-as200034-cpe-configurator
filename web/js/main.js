@@ -26,6 +26,7 @@ import { workOrdersView } from './views/work-orders.js';
 import { firmwareView } from './views/firmware.js';
 import { privacyView } from './views/privacy.js';
 import { cpeView } from './views/cpe.js';
+import { advisorView } from './views/advisor.js';
 import { setAdmin } from './terms.js';
 import { icon } from './icons.js';
 
@@ -42,6 +43,7 @@ const ROUTES = [
   { id: 'stats', icon: 'query_stats', label: 'Statistiche', view: statsView, admin: true, module: 'stats' },
   { id: 'outages', icon: 'power_off', label: 'Guasti Enel', view: outagesView, module: 'power_outages' },
   { id: 'network', icon: 'hub', label: 'Stato rete', view: networkView, module: 'network_status' },
+  { id: 'ia-ap', icon: 'troubleshoot', label: 'IA-AP', view: advisorView, admin: true },
   { id: 'mytemplates', icon: 'memory', label: 'Template disponibili', view: myTemplatesView, installer: true },
   { id: 'coverage', icon: 'explore', label: 'Copertura', view: coverageView, module: 'coverage' },
   { id: 'routeros', icon: 'router', label: 'MikroTik · RouterOS', view: routerosView, module: 'routeros' },

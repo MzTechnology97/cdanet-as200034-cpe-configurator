@@ -876,3 +876,34 @@ data class PrivacyDto(
 /** The installer's GPS against the work order's position (address or office coordinates). */
 @Serializable
 data class PositionCheckDto(val ok: Boolean = true, val checked: Boolean = false, val distanceM: Int? = null, val maxM: Int = 500, val reference: String? = null)
+
+/** IA-AP (admins): what to fix on APs and CPEs, from UISP and the coverage model. */
+@Serializable
+data class AdvisorDto(
+    val at: String? = null,
+    val loadAt: String? = null,
+    val range: AdvisorRangeDto = AdvisorRangeDto(),
+    val findings: List<AdvisorFindingDto> = emptyList(),
+)
+
+@Serializable
+data class AdvisorRangeDto(val from: Int = 5120, val to: Int = 5800)
+
+@Serializable
+data class AdvisorFindingDto(
+    val id: String,
+    val severity: String,
+    val kind: String = "",
+    val apId: String = "",
+    val apName: String = "",
+    val cpe: AdvisorCpeDto? = null,
+    val title: String = "",
+    val detail: String = "",
+    val action: String = "",
+    val params: Map<String, JsonElement>? = null,
+    val since: String? = null,
+    val dismissedUntil: String? = null,
+)
+
+@Serializable
+data class AdvisorCpeDto(val id: String? = null, val name: String = "", val mac: String? = null)

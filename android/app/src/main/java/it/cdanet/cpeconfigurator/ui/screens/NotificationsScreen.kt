@@ -27,7 +27,7 @@ import it.cdanet.cpeconfigurator.ui.ErrorBanner
 import it.cdanet.cpeconfigurator.ui.SectionCard
 import kotlinx.coroutines.launch
 
-private val ICONS = mapOf("provisioning_failed" to "❌", "install_ko" to "⛔", "review_pending" to "📶", "install_activated" to "✅", "work_order_noc" to "📋")
+private val ICONS = mapOf("provisioning_failed" to "❌", "install_ko" to "⛔", "review_pending" to "📶", "install_activated" to "✅", "work_order_noc" to "📋", "network_advice" to "🛠️")
 
 /**
  * The user's notifications (NOC approvals, activations; for admins also failures, KO and

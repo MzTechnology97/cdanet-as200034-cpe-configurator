@@ -61,8 +61,10 @@ fun installTabTitles(m: Map<String, Boolean>, admin: Boolean) = buildList {
     if (m["cpe_health"] != false) add(if (admin) "Salute CPE" else "Stato CPE")
 }
 
-fun networkTabTitles(m: Map<String, Boolean>) = buildList {
+fun networkTabTitles(m: Map<String, Boolean>, admin: Boolean = false) = buildList {
     if (m["network_status"] != false) add("Stato")
+    // IA-AP: what to fix on APs and CPEs, admins only (the server refuses the others)
+    if (admin) add("IA-AP")
     if (m["power_outages"] != false) {
         add("Guasti")
         add("Aree e avvisi")
@@ -149,13 +151,14 @@ fun InstallationsHub(
     TabbedHub(tabs, selected, onSelect)
 }
 
-/** "Rete": POP/AP state, Enel outages, the user's areas of interest and the APs near a place. */
+/** "Rete": POP/AP state, IA-AP (admins), Enel outages, the user's areas of interest and the APs near a place. */
 @Composable
 fun NetworkHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit, onAim: (CompassTarget) -> Unit, onCompass: (CompassTarget) -> Unit) {
     val modules by c.modules.collectAsState()
-    val tabs = networkTabTitles(modules).map { t ->
+    val tabs = networkTabTitles(modules, c.session.isAdmin).map { t ->
         when (t) {
             "Stato" -> HubTab(t, R.drawable.ic_hub) { NetworkStatusScreen(c) }
+            "IA-AP" -> HubTab(t, R.drawable.ic_troubleshoot) { AdvisorScreen(c) }
             "Guasti" -> HubTab(t, R.drawable.ic_power_off) { OutagesScreen(c, OutageSection.List) }
             "Aree e avvisi" -> HubTab(t, R.drawable.ic_my_location) { OutagesScreen(c, OutageSection.Areas) }
             else -> HubTab(t, R.drawable.ic_explore, scroll = false) { PointingScreen(c, onAim = onAim, onCompass = onCompass) }
@@ -193,7 +196,7 @@ val DEVICES_TABS = listOf("SNMP", "TVCC")
 /** Tabs of an area with tabs (empty for a plain screen): where a Home shortcut lands. */
 fun hubTabTitles(s: Screen, m: Map<String, Boolean>, admin: Boolean): List<String> = when (s) {
     Screen.Installations -> installTabTitles(m, admin)
-    Screen.NetHub -> networkTabTitles(m)
+    Screen.NetHub -> networkTabTitles(m, admin)
     Screen.CpeHub -> cpeTabTitles(m)
     Screen.Lan -> LAN_TABS
     Screen.Diag -> DIAG_TABS
