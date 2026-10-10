@@ -179,7 +179,7 @@ export async function adminCoverageView() {
           { label: 'AP', render: (a) => h('div', {}, h('b', {}, a.name || a.id), h('div', { class: 'small muted' }, [a.ssid, a.siteName].filter(Boolean).join(' · '))) },
           { label: 'Distanza', render: (a) => km(a.distanceM) },
           { label: 'Puntamento', render: (a) => h('span', { class: 'bearing' }, h('span', { class: 'arrow', 'data-deg': a.bearing }, '↑'), ` ${a.bearing}° ${a.direction}`) },
-          { label: 'Segnale stimato', render: (a) => estimateCell(a.estimate) },
+          { label: 'Segnale stimato', render: (a) => h('div', {}, estimateCell(a.estimate), a.failures ? h('div', { class: 'small' }, `${a.failures} ${a.failures === 1 ? 'installazione fallita' : 'installazioni fallite'} qui vicino verso questo AP`) : null) },
           { label: 'Carico (20–23)', render: (a) => loadCell(a.load) },
           { label: 'Client', render: (a) => a.stations ?? '—' },
           { label: 'Frequenza', render: (a) => (a.frequency ? `${a.frequency} MHz` : '—') },
@@ -219,7 +219,7 @@ export async function adminCoverageView() {
         h(
           'p',
           { class: 'small muted' },
-          `${r.inRange} AP valutati entro ${r.maxKm} km${r.inRange > r.aps.length ? ` (mostrati i ${r.aps.length} migliori)` : ''}, ordinati per segnale stimato (minimo per il collaudo ${r.minSignalDbm} dBm). La stima viene dalle CPE già collegate a ogni AP; la visibilità usa il terreno e l’altezza della CPE indicata sopra.`,
+          `${r.inRange} AP valutati entro ${r.maxKm} km${r.hiddenWeak ? `, ${r.hiddenWeak} non mostrati perché più deboli di ${r.hideBelowDbm} dBm (Impostazioni server)` : ''}${r.inRange - (r.hiddenWeak ?? 0) > r.aps.length ? ` (mostrati i ${r.aps.length} migliori)` : ''}, ordinati per segnale stimato (minimo per il collaudo ${r.minSignalDbm} dBm). La stima viene dalle CPE già collegate a ogni AP; la visibilità usa il terreno e l’altezza della CPE indicata sopra.`,
         ),
       ),
     );
@@ -455,7 +455,10 @@ function accuracyCard() {
               'div',
               {},
               h('p', {}, h('b', {}, `Su ${last.customers} clienti collegati: errore tipico ${last.medianAbsDb} dB, ${last.within6Pct}% entro ±6 dB`), ` · tendenza ${sign(last.biasDb)} dB · 1 su 10 sbaglia più di ${last.p90AbsDb} dB · ${TERRAIN[last.terrain]}, edifici ${last.settings.buildingM} m, alberi ${last.settings.treeM} m, EIRP ${last.settings.eirpDbm} dBm (calibrazione ${sign(last.settings.calibrationDb)} dB) · ${fmtDate(last.at)}`),
-              h('p', { class: 'small muted' }, `Per terreno: ${Object.entries(last.byTerrain).map(([k, s]) => `${VERDICT[k] ?? k} ${s.n} (errore ${s.medianAbsDb} dB, tendenza ${sign(s.biasDb)})`).join(' · ')}. Collegati ma dati per ostruiti: ${last.blockedButConnected}; giudicati improbabili: ${last.unlikelyButConnected}.`),
+              h('p', { class: 'small muted' }, `Per terreno: ${Object.entries(last.byTerrain).map(([k, s]) => `${VERDICT[k] ?? k} ${s.n} (errore ${s.medianAbsDb} dB, tendenza ${sign(s.biasDb)})`).join(' · ')}. Collegati ma dati per ostruiti: ${last.blockedButConnected}; giudicati improbabili: ${last.unlikelyButConnected}.${last.realHeights ? ` Con l’altezza reale della CPE dal collaudo: ${last.realHeights}.` : ''}`),
+              last.failures?.n
+                ? h('p', { class: 'small' }, `Installazioni fallite per segnale, aggancio o ostacoli: ${last.failures.n}. Il modello le avrebbe giudicate: ${Object.entries(last.failures.rated).map(([k, v]) => `${k} ${v}`).join(', ')}${last.failures.rated.buono ? ' — quelle "buono" sono gli errori da guardare.' : '.'}`)
+                : h('p', { class: 'small muted' }, 'Nessuna installazione fallita per motivi radio da confrontare: quando l’app ne registra (Segnala KO), qui si vede se il modello le avrebbe evitate.'),
             )
           : h('p', { class: 'muted' }, 'Nessuna misura ancora: avviala per vedere quanto è affidabile la stima sulla tua rete.'),
         v.error ? h('div', { class: 'notice bad' }, v.error) : null,

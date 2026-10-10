@@ -82,6 +82,7 @@ Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). 
 
 ## Già rilasciato
 
+- v1.32.54: verifica di copertura senza gli AP più deboli della soglia di Impostazioni server (−70 dBm); installazioni fallite per motivi radio come casi negativi (avviso e AP mai "buono" entro 300 m, misurate nell'affidabilità); altezza reale della CPE dal collaudo nella misura dell'affidabilità.
 - v1.32.53: carico serale degli AP (airtime, utilizzo, banda di picco 20–23, SNR, airtime per CPE) aggiornato ogni ora da UISP: un AP carico non è mai consigliato come buono; capacità stimata del nuovo collegamento dalla curva segnale → capacità delle CPE reali, anche nella simulazione (vista segnale o capacità).
 - v1.32.51: terreno TINITALY 10 m ed edifici/alberi da ESA WorldCover (scaricati dal server per l'area della rete, dalla console); antenne sopra gli ostacoli vicini e AP in cima alla collina; Visibilità con edifici e alberi; riquadro "Affidabilità della stima" (ogni cliente stimato senza di lui, storico prima/dopo, AP e clienti stimati peggio); altezze medie di edifici e vegetazione in Impostazioni server.
 - v1.32.50: copertura riscritta: teoria radio + terreno (diffrazione sulle colline, stesso profilo di Visibilità) + calibrazione di rete e del singolo AP dai clienti reali; un solo cliente non può più dare −52 dBm dietro una collina; clienti con posizione UISP sull'AP o oltre 20 km esclusi (niente più "fasci" da 50 km); nessun AP oltre 20 km; quota GPS degli AP mai sotto il terreno + 5 m; simulazione con il terreno.

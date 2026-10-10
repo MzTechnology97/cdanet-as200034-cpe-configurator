@@ -4,6 +4,8 @@ import { buildApModel, estimateAt, MAX_LINK_M, rateCoverage } from '../domain/co
 import { bearingDeg, distanceM } from '../domain/geo.ts';
 import { isPtp } from './uisp.ts';
 import { obstacles, pointingConfig, terrainBetween, terrainSampler } from './terrain.ts';
+import { cpeHeights, fieldFailures } from './field-samples.ts';
+import { parseMac } from '../domain/policy.ts';
 
 /**
  * How reliable the coverage estimate is, measured on the real customers: for every connected CPE
@@ -30,6 +32,10 @@ export interface AccuracySummary {
   /** Connected customers the model calls blocked, and those it would rate "improbabile". */
   blockedButConnected: number;
   unlikelyButConnected: number;
+  /** Customers measured with the CPE height of their acceptance test (the others: the default). */
+  realHeights?: number;
+  /** Installations given up for radio reasons, and how the model rates them (it should not say "buono"). */
+  failures?: { n: number; rated: Record<string, number> };
 }
 
 export interface AccuracyRun extends AccuracySummary {
@@ -59,6 +65,8 @@ export function createCoverageAccuracy(ctx: AppContext) {
     const h = pointingConfig(ctx.db);
     const obs = obstacles(ctx);
     const min = ctx.cfg.thresholds.signalMin;
+    const heights = cpeHeights(ctx.db);
+    let realHeights = 0;
     const rows: Array<{ ap: string; err: number; real: number; est: number; verdict: string | null; device: string; mac: string | null; d: number; rating: string }> = [];
     let fine = false;
     let any = false;
@@ -76,11 +84,30 @@ export function createCoverageAccuracy(ctx: AppContext) {
         const d = distanceM(a.location, c);
         if (d < 50 || d > MAX_LINK_M) continue; // positions the model ignores anyway
         const m = buildApModel(a.location, a.clients.filter((x) => x !== c), a.heading, a.device.frequency, radio, prior);
-        const terrain = at ? terrainBetween(at, c, h.cpeHeightM, target, h.apHeightM, obs) : null;
+        // the real height of the CPE when its acceptance test says it, else the default
+        const mac = c.device.mac ? parseMac(c.device.mac) : null;
+        const own = mac ? heights.get(mac) : undefined;
+        if (own !== undefined) realHeights++;
+        const terrain = at ? terrainBetween(at, c, own ?? h.cpeHeightM, target, h.apHeightM, obs) : null;
         const e = estimateAt(m, d, bearingDeg(a.location, c), a.device.frequency, radio, terrain);
         if (e.signalDbm === null) continue;
         rows.push({ ap: a.device.id, err: e.signalDbm - c.signal!, real: c.signal!, est: e.signalDbm, verdict: terrain?.verdict ?? null, device: c.device.name, mac: c.device.mac, d: Math.round(d), rating: rateCoverage('active', e, min) });
       }
+    }
+    // the negative cases: where an installation failed, what would the model have said?
+    const rated: Record<string, number> = {};
+    let n = 0;
+    for (const f of fieldFailures(ctx.db)) {
+      const a = f.apName ? aps.find((x) => x.device.name.toLowerCase() === f.apName!.toLowerCase()) : undefined;
+      if (!a) continue;
+      const at = await terrainSampler(ctx.terrain, [a.location, f], 500);
+      const target = { lat: a.location.lat, lon: a.location.lon, gpsAltitude: a.device.altitude, siteHeight: a.siteHeight, frequency: a.device.frequency };
+      const m = buildApModel(a.location, a.clients, a.heading, a.device.frequency, radio, prior);
+      const terrain = at ? terrainBetween(at, f, h.cpeHeightM, target, h.apHeightM, obs) : null;
+      const e = estimateAt(m, distanceM(a.location, f), bearingDeg(a.location, f), a.device.frequency, radio, terrain);
+      const r = rateCoverage(a.device.status === 'active' ? 'active' : a.device.status, e, min);
+      rated[r] = (rated[r] ?? 0) + 1;
+      n++;
     }
     const errs = rows.map((x) => x.err);
     const abs = errs.map(Math.abs);
@@ -106,6 +133,8 @@ export function createCoverageAccuracy(ctx: AppContext) {
       byTerrain,
       blockedButConnected: rows.filter((x) => x.verdict === 'blocked' && x.real >= min).length,
       unlikelyButConnected: rows.filter((x) => x.rating === 'improbabile' && x.real >= min).length,
+      realHeights,
+      failures: { n, rated },
       aps: perAp.filter((a) => a.customers >= 3).sort((x, y) => Math.abs(y.biasDb) - Math.abs(x.biasDb)).slice(0, 15),
       worst: rows
         .sort((x, y) => Math.abs(y.err) - Math.abs(x.err))

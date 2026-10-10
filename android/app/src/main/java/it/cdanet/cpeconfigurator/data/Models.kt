@@ -223,6 +223,8 @@ data class PointingApDto(
     val rating: String? = null,
     /** Load of the AP in the evening (installers: the verdict only). */
     val load: ApLoadDto? = null,
+    /** Installations towards this AP given up nearby for radio reasons (no signal, no link, obstacles). */
+    val failures: Int = 0,
 )
 
 /** "Trova l'AP": nearest APs from the installation point with altitude and tilt. */
@@ -534,6 +536,8 @@ data class CoverageAp(
     val rating: String? = null,
     /** Load of the AP in the evening (installers: the verdict only). */
     val load: ApLoadDto? = null,
+    /** Installations towards this AP given up nearby for radio reasons (no signal, no link, obstacles). */
+    val failures: Int = 0,
 )
 
 /** What the app shows of a radio simulation (the map gets the whole answer). */
@@ -622,6 +626,11 @@ data class CoverageDto(
     /** APs within range that were rated, and how many were left out (inactive or signal too low). */
     val inRange: Int = 0,
     val discarded: Int = 0,
+    /** APs not listed because weaker than the threshold of Impostazioni server. */
+    val hiddenWeak: Int = 0,
+    /** Installations given up for radio reasons within 300 m (any AP). */
+    val failuresNearby: Int = 0,
+    val hideBelowDbm: Int = -70,
 )
 
 @Serializable

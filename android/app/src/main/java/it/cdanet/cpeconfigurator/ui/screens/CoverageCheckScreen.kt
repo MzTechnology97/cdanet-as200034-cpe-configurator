@@ -338,7 +338,12 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
         val d = result
         if (p != null && d != null) {
             SectionCard("AP per ${p.label}") {
-                if (d.aps.isEmpty()) Text(noApMessage(d.restricted, d.assignedCount, d.discarded, d.maxKm), color = MaterialTheme.colorScheme.error)
+                if (d.aps.isEmpty()) Text(
+                    if (d.hiddenWeak > 0 && !(d.restricted && d.assignedCount == 0)) "Nessun AP con segnale stimato migliore di ${d.hideBelowDbm} dBm: ${d.hiddenWeak} più deboli non mostrati."
+                    else noApMessage(d.restricted, d.assignedCount, d.discarded, d.maxKm),
+                    color = MaterialTheme.colorScheme.error,
+                )
+                else if (d.hiddenWeak > 0) Text("${d.hiddenWeak} AP più deboli di ${d.hideBelowDbm} dBm non mostrati.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 d.aps.forEachIndexed { i, ap ->
                     if (i > 0) HorizontalDivider()
                     Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
@@ -355,6 +360,7 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                                 )
                                 ap.estimate?.describe()?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium) }
                                 ap.load?.describe()?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = if (ap.load.level == "carico") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) }
+                                if (ap.failures > 0) Text("${ap.failures} ${if (ap.failures == 1) "installazione fallita" else "installazioni fallite"} qui vicino verso questo AP", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                             }
                         }
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(start = 34.dp)) {

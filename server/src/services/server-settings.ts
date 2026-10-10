@@ -146,6 +146,11 @@ export const SERVER_SETTINGS: Def[] = [
     get: (c) => c.staleCpeMonths, set: (c, v) => (c.staleCpeMonths = (v as number | undefined) ?? 12),
   },
   {
+    key: 'coverageHideBelowDbm', env: 'COVERAGE_HIDE_BELOW_DBM', group: 'Copertura per gli installatori', label: 'Nascondi gli AP con segnale stimato più debole di (dBm)', kind: 'int', min: -100, max: -40,
+    help: 'In ogni verifica di copertura (console e app, installatori e amministratori) gli AP con un segnale stimato più debole di questo valore non vengono elencati: la risposta dice quanti ne sono stati nascosti. Gli AP senza una stima restano. −100 = mostra tutti.',
+    get: (c) => c.coverageHideBelowDbm, set: (c, v) => (c.coverageHideBelowDbm = (v as number | undefined) ?? -70),
+  },
+  {
     key: 'installerCoverageAps', env: 'INSTALLER_COVERAGE_APS', group: 'Copertura per gli installatori', label: 'AP mostrati per ogni verifica di copertura', kind: 'int', min: 1, max: 20,
     help: 'Il server valuta tutti gli AP assegnati all’installatore entro il raggio di copertura (Connettori → UISP), li ordina per segnale stimato e mostra i primi di questo numero; esclude gli AP non attivi o troppo deboli. Vale per la console web e per l’app (Copertura, AP vicini); gli amministratori scelgono ogni volta.',
     get: (c) => c.installerCoverageAps, set: (c, v) => (c.installerCoverageAps = (v as number | undefined) ?? 5),

@@ -39,6 +39,8 @@ export function testConfig(overrides: Record<string, string> = {}) {
       PHOTOS_DIR: join(dir, 'photos'),
       INFRA_DIR: join(dir, 'infra'),
       CPE_ADMIN_PASSWORD: 'Cpe-Admin-Secret-1',
+      // every AP listed unless a test sets the threshold (Impostazioni server: −70 dBm by default)
+      COVERAGE_HIDE_BELOW_DBM: '-100',
       UISP_ENROLLMENT: 'wss://uisp.example:443+token+allowUntrustedCertificate',
       LOG_LEVEL: 'silent',
       ...overrides,

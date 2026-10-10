@@ -110,3 +110,64 @@ describe('Copertura: affidabilità e terreno (admin)', () => {
     assert.equal((await app.inject({ method: 'POST', url: '/api/admin/terrain/import', headers: T, payload: {} })).statusCode, 403);
   });
 });
+
+describe('Copertura: AP deboli nascosti', () => {
+
+  it('Verifica copertura: APs weaker than the threshold of Impostazioni server are hidden and counted', async () => {
+  const uisp = fakeUisp();
+  const { app } = await buildApp(testConfig(), 'test', { db: openDatabase(':memory:'), logger: false, uisp: uisp.uisp, fetchImpl: uisp.fetchImpl });
+  const H = { authorization: `Bearer ${(await app.inject({ method: 'POST', url: '/api/auth/login', payload: ADMIN })).json().token}` };
+  const all = (await app.inject({ method: 'GET', url: '/api/coverage?lat=37.6&lon=14.1&limit=20', headers: H })).json();
+  const signals = all.aps.map((a: { estimate: { signalDbm: number | null } | null }) => a.estimate?.signalDbm).filter((v: number | null | undefined): v is number => typeof v === 'number');
+  assert.ok(signals.length >= 2, JSON.stringify(signals));
+  // a threshold between the strongest and the weakest estimate
+  const cut = Math.round((Math.max(...signals) + Math.min(...signals)) / 2);
+  assert.equal((await app.inject({ method: 'PUT', url: '/api/admin/server-settings', headers: H, payload: { values: { coverageHideBelowDbm: Math.max(-100, Math.min(-40, cut)) } } })).statusCode, 200);
+  const r = (await app.inject({ method: 'GET', url: '/api/coverage?lat=37.6&lon=14.1&limit=20', headers: H })).json();
+  assert.equal(r.hideBelowDbm, Math.max(-100, Math.min(-40, cut)));
+  assert.ok(r.aps.every((a: { estimate: { signalDbm: number | null } | null }) => a.estimate?.signalDbm == null || a.estimate.signalDbm >= r.hideBelowDbm));
+  assert.equal(r.hiddenWeak, all.aps.length - r.aps.length);
+  assert.ok(r.hiddenWeak >= 1 || cut > -40 || cut < -100);
+});
+});
+
+describe('Copertura: collaudi e installazioni fallite', () => {
+  it('a failed installation nearby lowers the AP it tried; acceptance heights are read by MAC', async () => {
+    const { cpeHeights, fieldFailures, failuresNear } = await import('../src/services/field-samples.ts');
+    const uisp = fakeUisp();
+    const db = openDatabase(':memory:');
+    const { app } = await buildApp(testConfig(), 'test', { db, logger: false, uisp: uisp.uisp, fetchImpl: uisp.fetchImpl });
+    const H = { authorization: `Bearer ${(await app.inject({ method: 'POST', url: '/api/auth/login', payload: ADMIN })).json().token}` };
+    const before = (await app.inject({ method: 'GET', url: '/api/coverage?lat=37.59&lon=14.11&limit=20', headers: H })).json();
+    const target = before.aps[0];
+    assert.ok(target);
+    assert.equal(before.failuresNearby, 0);
+    const job = (id: string, mac: string, lat: number, lon: number) =>
+      db
+        .prepare(`INSERT INTO provisioning_jobs(id, created_at, expires_at, user_id, model, mac, serial, ssid, pppoe_user, status, latitude, longitude) VALUES(?, ?, ?, 1, 'LiteBeam 5AC', ?, '', 'X', 'u', 'success', ?, ?)`)
+        .run(id, new Date().toISOString(), new Date().toISOString(), mac, lat, lon);
+    // an acceptance test with the real height of the CPE
+    job('00000000-0000-4000-8000-000000000001', '24:A4:3C:DE:00:01', 37.59, 14.12);
+    db.prepare(`INSERT INTO job_acceptance(job_id, created_at, user_id, verdict, data) VALUES(?, ?, 1, 'ok', ?)`).run('00000000-0000-4000-8000-000000000001', new Date().toISOString(), JSON.stringify({ cpeHeightM: 9.5 }));
+    assert.equal(cpeHeights(db).get('24:A4:3C:DE:00:01'), 9.5);
+    // an installation given up for lack of signal 100 m away, towards that AP
+    job('00000000-0000-4000-8000-000000000002', '24:A4:3C:DE:00:99', 37.5905, 14.1105);
+    db.prepare(`INSERT INTO install_ko(created_at, user_id, job_id, kind, mode, step, reason, note, data) VALUES(?, 1, ?, 'definitive', 'new', 'link', 'no_signal', 'nessun segnale', ?)`).run(new Date().toISOString(), '00000000-0000-4000-8000-000000000002', JSON.stringify({ apName: target.name, signal: -84 }));
+    // a KO for other reasons does not count
+    db.prepare(`INSERT INTO install_ko(created_at, user_id, job_id, kind, mode, step, reason, note) VALUES(?, 1, ?, 'postponed', 'new', 'config', 'weather', 'pioggia forte')`).run(new Date().toISOString(), '00000000-0000-4000-8000-000000000002');
+    assert.equal(fieldFailures(db).length, 1);
+    assert.deepEqual(failuresNear(fieldFailures(db), { lat: 37.59, lon: 14.11 }, target.name), { sameAp: 1, any: 1 });
+    const after = (await app.inject({ method: 'GET', url: '/api/coverage?lat=37.59&lon=14.11&limit=20', headers: H })).json();
+    assert.equal(after.failuresNearby, 1);
+    const t2 = after.aps.find((a: { id: string }) => a.id === target.id);
+    assert.equal(t2.failures, 1);
+    assert.notEqual(t2.rating, 'buono', 'a failed installation nearby: not "buono"');
+    const { rateCoverage } = await import('../src/domain/coverage-model.ts');
+    const good = { signalDbm: -60, low: -64, high: -56, inSector: true };
+    assert.equal(rateCoverage('active', good, -75), 'buono');
+    assert.equal(rateCoverage('active', good, -75, null, 1), 'possibile');
+    // solved by a later successful test: it no longer counts
+    db.prepare(`UPDATE install_ko SET resolved_at = ? WHERE reason = 'no_signal'`).run(new Date().toISOString());
+    assert.equal((await app.inject({ method: 'GET', url: '/api/coverage?lat=37.59&lon=14.11&limit=20', headers: H })).json().failuresNearby, 0);
+  });
+});

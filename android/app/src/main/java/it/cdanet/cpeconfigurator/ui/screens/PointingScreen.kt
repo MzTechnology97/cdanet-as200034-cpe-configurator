@@ -222,6 +222,7 @@ fun PointingScreen(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (
                             )
                             a.estimate?.describe()?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium) }
                             a.load?.describe()?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+                            if (a.failures > 0) Text("${a.failures} ${if (a.failures == 1) "installazione fallita" else "installazioni fallite"} qui vicino verso questo AP", style = MaterialTheme.typography.bodySmall, color = WarnAmber)
                             if (a.status != "active") Text("AP non attivo", color = WarnAmber, style = MaterialTheme.typography.bodySmall)
                         }
                     }
