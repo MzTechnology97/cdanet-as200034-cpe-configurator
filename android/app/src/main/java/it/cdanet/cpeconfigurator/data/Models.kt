@@ -308,7 +308,26 @@ data class AdminCpeDto(
 )
 
 @Serializable
-data class AdminCrmDto(val account: AdminCrmAccountDto, val customer: AdminCrmCustomerDto? = null, val site: AdminCrmSiteDto? = null)
+data class AdminCrmDto(
+    val account: AdminCrmAccountDto,
+    val customer: AdminCrmCustomerDto? = null,
+    val site: AdminCrmSiteDto? = null,
+    /** The customer's other lines (other sites, CPEs, PPPoE accounts). */
+    val lines: List<AdminCrmLineDto> = emptyList(),
+)
+
+@Serializable
+data class AdminCrmLineDto(
+    val username: String = "",
+    val state: String = "unknown",
+    val profile: String = "",
+    val speed: PlanSpeedDto? = null,
+    val site: String? = null,
+    val cpe: AdminCrmLineCpeDto? = null,
+)
+
+@Serializable
+data class AdminCrmLineCpeDto(val deviceId: String, val name: String = "", val status: String = "", val customer: Boolean = true)
 
 @Serializable
 data class AdminCrmAccountDto(

@@ -13,7 +13,7 @@ const API_KEY = 'K3y-Segreta-IspBilling-0123456789';
  * ISP Billing with four accounts: ROSSI online on the CPE "aa-bb-cc-dd-ee-ff" of the fake UISP,
  * BIANCHI offline although its CPE is online, VERDI suspended (unpaid service), NERI terminated.
  */
-function fakeCrm() {
+function fakeCrm(opts: { secondLine?: boolean } = {}) {
   const accounts = [
     { account_id: '1', customer_id: '10', address_id: '101', username: 'rossi@cda', status: 'Attivo', profile_name: 'ISP37@CDA-NET-HOME-30-6-NEW', static_ip: '', cpe_type: 'ubiquiti' },
     { account_id: '2', customer_id: '20', address_id: '201', username: 'bianchi@cda', status: 'Attivo', profile_name: 'ISP37@CDA-NET-HOME-100-20', static_ip: '', cpe_type: 'ubiquiti' },
@@ -43,6 +43,12 @@ function fakeCrm() {
     '20': [{ address_id: 201, description: 'Indirizzo principale', address_line1: 'Via Valle 2', city: 'Enna', lat: '37.6', lng: '14.1', is_main: true }],
     '30': [{ address_id: 301, description: 'Indirizzo principale', address_line1: 'Via Senza Punto 3', city: 'Enna', lat: null, lng: null, is_main: true }],
   };
+  // ROSSI with a second line: an office with its own PPPoE account (no CPE in UISP yet)
+  if (opts.secondLine) {
+    accounts.push({ account_id: '5', customer_id: '10', address_id: '102', username: 'rossi.ufficio@cda', status: 'Attivo', profile_name: 'ISP37@CDA-NET-BUSINESS-100-20', static_ip: '', cpe_type: 'ubiquiti' });
+    sessions['5'] = { connection_status: 'offline', mac_address: null, client_ip: null, session_duration: 0 };
+    addresses['10']!.push({ address_id: 102, description: 'Ufficio', address_line1: 'Via Roma 10', city: 'Enna', postal_code: '94100', lat: null, lng: null, is_main: false });
+  }
   const calls: string[] = [];
   const page = (data: object[]) => Response.json({ status: 'OK', message: null, data: { data, max_items: 30, total: String(data.length), prev: null, next: null, pages: 1 } });
   const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
@@ -68,6 +74,21 @@ describe('Stato RADIUS dal CRM per il NOC', () => {
     assert.deepEqual(profileSpeed('ISP37@CDA-NET-HOME-300-50-NEW'), { down: 300, up: 50 });
     assert.deepEqual(profileSpeed('ISP37@CDA-NET-B2B-30-30'), { down: 30, up: 30 });
     assert.equal(profileSpeed('ISP37@CDA-NET-HOME-FTTH'), null);
+  });
+
+  it('a customer with several lines: the CPE card shows its own line and the others', async () => {
+    const crm = fakeCrm({ secondLine: true });
+    const uisp = fakeUisp();
+    const { app, ctx } = await buildApp(testConfig(), 'test', { db: openDatabase(':memory:'), logger: false, uisp: uisp.uisp, fetchImpl: crm.fetchImpl });
+    const A = { authorization: `Bearer ${(await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: ADMIN.username, password: ADMIN.password } })).json().token}` };
+    await app.inject({ method: 'PUT', url: '/api/admin/modules', headers: A, payload: { cpe_health: true } });
+    await app.inject({ method: 'PUT', url: '/api/admin/connectors/crm', headers: A, payload: { enabled: true, url: 'https://crm.test', apiId: API_ID, apiKey: API_KEY } });
+    await ctx.crmSync.sync();
+    const card = (await app.inject({ method: 'GET', url: '/api/admin/cpe/cpe-1', headers: A })).json().crm;
+    assert.equal(card.account.username, 'rossi@cda', 'the line of THIS CPE (session MAC)');
+    assert.equal(card.lines.length, 1);
+    assert.deepEqual([card.lines[0].username, card.lines[0].speed, card.lines[0].cpe], ['rossi.ufficio@cda', { down: 100, up: 20 }, null]);
+    assert.match(card.lines[0].site, /Ufficio.*Via Roma 10/);
   });
 
   it('syncs accounts and sessions, matches the CPEs by MAC and shows it only to admins', async () => {

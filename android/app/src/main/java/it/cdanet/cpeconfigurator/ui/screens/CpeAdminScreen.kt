@@ -207,7 +207,7 @@ private fun CpeAdminContent(c: AppContainer, deviceId: String) {
                 )
             }, onBackup = { run(Pending("", "backups", "Backup richiesto: compare nell'elenco tra poco", 6000)) })
 
-            d.crm?.let { CustomerCard(it) }
+            d.crm?.let { crm -> CustomerCard(crm) { id -> c.adminCpeId.value = id } }
 
             SectionCard("Radio", icon = R.drawable.ic_settings_input_antenna) {
                 val r = cpe.radio
@@ -415,19 +415,11 @@ private fun ColumnScope.Tiles(vararg items: Pair<String, String>) {
 
 /** The customer of the CPE in ISP Billing. */
 @Composable
-private fun CustomerCard(crm: AdminCrmDto) {
+private fun CustomerCard(crm: AdminCrmDto, onOpenCpe: (String) -> Unit) {
     SectionCard("Cliente (ISP Billing)", icon = R.drawable.ic_person) {
         val a = crm.account
         val cu = crm.customer
-        val (label, kind) = when (a.state) {
-            "online" -> "attivo · PPPoE online" to NoticeKind.Good
-            "offline" -> "attivo · PPPoE offline" to NoticeKind.Bad
-            "services_suspended" -> "servizi sospesi" to NoticeKind.Warn
-            "suspended" -> "sospeso" to NoticeKind.Warn
-            "terminating" -> "in cessazione" to NoticeKind.Warn
-            "terminated" -> "cessato" to NoticeKind.Bad
-            else -> "stato non letto" to NoticeKind.Info
-        }
+        val (label, kind) = stateLabel(a.state)
         Text(cu?.name ?: "—", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
         Row(verticalAlignment = Alignment.CenterVertically) {
             StatusChip(label, kind)
@@ -441,8 +433,37 @@ private fun CustomerCard(crm: AdminCrmDto) {
         cu?.email?.let { KeyValue("Email", it) }
         crm.site?.let { site -> KeyValue("Sede", listOfNotNull(site.description, site.address).joinToString(" · ").ifBlank { "—" }) }
         cu?.address?.let { KeyValue("Residenza", it) }
+        if (crm.lines.isNotEmpty()) {
+            HorizontalDivider()
+            Text("Altre linee del cliente (${crm.lines.size})", style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
+            crm.lines.forEach { l ->
+                val (st, k) = stateLabel(l.state)
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text(l.site ?: "Sede non indicata", fontWeight = FontWeight.Medium, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                        Text(listOfNotNull(l.username, l.speed?.let { "${it.down}M/${it.up}M" } ?: l.profile.ifBlank { null }).joinToString(" · "), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(l.cpe?.name?.let { "CPE $it" } ?: "CPE non trovata in UISP", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    }
+                    Column(horizontalAlignment = Alignment.End) {
+                        StatusChip(st, k)
+                        l.cpe?.takeIf { it.customer }?.let { cp -> TextButton(onClick = { onOpenCpe(cp.deviceId) }) { Text("Gestisci") } }
+                    }
+                }
+            }
+        }
         Text("La password PPPoE non viene mostrata.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
+}
+
+/** Customer state from ISP Billing (RADIUS account and CRM), as a label and a color. */
+private fun stateLabel(state: String): Pair<String, NoticeKind> = when (state) {
+    "online" -> "attivo · PPPoE online" to NoticeKind.Good
+    "offline" -> "attivo · PPPoE offline" to NoticeKind.Bad
+    "services_suspended" -> "servizi sospesi" to NoticeKind.Warn
+    "suspended" -> "sospeso" to NoticeKind.Warn
+    "terminating" -> "in cessazione" to NoticeKind.Warn
+    "terminated" -> "cessato" to NoticeKind.Bad
+    else -> "stato non letto" to NoticeKind.Info
 }
 
 /** Wireless parameters: only the changed ones are sent (the server rewrites the rest as it is). */
