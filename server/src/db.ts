@@ -382,6 +382,29 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX privacy_acceptances_user ON privacy_acceptances(user_id, text_sha256);
   `,
+  // 22: RADIUS state copied from the CRM (ISP Billing) for the NOC, replaced at every sync
+  `
+  CREATE TABLE crm_radius(
+    account_id TEXT PRIMARY KEY,
+    customer_id TEXT NOT NULL DEFAULT '',
+    username TEXT NOT NULL,
+    account_status TEXT NOT NULL DEFAULT '',
+    profile TEXT NOT NULL DEFAULT '',
+    static_ip TEXT NOT NULL DEFAULT '',
+    cpe_type TEXT NOT NULL DEFAULT '',
+    customer_name TEXT NOT NULL DEFAULT '',
+    customer_status TEXT NOT NULL DEFAULT '',
+    customer_group TEXT NOT NULL DEFAULT '',
+    services_suspended INTEGER NOT NULL DEFAULT 0,
+    online INTEGER,
+    mac TEXT,
+    client_ip TEXT,
+    session_seconds INTEGER,
+    checked_at TEXT
+  );
+  CREATE INDEX crm_radius_mac ON crm_radius(mac);
+  CREATE INDEX crm_radius_username ON crm_radius(username COLLATE NOCASE);
+  `,
 ];
 
 export function openDatabase(path: string): Db {

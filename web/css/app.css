@@ -94,6 +94,7 @@ button { font: inherit; border-radius: 8px; border: 1px solid var(--line); backg
 button:hover { border-color: var(--brand); }
 button.primary { background: var(--brand); border-color: var(--brand); color: #fff; font-weight: 600; }
 button.danger { color: var(--bad); }
+.bad-text { color: var(--bad); }
 button:disabled { opacity: .55; cursor: progress; }
 .btns { display: flex; gap: 8px; flex-wrap: wrap; }
 .code-editor { width: 100%; min-height: 420px; font-family: ui-monospace, 'Cascadia Code', Consolas, monospace; font-size: .82rem; line-height: 1.45; white-space: pre; overflow: auto; tab-size: 2; }

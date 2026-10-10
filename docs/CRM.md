@@ -21,12 +21,20 @@ Le chiamate usano `Authorization: Bearer {api_id}:{api_key}`.
 | Permesso mancante (o IP non autorizzato) | La chiave non ha il permesso per quel modulo, oppure l'IP del server non è tra quelli autorizzati della chiave (HTTP 403) |
 | Non raggiungibile | Indirizzo, DNS o firewall |
 
-## Stato
+## Stato RADIUS per il NOC
 
-Per ora c'è solo il connettore con il test della chiave: nessun dato viene letto o scritto durante il lavoro normale. Le integrazioni previste sono nella [ROADMAP](ROADMAP.md):
-- utente PPPoE ↔ account RADIUS, cliente e profilo;
-- stato RADIUS nel collaudo e in Salute CPE;
-- account RADIUS creato dal server;
-- stato, campi personalizzati e coordinate del cliente scritti dopo il collaudo;
-- attività ISP Billing nell'agenda interventi;
-- seriali del magazzino.
+Con il connettore attivo il server copia ogni 10 minuti (prima volta un minuto dopo l'avvio) lo stato RADIUS nella tabella `crm_radius`: tutti gli account ISPRadius con profilo, cliente, gruppo, sospensioni (account `Sospeso`, cliente `suspended`, servizio sospeso) e, per gli account non terminati, la sessione (`/accounts/{id}/status`: online/offline, MAC, IP, durata). Circa un minuto per mille account, quattro letture in parallelo; se una lettura di sessione fallisce resta quella precedente.
+
+- **Salute CPE** (solo amministratori): colonna PPPoE e problemi `pppoe_offline` (CPE online in UISP, sessione giù) e `account_suspended`; la CPE si abbina con il MAC della sessione (≈80% sul campo: le CPE Ubiquiti fanno PPPoE con il MAC che UISP conosce) o con l'utente PPPoE dell'installazione. Riquadro **Account PPPoE** con offline, sospesi e account senza CPE in rete.
+- **Stato rete** (solo amministratori): sessioni PPPoE online, offline e sospese delle CPE di ogni AP.
+- **Connettori → CRM**: ultima sincronizzazione, conteggi e *Sincronizza stato RADIUS*.
+
+Velocità del piano dal nome del profilo (`CDA-NET-HOME-30-6` → 30/6 Mbit/s).
+
+## Prossimi passi
+
+Decisi con l'utente (vedi la [ROADMAP](ROADMAP.md)):
+- preparazione del provisioning: account inesistente → creato in ISP Billing; account sospeso → blocco, notifica al NOC, all'installatore "contatta l'assistenza" con un codice d'errore;
+- collaudo: "PPPoE autenticato" obbligatorio (online, MAC della CPE, velocità del profilo), con notifica al NOC e codice d'errore bloccante;
+- coordinate delle CPE da UISP scritte nelle anagrafiche e sede di installazione dall'anagrafica;
+- attività ISP Billing nell'agenda interventi, seriali del magazzino.

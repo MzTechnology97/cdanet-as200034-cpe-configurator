@@ -94,6 +94,36 @@ export function crmCard(c, reload) {
       await reload();
     });
 
+  // RADIUS state copied for the NOC (Salute CPE, Stato rete): last sync and sync now
+  const radius = h('div', {});
+  const syncBtn = h('button', { type: 'button' }, 'Sincronizza stato RADIUS');
+  async function showRadius() {
+    const r = await api('/api/admin/crm/radius/status');
+    if (!r.configured) return mount(radius);
+    mount(
+      radius,
+      h('h3', {}, 'Stato RADIUS per il NOC'),
+      h(
+        'p',
+        { class: 'small muted' },
+        r.at
+          ? `Aggiornato ${fmtDate(r.at)} in ${Math.round((r.ms ?? 0) / 1000)} s: ${r.accounts.toLocaleString('it-IT')} account, ${r.online} online, ${r.offline} offline, ${r.suspended} sospesi.`
+          : 'Non ancora sincronizzato: parte da solo entro un minuto dall’avvio e poi ogni 10 minuti.',
+        r.running ? ' Sincronizzazione in corso…' : '',
+      ),
+      r.error ? h('div', { class: 'notice warn' }, `Ultima sincronizzazione non riuscita: ${ERRORS[r.error] ?? r.error}`) : null,
+      h('div', { class: 'btns' }, syncBtn),
+    );
+    if (r.running) setTimeout(() => void showRadius().catch(() => {}), 4000);
+  }
+  syncBtn.onclick = () =>
+    busy(syncBtn, async () => {
+      await api('/api/admin/crm/radius/sync', { method: 'POST' });
+      toast('Sincronizzazione avviata: dura circa un minuto');
+      await showRadius();
+    });
+  if (c.configured && c.enabled) void showRadius().catch(() => {});
+
   return card(
     h(
       'div',
@@ -111,5 +141,6 @@ export function crmCard(c, reload) {
     ),
     h('div', { class: 'btns' }, testBtn, saveBtn, c.configured ? resetBtn : null),
     result,
+    radius,
   );
 }
