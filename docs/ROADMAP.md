@@ -83,6 +83,10 @@ Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). 
 ## Già rilasciato
 
 - v1.32.29: guida installatore aggiornata con la nuova Scansione LAN (host attivi, griglia IP, topologia, discovery, porte) e dati di esempio per tutte le schede nelle build di sviluppo.
+- v1.32.24: Scansione LAN con radar e contatore dal vivo, topologia automatica a fine scansione con le due fasi indicate, produttori e tipi dell'elenco dal grafo (SNMP, impronte, nomi di fabbrica).
+- v1.32.21: Scansione LAN riprogettata (radar, riepilogo per tipo, griglia degli indirizzi, schede host tecniche, discovery multi-vendor con quadro dei protocolli, porte con mappa e banner), orizzontale e tablet su due colonne, nuvoletta dei dispositivi a schermo intero, PNG/PDF salvati in Download.
+- v1.32.19: scansione senza host fantasma (DNS intercettato dal router, "No route to host"), mappa automatica a fine scansione, zoom e schermo intero.
+- v1.32.18: topologia di rete a grafo (stile UniFi) con icone per tipo e produttore, più protocolli di discovery, scansione ampia, export PNG/PDF.
 - v1.32.17: connettore CRM ISP Billing in Connettori (chiave cifrata, test per modulo); nessun dato ancora letto o scritto.
 - v1.32.7: Segnala KO (rimandata con motivo e giorno, o KO definitivo con motivazione) senza bloccare i ritentativi; scrittura nella CPE ritentabile; approvazione del NOC per i collaudi con segnale pessimo; pagina Notifiche (console e app) con scelta di cosa ricevere anche su Telegram.
 - v1.32.6: Reti Wi-Fi da UISP con la chiave WPA2 comune: solo gli SSID ancora da importare, per nodo e selezionabili; export CSV con le chiavi in chiaro (con password).
@@ -93,10 +97,6 @@ Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). 
 - v1.31.1: collegamenti PtP esclusi da copertura, Trova l'AP, Stato rete e Salute CPE (SSID CDA-NET-N…-D…).
 - v1.31.0: aggiornamento obbligatorio e automatico dell'app.
 - v1.30.0: accesso rapido con impronta o volto nell'app, credenziali salvabili nel browser.
-- v1.32.24: Scansione LAN con radar e contatore dal vivo, topologia automatica a fine scansione con le due fasi indicate, produttori e tipi dell'elenco dal grafo (SNMP, impronte, nomi di fabbrica).
-- v1.32.21: Scansione LAN riprogettata (radar, riepilogo per tipo, griglia degli indirizzi, schede host tecniche, discovery multi-vendor con quadro dei protocolli, porte con mappa e banner), orizzontale e tablet su due colonne, nuvoletta dei dispositivi a schermo intero, PNG/PDF salvati in Download.
-- v1.32.19: scansione senza host fantasma (DNS intercettato dal router, "No route to host"), mappa automatica a fine scansione, zoom e schermo intero.
-- v1.32.18: topologia di rete a grafo (stile UniFi) con icone per tipo e produttore, più protocolli di discovery, scansione ampia, export PNG/PDF.
 - v1.29.0: notifiche Telegram personali per tutti gli account, con il solo token del bot.
 - v1.28.0: installazione CPE guidata (AP consigliati, cambio AP, mirino AR con segnale, collaudo) e ripuntamento; Salute CPE nell'app con ricerca, filtri e lista compatta; mappe dell'app tramite il client dell'app.
 - v1.27.0: infrastruttura dal portale (indirizzo/HTTPS, aggiornamenti, mappe) tramite l'agente di aggiornamento, che aggiorna anche i file di deploy.
