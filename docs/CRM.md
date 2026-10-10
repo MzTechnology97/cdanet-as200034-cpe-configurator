@@ -29,6 +29,8 @@ Con il connettore attivo il server copia ogni 10 minuti (prima volta un minuto d
 - **Stato rete** (solo amministratori): sessioni PPPoE online, offline e sospese delle CPE di ogni AP.
 - **Connettori → CRM**: ultima sincronizzazione, conteggi e *Sincronizza stato RADIUS*.
 
+Ogni account ha uno **stato sintetico** (`state` in Salute CPE e nell'elenco): `terminated` (account terminato o cliente cessato), `terminating` (cliente in cessazione), `suspended` (account o cliente sospeso), `services_suspended`, `offline`, `online`, `unknown`, in quest'ordine di priorità. Anche gli account terminati vengono letti con la loro ultima sessione: la CPE di un cliente cessato ancora in rete risulta "cliente cessato" in Salute CPE (problema `account_terminated`) e nel filtro *Cessati con la CPE ancora in rete*; nell'abbinamento per MAC un account attivo prevale sempre su uno terminato.
+
 Velocità del piano dal nome del profilo (`CDA-NET-HOME-30-6` → 30/6 Mbit/s).
 
 ## Clienti (console)

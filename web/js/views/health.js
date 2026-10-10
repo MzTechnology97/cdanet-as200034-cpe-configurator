@@ -17,13 +17,15 @@ const ISSUES = {
 const RADIUS_ISSUES = {
   pppoe_offline: ['PPPoE offline', 'bad'],
   account_suspended: ['account sospeso', 'warn'],
+  account_terminated: ['cliente cessato', 'warn'],
 };
 const ALL_ISSUES = { ...ISSUES, ...RADIUS_ISSUES };
 
 /** PPPoE session of a CPE: online, offline or suspended, with user, plan and customer. */
 function pppoeCell(r) {
   if (!r) return h('span', { class: 'small muted' }, '—');
-  const state = r.suspended ? badge('sospeso', 'warn') : r.online === true ? badge('online', 'good') : r.online === false ? badge('offline', 'bad') : badge('?', '');
+  const state =
+    r.state === 'terminated' ? badge('cessato', '') : r.state === 'terminating' ? badge('in cessazione', 'warn') : r.suspended ? badge('sospeso', 'warn') : r.online === true ? badge('online', 'good') : r.online === false ? badge('offline', 'bad') : badge('?', '');
   return h(
     'div',
     {},
@@ -42,6 +44,7 @@ function radiusPanel() {
     h('option', { value: 'offline' }, 'PPPoE offline (account attivo)'),
     h('option', { value: 'suspended' }, 'Sospesi (account, cliente o servizio)'),
     h('option', { value: 'unmatched' }, 'Senza CPE in rete (router o ONT del cliente)'),
+    h('option', { value: 'terminated' }, 'Cessati con la CPE ancora in rete'),
     h('option', { value: 'all' }, 'Tutti gli account'),
   );
   const q = h('input', { placeholder: 'Utente, cliente, IP, AP…' });
@@ -186,6 +189,7 @@ export async function healthView({ user }) {
           // admins with the CRM: RADIUS sessions
           'pppoe_offline' in t ? stat('PPPoE offline con CPE online', t.pppoe_offline) : null,
           'account_suspended' in t ? stat('Account sospesi', t.account_suspended) : null,
+          'account_terminated' in t ? stat('CPE di clienti cessati', t.account_terminated) : null,
         ),
         h('p', { class: 'small muted' }, `${nms('Stato UISP', 'Stato')} del ${fmtDate(data.generatedAt)}. "Segnale calato": almeno ${data.thresholds.signalDropDb} dB in meno rispetto al collaudo (solo CPE installate con l’app).`),
         data.uisp ? null : h('div', { class: 'notice warn' }, nms('UISP non raggiungibile: stato attuale non disponibile.', 'Stato attuale non disponibile, riprova più tardi.')),
