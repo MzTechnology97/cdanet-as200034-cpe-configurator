@@ -35,6 +35,7 @@ import { createCrmSettings } from './services/crm.ts';
 import { createCrmSync, type CrmSync } from './services/crm-sync.ts';
 import { crmRoutes } from './routes/crm.ts';
 import { connectorRoutes } from './routes/connectors.ts';
+import { cpeAdminRoutes } from './routes/cpe-admin.ts';
 import { uispRoutes } from './routes/uisp.ts';
 import { mapRoutes } from './routes/map.ts';
 import { networkRoutes } from './routes/network.ts';
@@ -220,6 +221,7 @@ export async function buildApp(
   adminRoutes(app, ctx);
   toolRoutes(app, ctx);
   uispRoutes(app, ctx);
+  cpeAdminRoutes(app, ctx);
   connectorRoutes(app, ctx);
 
   if (existsSync(join(cfg.staticDir, 'index.html'))) {

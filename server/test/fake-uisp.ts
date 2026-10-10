@@ -44,6 +44,7 @@ export const STATION = {
 export function fakeUisp(opts: { authorizeMethod?: 'POST' | 'PUT'; backupCfg?: string } = {}) {
   const calls: Array<{ method: string; path: string; body: unknown; token: string | null }> = [];
   const devices = [AP_N2, AP_N7, FAR_AP, PTP, STATION, OLD_CPE].map((d) => structuredClone(d));
+  const unms: Record<string, unknown> = {};
   const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
     const url = new URL(String(input));
     const method = init?.method ?? 'GET';
@@ -76,6 +77,40 @@ export function fakeUisp(opts: { authorizeMethod?: 'POST' | 'PUT'; backupCfg?: s
       const series = (f: (i: number) => number) => ({ avg: Array.from({ length: 168 }, (_, i) => ({ x: now - (167 - i) * 3600_000, y: f(i) })) });
       return new Response(JSON.stringify({ signal: series((i) => -58 - (8 * i) / 167), remoteSignal: series(() => -60), downlinkCapacity: series(() => 250000), uplinkCapacity: series(() => 200000), ping: { avg: [] } }));
     }
+    // admin "Stato CPE"
+    const one = /^\/devices\/([^/]+)\/(detail|interfaces|system\/unms|restart|refresh|upgrade-to-latest)$/.exec(path);
+    if (one) {
+      const d = devices.find((x) => x.identification.id === one[1]);
+      if (!d) return new Response('{"message":"Device not found"}', { status: 404 });
+      if (one[2] === 'detail') {
+        return new Response(
+          JSON.stringify({
+            ...d,
+            identification: { ...d.identification, model: 'LBE-5AC-Gen2', modelName: 'LiteBeam 5AC Gen2', serialNumber: 'S123', displayName: d.identification.name },
+            overview: { ...d.overview, uptime: 86400, cpu: 12, ram: 40, frequency: 5600, channelWidth: 20, distance: 2300, canUpgrade: true, lastSeen: '2026-10-10T10:00:00Z' },
+            firmware: { compatible: true },
+            upgrade: { status: null, progress: 0, firmwareVersion: '8.7.15' },
+            meta: { alias: null, note: null, maintenance: false },
+            latestBackup: { id: 'bk1', timestamp: '2026-10-08T10:00:00Z' },
+            location: { latitude: 37.58, longitude: 14.12 },
+            ipAddress: '10.99.0.21/32',
+          }),
+        );
+      }
+      if (one[2] === 'interfaces') return new Response(JSON.stringify([{ identification: { name: 'eth0', type: 'ethernet' }, enabled: true, status: { plugged: true, currentSpeed: '1000-full' }, addresses: [] }]));
+      if (one[2] === 'system/unms') {
+        if (method === 'PUT') {
+          unms[one[1]!] = body;
+          return new Response('{}');
+        }
+        return new Response(JSON.stringify(unms[one[1]!] ?? { overrideGlobal: false, devicePingAddress: null, meta: { alias: null, note: null, maintenance: false, customIpAddress: null } }));
+      }
+      return new Response(JSON.stringify({ result: true, message: 'ok' }));
+    }
+    if (/^\/devices\/airmaxes\/[^/]+\/config\/wireless$/.test(path)) {
+      return new Response(JSON.stringify({ mode: 'sta-ptmp', ssid: 'CDA-NET-N2-D01', txPower: 24, antennaGain: 23, ackDistance: 2400, isAutoChannelWidthEnabled: false, securityConfig: { security: 'wpa2AES', presharedKey: 'chiave-segreta-wpa', authServerSecret: 'segreto-radius' } }));
+    }
+    if (/^\/devices\/[^/]+\/backups\/[^/]+\/apply$/.test(path)) return new Response('{"result":true}');
     if (path === '/outages') return new Response(JSON.stringify({ items: [{ id: 'o1', startTimestamp: '2026-10-05T02:00:00Z', endTimestamp: '2026-10-05T02:20:00Z', type: 'outage', aggregatedTime: 1200, inProgress: false }] }));
         if (opts.backupCfg && /^\/devices\/[^/]+\/backups\/bk2$/.test(path)) return new Response(opts.backupCfg, { headers: { 'content-type': 'text/plain' } });
     if (/^\/devices\/[^/]+\/backups\/bk1$/.test(path)) return new Response(new Uint8Array([1, 2, 3]), { headers: { 'content-type': 'application/octet-stream' } });

@@ -311,7 +311,17 @@ export async function healthView({ user }) {
                       admin && c.assignedTo ? h('div', { class: 'small' }, `assegnata a ${c.assignedTo.username}`) : null,
                     ),
                 },
-                { label: '', render: (c) => (c.jobId ? h('a', { href: `#/jobs?q=${encodeURIComponent(c.mac)}` }, 'storico') : '') },
+                {
+                  label: '',
+                  render: (c) =>
+                    h(
+                      'div',
+                      { class: 'btns ap-actions' },
+                      // admins: the CPE as in the UISP app (detail, restart, firmware, backups…)
+                      admin && c.deviceId ? h('a', { class: 'button-link small-btn', href: `#/cpe?id=${encodeURIComponent(c.deviceId)}` }, 'Gestisci') : null,
+                      c.jobId ? h('a', { href: `#/jobs?q=${encodeURIComponent(c.mac)}` }, 'storico') : null,
+                    ),
+                },
               ],
               rows.slice(0, 500),
             )

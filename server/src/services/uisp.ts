@@ -534,6 +534,44 @@ export function createUisp(opts: UispOptions) {
       });
     },
 
+    // ---- Admin "Stato CPE": one device as in the UISP app (routes verified on UISP 3.1.65) ----
+    /** Full UISP detail of a device (identity, overview, firmware/upgrade, meta, location…). */
+    async deviceDetail(deviceId: string) {
+      return call('GET', `/devices/${encodeURIComponent(deviceId)}/detail`);
+    },
+    async deviceInterfaces(deviceId: string) {
+      return call('GET', `/devices/${encodeURIComponent(deviceId)}/interfaces`);
+    },
+    /** airMAX wireless configuration (includes keys: callers must filter it); null when offline. */
+    async airmaxWireless(deviceId: string) {
+      return call('GET', `/devices/airmaxes/${encodeURIComponent(deviceId)}/config/wireless`).catch(() => null);
+    },
+    /** UISP settings of the device: alias, note, maintenance mode (and ping/transmission overrides). */
+    async deviceUnms(deviceId: string) {
+      return call('GET', `/devices/${encodeURIComponent(deviceId)}/system/unms`);
+    },
+    async setDeviceUnms(deviceId: string, body: unknown) {
+      const r = await call('PUT', `/devices/${encodeURIComponent(deviceId)}/system/unms`, body);
+      invalidate();
+      return r;
+    },
+    /** UISP accepts these even for an offline device (they simply do not reach it). */
+    async restartDevice(deviceId: string) {
+      return call('POST', `/devices/${encodeURIComponent(deviceId)}/restart`, {});
+    },
+    async refreshDevice(deviceId: string) {
+      const r = await call('POST', `/devices/${encodeURIComponent(deviceId)}/refresh`, {});
+      invalidate();
+      return r;
+    },
+    /** Firmware upgrade to the latest version UISP has for the device (shown in its detail). */
+    async upgradeDeviceToLatest(deviceId: string) {
+      return call('POST', `/devices/${encodeURIComponent(deviceId)}/upgrade-to-latest`, {});
+    },
+    async applyBackup(deviceId: string, backupId: string) {
+      return call('POST', `/devices/${encodeURIComponent(deviceId)}/backups/${encodeURIComponent(backupId)}/apply`, {});
+    },
+
     async createBackup(deviceId: string) {
       return call('POST', `/devices/${encodeURIComponent(deviceId)}/backups`, {});
     },
