@@ -92,6 +92,7 @@ Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). 
 - v1.31.1: collegamenti PtP esclusi da copertura, Trova l'AP, Stato rete e Salute CPE (SSID CDA-NET-N…-D…).
 - v1.31.0: aggiornamento obbligatorio e automatico dell'app.
 - v1.30.0: accesso rapido con impronta o volto nell'app, credenziali salvabili nel browser.
+- v1.32.24: Scansione LAN con radar e contatore dal vivo, topologia automatica a fine scansione con le due fasi indicate, produttori e tipi dell'elenco dal grafo (SNMP, impronte, nomi di fabbrica).
 - v1.32.21: Scansione LAN riprogettata (radar, riepilogo per tipo, griglia degli indirizzi, schede host tecniche, discovery multi-vendor con quadro dei protocolli, porte con mappa e banner), orizzontale e tablet su due colonne, nuvoletta dei dispositivi a schermo intero, PNG/PDF salvati in Download.
 - v1.32.19: scansione senza host fantasma (DNS intercettato dal router, "No route to host"), mappa automatica a fine scansione, zoom e schermo intero.
 - v1.32.18: topologia di rete a grafo (stile UniFi) con icone per tipo e produttore, più protocolli di discovery, scansione ampia, export PNG/PDF.
