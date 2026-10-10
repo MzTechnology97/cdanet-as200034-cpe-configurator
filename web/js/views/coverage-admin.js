@@ -1,5 +1,5 @@
 import { api } from '../api.js';
-import { badge, busy, card, field, h, mount, pageHead, table, toast } from '../dom.js';
+import { badge, busy, card, field, fmtDate, h, mount, pageHead, table, toast } from '../dom.js';
 import { createMap, fit, legend, popup, towards, MAP_COLORS as C } from '../map.js';
 import { estimateCell, orientArrows, osmLink, RATING } from './coverage.js';
 
@@ -266,7 +266,7 @@ export async function adminCoverageView() {
         h(
           'span',
           { class: 'small muted' },
-          ` · ${d.theoretical ? 'nessun cliente da cui calibrare' : `calibrata su ${d.customers} clienti`}${d.ignored ? ` (${d.ignored} con posizione non valida in UISP, esclusi)` : ''} · raggio ${km(d.radiusM)} · ${Math.round((100 * good) / d.cells.length)}% dell’area sopra ${d.minDbm} dBm`,
+          ` · ${d.theoretical ? 'nessun cliente da cui calibrare' : `calibrata su ${d.customers} clienti`}${d.ignored ? ` (${d.ignored} sull’AP o oltre 20 km, esclusi dal calcolo)` : ''} · raggio ${km(d.radiusM)} · ${Math.round((100 * good) / d.cells.length)}% dell’area sopra ${d.minDbm} dBm`,
         ),
         ' ',
         clearBtn(),
@@ -400,5 +400,128 @@ export async function adminCoverageView() {
     ),
     out,
     profileBox,
+    accuracyCard(),
+    terrainCard(),
   );
+}
+
+/**
+ * Affidabilità della stima: the model measured on the real customers (each one estimated without
+ * itself), the history to compare before/after, the APs and the customers it gets most wrong.
+ */
+function accuracyCard() {
+  const box = h('div', {}, h('p', { class: 'muted' }, 'Caricamento…'));
+  let timer = null;
+  const TERRAIN = { tinitaly: 'terreno 10 m', srtm: 'terreno 30 m', nessuno: 'senza terreno' };
+  const VERDICT = { clear: 'libero', fresnel: 'Fresnel', blocked: 'ostruito', 'n/d': 'n/d' };
+  const sign = (v) => `${v > 0 ? '+' : ''}${v}`;
+  const show = (v) => {
+    const last = v.last;
+    const go = h('button', { type: 'button', disabled: v.running }, v.running ? 'Misura in corso…' : 'Misura ora');
+    go.onclick = () => busy(go, async () => (await api('/api/admin/coverage/accuracy', { method: 'POST', body: {} }), await load()));
+    mount(
+      box,
+      h(
+        'div',
+        {},
+        last
+          ? h(
+              'div',
+              {},
+              h('p', {}, h('b', {}, `Su ${last.customers} clienti collegati: errore tipico ${last.medianAbsDb} dB, ${last.within6Pct}% entro ±6 dB`), ` · tendenza ${sign(last.biasDb)} dB · 1 su 10 sbaglia più di ${last.p90AbsDb} dB · ${TERRAIN[last.terrain]}, edifici ${last.settings.buildingM} m, alberi ${last.settings.treeM} m, EIRP ${last.settings.eirpDbm} dBm (calibrazione ${sign(last.settings.calibrationDb)} dB) · ${fmtDate(last.at)}`),
+              h('p', { class: 'small muted' }, `Per terreno: ${Object.entries(last.byTerrain).map(([k, s]) => `${VERDICT[k] ?? k} ${s.n} (errore ${s.medianAbsDb} dB, tendenza ${sign(s.biasDb)})`).join(' · ')}. Collegati ma dati per ostruiti: ${last.blockedButConnected}; giudicati improbabili: ${last.unlikelyButConnected}.`),
+            )
+          : h('p', { class: 'muted' }, 'Nessuna misura ancora: avviala per vedere quanto è affidabile la stima sulla tua rete.'),
+        v.error ? h('div', { class: 'notice bad' }, v.error) : null,
+        h('div', { class: 'row' }, go),
+        v.history?.length > 1
+          ? h('details', {}, h('summary', {}, `Storico (${v.history.length} misure)`), table(
+              [
+                { label: 'Quando', render: (s) => fmtDate(s.at) },
+                { label: 'Dati', render: (s) => `${TERRAIN[s.terrain]} · edifici ${s.settings.buildingM} m · alberi ${s.settings.treeM} m · EIRP ${s.settings.eirpDbm}` },
+                { label: 'Clienti', render: (s) => s.customers },
+                { label: 'Errore tipico', render: (s) => `${s.medianAbsDb} dB` },
+                { label: 'Entro ±6 dB', render: (s) => `${s.within6Pct}%` },
+                { label: 'Tendenza', render: (s) => `${sign(s.biasDb)} dB` },
+                { label: 'Ostruiti ma collegati', render: (s) => s.blockedButConnected },
+              ],
+              [...v.history].reverse(),
+            ))
+          : null,
+        last?.aps?.length
+          ? h('details', {}, h('summary', {}, 'AP dove la stima sbaglia di più (in media)'), table(
+              [
+                { label: 'AP', render: (a) => a.name },
+                { label: 'Clienti', render: (a) => a.customers },
+                { label: 'Tendenza', render: (a) => `${sign(a.biasDb)} dB` },
+                { label: 'Errore tipico', render: (a) => `${a.medianAbsDb} dB` },
+              ],
+              last.aps,
+            ), h('p', { class: 'small muted' }, 'Tendenza positiva: la stima è più ottimista del reale (antenna più bassa, potenza minore o ostacoli non visti); negativa: più pessimista (azimut, altezza dell’antenna, potenza maggiore). Controlla in UISP azimut e altezza di questi AP.'))
+          : null,
+        last?.worst?.length
+          ? h('details', {}, h('summary', {}, 'Clienti stimati peggio'), table(
+              [
+                { label: 'CPE', render: (c) => h('div', {}, c.device, h('div', { class: 'small muted mono' }, c.mac ?? '')) },
+                { label: 'AP', render: (c) => c.ap },
+                { label: 'Reale', render: (c) => `${c.realDbm} dBm` },
+                { label: 'Stimato', render: (c) => `${c.estimateDbm} dBm` },
+                { label: 'Errore', render: (c) => `${sign(c.errorDb)} dB` },
+                { label: 'Terreno', render: (c) => VERDICT[c.terrain ?? 'n/d'] },
+                { label: 'Distanza', render: (c) => `${(c.distanceM / 1000).toFixed(2)} km` },
+              ],
+              last.worst,
+            ))
+          : null,
+        h('p', { class: 'small muted' }, 'Ogni cliente collegato viene stimato senza usare il suo segnale e confrontato con quello reale. La misura si ripete da sola dopo ogni scaricamento di terreno e ostacoli.'),
+      ),
+    );
+    clearTimeout(timer);
+    if (v.running) timer = setTimeout(() => load().catch(() => {}), 4000);
+  };
+  const load = async () => show(await api('/api/admin/coverage/accuracy'));
+  load().catch((e) => mount(box, h('div', { class: 'notice bad' }, e.message)));
+  return card(h('h2', {}, 'Affidabilità della stima'), box);
+}
+
+/**
+ * Terreno e ostacoli: TINITALY (10 m) and ESA WorldCover (buildings, trees) for the area of the
+ * network, downloaded and converted by the server when the admin asks. Polls while it runs.
+ */
+function terrainCard() {
+  const box = h('div', {}, h('p', { class: 'muted' }, 'Caricamento…'));
+  let timer = null;
+  const show = (s) => {
+    const imp = s.import ?? {};
+    const area = s.area ? `${s.area.minLat.toFixed(2)}–${s.area.maxLat.toFixed(2)}° N, ${s.area.minLon.toFixed(2)}–${s.area.maxLon.toFixed(2)}° E` : 'nessun AP con posizione';
+    const go = h('button', { type: 'button', disabled: imp.running || !s.area }, s.dtmTiles ? 'Aggiorna per l’area della rete' : 'Scarica terreno e ostacoli');
+    go.onclick = () =>
+      busy(go, async () => {
+        if (!confirm(`Il server scarica il modello del terreno TINITALY 1.1 (INGV, 10 m) e la mappa del suolo ESA WorldCover 2021 per l’area della rete (${area}): per la Sicilia circa 800 MB da INGV e 60 MB da ESA, convertiti e poi cancellati (restano circa 300–400 MB). Procedo?`)) return;
+        await api('/api/admin/terrain/import', { method: 'POST', body: {} });
+        await load();
+      });
+    mount(
+      box,
+      h(
+        'div',
+        {},
+        h('p', {}, s.dtmTiles
+          ? `Terreno a 10 m: ${s.dtmTiles} riquadri di 0,1° (${s.tinitaly} file TINITALY) · edifici e vegetazione: ${s.coverTiles} riquadri (${s.worldcover} file WorldCover) · aggiornato ${fmtDate(s.updatedAt)}.`
+          : 'Non ancora scaricati: la copertura usa il modello SRTM (circa 30 m) e non vede edifici e alberi.'),
+        imp.running
+          ? h('div', { class: 'notice' }, `In corso: ${imp.phase} (${imp.done}/${imp.total})…`)
+          : imp.error
+            ? h('div', { class: 'notice bad' }, `Ultimo scaricamento interrotto (${imp.phase}): ${imp.error}. Riprova: riparte da dove si era fermato.`)
+            : null,
+        h('div', { class: 'row' }, go),
+        h('p', { class: 'small muted' }, `Area della rete: ${area}, cioè gli AP più 20 km intorno. Le altezze medie di edifici e vegetazione si impostano in Impostazioni server → Simulazione radio. Fonti: TINITALY 1.1, Tarquini et al. (2023), INGV, doi:10.13127/tinitaly/1.1 (CC BY 4.0); ESA WorldCover 10 m 2021 v200, doi:10.5281/zenodo.7254221 (CC BY 4.0).`),
+      ),
+    );
+    clearTimeout(timer);
+    if (imp.running) timer = setTimeout(() => load().catch(() => {}), 3000);
+  };
+  const load = async () => show(await api('/api/admin/terrain'));
+  load().catch((e) => mount(box, h('div', { class: 'notice bad' }, e.message)));
+  return card(h('h2', {}, 'Terreno e ostacoli'), box);
 }

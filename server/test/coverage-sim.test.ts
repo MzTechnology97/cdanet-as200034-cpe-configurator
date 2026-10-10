@@ -80,3 +80,33 @@ describe('Copertura: il terreno entra nella stima', () => {
     assert.ok(sim.cells.some((c: { blocked?: boolean }) => !c.blocked));
   });
 });
+
+describe('Copertura: affidabilità e terreno (admin)', () => {
+  it('measures the model on the customers, keeps the history, and shows the terrain status', async () => {
+    const uisp = fakeUisp();
+    const { app } = await buildApp(testConfig(), 'test', { db: openDatabase(':memory:'), logger: false, uisp: uisp.uisp, fetchImpl: uisp.fetchImpl });
+    const login = async (username: string, password: string) => ({ authorization: `Bearer ${(await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username, password } })).json().token}` });
+    const H = await login(ADMIN.username, ADMIN.password);
+    await app.inject({ method: 'POST', url: '/api/admin/users', headers: H, payload: { username: 'tecnico', password: 'Installer-Pass-123' } });
+    const T = await login('tecnico', 'Installer-Pass-123');
+    const run = async () => {
+      assert.equal((await app.inject({ method: 'POST', url: '/api/admin/coverage/accuracy', headers: H, payload: {} })).json().started, true);
+      for (let i = 0; i < 100 && (await app.inject({ method: 'GET', url: '/api/admin/coverage/accuracy', headers: H })).json().running; i++) await new Promise((r) => setTimeout(r, 50));
+      return (await app.inject({ method: 'GET', url: '/api/admin/coverage/accuracy', headers: H })).json();
+    };
+    const first = await run();
+    assert.equal(first.error, null);
+    assert.ok(first.last && first.last.customers >= 0, JSON.stringify(first.last));
+    assert.equal(typeof first.last.medianAbsDb, 'number');
+    assert.ok(Array.isArray(first.last.worst));
+    const second = await run();
+    assert.equal(second.history.length, 2, 'history kept for before/after');
+    assert.equal(second.history[0].worst, undefined, 'the history has summaries only');
+    assert.equal((await app.inject({ method: 'GET', url: '/api/admin/coverage/accuracy', headers: T })).statusCode, 403);
+
+    const terrain = (await app.inject({ method: 'GET', url: '/api/admin/terrain', headers: H })).json();
+    assert.equal(terrain.dtmTiles, 0);
+    assert.ok(terrain.area && terrain.area.minLat < 37.6 && terrain.area.maxLat > 37.6, JSON.stringify(terrain.area));
+    assert.equal((await app.inject({ method: 'POST', url: '/api/admin/terrain/import', headers: T, payload: {} })).statusCode, 403);
+  });
+});

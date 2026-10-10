@@ -1,7 +1,7 @@
 {
   "name": "cdanet-cpe-server",
   "private": true,
-  "version": "1.32.50",
+  "version": "1.32.51",
   "description": "CDA Net AS200034 CPE Configurator - control plane (API + Admin/NOC web)",
   "type": "module",
   "engines": {
@@ -12,7 +12,8 @@
     "dev": "node --watch src/main.ts",
     "typecheck": "tsc -p tsconfig.json",
     "test": "node --test \"test/**/*.test.ts\"",
-    "reset-admin": "node src/cli/reset-admin.ts"
+    "reset-admin": "node src/cli/reset-admin.ts",
+    "terrain:import": "node src/cli/terrain-import.ts"
   },
   "dependencies": {
     "@fastify/static": "^10.1.5",

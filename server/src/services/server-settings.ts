@@ -166,6 +166,16 @@ export const SERVER_SETTINGS: Def[] = [
     get: (c) => c.coverageCpeGainDbi, set: (c, v) => (c.coverageCpeGainDbi = (v as number | undefined) ?? 23),
   },
   {
+    key: 'coverageBuildingM', env: 'COVERAGE_BUILDING_HEIGHT_M', group: 'Simulazione radio', label: 'Altezza media degli edifici (m)', kind: 'int', min: 0, max: 60,
+    help: 'Dove la mappa del suolo (ESA WorldCover) indica edifici, il profilo verso l’AP si alza di questa altezza: un paese tra la CPE e l’AP può fare ombra. Gli edifici entro 50 m dalla CPE e dall’AP non contano (l’antenna è sopra il tetto). 0 = edifici ignorati.',
+    get: (c) => c.coverageBuildingM, set: (c, v) => (c.coverageBuildingM = (v as number | undefined) ?? 8),
+  },
+  {
+    key: 'coverageTreeM', env: 'COVERAGE_TREE_HEIGHT_M', group: 'Simulazione radio', label: 'Altezza media della vegetazione (m)', kind: 'int', min: 0, max: 40,
+    help: 'Dove la mappa del suolo indica alberi: il tratto di linea di vista che attraversa le chiome attenua il segnale (fogliame a 5 GHz, ITU-R P.833, fino a 20 dB). Uliveti e agrumeti 5–8 m, boschi 10–20 m. 0 = vegetazione ignorata.',
+    get: (c) => c.coverageTreeM, set: (c, v) => (c.coverageTreeM = (v as number | undefined) ?? 8),
+  },
+  {
     key: 'releases.githubRepo', env: 'ANDROID_RELEASE_GITHUB_REPO', group: 'Rilasci dell’app Android', label: 'Repository GitHub dei rilasci (owner/repo)', kind: 'text', restart: true,
     get: (c) => c.releases.githubRepo, set: (c, v) => (c.releases.githubRepo = v as string | undefined),
   },

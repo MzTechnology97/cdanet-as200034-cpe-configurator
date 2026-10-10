@@ -79,6 +79,8 @@ const envSchema = z.object({
   // theoretical estimate for APs without customers: EIRP of the AP and gain of the CPE antenna
   COVERAGE_AP_EIRP_DBM: int(30, 10, 60),
   COVERAGE_CPE_GAIN_DBI: int(23, 0, 40),
+  COVERAGE_BUILDING_HEIGHT_M: int(8, 0, 60),
+  COVERAGE_TREE_HEIGHT_M: int(8, 0, 40),
   MIN_ANDROID_VERSION: z.string().regex(/^\d+\.\d+\.\d+$/).default('1.0.0'),
   // the Android app must be on the latest published release (older ones cannot log in)
   APP_FORCE_LATEST: z.enum(['0', '1']).default('1'),
@@ -129,6 +131,8 @@ export interface Config {
   infraDir: string;
   /** Terrain tiles: source and local cache. */
   dem: { url: string; dir: string };
+  /** Terrain (TINITALY) and land cover (WorldCover) tiles imported by the admin. */
+  terrainDir: string;
   staticDir: string;
   masterKey: Buffer;
   jwtSecret: Uint8Array;
@@ -163,6 +167,10 @@ export interface Config {
   staleCpeMonths: number;
   installerDistanceStepM: number;
   coverageEirpDbm: number;
+  /** Average height of the buildings (land cover "built-up") between the CPE and the AP, m. */
+  coverageBuildingM: number;
+  /** Average height of the trees (land cover "tree cover"), m. */
+  coverageTreeM: number;
   coverageCpeGainDbi: number;
   minAndroidVersion: string;
   auditRetentionDays: number;
@@ -212,6 +220,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     dbPath: e.DB_PATH,
     ouiDir: e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-oui-${process.pid}`) : join(dirname(e.DB_PATH), 'oui'),
     dem: { url: e.DEM_URL, dir: e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-dem-${process.pid}`) : join(dirname(e.DB_PATH), 'dem') },
+    terrainDir: e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-terrain-${process.pid}`) : join(dirname(e.DB_PATH), 'terrain'),
     mapFile: e.MAP_FILE || (e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-map-${process.pid}.pmtiles`) : join(dirname(e.DB_PATH), 'maps', 'basemap.pmtiles')),
     infraDir: e.INFRA_DIR || (e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-infra-${process.pid}`) : join(dirname(e.DB_PATH), 'infra')),
     firmwareDir: e.FIRMWARE_DIR || (e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-firmware-${process.pid}`) : join(dirname(e.DB_PATH), 'firmware')),
@@ -257,6 +266,8 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     installerDistanceStepM: e.INSTALLER_DISTANCE_STEP_M,
     coverageEirpDbm: e.COVERAGE_AP_EIRP_DBM,
     coverageCpeGainDbi: e.COVERAGE_CPE_GAIN_DBI,
+    coverageBuildingM: e.COVERAGE_BUILDING_HEIGHT_M,
+    coverageTreeM: e.COVERAGE_TREE_HEIGHT_M,
     minAndroidVersion: e.MIN_ANDROID_VERSION,
     auditRetentionDays: e.GDPR_AUDIT_RETENTION_DAYS,
     releases: {
