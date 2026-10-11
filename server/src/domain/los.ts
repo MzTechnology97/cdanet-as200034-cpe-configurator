@@ -113,17 +113,25 @@ export function diffractionLossDb(profile: ProfilePoint[], fromAltitude: number,
   return Math.round(Math.min(60, deygout(0, profile.length - 1, fromAltitude, toAltitude, 1)) * 10) / 10;
 }
 
+/** Highest believable GPS antenna above the ground, m: beyond it the GPS altitude is discarded. */
+export const MAX_GPS_ABOVE_GROUND_M = 60;
+
+export type ApAltitudeFrom = 'sito' | 'gps' | 'uisp' | 'terreno';
+
 /**
- * Altitude of the AP antenna, metres a.s.l. UISP's location.altitude is the GPS altitude on GPS
- * APs; on the others it holds small values (a height above the ground typed in UISP). Otherwise:
- * terrain + antenna height (site height in UISP, else the admin default). Pure, unit-tested.
+ * Altitude of the AP antenna, metres a.s.l. First the height of its site in UISP above the
+ * terrain (typed by hand, reliable). Then UISP's location.altitude: the GPS altitude on GPS APs
+ * (its vertical error reaches tens of metres: kept between ground + 5 m and ground +
+ * MAX_GPS_ABOVE_GROUND_M), small values on the others (a height above the ground typed in UISP).
+ * Otherwise terrain + the admin default. Pure, unit-tested.
  */
-export function resolveApAltitude(reported: number | null, ground: number | null, height: number): { altitude: number | null; from: 'gps' | 'uisp' | 'terreno' | null } {
+export function resolveApAltitude(reported: number | null, ground: number | null, siteHeight: number | null, defaultHeight: number): { altitude: number | null; from: ApAltitudeFrom | null } {
+  if (ground !== null && siteHeight !== null && siteHeight >= 0) return { altitude: ground + siteHeight, from: 'sito' };
   if (reported !== null) {
-    // GPS altitude: kept, but never under the ground + 5 m (the vertical GPS error is ±15 m: an
-    // antenna "inside" the hill it stands on would hide every customer)
-    if (ground !== null ? reported >= ground - 30 : reported >= 100) return { altitude: ground !== null ? Math.max(reported, ground + 5) : reported, from: 'gps' };
+    // GPS altitude: never under the ground + 5 m (an antenna "inside" the hill it stands on would
+    // hide every customer) and never absurdly high (a GPS 90 m off would see over everything)
+    if (ground !== null ? reported >= ground - 30 && reported <= ground + MAX_GPS_ABOVE_GROUND_M : reported >= 100) return { altitude: ground !== null ? Math.max(reported, ground + 5) : reported, from: 'gps' };
     if (ground !== null && reported >= 0 && reported < 100) return { altitude: ground + reported, from: 'uisp' };
   }
-  return ground === null ? { altitude: null, from: null } : { altitude: ground + height, from: 'terreno' };
+  return ground === null ? { altitude: null, from: null } : { altitude: ground + defaultHeight, from: 'terreno' };
 }

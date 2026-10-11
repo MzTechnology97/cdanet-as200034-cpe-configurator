@@ -319,7 +319,7 @@ function pointingSettings() {
             h(
               'p',
               {},
-              `Su ${src.total} AP: ${src.gps} con l’altitudine GPS in UISP, ${src.siteHeight} con l’altezza del sito in UISP, `,
+              `Su ${src.total} AP: ${src.siteHeight} con l’altezza del sito in UISP, ${src.gps} solo con l’altitudine GPS, `,
               h('b', {}, `${src.fallback.length} senza nessuno dei due`),
               src.fallback.length ? ': per questi vale l’altezza impostata qui.' : ': l’altezza impostata qui oggi non viene usata.',
             ),
@@ -335,7 +335,7 @@ function pointingSettings() {
           h(
             'ul',
             { class: 'small plain' },
-            h('li', {}, h('b', {}, 'AP: '), 'si usa prima l’altitudine GPS dell’AP registrata in UISP, poi l’altezza del suo sito in UISP sopra il terreno. Solo se UISP non ha nessuno dei due vale l’altezza antenne qui sotto: non si somma mai ai dati di UISP.'),
+            h('li', {}, h('b', {}, 'AP: '), 'si usa prima l’altezza del suo sito in UISP sopra il terreno; se manca, l’altitudine GPS dell’AP in UISP (scartata se lo mette a più di 60 m dal suolo: l’errore verticale del GPS arriva a decine di metri). Solo se UISP non ha nessuno dei due vale l’altezza antenne qui sotto: non si somma mai ai dati di UISP.'),
             h('li', {}, h('b', {}, 'CPE: '), 'terreno più l’altezza dal suolo. Quella qui sotto è solo il valore di partenza: il tecnico la cambia nell’app per ogni installazione.'),
           ),
           h('div', { class: 'row' }, field('Altezza antenne AP (m dal suolo), solo per AP senza altitudine in UISP', ap), field('Altezza CPE di partenza (m dal suolo)', cpe)),
