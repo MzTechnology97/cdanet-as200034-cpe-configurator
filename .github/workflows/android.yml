@@ -6,7 +6,8 @@ on:
     tags: ['v*']
     paths: ['android/**', 'VERSION', '.github/workflows/android.yml']
   pull_request:
-    paths: ['android/**', 'VERSION', '.github/workflows/android.yml']
+    # tools/ too: these checks are required to merge (see server.yml)
+    paths: ['android/**', 'VERSION', 'tools/**', '.github/workflows/android.yml']
   workflow_dispatch:
 
 permissions:
