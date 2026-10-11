@@ -214,7 +214,7 @@ fun PointingScreen(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (
                             }
                             Text(
                                 listOfNotNull(
-                                    a.altitude?.let { "Alt: ${it.roundToInt()} m s.l.m." + if (a.altitudeFrom == "gps") " (GPS)" else "" },
+                                    a.altitude?.let { "Alt: ${it.roundToInt()} m s.l.m." + when (a.altitudeFrom) { "gps" -> " (GPS)"; "sito" -> " (sito)"; else -> "" } },
                                     "Azi: ${a.bearing}°",
                                     a.tiltDeg?.let { "Tilt: ${"%.1f".format(java.util.Locale.ITALY, it)}°" },
                                 ).joinToString("   "),

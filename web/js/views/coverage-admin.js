@@ -51,7 +51,7 @@ const s = (tag, attrs = {}) => {
   return el;
 };
 
-const ALT_FROM = { gps: 'altitudine GPS di UISP', uisp: 'altezza dal suolo scritta in UISP', terreno: 'altezza predefinita (Impostazioni server), UISP non la indica' };
+const ALT_FROM = { sito: 'altezza del sito in UISP', gps: 'altitudine GPS di UISP (il sito non ha l’altezza)', uisp: 'altezza dal suolo scritta in UISP', terreno: 'altezza predefinita (Impostazioni server), UISP non la indica' };
 
 /** First Fresnel zone radius at [d] of a [D] m link, m. */
 const fresnelR = (d, D, freqMhz) => Math.sqrt(((299.79 / (freqMhz || 5600)) * d * Math.max(0, D - d)) / D);

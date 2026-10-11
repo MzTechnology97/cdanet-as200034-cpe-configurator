@@ -37,12 +37,15 @@ describe('Puntamento: terreno e tilt', () => {
 
   it('resolves the AP altitude as UISP reports it on the real network', () => {
     // LAP-GPS: GPS altitude a.s.l.
-    assert.deepEqual(resolveApAltitude(954, 940, 15), { altitude: 954, from: 'gps' });
+    assert.deepEqual(resolveApAltitude(954, 940, null, 15), { altitude: 954, from: 'gps' });
+    // the site height typed in UISP comes first
+    assert.deepEqual(resolveApAltitude(954, 940, 10, 15), { altitude: 950, from: 'sito' });
     // non-GPS AP: small value = height above the ground typed in UISP
-    assert.deepEqual(resolveApAltitude(6, 520, 15), { altitude: 526, from: 'uisp' });
-    // nothing reported: terrain + site/default antenna height
-    assert.deepEqual(resolveApAltitude(null, 520, 10.07), { altitude: 530.07, from: 'terreno' });
-    assert.deepEqual(resolveApAltitude(null, null, 15), { altitude: null, from: null });
+    assert.deepEqual(resolveApAltitude(6, 520, null, 15), { altitude: 526, from: 'uisp' });
+    // nothing reported: terrain + site height, else the default antenna height
+    assert.deepEqual(resolveApAltitude(null, 520, 10.07, 15), { altitude: 530.07, from: 'sito' });
+    assert.deepEqual(resolveApAltitude(null, 520, null, 15), { altitude: 535, from: 'terreno' });
+    assert.deepEqual(resolveApAltitude(null, null, 15, 15), { altitude: null, from: null });
     assert.equal(sectorWidth('LAP-120'), 120);
     assert.equal(sectorWidth('PrismAP-5-45'), 45);
     assert.equal(sectorWidth('LAP-GPS'), 90);

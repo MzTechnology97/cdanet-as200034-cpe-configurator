@@ -87,7 +87,7 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
       inRange: inRange.length,
       discarded: ranked.length - useful.length,
       aps: aps.map(({ lat, lon, siteId: _site, stations: _st, ...a }, i) => {
-        const { altitude, from: altitudeFrom } = resolveApAltitude(a.gpsAltitude, apGround[i] ?? null, a.siteHeight ?? c.apHeightM);
+        const { altitude, from: altitudeFrom } = resolveApAltitude(a.gpsAltitude, apGround[i] ?? null, a.siteHeight, c.apHeightM);
         const base = {
           id: a.id,
           name: a.name,

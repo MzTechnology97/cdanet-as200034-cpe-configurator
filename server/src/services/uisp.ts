@@ -302,16 +302,17 @@ export function createUisp(opts: UispOptions) {
     },
 
     /**
-     * Where the altitude of each AP comes from (Impostazioni server → Puntamento): its own GPS
-     * altitude in UISP, the height of its site, or neither (then the configured antenna height).
+     * Where the altitude of each AP comes from (Impostazioni server → Puntamento): the height of
+     * its site in UISP, else its own altitude in UISP (GPS), or neither (then the configured
+     * antenna height).
      */
     async apAltitudeSources() {
       const list = (await aps()).filter((d) => !isPtp(d));
       const fallback = list.filter((d) => d.altitude === null && d.siteHeight === null);
       return {
         total: list.length,
-        gps: list.filter((d) => d.altitude !== null).length,
-        siteHeight: list.filter((d) => d.altitude === null && d.siteHeight !== null).length,
+        gps: list.filter((d) => d.siteHeight === null && d.altitude !== null).length,
+        siteHeight: list.filter((d) => d.siteHeight !== null).length,
         fallback: fallback.map((d) => d.name).sort((a, b) => a.localeCompare(b, 'it', { numeric: true })),
       };
     },
