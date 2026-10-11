@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { apModels } from '../services/model-inputs.ts';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
@@ -61,7 +62,7 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
     const maxKm = Math.min(ctx.uispSettings.coverageMaxKm, MAX_LINK_M / 1000);
     const inRange = await ctx.uisp.nearestAps({ lat: q.lat, lon: q.lon }, 500, maxKm, allow);
     const radio = { eirpDbm: ctx.cfg.coverageEirpDbm, cpeGainDbi: ctx.cfg.coverageCpeGainDbi };
-    const models = await ctx.uisp.apModels(inRange.map((a) => a.id), radio).catch(() => new Map<string, ApModel>());
+    const models = await apModels(ctx, inRange.map((a) => a.id), radio).catch(() => new Map<string, ApModel>());
     const clientsShown = !keys || ctx.outages.config().installerClients;
     const height = q.height ?? c.cpeHeightM;
     // the terrain towards every AP, as in Visibilità: a hill in the way lowers the expected signal

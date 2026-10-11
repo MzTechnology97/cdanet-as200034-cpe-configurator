@@ -1,5 +1,6 @@
 import type { AppContext } from '../context.ts';
 import { nowIso } from '../db.ts';
+import { modelInputs } from './model-inputs.ts';
 import { buildApModel, estimateAt, MAX_LINK_M, rateCoverage } from '../domain/coverage-model.ts';
 import { bearingDeg, distanceM } from '../domain/geo.ts';
 import { isPtp } from './uisp.ts';
@@ -69,6 +70,12 @@ export interface AccuracyRun extends AccuracySummary {
   blocked?: BlockedCustomer[];
   aps: Array<{ id: string; name: string; customers: number; biasDb: number; medianAbsDb: number }>;
   worst: Array<{ device: string; mac: string | null; ap: string; realDbm: number; estimateDbm: number; errorDb: number; terrain: string | null; distanceM: number }>;
+  /**
+   * Admins' map: every customer measured (real against estimated without it) and the places where
+   * an installation failed for radio reasons. Not kept in the history.
+   */
+  points?: Array<{ lat: number; lon: number; device: string; ap: string; realDbm: number; estimateDbm: number }>;
+  failurePoints?: Array<{ lat: number; lon: number; reason: string; ap: string | null; at: string }>;
 }
 
 const KEY = 'coverage.accuracy';
@@ -122,13 +129,13 @@ export function createCoverageAccuracy(ctx: AppContext) {
   async function measure(): Promise<AccuracyRun> {
     if (!ctx.uisp) throw new Error('uisp_not_configured');
     const radio = { eirpDbm: ctx.cfg.coverageEirpDbm, cpeGainDbi: ctx.cfg.coverageCpeGainDbi };
-    const { aps, prior } = await ctx.uisp.modelInputs(radio);
+    const { aps, prior } = await modelInputs(ctx, radio);
     const h = pointingConfig(ctx.db);
     const obs = obstacles(ctx);
     const min = ctx.cfg.thresholds.signalMin;
     const heights = cpeHeights(ctx.db);
     let realHeights = 0;
-    const rows: Array<{ ap: string; err: number; real: number; est: number; verdict: string | null; device: string; mac: string | null; d: number; rating: string }> = [];
+    const rows: Array<{ ap: string; err: number; real: number; est: number; verdict: string | null; device: string; mac: string | null; d: number; rating: string; lat: number; lon: number }> = [];
     const blocked: BlockedCustomer[] = [];
     let fine = false;
     let any = false;
@@ -145,7 +152,7 @@ export function createCoverageAccuracy(ctx: AppContext) {
       for (const c of withSignal) {
         const d = distanceM(a.location, c);
         if (d < 50 || d > MAX_LINK_M) continue; // positions the model ignores anyway
-        const m = buildApModel(a.location, a.clients.filter((x) => x !== c), a.heading, a.device.frequency, radio, prior);
+        const m = buildApModel(a.location, a.clients.filter((x) => x !== c), a.heading, a.device.frequency, radio, prior, a.pattern);
         // the real height of the CPE when its acceptance test says it, else the default
         const mac = c.device.mac ? parseMac(c.device.mac) : null;
         const own = mac ? heights.get(mac) : undefined;
@@ -153,7 +160,7 @@ export function createCoverageAccuracy(ctx: AppContext) {
         const terrain = at ? terrainBetween(at, c, own ?? h.cpeHeightM, target, h.apHeightM, obs) : null;
         const e = estimateAt(m, d, bearingDeg(a.location, c), a.device.frequency, radio, terrain);
         if (e.signalDbm === null) continue;
-        rows.push({ ap: a.device.id, err: e.signalDbm - c.signal!, real: c.signal!, est: e.signalDbm, verdict: terrain?.verdict ?? null, device: c.device.name, mac: c.device.mac, d: Math.round(d), rating: rateCoverage('active', e, min) });
+        rows.push({ ap: a.device.id, err: e.signalDbm - c.signal!, real: c.signal!, est: e.signalDbm, verdict: terrain?.verdict ?? null, device: c.device.name, mac: c.device.mac, d: Math.round(d), rating: rateCoverage('active', e, min), lat: c.lat, lon: c.lon });
         if (at && terrain?.verdict === 'blocked' && c.signal! >= min) {
           const cpeH = own ?? h.cpeHeightM;
           blocked.push({
@@ -181,7 +188,7 @@ export function createCoverageAccuracy(ctx: AppContext) {
       if (!a) continue;
       const at = await terrainSampler(ctx.terrain, [a.location, f], 500);
       const target = { lat: a.location.lat, lon: a.location.lon, gpsAltitude: a.device.altitude, siteHeight: a.siteHeight, frequency: a.device.frequency };
-      const m = buildApModel(a.location, a.clients, a.heading, a.device.frequency, radio, prior);
+      const m = buildApModel(a.location, a.clients, a.heading, a.device.frequency, radio, prior, a.pattern);
       const terrain = at ? terrainBetween(at, f, h.cpeHeightM, target, h.apHeightM, obs) : null;
       const e = estimateAt(m, distanceM(a.location, f), bearingDeg(a.location, f), a.device.frequency, radio, terrain);
       const r = rateCoverage(a.device.status === 'active' ? 'active' : a.device.status, e, min);
@@ -216,6 +223,8 @@ export function createCoverageAccuracy(ctx: AppContext) {
       failures: { n, rated },
       blocked: blocked.sort((x, y) => x.ap.localeCompare(y.ap) || x.distanceM - y.distanceM),
       aps: perAp.filter((a) => a.customers >= 3).sort((x, y) => Math.abs(y.biasDb) - Math.abs(x.biasDb)).slice(0, 15),
+      points: rows.map((x) => ({ lat: x.lat, lon: x.lon, device: x.device, ap: apName.get(x.ap) ?? x.ap, realDbm: x.real, estimateDbm: x.est })),
+      failurePoints: fieldFailures(ctx.db).map((f) => ({ lat: f.lat, lon: f.lon, reason: f.reason, ap: f.apName, at: f.at })),
       worst: rows
         .sort((x, y) => Math.abs(y.err) - Math.abs(x.err))
         .slice(0, 30)
@@ -230,7 +239,7 @@ export function createCoverageAccuracy(ctx: AppContext) {
     void measure()
       .then((run) => {
         const { history } = stored();
-        const { aps: _a, worst: _w, ...summary } = run;
+        const { aps: _a, worst: _w, points: _p, failurePoints: _f, blocked: _b, ...summary } = run;
         const value = JSON.stringify({ history: [...history, summary].slice(-30), last: run });
         ctx.db
           .prepare(

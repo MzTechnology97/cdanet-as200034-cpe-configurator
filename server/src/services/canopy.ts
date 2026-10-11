@@ -139,7 +139,9 @@ export function createCanopyReader(range: Range) {
     }
     return p;
   }
-  const ready = new Map<string, Uint8Array | null>();
+  // blocks by their global index on the overview grid of the world (row × 2^20 + column)
+  const ready = new Map<number, Uint8Array | null>();
+  const per = CANOPY_LEVEL_PX / 512;
   /** Fetches (a few at a time) every block of the overview over a box of degrees. */
   async function ensure(b: { north: number; south: number; west: number; east: number }) {
     const n = 2 ** CANOPY_ZOOM;
@@ -148,35 +150,37 @@ export function createCanopyReader(range: Range) {
     const x1 = Math.floor(mercX(b.east, n) * P) + 2;
     const y0 = Math.floor(mercY(b.north, n) * P) - 2;
     const y1 = Math.floor(mercY(b.south, n) * P) + 2;
-    const jobs: Array<[string, number, number]> = [];
+    const jobs: Array<[number, number]> = [];
     for (let by = Math.floor(y0 / 512); by <= Math.floor(y1 / 512); by++) {
-      for (let bx = Math.floor(x0 / 512); bx <= Math.floor(x1 / 512); bx++) {
-        const per = P / 512;
-        const qk = quadkey(Math.floor(bx / per), Math.floor(by / per), CANOPY_ZOOM);
-        const key = `${qk}/${bx % per}/${by % per}`;
-        if (!ready.has(key)) jobs.push([qk, bx % per, by % per]);
-      }
+      for (let bx = Math.floor(x0 / 512); bx <= Math.floor(x1 / 512); bx++) if (!ready.has(by * 2 ** 20 + bx)) jobs.push([bx, by]);
     }
     for (let k = 0; k < jobs.length; k += 8) {
-      await Promise.all(jobs.slice(k, k + 8).map(async ([qk, bx, by]) => ready.set(`${qk}/${bx}/${by}`, await block(qk, bx, by))));
+      await Promise.all(
+        jobs.slice(k, k + 8).map(async ([bx, by]) => ready.set(by * 2 ** 20 + bx, await block(quadkey(Math.floor(bx / per), Math.floor(by / per), CANOPY_ZOOM), bx % per, by % per))),
+      );
     }
   }
   /** Tallest tree (m) within [radiusPx] pixels of the overview around a point (blocks ensured); 0 = none. */
   function maxAround(lat: number, lon: number, radiusPx = 1): number {
     const n = 2 ** CANOPY_ZOOM;
     const P = CANOPY_LEVEL_PX;
-    const per = P / 512;
     const gx = Math.floor(mercX(lon, n) * P);
     const gy = Math.floor(mercY(lat, n) * P);
     let top = 0;
+    let key = -1;
+    let b: Uint8Array | null | undefined = null;
     for (let dy = -radiusPx; dy <= radiusPx; dy++) {
+      const y = gy + dy;
+      const by = y >> 9;
       for (let dx = -radiusPx; dx <= radiusPx; dx++) {
         const x = gx + dx;
-        const y = gy + dy;
-        const bx = Math.floor(x / 512);
-        const by = Math.floor(y / 512);
-        const b = ready.get(`${quadkey(Math.floor(bx / per), Math.floor(by / per), CANOPY_ZOOM)}/${bx % per}/${by % per}`);
-        const v = b ? b[(y - by * 512) * 512 + (x - bx * 512)]! : 0;
+        const bx = x >> 9;
+        const k = by * 1048576 + bx;
+        if (k !== key) {
+          key = k;
+          b = ready.get(k);
+        }
+        const v = b ? b[(y & 511) * 512 + (x & 511)]! : 0;
         if (v > top && v < 255) top = v;
       }
     }

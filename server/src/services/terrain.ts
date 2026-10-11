@@ -215,6 +215,8 @@ export function profileEffect(p: BuiltProfile): TerrainEffect {
     diffractionDb: Math.round(Math.min(60, diffraction + foliageDb) * 10) / 10,
     ...(foliageM > 0 ? { foliageM: Math.round(foliageM), foliageDb } : {}),
     ...(los.verdict !== bareVerdict ? { buildings: true } : {}),
+    // the point as the AP antenna sees it: degrees above (+) or below (−) its horizontal
+    elevDeg: Math.round(((Math.atan2(p.from - p.to, p.D) * 180) / Math.PI) * 10) / 10,
   };
 }
 

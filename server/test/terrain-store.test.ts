@@ -231,7 +231,7 @@ describe('Terreno e ostacoli: effetto sul collegamento', () => {
   };
 
   it('buildings are solid, trees attenuate with the stretch of crowns crossed', () => {
-    assert.deepEqual(profileEffect(prof(null, 0, 0, 0)), { verdict: 'clear', lossDb: 0, diffractionDb: 0 });
+    assert.deepEqual(profileEffect(prof(null, 0, 0, 0)), { verdict: 'clear', lossDb: 0, diffractionDb: 0, elevDeg: 0 });
     const town = profileEffect(prof('edificio', 15, 900, 1100));
     assert.equal(town.verdict, 'blocked');
     assert.equal(town.buildings, true);

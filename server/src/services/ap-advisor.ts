@@ -1,5 +1,7 @@
 import type { AppContext } from '../context.ts';
 import { nowIso } from '../db.ts';
+import { needsExternalAntenna, suggestedAzimuth } from '../routes/antennas.ts';
+import { modelInputs } from './model-inputs.ts';
 import { analyzeNetwork, type AdvisorInput, type Finding } from '../domain/advisor.ts';
 import { buildApModel, estimateAt, MAX_LINK_M, rateCoverage } from '../domain/coverage-model.ts';
 import { bearingDeg, distanceM } from '../domain/geo.ts';
@@ -61,7 +63,7 @@ export function createAdvisor(ctx: AppContext, log?: (m: string) => void) {
     const rebalance = new Map<string, { apName: string; signalDbm: number; level: string | null }>();
     if (!ctx.uisp) return { expected, cpeSignal, rebalance };
     const radio = { eirpDbm: ctx.cfg.coverageEirpDbm, cpeGainDbi: ctx.cfg.coverageCpeGainDbi };
-    const { aps, prior } = await ctx.uisp.modelInputs(radio);
+    const { aps, prior } = await modelInputs(ctx, radio);
     const h = pointingConfig(ctx.db);
     const obs = obstacles(ctx);
     const busy = new Set(inputs.filter((i) => i.load?.level === 'carico').map((i) => i.apId));
@@ -72,7 +74,7 @@ export function createAdvisor(ctx: AppContext, log?: (m: string) => void) {
         cpeSignal.set(c.device.id, c.signal);
         const d = distanceM(a.location, c);
         if (d < 50 || d > MAX_LINK_M || withSignal.length < 3) continue;
-        const m = buildApModel(a.location, a.clients.filter((x) => x !== c), a.heading, a.device.frequency, radio, prior);
+        const m = buildApModel(a.location, a.clients.filter((x) => x !== c), a.heading, a.device.frequency, radio, prior, a.pattern);
         const e = estimateAt(m, d, bearingDeg(a.location, c), a.device.frequency, radio, null);
         // only where the model is confident enough to accuse the CPE
         if (e.signalDbm !== null && e.confidence !== 'bassa') expected.set(c.device.id, e.signalDbm);
@@ -88,7 +90,7 @@ export function createAdvisor(ctx: AppContext, log?: (m: string) => void) {
           const at = await terrainSampler(ctx.terrain, [o.location, c], 500);
           const target = { lat: o.location.lat, lon: o.location.lon, gpsAltitude: o.device.altitude, siteHeight: o.siteHeight, frequency: o.device.frequency };
           const t = at ? terrainBetween(at, c, h.cpeHeightM, target, h.apHeightM, obs) : null;
-          const e = estimateAt(buildApModel(o.location, o.clients, o.heading, o.device.frequency, radio, prior), d, bearingDeg(o.location, c), o.device.frequency, radio, t);
+          const e = estimateAt(buildApModel(o.location, o.clients, o.heading, o.device.frequency, radio, prior, o.pattern), d, bearingDeg(o.location, c), o.device.frequency, radio, t);
           const level = ctx.apLoad.load(o.device.id)?.level ?? null;
           if (e.signalDbm === null || rateCoverage(o.device.status === 'active' ? 'active' : o.device.status, e, ctx.cfg.thresholds.signalMin, level) !== 'buono') continue;
           if (!best || e.signalDbm > best.signalDbm) best = { apName: o.device.name, signalDbm: e.signalDbm, level };
@@ -99,13 +101,48 @@ export function createAdvisor(ctx: AppContext, log?: (m: string) => void) {
     return { expected, cpeSignal, rebalance };
   }
 
+  /**
+   * APs the coverage model cannot point right: no azimuth (UISP nor the admin) or a radio without
+   * its own antenna whose antenna nobody said (a horn on a Rocket). Info: the fix is in Copertura.
+   */
+  async function antennaFindings(): Promise<Finding[]> {
+    if (!ctx.uisp) return [];
+    const assigned = ctx.antennas.assigned();
+    const out: Finding[] = [];
+    for (const a of (await ctx.uisp.modelInputs()).aps) {
+      if (isPtp(a.device) || a.clients.length < 3) continue;
+      const base = { apId: a.device.id, apName: a.device.name, kind: 'antenna', severity: 'info' as const };
+      if (a.device.heading == null && assigned[a.device.id]?.azimuth == null) {
+        const s = suggestedAzimuth(a.location, a.clients);
+        out.push({
+          ...base,
+          id: `azimuth:${a.device.id}`,
+          title: 'Azimut dell’antenna non indicato',
+          detail: `UISP non ha la direzione dell’antenna${s ? `; dai ${a.clients.length} clienti collegati punta verso circa ${s.azimuth}° (arco servito ${s.arc}°)` : ''}.`,
+          action: 'Indica o conferma l’azimut in Copertura → Antenne degli AP (o in UISP): la copertura userà il diagramma vero dell’antenna.',
+          ...(s ? { params: { azimut: s.azimuth } } : {}),
+        });
+      }
+      if (needsExternalAntenna(a.device.model) && !assigned[a.device.id]?.antennaId) {
+        out.push({
+          ...base,
+          id: `antenna:${a.device.id}`,
+          title: 'Antenna non indicata',
+          detail: `${a.device.model ?? 'La radio'} non ha un’antenna sua e UISP non sa quale c’è montata (horn RF elements, settore…).`,
+          action: 'Scegli l’antenna in Copertura → Antenne degli AP: la copertura userà il suo diagramma.',
+        });
+      }
+    }
+    return out;
+  }
+
   async function run(inputs: AdvisorInput[]): Promise<void> {
     if (running) return;
     running = true;
     last = inputs;
     try {
       const checks = await modelChecks(inputs).catch(() => ({ expected: undefined, cpeSignal: undefined, rebalance: undefined }));
-      const findings = analyzeNetwork(inputs, { range: range(), minDbm: ctx.cfg.thresholds.signalMin, ...checks });
+      const findings = [...analyzeNetwork(inputs, { range: range(), minDbm: ctx.cfg.thresholds.signalMin, ...checks }), ...(await antennaFindings().catch(() => []))];
       const prev = read<Stored>(KEY, { at: null, findings: [], since: {} });
       const now = nowIso();
       const since: Record<string, string> = {};

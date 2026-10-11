@@ -233,6 +233,47 @@ export async function adminCoverageView() {
     .then((c) => (height.value = c.cpeHeightM))
     .catch(() => {});
 
+  // the model on the real customers (last Affidabilità della stima): where it gets it right
+  let realLayer = null;
+  let koLayer = null;
+  const realToggle = h('input', { type: 'checkbox' });
+  const koToggle = h('input', { type: 'checkbox' });
+  let accuracyLast = null;
+  const accuracyData = async () => (accuracyLast ??= (await api('/api/admin/coverage/accuracy')).last ?? {});
+  const ERR_COLOR = (e) => (Math.abs(e) <= 6 ? '#16a34a' : Math.abs(e) <= 12 ? '#f59e0b' : '#dc2626');
+  realToggle.onchange = async () => {
+    const m = await ensureMap();
+    if (!m) return;
+    const L = window.L;
+    realLayer ??= L.layerGroup();
+    realLayer.clearLayers();
+    if (!realToggle.checked) return m.removeLayer(realLayer);
+    const pts = (await accuracyData()).points ?? [];
+    if (!pts.length) toast('Nessuna misura: avvia «Affidabilità della stima» qui sotto');
+    for (const p of pts) {
+      const err = p.estimateDbm - p.realDbm;
+      L.circleMarker([p.lat, p.lon], { radius: 4, color: ERR_COLOR(err), weight: 1, fillOpacity: 0.8, bubblingMouseEvents: false })
+        .bindPopup(popup(p.device, `AP ${p.ap}`, `reale ${p.realDbm} dBm · stimato ${p.estimateDbm} dBm`, `${err > 0 ? 'stima ottimista' : err < 0 ? 'stima pessimista' : 'esatta'} di ${Math.abs(err)} dB`))
+        .addTo(realLayer);
+    }
+    realLayer.addTo(m);
+  };
+  koToggle.onchange = async () => {
+    const m = await ensureMap();
+    if (!m) return;
+    const L = window.L;
+    koLayer ??= L.layerGroup();
+    koLayer.clearLayers();
+    if (!koToggle.checked) return m.removeLayer(koLayer);
+    const KO = { no_signal: 'nessun segnale', no_link: 'non si aggancia', obstacles: 'ostacoli' };
+    for (const f of (await accuracyData()).failurePoints ?? []) {
+      L.marker([f.lat, f.lon], { icon: L.divIcon({ className: 'ko-pin', html: '✕', iconSize: [16, 16] }) })
+        .bindPopup(popup('Installazione fallita', KO[f.reason] ?? f.reason, f.ap ? `verso ${f.ap}` : null, fmtDate(f.at)))
+        .addTo(koLayer);
+    }
+    koLayer.addTo(m);
+  };
+
   async function ensureMap() {
     if (map) return map;
     for (let i = 0; i < 60 && !el.isConnected; i++) await new Promise((r) => setTimeout(r, 50));
@@ -632,13 +673,15 @@ export async function adminCoverageView() {
       h('p', { class: 'small muted' }, 'Scrivi un indirizzo, delle coordinate o il nome di un AP, oppure clicca sulla mappa. L’altezza della CPE vale per la visibilità di questo punto.'),
     ),
     card(
-      h('h2', {}, 'Mappa della rete'),
+      h('div', { class: 'link-head' }, h('h2', {}, 'Mappa della rete'), h('label', { class: 'check small' }, realToggle, ' Clienti reali: segnale vero contro stima'), h('label', { class: 'check small' }, koToggle, ' Installazioni fallite')),
       h('div', { class: 'map-stage' }, el, dock),
       legend([
         [STATE_COLOR.ok, 'AP in funzione'],
         [STATE_COLOR.degraded, 'molte CPE offline'],
         [STATE_COLOR.down, 'non raggiungibile'],
         [C.point, 'punto verificato'],
+        ['#16a34a', 'cliente: stima entro 6 dB'],
+        ['#dc2626', 'cliente: stima sbagliata di oltre 12 dB'],
       ]),
       h('div', { class: 'map-tools' }, mapNote, h('button', { type: 'button', class: 'small-btn', onclick: () => (picker?.arm(), toast('Clicca sulla mappa nel nuovo punto')) }, 'Nuovo punto sulla mappa')),
       simBox,
@@ -655,6 +698,7 @@ export async function adminCoverageView() {
       },
     }),
     terrainCard(),
+    antennasCard(),
   );
 }
 
@@ -822,3 +866,110 @@ function terrainCard() {
   load().catch((e) => mount(box, h('div', { class: 'notice bad' }, e.message)));
   return card(h('h2', {}, 'Terreno e ostacoli'), box);
 }
+
+/** Polar drawing of a horizontal cut (attenuation in dB: the edge is the peak, the centre 30 dB down). */
+function polar(az, size = 64) {
+  const c = size / 2;
+  const r = (db) => Math.max(0, (1 - Math.min(30, db) / 30) * (c - 2));
+  const pts = az.map((db, i) => {
+    const a = ((i - 90) * Math.PI) / 180;
+    return `${(c + r(db) * Math.cos(a)).toFixed(1)},${(c + r(db) * Math.sin(a)).toFixed(1)}`;
+  });
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('viewBox', `0 0 ${size} ${size}`);
+  svg.setAttribute('width', size);
+  svg.setAttribute('height', size);
+  svg.setAttribute('class', 'ant-polar');
+  svg.innerHTML = `<circle cx="${c}" cy="${c}" r="${c - 2}" class="ring"/><circle cx="${c}" cy="${c}" r="${(c - 2) / 2}" class="ring"/><polygon points="${pts.join(' ')}" class="lobe"/>`;
+  return svg;
+}
+
+/**
+ * Antenne degli AP: the makers' radiation patterns (Ubiquiti, RF elements) and, for every AP, the
+ * antenna, azimuth and tilt the coverage model uses. UISP rarely knows the azimuth and never which
+ * horn is on a Rocket: the admin says it here (the customers suggest the azimuth).
+ */
+function antennasCard() {
+  const box = h('div', {}, h('p', { class: 'muted' }, 'Caricamento…'));
+  const onlyTodo = h('input', { type: 'checkbox', checked: true });
+  let timer = null;
+  let data = null;
+  const patterns = new Map();
+  const patternOf = (id) => {
+    if (!patterns.has(id)) patterns.set(id, api(`/api/admin/antennas/pattern/${encodeURIComponent(id)}`));
+    return patterns.get(id);
+  };
+  const show = () => {
+    const s = data;
+    const imp = s.import ?? {};
+    const lib = s.library ?? [];
+    const dl = h('button', { type: 'button', disabled: imp.running }, lib.length ? 'Aggiorna i diagrammi' : 'Scarica i diagrammi delle antenne');
+    dl.onclick = () =>
+      busy(dl, async () => {
+        if (!confirm('Il server scarica i diagrammi di radiazione pubblicati dai costruttori: Ubiquiti airMAX (27 file da dl.ui.com, circa 0,7 MB) e RF elements (horn, settori e parabole: 1 file da rfelements.com, 135 KB). Restano sul server, non nel codice. Procedo?')) return;
+        await api('/api/admin/antennas/import', { method: 'POST', body: {} });
+        await load();
+      });
+    const todo = (a) => a.customers >= 3 && ((a.azimuth == null && a.uispAzimuth == null) || (a.external && !a.antennaId));
+    const rows = (onlyTodo.checked ? s.aps.filter(todo) : s.aps).slice(0, 300);
+    const groups = ['Ubiquiti', 'RF elements'].map((v) => h('optgroup', { label: v }, lib.filter((p) => p.vendor === v).map((p) => h('option', { value: p.id }, `${p.name} · ${p.gainDbi ?? '?'} dBi · ${p.hBeam}°×${p.vBeam}°`))));
+    const row = (a) => {
+      const ant = h('select', {}, h('option', { value: '' }, a.external ? '— da indicare —' : a.antennaFrom === 'modello' ? 'integrata (dal modello)' : '—'), ...groups.map((g) => g.cloneNode(true)));
+      ant.value = a.antennaFrom === 'admin' ? a.antennaId : '';
+      const az = h('input', { type: 'number', class: 'ant-num', min: 0, max: 359, step: 1, value: a.azimuth ?? '', placeholder: a.uispAzimuth != null ? `UISP ${a.uispAzimuth}°` : a.suggested ? `clienti ~${a.suggested.azimuth}°` : '°' });
+      const tilt = h('input', { type: 'number', class: 'ant-num', min: -30, max: 30, step: 0.5, value: a.tilt ?? '', placeholder: '°' });
+      const pv = h('span', { class: 'ant-pv' });
+      const preview = async () => {
+        const id = ant.value || (a.antennaFrom === 'modello' ? a.antennaId : null);
+        mount(pv, id ? polar((await patternOf(id)).az) : '');
+      };
+      ant.onchange = () => preview().catch(() => {});
+      preview().catch(() => {});
+      const save = h('button', { type: 'button', class: 'small-btn' }, 'Salva');
+      save.onclick = () =>
+        busy(save, async () => {
+          const num = (el) => (String(el.value).trim() === '' ? null : Number(el.value));
+          await api(`/api/admin/antennas/ap/${encodeURIComponent(a.id)}`, { method: 'PUT', body: { antennaId: ant.value || null, azimuth: num(az), tilt: num(tilt) } });
+          toast(`${a.name}: salvato`);
+          Object.assign(a, { antennaId: ant.value || a.antennaId, antennaFrom: ant.value ? 'admin' : a.antennaFrom, azimuth: num(az), tilt: num(tilt) });
+        });
+      const use = a.suggested && a.azimuth == null ? h('button', { type: 'button', class: 'small-btn', onclick: () => (az.value = a.suggested.azimuth) }, `usa ${a.suggested.azimuth}°`) : null;
+      return { a, ant, az, tilt, pv, save, use };
+    };
+    mount(
+      box,
+      h(
+        'div',
+        {},
+        h('p', {}, lib.length
+          ? `${lib.length} diagrammi: ${lib.filter((p) => p.vendor === 'Ubiquiti').length} Ubiquiti, ${lib.filter((p) => p.vendor === 'RF elements').length} RF elements (horn, settori, parabole).`
+          : 'Diagrammi non ancora scaricati: la copertura usa un settore generico centrato sui clienti.'),
+        imp.running ? h('div', { class: 'notice' }, `Scaricamento… (${imp.done}/${imp.total})`) : imp.error ? h('div', { class: 'notice bad' }, imp.error) : null,
+        h('div', { class: 'row' }, dl, h('label', { class: 'check small' }, onlyTodo, ' Solo gli AP da completare')),
+        rows.length
+          ? table(
+              [
+                { label: 'AP', render: (r) => h('div', {}, r.a.name, h('div', { class: 'small muted' }, `${r.a.model ?? ''} · ${r.a.customers} clienti`)) },
+                { label: 'Antenna', render: (r) => h('div', { class: 'ant-cell' }, r.pv, r.ant) },
+                { label: 'Azimut', render: (r) => h('div', {}, r.az, r.use) },
+                { label: 'Tilt (giù +)', render: (r) => r.tilt },
+                { label: '', render: (r) => r.save },
+              ],
+              rows.map(row),
+            )
+          : h('p', { class: 'muted' }, onlyTodo.checked ? 'Tutti gli AP con clienti hanno azimut e antenna.' : 'Nessun AP.'),
+        h('p', { class: 'small muted' }, 'Con antenna e azimut la copertura usa il diagramma vero (orizzontale; anche verticale se indichi il tilt meccanico: quello elettrico è già nel diagramma). L’azimut suggerito è il centro dell’arco dei clienti collegati: confermalo solo se torna con l’antenna reale. IA-AP segnala gli AP senza azimut e i Rocket senza antenna indicata.'),
+      ),
+    );
+    clearTimeout(timer);
+    if (imp.running) timer = setTimeout(() => load().catch(() => {}), 2000);
+  };
+  onlyTodo.onchange = () => data && show();
+  const load = async () => {
+    data = await api('/api/admin/antennas');
+    show();
+  };
+  load().catch((e) => mount(box, h('div', { class: 'notice bad' }, e.message)));
+  return card(h('h2', {}, 'Antenne degli AP'), box);
+}
+
