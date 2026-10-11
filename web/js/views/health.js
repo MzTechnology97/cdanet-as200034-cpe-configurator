@@ -101,7 +101,7 @@ function radiusPanel() {
  * assignment of CPEs to installers. Installers: the CPEs they installed with the app plus those
  * assigned to them. Current state vs the acceptance test; no PPPoE data, no configuration.
  */
-export async function healthView({ user }) {
+export async function healthView({ user, params }) {
   const admin = user.role === 'admin';
   const out = h('div', {});
   const filter = h(
@@ -121,7 +121,9 @@ export async function healthView({ user }) {
     h('option', { value: 'uisp' }, nms('Solo in UISP (installate prima o senza app)', 'Assegnate a me')),
     ...(admin ? [h('option', { value: 'assigned' }, 'Assegnate a un installatore'), h('option', { value: 'unassigned' }, 'Non assegnate')] : []),
   );
-  const q = h('input', { placeholder: 'Cliente, MAC, AP, installatore…' });
+  // ?q= (search of the console): the CPE searched for, among all of them
+  const q = h('input', { placeholder: 'Cliente, MAC, AP, installatore…', value: params?.get('q') ?? '' });
+  if (params?.get('q')) filter.value = 'all';
   // firmware (state or exact version), customer state and plan from ISP Billing: filled after loading
   const fw = h('select', {});
   const account = h('select', {});

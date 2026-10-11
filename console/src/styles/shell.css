@@ -70,13 +70,18 @@ kbd { font: 600 .72rem var(--font-mono); padding: 2px 6px; border-radius: 6px; b
 .cx-palette-input input { flex: 1; border: 0; outline: none; background: transparent; color: var(--ink); font: inherit; font-size: 1.05rem; min-height: 32px; box-shadow: none; }
 .cx-palette ul { list-style: none; margin: 0; padding: var(--sp-2); max-height: min(60vh, 420px); overflow-y: auto; }
 .cx-palette li { display: flex; align-items: center; gap: var(--sp-3); padding: 10px var(--sp-3); border-radius: var(--radius-sm); cursor: pointer; }
-.cx-palette li span { flex: 1; }
+.cx-palette li > .cx-palette-text { flex: 1; }
 .cx-palette li .icon { width: 20px; height: 20px; fill: var(--muted); }
 .cx-palette li.sel { background: var(--brand-soft); color: var(--brand-ink); }
 .cx-palette li.sel .icon { fill: var(--brand); }
 .cx-palette .cx-go { opacity: 0; }
 .cx-palette li.sel .cx-go { opacity: 1; }
 .cx-palette .cx-none { color: var(--muted); cursor: default; }
+.cx-palette li.cx-palette-group { padding: 10px var(--sp-3) 4px; font-size: .7rem; font-weight: 700; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); cursor: default; }
+.cx-palette-text { display: grid; min-width: 0; }
+.cx-palette-text span, .cx-palette-text small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.cx-palette-text small { color: var(--muted); font-size: var(--fs-xs); }
+.cx-palette li.sel .cx-palette-text small { color: inherit; opacity: .8; }
 
 /* tablets and phones: menu off-canvas, bottom bar */
 @media (max-width: 860px) {

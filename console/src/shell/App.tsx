@@ -1,5 +1,8 @@
+import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, session } from '../lib/api';
+import { useLiveEvents } from '../lib/live';
+import { keys, queryClient } from '../lib/query';
 import { isOn, loadModules, modulesLoaded, resetModules } from '../../../web/js/modules.js';
 import { toast } from '../../../web/js/dom.js';
 import { setAdmin } from '../../../web/js/terms.js';
@@ -37,7 +40,6 @@ export function App() {
   const [hash, setHash] = useState(readHash);
   const [modulesReady, setModulesReady] = useState(modulesLoaded());
   const [modulesRev, setModulesRev] = useState(0);
-  const [unread, setUnread] = useState(0);
   const [menuOpen, setMenuOpen] = useState(false);
   const [palette, setPalette] = useState(false);
   const [narrow, setNarrow] = useState(() => localStorage.getItem('cda-menu') === 'narrow');
@@ -55,10 +57,12 @@ export function App() {
       });
     };
     const onLogout = () => {
+      queryClient.clear();
       toast('Sessione scaduta: accedi di nuovo', 'bad');
       setS(null);
     };
-    const onUnread = (e: Event) => setUnread(Number((e as CustomEvent).detail) || 0);
+    // the Notifiche page tells the new count after marking read
+    const onUnread = (e: Event) => queryClient.setQueryData(keys.unread, Number((e as CustomEvent).detail) || 0);
     const onModules = () => setModulesRev((n) => n + 1);
     window.addEventListener('hashchange', onHash);
     window.addEventListener('cda:logout', onLogout);
@@ -72,22 +76,17 @@ export function App() {
     };
   }, []);
 
-  // after login: role words for the pages of web/js, the modules on, the unread count every minute
+  // after login: role words for the pages of web/js, the modules on
   useEffect(() => {
     if (!user) return;
     setAdmin(user.role === 'admin');
     if (!modulesLoaded()) void loadModules().then(() => setModulesReady(true));
-    const poll = async () => {
-      if (session.get()?.token && !document.hidden) setUnread((await unreadCount()) ?? 0);
-    };
-    void poll();
-    const t = setInterval(poll, 60_000);
-    document.addEventListener('visibilitychange', poll);
-    return () => {
-      clearInterval(t);
-      document.removeEventListener('visibilitychange', poll);
-    };
   }, [s?.token]);
+
+  // unread notifications: at once when the server says so (live events), else every 5 minutes
+  useLiveEvents(s?.token ?? null);
+  const unread =
+    useQuery({ queryKey: keys.unread, queryFn: async () => (await unreadCount()) ?? 0, enabled: !!s?.token, refetchInterval: 5 * 60_000, staleTime: 60_000 }).data ?? 0;
 
   // Ctrl+K (or /) opens the pages, Escape closes the menu
   useEffect(() => {
@@ -118,6 +117,7 @@ export function App() {
 
   const logout = () => {
     session.clear();
+    queryClient.clear();
     resetModules();
     setModulesReady(false);
     location.hash = '';

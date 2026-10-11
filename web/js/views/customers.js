@@ -39,9 +39,11 @@ function gap(x) {
  * Clienti (admins, CRM connected): customer records and installation sites from ISP Billing with
  * the PPPoE session and the CPE in UISP. Read only: positions are compared, nothing is written.
  */
-export async function customersView() {
+export async function customersView({ params } = {}) {
   const which = h('select', {}, FILTERS.map(([v, l]) => h('option', { value: v }, l)));
-  const q = h('input', { placeholder: 'Nome, codice, telefono, indirizzo, utente PPPoE, MAC, AP…' });
+  // ?q= (search of the console): the customer searched for, among all of them
+  const q = h('input', { placeholder: 'Nome, codice, telefono, indirizzo, utente PPPoE, MAC, AP…', value: params?.get('q') ?? '' });
+  if (params?.get('q')) which.value = 'all';
   const info = h('p', { class: 'small muted' });
   const list = h('div', {});
   const detail = h('div', {});
