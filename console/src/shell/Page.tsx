@@ -1,6 +1,7 @@
 import { type ComponentType, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { icon } from '../../../web/js/icons.js';
 import { loginView } from '../../../web/js/views/login.js';
+import { unmountLegacy } from '../lib/react-legacy';
 import type { PageContext, Route, User } from './routes';
 
 /**
@@ -26,15 +27,10 @@ export function Page({ route, user, query }: { route: Route; user: User; query: 
           // Funzionalità: a module turned on or off changes the menu
           const content = await view({ user, params, onChange: () => window.dispatchEvent(new Event('cda:modules')) });
           if (gone || !host.current) return;
-          // the section's icon next to the page title, as in the menu
-          const h1 = (content as Element).querySelector?.('.page-head h1');
-          if (h1 && route.icon && !h1.querySelector('svg')) {
-            const span = document.createElement('span');
-            span.className = 'head-icon';
-            span.append(icon(route.icon));
-            h1.prepend(span);
-          }
           host.current.replaceChildren(content);
+          // the section's icon next to the page title, as in the menu (a React page of web/js draws
+          // its title a moment after it is in the page)
+          if (route.icon) decorate(content as Element, route.icon);
         }
       } catch (e) {
         const err = e as { body?: { error?: string }; message?: string };
@@ -49,8 +45,11 @@ export function Page({ route, user, query }: { route: Route; user: User; query: 
         if (!gone) setLoading(false);
       }
     })();
+    const node = host.current;
     return () => {
       gone = true;
+      // a React page of web/js leaves with its page: its timers and requests stop
+      unmountLegacy(node);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [route, user.id, user.role, query]);
@@ -62,6 +61,25 @@ export function Page({ route, user, query }: { route: Route; user: User; query: 
       {Comp ? <Comp user={user} params={new URLSearchParams(query)} /> : <div ref={host} />}
     </>
   );
+}
+
+/** The icon of the section before the page title, as soon as the title is there (at most 2 s). */
+function decorate(content: Element, name: string) {
+  const put = () => {
+    const h1 = content.querySelector?.('.page-head h1');
+    if (!h1) return false;
+    if (!h1.querySelector('svg')) {
+      const span = document.createElement('span');
+      span.className = 'head-icon';
+      span.append(icon(name));
+      h1.prepend(span);
+    }
+    return true;
+  };
+  if (put() || !(content instanceof Element)) return;
+  const watch = new MutationObserver(() => put() && watch.disconnect());
+  watch.observe(content, { childList: true, subtree: true });
+  setTimeout(() => watch.disconnect(), 2000);
 }
 
 /** A piece of the console that is no longer on the server (Chrome, Firefox, Safari wording). */
