@@ -200,6 +200,7 @@ data class SignalEstimateDto(
             if (tooFar) "oltre 20 km: troppo lontano" else null,
             terrain?.describe(),
             capacityMbps?.let { "capacità ~$it Mbit/s" + (eveningMbps?.let { e -> ", la sera ~$e" } ?: "") },
+            mcs?.takeIf { it >= 0 }?.let { m -> "modulazione attesa ${listOf("1x", "2x", "3x", "4x", "6x", "8x", "9x", "10x", "12x", "13x").getOrElse(m) { "" }}" + (snrDb?.let { " (SNR $it dB)" } ?: "") },
             // no customers on the AP yet: free-space estimate from the radio parameters
             if (theoretical) "stima teorica: AP senza clienti" else basis?.let { b -> "calibrata su $b clienti" },
         ).joinToString(" · ")
@@ -590,6 +591,8 @@ data class SimulationInfoDto(
     val load: ApLoadDto? = null,
     /** The cells carry the capacity of a new link (cap). */
     val capacity: Boolean = false,
+    /** Share of the link a new customer gets at the evening peak (speed in the evening = cap × share). */
+    val eveningShare: Double? = null,
 )
 
 @Serializable

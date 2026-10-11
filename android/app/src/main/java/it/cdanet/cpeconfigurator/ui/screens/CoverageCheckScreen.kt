@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import androidx.compose.foundation.relocation.bringIntoViewRequester
 import android.os.Handler
 import android.os.Looper
 import android.webkit.JavascriptInterface
@@ -72,7 +73,6 @@ private val SIM_SCALE = listOf(
     Color(0xFFA3E635) to "−65…−70",
     Color(0xFFFACC15) to "−70…−75",
     Color(0xFFF97316) to "−75…−80 (sotto il minimo)",
-    Color(0xFFDC2626) to "sotto −80",
 )
 
 /** Capacity scale (downlink of the radio link), as in the console. */
@@ -99,17 +99,23 @@ fun parseCoords(text: String): Pair<Double, Double>? {
 }
 
 /** Calls of the map page (window.CdaApp): a tapped point, "Simula copertura" on an AP. */
-class CoverageBridge(private val onTap: (Double, Double) -> Unit, private val onSimulate: (String) -> Unit) {
+class CoverageBridge(private val tapped: (Double, Double) -> Unit, private val simulate: (String) -> Unit, private val toggled3d: (Boolean) -> Unit = {}) {
     private val main = Handler(Looper.getMainLooper())
 
     @JavascriptInterface
     fun onMapClick(lat: Double, lon: Double) {
-        main.post { onTap(lat, lon) }
+        main.post { tapped(lat, lon) }
     }
 
     @JavascriptInterface
     fun onSimulate(apId: String) {
-        main.post { onSimulate(apId) }
+        main.post { simulate(apId) }
+    }
+
+    /** The 3D view opened or closed in the page: the map takes the whole screen meanwhile. */
+    @JavascriptInterface
+    fun on3d(open: Boolean) {
+        main.post { toggled3d(open) }
     }
 }
 
@@ -123,7 +129,7 @@ private data class BaseAp(val id: String, val name: String, val lat: Double, val
  * on the map and the radio simulation of each one (as the console). Installers get the server's
  * limits: their assigned APs, approximate areas.
  */
-@OptIn(ExperimentalLayoutApi::class)
+@OptIn(ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
 fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? = null, onAim: ((CompassTarget) -> Unit)? = null) {
     val scope = rememberCoroutineScope()
@@ -146,7 +152,8 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
     var baseAps by remember { mutableStateOf<List<BaseAp>>(emptyList()) }
     var sim by remember { mutableStateOf<SimulationInfoDto?>(null) }
     var simJson by remember { mutableStateOf<String?>(null) }
-    var simCapacity by remember { mutableStateOf(false) }
+    // the scale of the simulation: "dbm" (signal), "cap" (capacity of the link), "eve" (in the evening)
+    var simMode by remember { mutableStateOf("dbm") }
     var page by remember { mutableStateOf<WebView?>(null) }
     // the AP whose link is open (the card shows the updated AP after every check)
     var los by remember { mutableStateOf<String?>(null) }
@@ -230,7 +237,8 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
 
     val onTap by rememberUpdatedState { la: Double, lo: Double -> check(la, lo, null) }
     val onSim by rememberUpdatedState { id: String -> simulate(id) }
-    val bridge = remember { CoverageBridge({ la, lo -> onTap(la, lo) }, { id -> onSim(id) }) }
+    var map3d by remember { mutableStateOf(false) }
+    val bridge = remember { CoverageBridge({ la, lo -> onTap(la, lo) }, { id -> onSim(id) }, { open -> map3d = open }) }
 
     // the map follows the data: base APs (admins), the checked point with its APs, the simulation
     LaunchedEffect(page, baseJson) { if (baseJson != null) page?.evaluateJavascript("window.cdaCoverageBase($baseJson)", null) }
@@ -240,7 +248,9 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
         page?.evaluateJavascript("window.cdaClearLink()", null)
         if (resultJson != null && p != null) page?.evaluateJavascript("window.cdaCoverage(Object.assign($resultJson, { lat: ${p.lat}, lon: ${p.lon} }))", null)
     }
-    LaunchedEffect(page, simJson, simCapacity) { page?.evaluateJavascript(if (simJson != null) "window.cdaSimulation($simJson, '${if (simCapacity) "cap" else "dbm"}')" else "window.cdaClearSimulation()", null) }
+    LaunchedEffect(page, simJson, simMode) { page?.evaluateJavascript(if (simJson != null) "window.cdaSimulation($simJson, '$simMode')" else "window.cdaClearSimulation()", null) }
+    // admins: the 3D view of the map (terrain, imagery, buildings), with the session of the app
+    LaunchedEffect(page, admin) { val t = c.session.token; if (admin && t != null) page?.evaluateJavascript("window.cdaAdmin3d(${JsonPrimitive(t)})", null) }
 
     val heightM = height.replace(',', '.').toDoubleOrNull()?.takeIf { it in 0.5..100.0 }
     // another CPE: the same point with its antenna gain
@@ -314,7 +324,17 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
             }
         }
 
-        EmbeddedMap(c, "window.cdaCoverageMode()", Modifier.fillMaxWidth().height(380.dp).padding(vertical = 4.dp), bridge = bridge) { page = it }
+        // the 3D view needs room: the map grows to the height of the screen while it is open
+        val mapHeight = if (map3d) (androidx.compose.ui.platform.LocalConfiguration.current.screenHeightDp - 150).coerceAtLeast(380).dp else 380.dp
+        val mapPos = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+        // after the map has grown (a frame later), the screen scrolls to it
+        LaunchedEffect(map3d) {
+            if (map3d) {
+                kotlinx.coroutines.delay(250)
+                mapPos.bringIntoView()
+            }
+        }
+        EmbeddedMap(c, "window.cdaCoverageMode()", Modifier.fillMaxWidth().height(mapHeight).padding(vertical = 4.dp).bringIntoViewRequester(mapPos), bridge = bridge) { page = it }
         // the first tap places the point; then the map moves freely and the point is dragged
         if (point != null) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -325,7 +345,7 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
         if (busy == "check" || busy == "sim") Text(if (busy == "sim") "Simulazione in corso…" else "Valutazione degli AP…", style = MaterialTheme.typography.bodySmall)
 
         sim?.let { s ->
-            LaunchedEffect(s.ap.id) { simCapacity = false }
+            LaunchedEffect(s.ap.id) { simMode = "dbm" }
             SectionCard("Simulazione${if (s.theoretical) " teorica" else ""} · ${s.ap.name}") {
                 val good = s.cells.count { it.dbm >= s.minDbm }
                 Text(
@@ -333,16 +353,18 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                     else "${if (s.theoretical) "Nessun cliente da cui calibrare" else "Calibrata su ${s.customers} clienti"}" +
                         (if (s.ignored > 0) " (${s.ignored} sull'AP o oltre 20 km, esclusi dal calcolo)" else "") +
                         " · raggio ${km(s.radiusM)} · ${Math.round(100.0 * good / s.cells.size)}% dell'area sopra ${s.minDbm} dBm" +
-                        (if (s.capacity) ", ${Math.round(100.0 * s.cells.count { it.dbm >= s.minDbm && (it.cap ?: 0.0) >= 50 } / s.cells.size)}% con almeno 50 Mbit/s" else ""),
+                        (if (s.capacity) ", ${Math.round(100.0 * s.cells.count { it.dbm >= s.minDbm && (it.cap ?: 0.0) >= 50 } / s.cells.size)}% con almeno 50 Mbit/s" else "") +
+                        (s.eveningShare?.takeIf { s.capacity }?.let { sh -> ", ${Math.round(100.0 * s.cells.count { it.dbm >= s.minDbm && (it.cap ?: 0.0) * sh >= 30 } / s.cells.size)}% con almeno 30 Mbit/s la sera" } ?: ""),
                     style = MaterialTheme.typography.bodySmall,
                 )
-                if (s.capacity) Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    FilterChip(selected = !simCapacity, onClick = { simCapacity = false }, label = { Text("Segnale") })
-                    FilterChip(selected = simCapacity, onClick = { simCapacity = true }, label = { Text("Capacità") })
+                if (s.capacity) FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    FilterChip(selected = simMode == "dbm", onClick = { simMode = "dbm" }, label = { Text("Segnale") })
+                    FilterChip(selected = simMode == "cap", onClick = { simMode = "cap" }, label = { Text("Capacità") })
+                    if (s.eveningShare != null) FilterChip(selected = simMode == "eve", onClick = { simMode = "eve" }, label = { Text("Velocità la sera") })
                 }
                 s.load?.describe()?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium) }
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                    (if (simCapacity && s.capacity) CAP_SCALE else SIM_SCALE).forEach { (color, label) ->
+                    (if (simMode != "dbm" && s.capacity) CAP_SCALE else SIM_SCALE).forEach { (color, label) ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Box(Modifier.size(12.dp).clip(RoundedCornerShape(3.dp)).background(color))
                             Spacer(Modifier.width(4.dp))
@@ -354,9 +376,10 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                     "Segnale atteso per una CPE nuova: potenza dell'AP, spazio libero" +
                         (if (s.antenna) ", diagramma dell'antenna" else "") +
                         (if (s.terrain) ", colline, edifici e alberi tra ogni punto e l'AP" else " (terreno non disponibile: colline non considerate)") +
-                        (if (s.capacity) ". Capacità: dal segnale con la curva delle CPE reali; la sera è condivisa con gli altri clienti dell'AP" else "") +
+                        (if (s.capacity) ". Capacità: dal segnale con la curva delle CPE reali; la velocità la sera è la parte del tempo radio che l'AP ha libera al picco serale" else "") +
                         (if (s.theoretical) ". Stima teorica, margine ±8 dB: l'AP non ha clienti con segnale." else ". I clienti collegati la correggono, di più quanti più sono.") +
-                        " Area vuota: nessuna copertura (sotto −90 dBm). Colori tenui: stima poco affidabile. Per un punto preciso usa Visibilità.",
+                        " Area vuota: segnale sotto ${s.minDbm - 5} dBm o AP nascosto da una collina. Colori tenui: stima poco affidabile o collina in mezzo. Per un punto preciso usa Collegamento." +
+                        (if (s.antenna) "" else " Antenna e azimut dell'AP non indicati: stima uguale in tutte le direzioni (per questo può sembrare un cerchio)."),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -368,6 +391,21 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
         val d = result
         if (p != null && d != null) {
             SectionCard("AP per ${p.label}") {
+                d.aps.firstOrNull()?.let { best ->
+                    val (title, color) = when (best.rating) {
+                        "buono" -> "Copertura probabile" to Color(0xFF16A34A)
+                        "possibile" -> "Copertura da verificare" to Color(0xFFD97706)
+                        else -> "Copertura improbabile" to MaterialTheme.colorScheme.error
+                    }
+                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(color.copy(alpha = 0.12f)).padding(10.dp)) {
+                        Text(title, color = color, fontWeight = FontWeight.Bold)
+                        Text(
+                            "Il migliore è ${best.name.ifBlank { best.id }}, a ${km(best.distanceM)}" + (best.estimate?.signalDbm?.let { ", segnale stimato $it dBm" } ?: "") +
+                                (best.estimate?.eveningMbps?.let { ", la sera ~$it Mbit/s" } ?: "") + ".",
+                            style = MaterialTheme.typography.bodySmall,
+                        )
+                    }
+                }
                 if (d.aps.isEmpty()) Text(
                     if (d.hiddenWeak > 0 && !(d.restricted && d.assignedCount == 0)) "Nessun AP con segnale stimato migliore di ${d.hideBelowDbm} dBm: ${d.hiddenWeak} più deboli non mostrati."
                     else noApMessage(d.restricted, d.assignedCount, d.discarded, d.maxKm),

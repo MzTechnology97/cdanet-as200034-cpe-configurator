@@ -554,3 +554,14 @@ tr:hover > td { background: color-mix(in srgb, var(--brand) 4%, transparent); }
 @media (max-width: 1099px) {
   .dock-chart svg { max-height: 260px; }
 }
+/* 3D view on a phone (and in the app's map): a compact bar, the scene gets the room */
+@media (max-width: 700px) {
+  .map3d-bar { padding: 6px 8px; gap: 6px; }
+  .map3d-bar b { font-size: .85rem; flex: 1 1 100%; }
+  .map3d-bar .small-btn { padding: 2px 8px; min-height: 28px; font-size: .78rem; }
+  .map3d-bar select { min-height: 28px; font-size: .8rem; max-width: 150px; }
+  .map3d-bar .muted { display: none; }
+  .map3d-close { position: absolute; top: 6px; right: 8px; }
+  .map3d { position: fixed; }
+  .map3d-legend { padding: 4px 8px; gap: 8px; font-size: .7rem; }
+}

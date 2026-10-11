@@ -138,6 +138,8 @@ async function openScene({ title, ariaLabel, legendItems, center, bearing, onLoa
     root.remove();
     document.removeEventListener('keydown', onKey);
     window.removeEventListener('hashchange', close);
+    // in the app: the map goes back to its size
+    window.CdaApp?.on3d?.(false);
   };
   const onKey = (e) => e.key === 'Escape' && close();
   // another page of the console: the 3D view goes with the page it was opened from
@@ -160,6 +162,8 @@ async function openScene({ title, ariaLabel, legendItems, center, bearing, onLoa
   );
   document.body.append(root);
   document.addEventListener('keydown', onKey);
+  // in the app: the map takes the whole screen while the 3D view is open
+  window.CdaApp?.on3d?.(true);
 
   let gl;
   let info;
