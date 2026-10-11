@@ -62,7 +62,7 @@ Il link apre lo storico già filtrato sul MAC della CPE (`/#/jobs?q=<MAC>`).
 
 Ogni provisioning riuscito non genera un messaggio singolo, ma entra nel riepilogo serale.
 
-**Assistente rete (IA-AP, v1.32.55)**: i nuovi problemi critici su AP e CPE trovati dall'analisi oraria arrivano solo nella pagina Notifiche degli admin (non su Telegram). Vedi [NOC.md](NOC.md#ia-ap-assistente-della-rete-admin-v13255).
+**Assistente rete (IA-AP, v1.32.55)**: i nuovi problemi critici su AP e CPE trovati dall'analisi oraria arrivano solo nella pagina Notifiche degli admin (non su Telegram), con il link alla pagina IA-AP. Dalla v1.32.65 un avviso critico viene notificato al massimo una volta alla settimana, anche se sparisce e ricompare tra un'analisi e l'altra. Vedi [NOC.md](NOC.md#ia-ap-assistente-della-rete-admin-v13255).
 
 **IA-AP, ottimizzazione automatica (v1.32.57)**: l'esito di ogni ottimizzazione di un AP (canale migliore tenuto, ripristinato, CPE non riagganciate, ripristino incompleto) arriva agli admin nella pagina Notifiche e, se scelto, su Telegram.
 

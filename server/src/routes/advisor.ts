@@ -17,6 +17,12 @@ export function advisorRoutes(app: FastifyInstance, ctx: AppContext) {
     return { ok: true };
   });
 
+  /** Panoramica: counters and the optimisations running or scheduled. */
+  app.get('/api/admin/advisor/summary', admin, async () => {
+    const runs = ctx.optimizer.view().runs.filter((r) => r.state === 'in_corso' || r.state === 'programmato');
+    return { ...ctx.advisor.summary(), optimizations: runs.map((r) => ({ id: r.id, apId: r.apId, apName: r.apName, state: r.state, startAt: r.startAt, step: r.step, candidates: r.candidates })) };
+  });
+
   /** Automatic optimisation: state, runs (newest first) and whether Impostazioni server allows it. */
   app.get('/api/admin/advisor/optimizer', admin, async () => ctx.optimizer.view());
 
