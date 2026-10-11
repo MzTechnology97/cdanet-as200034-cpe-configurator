@@ -193,7 +193,10 @@ async function openScene({ title, ariaLabel, legendItems, center, bearing, onLoa
     sources.osm = { type: 'vector', tiles: [bm.tiles.startsWith('http') ? bm.tiles : `${location.origin}${bm.tiles}`], minzoom: bm.minZoom ?? 0, maxzoom: bm.maxZoom ?? 15, attribution: '© OpenStreetMap' };
     layers.push({ id: 'buildings3d', type: 'fill-extrusion', source: 'osm', 'source-layer': 'buildings', minzoom: 13, paint: { 'fill-extrusion-color': '#e7e5e4', 'fill-extrusion-height': ['coalesce', ['get', 'height'], 7], 'fill-extrusion-base': ['coalesce', ['get', 'min_height'], 0], 'fill-extrusion-opacity': 0.88 } });
   }
+  let shown = -1;
   const show = (i) => {
+    shown = i;
+    hint();
     pics.forEach((v, j) => v.parts.forEach((_, k) => map.setLayoutProperty(`img${j}_${k}`, 'visibility', i === j ? 'visible' : 'none')));
     try {
       localStorage.setItem(BASE_KEY, pics[i]?.label ?? '');
@@ -228,10 +231,24 @@ async function openScene({ title, ariaLabel, legendItems, center, bearing, onLoa
     map.easeTo({ center: cam?.center, zoom: (cam?.zoom ?? 13) + zoomUp, bearing: b, pitch, duration: 900 });
   };
   const preset = (name, go) => views.append(h('button', { type: 'button', class: 'small-btn', onclick: go }, name));
+  // MapLibre zoom from which the chosen imagery draws (its tiles are 256 px: one level less)
+  const photoZoom = () => (pics[shown]?.minZoom ?? 0) - 1;
+  const about = `${info.terrain?.fine ? 'Terreno TINITALY 10 m' : 'Terreno SRTM 30 m'}${bm?.tiles ? ' · edifici OSM' : ''}${pics.length ? '' : ' · nessuna foto aerea in Connettori'}`;
+  // far out the service draws nothing: the relief alone, and how to get the photo back
+  let ready = false;
+  function hint() {
+    if (ready) status.textContent = `${about}${shown >= 0 && map.getZoom() < photoZoom() ? ' · avvicinati per vedere la foto aerea' : ''}`;
+  }
   map.on('load', () => {
+    ready = true;
     if (pics.length) show(start);
-    status.textContent = `${info.terrain?.fine ? 'Terreno TINITALY 10 m' : 'Terreno SRTM 30 m'}${bm?.tiles ? ' · edifici OSM' : ''}${pics.length ? '' : ' · nessuna foto aerea in Connettori'}`;
     onLoad({ map, gl, tag, fit, preset, tools, status });
+    hint();
+    map.on('zoomend', hint);
+    // opened from far out (a wide simulation, a zoomed-out map): close enough for the photo
+    const near = () => map.getZoom() < photoZoom() && map.easeTo({ zoom: photoZoom() + 0.2, duration: 700 });
+    if (map.isMoving()) map.once('moveend', near);
+    else near();
   });
   return map;
 }
