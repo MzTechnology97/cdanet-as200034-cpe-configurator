@@ -1,4 +1,5 @@
 import { createReadStream, openSync, readSync, closeSync, statSync } from 'node:fs';
+import { join } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { PmTilesReader } from '../domain/pmtiles.ts';
@@ -135,7 +136,8 @@ export function mapRoutes(app: FastifyInstance, ctx: AppContext) {
     return { available: layers.length > 0, layers, terrain: { minZoom: TERRAIN_MIN_ZOOM, maxZoom: TERRAIN_MAX_ZOOM, fine: t.dtmTiles > 0 } };
   });
 
-  const terrainTiles = createTerrainTiles({ sampler: (b) => ctx.terrain.sampler(b), version: () => ctx.terrain.status().updatedAt ?? '0' });
+  // kept on disk next to the terrain: the first 3D view of an area makes them, the next ones read them
+  const terrainTiles = createTerrainTiles({ sampler: (b) => ctx.terrain.sampler(b), version: () => ctx.terrain.status().updatedAt ?? '0', dir: join(ctx.cfg.terrainDir, 'tiles3d') });
   app.get('/api/admin/map/terrain/:z/:x/:y', { preHandler: ctx.auth.requireAdmin }, async (req, reply) => {
     const p = z.object({ z: z.coerce.number().int().min(TERRAIN_MIN_ZOOM).max(TERRAIN_MAX_ZOOM), x: z.coerce.number().int().min(0), y: z.coerce.number().int().min(0) }).parse(req.params);
     if (p.x >= 2 ** p.z || p.y >= 2 ** p.z) throw new HttpError(400, 'invalid_tile');

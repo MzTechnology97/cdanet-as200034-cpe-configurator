@@ -69,41 +69,59 @@ describe('IA-AP: lettura dei dati e regole', () => {
       ...['a', 'b', 'c', 'd', 'e'].map((deviceId) => station({ deviceId })),
     ];
     const sev = (pct: number) => analyzeNetwork([ap({ stations: st, load: load(pct) })], { range }).filter((f) => f.kind === 'airtime').map((f) => `${f.cpe?.id}:${f.severity}`);
-    assert.deepEqual(sev(20), ['slow:info'], 'AP with room to spare: worth knowing, no alarm');
+    assert.deepEqual(sev(20), [], 'AP with room to spare: not a problem');
     assert.deepEqual(sev(55), ['slow:attenzione']);
     assert.deepEqual(sev(75), ['slow:critico']);
     const f = analyzeNetwork([ap({ stations: st, load: load(75) })], { range }).find((x) => x.kind === 'airtime')!;
-    assert.match(f.detail, /capacità 50 Mbit\/s contro 200/);
+    assert.match(f.detail, /capacità 50 Mbit\/s, il 25% delle CPE con lo stesso SNR/);
     assert.match(f.detail, /la sera è al 75%/);
   });
 
   it('CPEs to fix: SNR, modulation, airtime, trend, polarisations, below the expected signal', () => {
     const st = [
       station({ deviceId: 'snr', rxSignal: -82, noise: -92 }),
-      station({ deviceId: 'mcs', rxMcs: 3, rxMcsIdeal: 8 }),
+      station({ deviceId: 'snr17', rxSignal: -75, noise: -92 }),
+      station({ deviceId: 'mcs', rxMcs: 2, rxMcsIdeal: 8, capMbps: 80 }),
+      station({ deviceId: 'mcs5', rxMcs: 3, rxMcsIdeal: 8 }),
+      station({ deviceId: 'mcsfast', rxMcs: 2, rxMcsIdeal: 8 }),
       station({ deviceId: 'air', airtime: 0.12 }),
       station({ deviceId: 'slowair', airtime: 0.12, capMbps: 60 }),
       station({ deviceId: 'trend', trendDb: -11 }),
-      station({ deviceId: 'chains', chains: [-55, -66] }),
+      station({ deviceId: 'chains', chains: [-55, -66], capMbps: 100 }),
+      station({ deviceId: 'chainsfast', chains: [-55, -66] }),
       station({ deviceId: 'exp' }),
+      station({ deviceId: 'exp15' }),
       station({ deviceId: 'ok' }),
     ];
-    const f = analyzeNetwork([ap({ stations: st })], { range, expected: new Map([['exp', -55]]), cpeSignal: new Map([['exp', -70]]) });
+    const f = analyzeNetwork([ap({ stations: st })], { range, expected: new Map([['exp', -55], ['exp15', -55]]), cpeSignal: new Map([['exp', -78], ['exp15', -70]]) });
     const by = (id: string) => f.filter((x) => x.cpe?.id === id).map((x) => `${x.kind}:${x.severity}`);
     assert.deepEqual(by('snr'), ['snr:critico']);
-    assert.deepEqual(by('mcs'), ['mcs:info'], '5 levels below: worth knowing');
+    assert.deepEqual(by('snr17'), [], 'SNR 17 dB: the same capacity per MHz as 20–25 on the real network');
+    assert.deepEqual(by('mcs'), ['mcs:attenzione']);
+    assert.deepEqual(by('mcs5'), [], '5 levels below the ideal is normal on the real network');
+    assert.deepEqual(by('mcsfast'), [], '6 levels below but the capacity of its peers: nothing lost');
     assert.deepEqual(by('air'), [], 'a fast CPE downloading a lot is not a problem');
-    assert.deepEqual(by('slowair'), ['airtime:info'], 'slow, but the evening load of the AP is unknown');
+    assert.deepEqual(by('slowair'), [], 'slow, but the AP is not busy in the evening');
     assert.deepEqual(by('trend'), ['trend:critico']);
     assert.deepEqual(by('chains'), ['chains:attenzione']);
-    assert.deepEqual(by('exp'), ['expected:attenzione']);
+    assert.deepEqual(by('chainsfast'), [], 'unbalanced but as fast as its peers');
+    assert.deepEqual(by('exp'), ['expected:attenzione'], '23 dB below: reported alone');
+    assert.deepEqual(by('exp15'), [], '15 dB below with a normal capacity: the model, not the CPE');
     assert.deepEqual(by('ok'), []);
     assert.equal(f[0]!.severity, 'critico', 'critical first');
+    assert.match(f.find((x) => x.cpe?.id === 'mcs')!.detail, /Capacità 80 Mbit\/s, il 40% di quella delle CPE della rete con lo stesso SNR/);
+  });
+
+  it('one finding per CPE for its link: the most serious cause, the others in its detail', () => {
+    const st = [station({ deviceId: 'x', rxSignal: -82, noise: -92, rxMcs: 2, rxMcsIdeal: 8, chains: [-80, -92], capMbps: 20 }), ...['a', 'b', 'c', 'd', 'e'].map((deviceId) => station({ deviceId }))];
+    const f = analyzeNetwork([ap({ stations: st })], { range }).filter((x) => x.cpe?.id === 'x');
+    assert.deepEqual(f.map((x) => `${x.kind}:${x.severity}`), ['snr:critico']);
+    assert.match(f[0]!.detail, /Inoltre: polarizzazioni sbilanciate di 12 dB; modulazione sotto l’ideale di 6 livelli./);
   });
 
   it('APs: evening load, many CPEs below their modulation, noise, channel shared with a near AP', () => {
     const load = { at: '', stations: 30, cpeAirtimePct: 2, eveningAirtimePct: 78, eveningUtilizationPct: 40, eveningPeakMbps: 90, capacityMbps: 180, noiseDbm: -78, snrDb: 30, channelWidthMhz: 40, level: 'carico' as const };
-    const bad = Array.from({ length: 6 }, (_, i) => station({ deviceId: `c${i}`, rxMcs: i < 4 ? 4 : 8, rxMcsIdeal: 8 }));
+    const bad = Array.from({ length: 6 }, (_, i) => station({ deviceId: `c${i}`, rxMcs: i < 4 ? 2 : 8, rxMcsIdeal: 8 }));
     const a = ap({ load, heading: 0, stations: bad, spectrum: flat(10, { 5497: 25, 5502: 25, 5507: 25, 5492: 25, 5487: 25 }) });
     const b = ap({ apId: 'ap-2', apName: 'N1-D02', location: { lat: 37.51, lon: 14.2 }, heading: 180, frequency: 5510, stations: [station({ deviceId: 'b1' })] });
     const f = analyzeNetwork([a, b], { range });
@@ -119,12 +137,21 @@ describe('IA-AP: lettura dei dati e regole', () => {
   it('two near APs never get overlapping channel suggestions', () => {
     // both on a noisy channel; the same quiet slot is the best for both: the second AP gets the next one
     const quiet = Object.fromEntries(Array.from({ length: 9 }, (_, i) => [5297 + i * 5, 2]));
-    const a = ap({ heading: 90, spectrum: flat(20, quiet) });
+    const noisy = [station({ noise: -76 })];
+    const a = ap({ heading: 90, spectrum: flat(20, quiet), stations: noisy });
     const second = Object.fromEntries(Array.from({ length: 9 }, (_, i) => [5677 + i * 5, 8]));
-    const b = ap({ apId: 'ap-2', apName: 'N1-D02', location: { lat: 37.5, lon: 14.25 }, heading: 270, frequency: 5600, spectrum: flat(20, { ...quiet, ...second }) });
+    const b = ap({ apId: 'ap-2', apName: 'N1-D02', location: { lat: 37.5, lon: 14.25 }, heading: 270, frequency: 5600, spectrum: flat(20, { ...quiet, ...second }), stations: noisy });
     const ch = analyzeNetwork([a, b], { range }).filter((x) => x.kind === 'channel');
     assert.equal(ch.length, 2, JSON.stringify(ch.map((x) => x.params)));
     assert.ok(Math.abs(Number(ch[0]!.params!.frequenza) - Number(ch[1]!.params!.frequenza)) >= 40, JSON.stringify(ch.map((x) => x.params)));
+  });
+
+  it('a quieter channel alone is no reason to move a healthy AP', () => {
+    const quiet = Object.fromEntries(Array.from({ length: 9 }, (_, i) => [5297 + i * 5, 2]));
+    assert.deepEqual(analyzeNetwork([ap({ spectrum: flat(20, quiet) })], { range }), []);
+    // the same AP with interference on its channel (many CPEs far below their modulation): yes
+    const bad = Array.from({ length: 5 }, (_, i) => station({ deviceId: `c${i}`, rxMcs: i < 3 ? 2 : 8, rxMcsIdeal: 8 }));
+    assert.ok(analyzeNetwork([ap({ spectrum: flat(20, quiet), stations: bad })], { range }).some((x) => x.kind === 'channel'));
   });
 
   it('channels: occupancy, quietest channel avoiding our APs, the CPE side counts too', () => {
@@ -144,7 +171,8 @@ describe('IA-AP: lettura dei dati e regole', () => {
     const noisyCpe = station({ deviceId: 'n1', spectrum: flat(10, { 5487: 30, 5492: 30, 5497: 30, 5502: 30, 5507: 30, 5512: 30, 5517: 30 }) });
     const f1 = analyzeNetwork([ap({ stations: [noisyCpe] })], { range });
     assert.ok(f1.some((x) => x.kind === 'cpenoise' && x.cpe?.id === 'n1'));
-    const weak = Array.from({ length: 5 }, (_, i) => station({ deviceId: `w${i}`, rxSignal: -76, noise: -92 }));
+    const weak = Array.from({ length: 5 }, (_, i) => station({ deviceId: `w${i}`, rxSignal: -79, noise: -92 }));
+    assert.ok(!analyzeNetwork([ap({ stations: Array.from({ length: 5 }, (_, i) => station({ deviceId: `m${i}`, rxSignal: -75, noise: -92 })) })], { range }).some((x) => x.kind === 'width'), 'median SNR 17 dB: 40 MHz still gives more');
     assert.ok(analyzeNetwork([ap({ stations: weak })], { range }).some((x) => x.id === 'narrow:ap-1' && x.params!.ampiezza === 20));
     const load = { at: '', stations: 20, cpeAirtimePct: 3, eveningAirtimePct: 60, eveningUtilizationPct: 30, eveningPeakMbps: 80, capacityMbps: 150, noiseDbm: -95, snrDb: 40, channelWidthMhz: 40, level: 'medio' as const };
     const strong = Array.from({ length: 5 }, (_, i) => station({ deviceId: `s${i}`, rxSignal: -50, noise: -95 }));

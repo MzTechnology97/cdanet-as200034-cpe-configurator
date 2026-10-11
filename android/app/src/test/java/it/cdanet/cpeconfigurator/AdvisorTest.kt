@@ -34,6 +34,7 @@ class AdvisorTest {
         assertEquals(listOf("AP-a", "AP-b"), g.map { it.first })
         assertEquals(listOf("3", "1"), g[0].second.map { it.id })
         assertEquals(listOf("1"), adviceGroups(all, "critico", "", false).flatMap { it.second }.map { it.id })
+        assertTrue("problems: no suggestions", adviceGroups(all, "problemi", "", true).flatMap { it.second }.map { it.id }.sorted() == listOf("1", "2", "3"))
         assertEquals(listOf("4"), adviceGroups(all, "", "cliente y", true).flatMap { it.second }.map { it.id })
         assertTrue(adviceGroups(all, "", "cliente y", false).isEmpty())
     }

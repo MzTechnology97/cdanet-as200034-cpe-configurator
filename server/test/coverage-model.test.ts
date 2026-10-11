@@ -89,7 +89,17 @@ describe('Copertura: modello del segnale', () => {
     assert.equal(m.samples.length, 2);
     assert.equal(m.ignored, 2);
     assert.ok(m.servedM! < 2000, `served ${m.servedM}`);
-    assert.ok(m.sector!.width <= 30, `no 50 km beam towards the misplaced customer: ${JSON.stringify(m.sector)}`);
+    // two customers are too few to guess a sector: none, rather than a sliver or a 50 km beam
+    assert.equal(m.sector, null, `no sector from two customers: ${JSON.stringify(m.sector)}`);
+  });
+
+  it('the served sector is guessed only from enough customers', () => {
+    const five = buildApModel(AP, [1000, 1300, 1600, 1900, 2200].map((d) => ({ ...at(d), signal: -62 })));
+    assert.ok(five.sector !== null, 'five customers: a sector');
+    const two = buildApModel(AP, [1000, 1300].map((d) => ({ ...at(d), signal: -62 })));
+    assert.equal(two.sector, null);
+    // without a sector a new point is not "outside" anything
+    assert.equal(estimateAt(two, 1200, 200, 5600, { eirpDbm: 38, cpeGainDbi: 23 }).inSector, null);
   });
 
   it('beyond 20 km an AP is never proposed', () => {

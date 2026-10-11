@@ -176,6 +176,7 @@ window.cdaCoverageBase = async (d) => {
   baseLayer ??= L.layerGroup().addTo(map);
   baseLayer.clearLayers();
   const aps = [...(d.pops ?? []).flatMap((p) => (p.aps ?? []).map((a) => ({ ...a, pop: p.name }))), ...(d.apsWithoutPop ?? []).map((a) => ({ ...a, pop: null }))].filter((a) => a.lat != null && a.lon != null);
+  view3d.aps = aps;
   for (const a of aps) {
     const sim = document.createElement('button');
     sim.type = 'button';
@@ -203,15 +204,23 @@ const CAP_SCALE = [
 ];
 const capColor = (v) => CAP_SCALE.find(([min]) => v >= min)[1];
 
-/** [mode]: "dbm" (signal, default) or "cap" (capacity of the link). Keeps the view when only the mode changes. */
+/**
+ * [mode]: "dbm" (signal, default), "cap" (capacity of the link) or "eve" (speed in the evening).
+ * Keeps the view when only the mode changes.
+ */
 window.cdaSimulation = async (d, mode = 'dbm') => {
   const map = await ready;
   if (!map || !d?.ap) return;
   const L = window.L;
   simLayer ??= L.layerGroup().addTo(map);
   simLayer.clearLayers();
-  // one smooth image; clearly no coverage is left blank, not a red disc
-  simulationOverlay(d, (c) => (c.dbm < (d.minDbm ?? -75) - 15 ? null : mode === 'cap' ? (c.cap == null ? null : capColor(c.cap)) : simColor(c.dbm))).addTo(simLayer);
+  // only where a CPE would work (as in the console): under the minimum by more than 5 dB, or
+  // behind a hill with a signal under the minimum, the map stays empty: the real shape, no disc
+  const min = d.minDbm ?? -75;
+  const usable = (c) => c.dbm >= min - 5 && !(c.blocked && c.dbm < min);
+  const share = d.eveningShare ?? 1;
+  const overlay = simulationOverlay(d, (c) => (!usable(c) ? null : mode === 'cap' || mode === 'eve' ? (c.cap == null ? null : capColor(mode === 'eve' ? c.cap * share : c.cap)) : simColor(c.dbm))).addTo(simLayer);
+  view3d.sim = { d, image: overlay.canvas, bounds: overlay.cellBounds, title: `simulazione di ${d.ap.name}`, legendItems: mode === 'dbm' ? SIM_LEGEND.filter(([min2]) => min2 >= min - 5).map(([, color, text]) => ['scale', text, color]) : CAP_LEGEND.map(([color, text]) => ['scale', text, color]) };
   if (d.sector && (d.servedM || d.theoretical)) {
     const reach = d.servedM || d.radiusM;
     const pts = [[d.ap.lat, d.ap.lon]];
@@ -226,7 +235,55 @@ let lastSim = null;
 
 window.cdaClearSimulation = async () => {
   lastSim = null;
+  view3d.sim = null;
   simLayer?.clearLayers();
+};
+
+/** What the 3D button shows: the APs, the simulation and the link drawn on the map. */
+const view3d = { aps: [], sim: null, link: null };
+const SIM_LEGEND = [
+  [-60, '#15803d', 'oltre −60 dBm'],
+  [-65, '#22c55e', '−60…−65'],
+  [-70, '#a3e635', '−65…−70'],
+  [-75, '#facc15', '−70…−75'],
+  [-80, '#f97316', '−75…−80'],
+];
+const CAP_LEGEND = [
+  ['#15803d', 'oltre 150 Mbit/s'],
+  ['#22c55e', '100–150'],
+  ['#a3e635', '50–100'],
+  ['#facc15', '25–50'],
+  ['#f97316', '10–25'],
+  ['#dc2626', 'sotto 10'],
+];
+
+/**
+ * Admins in the app: the session of the app for this page (the terrain and the imagery of the 3D
+ * view are for admins only) and the "3D" button on the map, as in the console.
+ */
+let button3d = null;
+window.cdaAdmin3d = async (token) => {
+  try {
+    sessionStorage.setItem('cdaSession', JSON.stringify({ token }));
+  } catch {
+    return;
+  }
+  const map = await ready;
+  if (!map || button3d) return;
+  const L = window.L;
+  const Btn = L.Control.extend({
+    options: { position: 'topright' },
+    onAdd() {
+      const b = L.DomUtil.create('button', 'map-3d-btn');
+      b.type = 'button';
+      b.textContent = '3D';
+      b.title = 'Vista 3D di questa zona';
+      L.DomEvent.disableClickPropagation(b);
+      b.onclick = () => import('./map3d.js').then((m) => m.openArea3d({ map, extras: { ...view3d } }));
+      return b;
+    },
+  });
+  button3d = new Btn().addTo(map);
 };
 
 /** Visibilità (admins): the link from the checked point to the AP and its Fresnel zone. */
@@ -236,8 +293,10 @@ window.cdaLink = async (p, lat, lon) => {
   if (!map || !p?.ap || p.ap.lat == null) return;
   linkLayer ??= window.L.layerGroup().addTo(map);
   drawFresnelLink(map, linkLayer, [lat, lon], p);
+  view3d.link = { from: [lat, lon], label: 'Punto', p, apName: p.ap.name ?? p.ap.id };
 };
 window.cdaClearLink = async () => {
+  view3d.link = null;
   await ready;
   linkLayer?.clearLayers();
 };

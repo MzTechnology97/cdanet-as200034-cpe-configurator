@@ -55,15 +55,15 @@ export async function modelInputs(ctx: AppContext, radio?: RadioDefaults) {
 
 /** UISP models with the antenna built in, and their pattern in the library. */
 const BUILT_IN: Array<[RegExp, string]> = [
-  [/^LAP-GPS/i, 'ubnt:LAP-GPS'],
-  [/^LBE-5AC-LR/i, 'ubnt:LBE-5AC-LR'],
-  [/^LBE-5AC-23/i, 'ubnt:LBE-5AC-23'],
-  [/^LBE-5AC/i, 'ubnt:LBE-5AC-Gen2'],
-  [/^NBE-5AC-19/i, 'ubnt:NBE-5AC-19'],
-  [/^NBE-5AC/i, 'ubnt:NBE-5AC-Gen2'],
-  [/^NS-5ACL|loco.*5ac/i, 'ubnt:NS-5AC-Loco'],
-  [/^NS-5AC/i, 'ubnt:NS-5AC'],
-  [/^PBE-5AC/i, 'ubnt:PBE-5AC-400'],
+  [/^LAP-GPS|^LiteAP GPS/i, 'ubnt:LAP-GPS'],
+  [/^LBE-5AC-LR|^LiteBeam 5AC LR|^LiteBeam 5AC Long/i, 'ubnt:LBE-5AC-LR'],
+  [/^LBE-5AC-23|^LiteBeam 5AC 23|^LiteBeam ac$/i, 'ubnt:LBE-5AC-23'],
+  [/^LBE-5AC|^LiteBeam 5AC/i, 'ubnt:LBE-5AC-Gen2'],
+  [/^NBE-5AC-19|^NanoBeam 5AC 19|^NanoBeam ac$/i, 'ubnt:NBE-5AC-19'],
+  [/^NBE-5AC|^NanoBeam 5AC/i, 'ubnt:NBE-5AC-Gen2'],
+  [/^NS-5ACL|loco.*5ac|5ac.*loco/i, 'ubnt:NS-5AC-Loco'],
+  [/^NS-5AC|^NanoStation 5AC/i, 'ubnt:NS-5AC'],
+  [/^PBE-5AC|^PowerBeam 5AC/i, 'ubnt:PBE-5AC-400'],
 ];
 
 /** The pattern the AP has, when it is known: model built in or chosen by the admin. */

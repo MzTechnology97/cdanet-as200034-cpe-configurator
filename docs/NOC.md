@@ -31,21 +31,24 @@ Console → **IA-AP**, e nell'app Rete → **IA-AP** (anche come scorciatoia del
 
 Dati usati, tutti da UISP: stazioni collegate (segnale, rumore, modulazione attuale e ideale nei due sensi, airtime, capacità, polarizzazioni), statistiche della settimana (andamento del segnale, carico serale 20–23), **spettro misurato dall'AP e da ogni CPE** (come airView), frequenza, ampiezza, azimut e modello dell'antenna; in più il modello di copertura per il segnale atteso di ogni cliente.
 
-| Avviso | Su | Quando |
-|---|---|---|
-| SNR basso | CPE | sotto 20 dB (critico sotto 12) |
-| Modulazione | CPE / AP | 4 o più livelli sotto l'ideale (attenzione da 6); sull'AP quando almeno metà delle CPE (minimo 4) è sotto (critico tre quarti) |
-| CPE lenta che occupa airtime | CPE | almeno il 10% dell'airtime e 3 volte la mediana dell'AP, **solo se la CPE è lenta** (SNR sotto 20 dB, modulazione più di 3 livelli sotto l'ideale o capacità sotto la metà della mediana dell'AP). Gravità dal carico serale dell'AP: attenzione oltre il 50%, critico oltre il 70%, altrimenti solo informazione. Una CPE veloce che scarica molto non è un problema (l'airtime UISP è letto in un istante) |
-| Segnale in calo | CPE | ultimo giorno peggiore dei primi due della settimana di 6 dB (critico 10) |
-| Sotto il segnale atteso | CPE | 10 dB sotto la stima del modello: puntamento o ostacolo nuovo |
-| Polarizzazioni | CPE | le due catene differiscono di 8 dB o più |
-| Interferenza dal cliente | CPE | la CPE vede il canale molto più occupato dell'AP |
-| Spostamento su altro AP | CPE | AP carico e un altro AP libero è "buono" per quel cliente |
-| Carico serale | AP | airtime o utilizzo del canale tra le 20 e le 23 oltre il 50% (critico 70%) |
-| Rumore all'AP | AP | rumore di fondo sopra −78 dBm |
-| Canale sovrapposto | AP | un nostro AP entro 6 km sullo stesso canale e dentro il fascio dell'altro |
-| Canale più libero | AP | un canale con almeno 4 punti di occupazione in meno, da AP e CPE insieme |
-| Ampiezza del canale | AP | più stretta per molti collegamenti deboli, più larga per un AP carico con margine di SNR |
+**Regole tarate sulla rete reale (v1.32.77, 631 CPE su 107 AP, 11 ottobre 2026).** Ogni regola sulle CPE è stata verificata sulla **capacità che la CPE ottiene davvero, confrontata con le CPE di tutta la rete con lo stesso SNR** (±2 dB, per MHz di canale): quello che non la abbassa non viene segnalato. Una CPE ha **un solo avviso** per il suo collegamento: la causa più grave, con le altre nel dettaglio («Inoltre: …»). Risultato sugli stessi dati: da 276 avvisi (più 63 sul segnale atteso) a 57, su 55 CPE e 2 AP.
+
+| Avviso | Su | Quando | Perché (dati reali) |
+|---|---|---|---|
+| SNR basso | CPE | sotto 15 dB (critico sotto 12) | 15–20 dB dà la stessa capacità per MHz di 20–25; sotto 15 scende a un terzo |
+| Modulazione | CPE | 6 o più livelli sotto l'ideale **e** capacità sotto il 70% delle pari | 4–5 livelli sotto è normale (capacità 0,98 delle pari); da 6 scende a 0,64 |
+| Modulazione | AP | almeno 3 CPE e il 30% delle CPE 6 o più livelli sotto l'ideale (critico 50%) | sintomo di canale disturbato |
+| CPE lenta che occupa airtime | CPE | almeno il 10% dell'airtime e 3 volte la mediana dell'AP, CPE lenta (SNR sotto 15, modulazione 6 livelli sotto o capacità sotto il 70% delle pari) **e** AP carico la sera: attenzione oltre il 50%, critico oltre il 70% | l'airtime per CPE di UISP è letto in un istante: un cliente veloce che scarica non è un problema; nessun AP oggi supera il 50% la sera |
+| Segnale in calo | CPE | ultimo giorno peggiore dei primi due della settimana di 6 dB (critico 10) | |
+| Sotto il segnale atteso | CPE | 20 dB sotto la stima del modello, oppure 10 dB con capacità sotto il 70% delle pari | tra 10 e 20 dB le CPE hanno la loro capacità normale: è l'errore del modello (6 dB tipico) |
+| Polarizzazioni | CPE | catene distanti 8 dB o più **e** capacità sotto il 70% delle pari (12 dB se la capacità non è nota) | da 8 dB la capacità scende solo in parte dei casi (0,71) |
+| Interferenza dal cliente | CPE | la CPE vede il canale molto più occupato dell'AP | |
+| Spostamento su altro AP | CPE | AP carico e un altro AP libero è "buono" per quel cliente | |
+| Carico serale | AP | airtime o utilizzo del canale tra le 20 e le 23 oltre il 50% (critico 70%) | |
+| Rumore all'AP | AP | rumore di fondo sopra −78 dBm | |
+| Canale sovrapposto | AP | un nostro AP entro 6 km sullo stesso canale e dentro il fascio dell'altro | |
+| Canale più libero | AP | solo per un AP con un sintomo (canale sovrapposto, rumore alto o modulazione bassa su molte CPE) e un canale con almeno 4 punti di occupazione in meno | sugli AP sani l'occupazione misurata non ha relazione con le prestazioni delle CPE |
+| Ampiezza del canale | AP | più stretta se l'SNR mediano delle CPE è sotto 15 dB, più larga per un AP carico con SNR mediano da 30 dB | sopra 15 dB i 40 MHz danno più capacità dei 20 anche con 3 dB di rumore in più |
 
 **Canali proposti**: sempre interi dentro la banda di Impostazioni server → Assistente rete (predefinita 5120–5800 MHz), mai sovrapposti a un nostro AP vicino. Lo spettro considerato è la media di quello dell'AP e di quello mediano delle sue CPE. Il cambio di frequenza stima anche la **risposta in frequenza delle antenne** (guadagno migliore a centro banda, circa 1,5 dB in meno per antenna ai bordi) e la perdita di percorso: un canale che porterebbe il cliente più debole sotto il minimo del collaudo viene scartato.
 

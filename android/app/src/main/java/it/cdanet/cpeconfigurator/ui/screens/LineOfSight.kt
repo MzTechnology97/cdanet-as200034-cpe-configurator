@@ -82,11 +82,11 @@ class LinkControls(
     val onHeight: (Double) -> Unit,
 )
 
-/** Indicative airMAX ac sensitivity at 40 MHz (dBm) for MCS 0…9 and the airOS rate multiplier. */
-val MCS_SCALE = listOf(-91 to "1x", -89 to "2x", -86 to "3x", -83 to "4x", -79 to "6x", -75 to "8x", -73 to "9x", -71 to "10x", -66 to "12x", -64 to "13x")
+/** airMAX ac modulations (airOS rate multiplier) and the SNR each needs, dB, MCS 0…9 (as the server). */
+val MCS_SCALE = listOf(4 to "1x", 7 to "2x", 10 to "3x", 13 to "4x", 17 to "6x", 21 to "8x", 23 to "9x", 25 to "10x", 29 to "12x", 31 to "13x")
 
-/** Index of the highest modulation reached by [dbm] (−1: none). */
-fun mcsReached(dbm: Int?): Int = if (dbm == null) -1 else MCS_SCALE.count { dbm >= it.first } - 1
+/** Index of the highest modulation an SNR allows (−1: none). */
+fun mcsReached(snrDb: Int?): Int = if (snrDb == null) -1 else MCS_SCALE.count { snrDb >= it.first } - 1
 
 /** Magnetic declination at the point, degrees east (to point with a compass). */
 fun declinationDeg(lat: Double, lon: Double): Double =
@@ -141,7 +141,7 @@ fun LineOfSightDialog(
                         if (controls != null) ApFacts(controls)
                         LinkFacts(d, bearing, estimate, lat, lon)
                         if (controls != null) CpeControls(controls, d)
-                        SignalBar(estimate?.signalDbm)
+                        SignalBar(estimate)
                         ProfileChart(d)
                         d.apAntenna?.let { a ->
                             Text(
@@ -249,18 +249,22 @@ private fun CpeControls(k: LinkControls, d: LosDto) {
     }
 }
 
-/** Expected signal on the airMAX modulation scale: the bar fills up to it, the reached MCS lit. */
+/**
+ * Expected modulation on the airMAX scale, as in UISP Design: it follows the SNR (signal − noise of
+ * the AP, from the server), not the signal alone; the bar fills with the SNR, the reached one lit.
+ */
 @Composable
-private fun SignalBar(dbm: Int?) {
-    if (dbm == null) return
-    val reached = mcsReached(dbm)
+private fun SignalBar(e: SignalEstimateDto?) {
+    val dbm = e?.signalDbm ?: return
+    val snr = e.snrDb ?: (dbm + 92)
+    val reached = e.mcs ?: mcsReached(snr)
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row {
-            Text("Segnale atteso", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
-            Text("$dbm dBm", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+            Text("Modulazione attesa", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+            Text(if (reached >= 0) "${MCS_SCALE[reached].second} · SNR $snr dB" else "nessuna · SNR $snr dB", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
         }
         androidx.compose.material3.LinearProgressIndicator(
-            progress = { ((dbm + 95) / 45f).coerceIn(0f, 1f) },
+            progress = { (snr / 35f).coerceIn(0f, 1f) },
             modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
             color = if (reached >= 7) Color(0xFF22C55E) else if (reached >= 4) Color(0xFFFACC15) else Color(0xFFF97316),
             trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
@@ -278,6 +282,7 @@ private fun SignalBar(dbm: Int?) {
                 )
             }
         }
+        Text("Segnale atteso $dbm dBm" + if (e.snrDb == null) " · rumore dell'AP non noto, considerato −92 dBm" else "", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 
@@ -359,6 +364,7 @@ private fun ProfileChart(d: LosDto) {
         }
     }
 }
+
 
 /** Beyond this extra height a mast is not a realistic answer: another AP is. */
 private const val MAX_MAST_M = 12.0
