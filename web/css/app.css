@@ -535,3 +535,13 @@ tr:hover > td { background: color-mix(in srgb, var(--brand) 4%, transparent); }
 .map3d-tag.cpe { background: #f97316; }
 .map3d-tag.other { background: rgba(15, 23, 42, .75); font-weight: 500; }
 .dock-3d { align-self: flex-start; }
+/* Copertura: installations failed for radio reasons on the admin map */
+.ko-pin { color: #111827; background: #fde047; border: 2px solid #111827; border-radius: 50%; font: 700 10px/12px system-ui, sans-serif; text-align: center; }
+
+/* Copertura: antennas of the APs */
+.ant-cell { display: flex; align-items: center; gap: 8px; }
+.ant-cell select { max-width: 280px; }
+.ant-pv { width: 64px; height: 64px; flex: none; }
+.ant-polar .ring { fill: none; stroke: var(--line); }
+.ant-polar .lobe { fill: color-mix(in srgb, #2563eb 30%, transparent); stroke: #2563eb; stroke-width: 1.2; }
+.ant-num { width: 8.5rem; min-height: 32px; }

@@ -26,12 +26,24 @@ export interface ClientSample {
   lon: number;
   /** Signal at the CPE, dBm (null when UISP does not report it). */
   signal: number | null;
+  /**
+   * Loss of the terrain between this customer and its AP (its own profile), dB: what it gets is
+   * then compared with the model *with* that loss, so the calibration and the local correction
+   * learn what the terrain does not explain. Undefined: not computed (counted as 0).
+   */
+  terrainDb?: number | null;
+  /** Elevation of the customer seen from the AP antenna, degrees (with its profile). */
+  elevDeg?: number | null;
 }
 
 interface Sample {
   d: number;
   b: number;
   s: number | null;
+  /** Terrain loss on the customer's own path, dB (0 when unknown). */
+  t: number;
+  /** The customer as the AP antenna sees it, degrees (null: unknown). */
+  e: number | null;
 }
 
 export interface ApModel {
@@ -42,6 +54,8 @@ export interface ApModel {
   sector: { center: number; width: number } | null;
   /** The sector is the real antenna (azimuth in UISP), not guessed from the customers. */
   antenna: boolean;
+  /** The real pattern of the antenna, when the admin said which one and where it points. */
+  pattern?: AntennaSetup | null;
   /** 90th percentile of the customers' distance. */
   servedM: number | null;
   /** Calibration of the whole network over the theory, dB (the same for every AP). */
@@ -61,6 +75,20 @@ export interface TerrainEffect {
   foliageDb?: number;
   /** Buildings (land cover) are what blocks or enters the Fresnel zone, not the bare ground. */
   buildings?: boolean;
+  /** The point as the AP antenna sees it: degrees above (+) or below (−) its horizontal. */
+  elevDeg?: number;
+}
+
+/**
+ * The real antenna of the AP: its radiation pattern (attenuation from the peak every degree:
+ * [az] clockwise from the boresight, [el] below the horizon, electrical downtilt included), where
+ * it points and its mechanical downtilt (null: unknown, the vertical pattern is not used).
+ */
+export interface AntennaSetup {
+  az: number[];
+  el: number[];
+  azimuth: number;
+  tilt: number | null;
 }
 
 export interface SignalEstimate {
@@ -121,8 +149,22 @@ export function patternLossDb(b: number, sector: { center: number; width: number
   return Math.min(25, 12 * (angleDiff(b, sector.center) / sector.width) ** 2);
 }
 
+/** Attenuation of a real pattern towards bearing [b] and elevation [e] (degrees), dB from the peak. */
+export function patternAt(p: AntennaSetup, b: number, e: number | null): number {
+  const az = p.az[(((Math.round(b - p.azimuth) % 360) + 360) % 360)] ?? 0;
+  if (e === null || p.tilt === null) return az;
+  // the mechanical downtilt moves the pattern down: the point is (−e − tilt) below its horizon
+  const el = p.el[(((Math.round(-e - p.tilt) % 360) + 360) % 360)] ?? 0;
+  // two cuts: the sum is the usual approximation, capped at the depth of the patterns
+  return Math.min(40, az + el);
+}
+
 /** Antenna gain towards bearing [b], dB (0 = main lobe), and whether [b] is inside the sector. */
-function direction(m: Pick<ApModel, 'sector' | 'antenna'>, b: number): { lossDb: number; inSector: boolean | null } {
+function direction(m: Pick<ApModel, 'sector' | 'antenna' | 'pattern'>, b: number, e: number | null = null): { lossDb: number; inSector: boolean | null } {
+  if (m.pattern) {
+    const az = patternAt({ ...m.pattern, tilt: null }, b, null);
+    return { lossDb: patternAt(m.pattern, b, e), inSector: az <= 6 };
+  }
   if (!m.sector) return { lossDb: 0, inSector: null };
   const inSector = angleDiff(b, m.sector.center) <= m.sector.width / 2 + 10;
   if (m.antenna) return { lossDb: patternLossDb(b, m.sector), inSector };
@@ -164,7 +206,7 @@ const median = (v: number[]) => {
 
 /** The customers of one AP as the model uses them: plausible positions only. */
 function samplesOf(ap: LatLon, clients: ClientSample[]) {
-  const all = clients.map((c) => ({ d: distanceM(ap, c), b: bearingDeg(ap, c), s: c.signal }));
+  const all = clients.map((c) => ({ d: distanceM(ap, c), b: bearingDeg(ap, c), s: c.signal, t: c.terrainDb ?? 0, e: c.elevDeg ?? null }));
   // a CPE at the AP itself (at the POP) or beyond 20 km says nothing about the coverage of a new point
   return { all, samples: all.filter((s) => s.d >= MIN_SAMPLE_M && s.d <= MAX_LINK_M) };
 }
@@ -177,7 +219,7 @@ const withSignal = (samples: Sample[]) => samples.filter((s): s is Sample & { s:
  * 3 such APs. Robust: an AP with misplaced customers or a wrong azimuth weighs like any other one.
  */
 export function networkCalibrationDb(
-  aps: Array<{ ap: LatLon; clients: ClientSample[]; heading: { center: number; width: number } | null; freqMHz: number | null }>,
+  aps: Array<{ ap: LatLon; clients: ClientSample[]; heading: { center: number; width: number } | null; freqMHz: number | null; pattern?: AntennaSetup | null }>,
   r: RadioDefaults,
 ): number | null {
   const offsets: number[] = [];
@@ -185,8 +227,8 @@ export function networkCalibrationDb(
     const { samples } = samplesOf(a.ap, a.clients);
     const sig = withSignal(samples);
     if (sig.length < 3) continue;
-    const dir = { sector: a.heading ?? servedArc(samples.map((s) => s.b)), antenna: a.heading !== null };
-    offsets.push(median(sig.map((s) => s.s - theory(s.d, a.freqMHz, r) + direction(dir, s.b).lossDb)));
+    const dir = { sector: a.heading ?? servedArc(samples.map((s) => s.b)), antenna: a.heading !== null, pattern: a.pattern ?? null };
+    offsets.push(median(sig.map((s) => s.s - theory(s.d, a.freqMHz, r) + direction(dir, s.b, s.e).lossDb + s.t)));
   }
   if (offsets.length < 3) return null;
   return Math.round(Math.min(PRIOR_MAX_DB, Math.max(PRIOR_MIN_DB, median(offsets))) * 2) / 2;
@@ -203,17 +245,19 @@ export function buildApModel(
   freqMHz: number | null = null,
   r: RadioDefaults = { eirpDbm: 30, cpeGainDbi: 23 },
   priorDb = 0,
+  pattern: AntennaSetup | null = null,
 ): ApModel {
   const { all, samples } = samplesOf(ap, clients);
   const ds = samples.map((s) => s.d).sort((a, b) => a - b);
   const servedM = ds.length ? Math.round(ds[Math.min(ds.length - 1, Math.floor(ds.length * 0.9))]!) : null;
-  const sector = heading ?? servedArc(samples.map((s) => s.b));
-  const m: ApModel = { samples, ignored: all.length - samples.length, sector, antenna: heading !== null, servedM, prior: priorDb, fit: null };
+  // the real antenna: its azimuth is also the centre of the sector
+  const sector = pattern ? { center: pattern.azimuth, width: 90 } : (heading ?? servedArc(samples.map((s) => s.b)));
+  const m: ApModel = { samples, ignored: all.length - samples.length, sector, antenna: heading !== null || pattern !== null, servedM, prior: priorDb, fit: null, pattern };
   const sig = withSignal(samples);
   if (!sig.length) return m;
   // y = what the customer gets beyond theory + network at 1 km (pattern included), x = −10·log10(d / 1 km)
   const x = sig.map((s) => -10 * Math.log10(s.d / 1000));
-  const y = sig.map((s) => s.s - theory(1000, freqMHz, r) - priorDb + direction(m, s.b).lossDb);
+  const y = sig.map((s) => s.s - theory(1000, freqMHz, r) - priorDb + direction(m, s.b, s.e).lossDb + s.t);
   let n = 2;
   const mx = x.reduce((a, v) => a + v, 0) / x.length;
   const sxx = x.reduce((a, v) => a + (v - mx) ** 2, 0);
@@ -237,7 +281,7 @@ export function buildApModel(
  */
 export function estimateAt(m: ApModel, d: number, b: number, freqMHz: number | null, r: RadioDefaults, terrain: TerrainEffect | null = null): SignalEstimate {
   const dist = Math.max(30, d);
-  const dir = direction(m, b);
+  const dir = direction(m, b, terrain?.elevDeg ?? null);
   const tooFar = d > MAX_LINK_M;
   const terrainDb = terrain?.lossDb ?? 0;
   const base = theory(1000, freqMHz, r) + m.prior - dir.lossDb - terrainDb;
@@ -261,8 +305,9 @@ export function estimateAt(m: ApModel, d: number, b: number, freqMHz: number | n
       if (gap <= 500) nearby++;
       const w = 1 / (gap + 100) ** 2;
       wsum += w;
-      // the customer's own residual: its signal against the model at its place (no terrain known there)
-      rsum += w * (s.s - (theory(1000, freqMHz, r) + m.prior - direction(m, s.b).lossDb + fit.offset - 10 * n * Math.log10(s.d / 1000)));
+      // the customer's own residual: its signal against the model at its place, with the terrain of
+      // its own path (when known): what is left is what the terrain does not explain
+      rsum += w * (s.s - (theory(1000, freqMHz, r) + m.prior - direction(m, s.b, s.e).lossDb - s.t + fit.offset - 10 * n * Math.log10(s.d / 1000)));
     }
     if (wsum > 0) est += (rsum / wsum) * Math.min(1, close / 2);
     spread = nearby >= 2 ? Math.min(fit.rmse, 4) : Math.min(THEORY_SPREAD_DB, fit.rmse + 6 / Math.sqrt(fit.from));

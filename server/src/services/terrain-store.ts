@@ -7,6 +7,9 @@ import { toUtm } from '../domain/utm.ts';
 import type { Dem } from './dem.ts';
 import { openGeoTiff } from './tiff.ts';
 import { extractZipEntry } from './zip.ts';
+import { rasterizeBuildings } from './buildings.ts';
+import { createCanopyReader, httpRange, rasterizeCanopy } from './canopy.ts';
+import type { PmTilesReader } from '../domain/pmtiles.ts';
 
 /**
  * Terrain and obstacles for the coverage model and Visibilità, kept on the server in tiles of
@@ -35,6 +38,13 @@ export interface Bbox {
 export interface TerrainSampler {
   ground(lat: number, lon: number): number | null;
   cover(lat: number, lon: number): number | null;
+  /**
+   * Height of the building standing at a point from the basemap footprints (m, 0 = none); null
+   * where the buildings were not imported (then the land cover class says it).
+   */
+  building?(lat: number, lon: number): number | null;
+  /** Height of the tallest tree at a point from the canopy map (m, 0 = none); null where not imported. */
+  canopy?(lat: number, lon: number): number | null;
   /** Elevation from TINITALY for at least part of the area (else SRTM only). */
   fine: boolean;
 }
@@ -55,6 +65,14 @@ interface Manifest {
   dtmTiles: number;
   coverTiles: number;
   updatedAt: string | null;
+  /** Buildings from the basemap: tiles, how many footprints and when. */
+  buildingTiles?: number;
+  buildings?: number;
+  buildingsAt?: string | null;
+  /** Tree heights from the canopy map: tiles, MB read and when. */
+  canopyTiles?: number;
+  canopyMb?: number;
+  canopyAt?: string | null;
 }
 
 export const TINITALY_PAGE = 'https://tinitaly.pi.ingv.it/Download_Area1_1.html';
@@ -88,9 +106,13 @@ export function createTerrainStore(opts: { dir: string; dem: Dem; fetchImpl?: ty
   const max = opts.maxTiles ?? 160;
   const dtmDir = join(opts.dir, 'dtm');
   const coverDir = join(opts.dir, 'cover');
+  const bldgDir = join(opts.dir, 'bldg');
+  const chmDir = join(opts.dir, 'chm');
   const tmpDir = join(opts.dir, 'tmp');
   const dtm = new Map<string, Uint16Array | null>();
   const cover = new Map<string, Uint8Array | null>();
+  const bldg = new Map<string, Uint8Array | null>();
+  const chm = new Map<string, Uint8Array | null>();
   const state: TerrainImportState = { running: false, phase: '', done: 0, total: 0, error: null, startedAt: null, finishedAt: null };
 
   const manifestPath = join(opts.dir, 'manifest.json');
@@ -129,6 +151,18 @@ export function createTerrainStore(opts: { dir: string; dem: Dem; fetchImpl?: ty
       return b ? new Uint8Array(b.buffer, b.byteOffset, b.length) : null;
     });
 
+  const bldgTile = (iy: number, ix: number) =>
+    cached(bldg, tileKey(iy, ix), () => {
+      const b = readTile(bldgDir, tileKey(iy, ix));
+      return b ? new Uint8Array(b.buffer, b.byteOffset, b.length) : null;
+    });
+
+  const chmTile = (iy: number, ix: number) =>
+    cached(chm, tileKey(iy, ix), () => {
+      const b = readTile(chmDir, tileKey(iy, ix));
+      return b ? new Uint8Array(b.buffer, b.byteOffset, b.length) : null;
+    });
+
   /** Position of a point inside its tile: grid coordinates from the north-west corner. */
   const gridPos = (lat: number, lon: number) => {
     const { iy, ix } = tileOf(lat, lon);
@@ -159,6 +193,20 @@ export function createTerrainStore(opts: { dir: string; dem: Dem; fetchImpl?: ty
     return v === 0 ? null : v;
   }
 
+  function buildingAt(lat: number, lon: number): number | null {
+    const { iy, ix, gx, gy } = gridPos(lat, lon);
+    const t = bldgTile(iy, ix);
+    if (!t) return null;
+    return t[Math.min(GRID, Math.round(gy)) * SIDE + Math.min(GRID, Math.round(gx))]!;
+  }
+
+  function canopyAt(lat: number, lon: number): number | null {
+    const { iy, ix, gx, gy } = gridPos(lat, lon);
+    const t = chmTile(iy, ix);
+    if (!t) return null;
+    return t[Math.min(GRID, Math.round(gy)) * SIDE + Math.min(GRID, Math.round(gx))]!;
+  }
+
   async function sampler(b: Bbox): Promise<TerrainSampler | null> {
     const srtm = await opts.dem.sampler(b.minLat, b.minLon, b.maxLat, b.maxLon);
     const { iy: y0, ix: x0 } = tileOf(b.minLat, b.minLon);
@@ -167,10 +215,14 @@ export function createTerrainStore(opts: { dir: string; dem: Dem; fetchImpl?: ty
     for (let y = y0; y <= y1 && !fine; y++) for (let x = x0; x <= x1 && !fine; x++) fine = existsSync(join(dtmDir, `${tileKey(y, x)}.bin.gz`));
     if (!fine && !srtm) return null;
     const hasCover = existsSync(coverDir);
+    const hasBldg = existsSync(bldgDir);
+    const hasChm = existsSync(chmDir);
     return {
       fine,
       ground: (lat, lon) => (fine ? fineGround(lat, lon) : null) ?? srtm?.(lat, lon) ?? null,
       cover: (lat, lon) => (hasCover ? coverAt(lat, lon) : null),
+      building: (lat, lon) => (hasBldg ? buildingAt(lat, lon) : null),
+      canopy: (lat, lon) => (hasChm ? canopyAt(lat, lon) : null),
     };
   }
 
@@ -385,13 +437,87 @@ export function createTerrainStore(opts: { dir: string; dem: Dem; fetchImpl?: ty
     }
   }
 
+  /**
+   * Buildings of the basemap over [area] (no download: the PMTiles file is already on the server),
+   * replacing what was there; [defaultM]: height of a building without one in OpenStreetMap.
+   */
+  async function importBuildings(area: Bbox, reader: Pick<PmTilesReader, 'tile'>, defaultM: number): Promise<void> {
+    if (state.running) throw new Error('import_running');
+    const tiles = tilesOf(area);
+    Object.assign(state, { running: true, phase: 'Edifici dalla mappa base', done: 0, total: tiles.length, error: null, startedAt: new Date().toISOString(), finishedAt: null });
+    const man = manifest();
+    let found = 0;
+    try {
+      mkdirSync(bldgDir, { recursive: true });
+      for (const { iy, ix } of tiles) {
+        const { grid, count } = await rasterizeBuildings(reader, { north: (iy + 1) * TILE_DEG, west: ix * TILE_DEG, step: STEP, side: SIDE }, defaultM);
+        writeFileSync(join(bldgDir, `${tileKey(iy, ix)}.bin.gz`), gzipSync(grid, { level: 6 }));
+        bldg.delete(tileKey(iy, ix));
+        found += count;
+        state.done++;
+      }
+      man.buildingTiles = readdirSync(bldgDir).length;
+      man.buildings = found;
+      man.buildingsAt = new Date().toISOString();
+      man.updatedAt = man.buildingsAt;
+      writeFileSync(manifestPath, JSON.stringify(man));
+      state.phase = 'Completato';
+    } catch (err) {
+      state.error = (err as Error).message;
+      state.phase = 'Interrotto';
+      opts.log?.(`buildings import: ${state.error}`);
+    } finally {
+      state.running = false;
+      state.finishedAt = new Date().toISOString();
+    }
+  }
+
+  /**
+   * Tree heights of the canopy map (Meta/WRI CHM v2) over [area]: the server reads by ranges only
+   * the overview blocks it needs, tile by tile, keeping what was done (a new run continues).
+   */
+  async function importCanopy(area: Bbox, range = httpRange(f)): Promise<void> {
+    if (state.running) throw new Error('import_running');
+    const tiles = tilesOf(area);
+    const man = manifest();
+    const todo = tiles.filter(({ iy, ix }) => !existsSync(join(chmDir, `${tileKey(iy, ix)}.bin.gz`)));
+    Object.assign(state, { running: true, phase: 'Altezze degli alberi (Meta/WRI)', done: tiles.length - todo.length, total: tiles.length, error: null, startedAt: new Date().toISOString(), finishedAt: null });
+    const reader = createCanopyReader(range);
+    try {
+      mkdirSync(chmDir, { recursive: true });
+      for (const { iy, ix } of todo) {
+        const grid = await rasterizeCanopy(reader, { north: (iy + 1) * TILE_DEG, west: ix * TILE_DEG, step: STEP, side: SIDE });
+        writeFileSync(join(chmDir, `${tileKey(iy, ix)}.bin.gz`), gzipSync(grid, { level: 6 }));
+        chm.delete(tileKey(iy, ix));
+        reader.clear();
+        state.done++;
+        state.phase = `Altezze degli alberi (Meta/WRI) · ${Math.round(reader.bytes / 1e6)} MB letti`;
+      }
+      man.canopyTiles = readdirSync(chmDir).length;
+      man.canopyMb = Math.round((man.canopyMb ?? 0) + reader.bytes / 1e6);
+      man.canopyAt = new Date().toISOString();
+      man.updatedAt = man.canopyAt;
+      writeFileSync(manifestPath, JSON.stringify(man));
+      state.phase = 'Completato';
+    } catch (err) {
+      state.error = (err as Error).message;
+      state.phase = 'Interrotto';
+      opts.log?.(`canopy import: ${state.error}`);
+    } finally {
+      state.running = false;
+      state.finishedAt = new Date().toISOString();
+    }
+  }
+
   return {
     sampler,
     importArea,
+    importBuildings,
+    importCanopy,
     state: () => ({ ...state }),
     status: () => {
       const m = manifest();
-      return { tinitaly: m.tinitaly.length, worldcover: m.worldcover.length, dtmTiles: m.dtmTiles, coverTiles: m.coverTiles, updatedAt: m.updatedAt, import: { ...state } };
+      return { tinitaly: m.tinitaly.length, worldcover: m.worldcover.length, dtmTiles: m.dtmTiles, coverTiles: m.coverTiles, buildingTiles: m.buildingTiles ?? 0, buildings: m.buildings ?? 0, buildingsAt: m.buildingsAt ?? null, canopyTiles: m.canopyTiles ?? 0, canopyAt: m.canopyAt ?? null, updatedAt: m.updatedAt, import: { ...state } };
     },
     /** For the tests: convert local files without downloading. */
     _convert: { tinitaly: convertTinitaly, worldCover: convertWorldCover, tmpDir, dtmDir },

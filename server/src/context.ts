@@ -17,6 +17,7 @@ import type { Notifier } from './services/notify.ts';
 import type { Telegram } from './services/telegram.ts';
 import type { Dem } from './services/dem.ts';
 import type { TerrainStore } from './services/terrain-store.ts';
+import type { Antennas } from './services/antennas.ts';
 import type { ApLoadService } from './services/ap-load.ts';
 import type { Advisor } from './services/ap-advisor.ts';
 import type { Optimizer } from './services/ap-optimizer.ts';
@@ -52,6 +53,8 @@ export interface AppContext {
   dem: Dem;
   /** TINITALY terrain and WorldCover land cover imported by the admin (SRTM where missing). */
   terrain: TerrainStore;
+  /** Radiation patterns of the makers and the antenna, azimuth and tilt of every AP (admins). */
+  antennas: Antennas;
   serverSettings: ServerSettings;
   notify: Notifier;
   version: string;

@@ -1,7 +1,7 @@
 import { existsSync } from 'node:fs';
 import { parseClientHeader, versionAtLeast } from './domain/policy.ts';
 import { loadLatestRelease } from './services/releases.ts';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
 import { ZodError } from 'zod';
@@ -42,6 +42,7 @@ import { mapRoutes } from './routes/map.ts';
 import { networkRoutes } from './routes/network.ts';
 import { pointingRoutes } from './routes/pointing.ts';
 import { terrainRoutes } from './routes/terrain.ts';
+import { antennaRoutes } from './routes/antennas.ts';
 import { advisorRoutes } from './routes/advisor.ts';
 import { serverSettingsRoutes } from './routes/server-settings.ts';
 import { infraRoutes } from './routes/infra.ts';
@@ -52,6 +53,7 @@ import { privacyRoutes } from './routes/privacy.ts';
 import { createServerSettings } from './services/server-settings.ts';
 import { createDem } from './services/dem.ts';
 import { createTerrainStore } from './services/terrain-store.ts';
+import { createAntennas } from './services/antennas.ts';
 import { createApLoad, type ApLoadService } from './services/ap-load.ts';
 import { createAdvisor, type Advisor } from './services/ap-advisor.ts';
 import { createOptimizer, type Optimizer } from './services/ap-optimizer.ts';
@@ -126,6 +128,7 @@ export async function buildApp(
     serverSettings,
     dem,
     terrain: createTerrainStore({ dir: cfg.terrainDir, dem, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
+    antennas: createAntennas({ dir: join(dirname(cfg.terrainDir), 'antennas'), db, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
     notify: undefined as unknown as Notifier,
     version,
   };
@@ -228,6 +231,7 @@ export async function buildApp(
   networkRoutes(app, ctx);
   pointingRoutes(app, ctx);
   terrainRoutes(app, ctx);
+  antennaRoutes(app, ctx);
   advisorRoutes(app, ctx);
   serverSettingsRoutes(app, ctx);
   infraRoutes(app, ctx);

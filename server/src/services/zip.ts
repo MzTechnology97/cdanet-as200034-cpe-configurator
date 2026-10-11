@@ -1,7 +1,7 @@
 import { createWriteStream, closeSync, fstatSync, openSync, readSync } from 'node:fs';
 import { createReadStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
-import { createInflateRaw } from 'node:zlib';
+import { createInflateRaw, inflateRawSync } from 'node:zlib';
 
 /**
  * Extracts the first entry of a ZIP archive whose name matches [pattern] to [outPath], streaming
@@ -55,4 +55,34 @@ export async function extractZipEntry(zipPath: string, pattern: RegExp, outPath:
   if (entry.method === 0) await pipeline(src, createWriteStream(outPath));
   else await pipeline(src, createInflateRaw(), createWriteStream(outPath));
   return entry.name;
+}
+
+/** Every file of a small ZIP archive held in memory (stored or DEFLATE, no ZIP64): name and bytes. */
+export function readZipEntries(zip: Buffer): Array<{ name: string; data: Buffer }> {
+  let eocd = -1;
+  for (let i = zip.length - 22; i >= Math.max(0, zip.length - 65_557); i--) {
+    if (zip.readUInt32LE(i) === 0x06054b50) {
+      eocd = i;
+      break;
+    }
+  }
+  if (eocd < 0) throw new Error('ZIP non valido');
+  const cdSize = zip.readUInt32LE(eocd + 12);
+  const cdOffset = zip.readUInt32LE(eocd + 16);
+  const out: Array<{ name: string; data: Buffer }> = [];
+  for (let p = cdOffset; p + 46 <= cdOffset + cdSize && zip.readUInt32LE(p) === 0x02014b50; ) {
+    const method = zip.readUInt16LE(p + 10);
+    const compSize = zip.readUInt32LE(p + 20);
+    const nameLen = zip.readUInt16LE(p + 28);
+    const extraLen = zip.readUInt16LE(p + 30);
+    const commentLen = zip.readUInt16LE(p + 32);
+    const local = zip.readUInt32LE(p + 42);
+    const name = zip.toString('utf8', p + 46, p + 46 + nameLen);
+    p += 46 + nameLen + extraLen + commentLen;
+    if (name.endsWith('/') || (method !== 0 && method !== 8)) continue;
+    const start = local + 30 + zip.readUInt16LE(local + 26) + zip.readUInt16LE(local + 28);
+    const raw = zip.subarray(start, start + compSize);
+    out.push({ name, data: method === 0 ? Buffer.from(raw) : inflateRawSync(raw) });
+  }
+  return out;
 }

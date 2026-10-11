@@ -79,6 +79,10 @@ export function networkRoutes(app: FastifyInstance, ctx: AppContext) {
               pppoe: pppoe.get(a.id) ?? null,
               served: (() => {
                 const m = sectors.get(a.id);
+                // the real antenna (pattern and azimuth of Antenne degli AP): its beam, not the customers' arc
+                const own = ctx.antennas.assigned()[a.id];
+                const p = ctx.antennas.pattern(own?.antennaId);
+                if (p && own?.azimuth != null) return { center: own.azimuth, width: p.hBeam, servedM: m?.servedM ?? null, antenna: p.name };
                 return m?.sector ? { center: m.sector.center, width: m.sector.width, servedM: m.servedM } : null;
               })(),
             }),

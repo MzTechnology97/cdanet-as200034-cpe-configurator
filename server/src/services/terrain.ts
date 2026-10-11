@@ -104,11 +104,7 @@ export function buildProfile(at: TerrainSampler, point: LatLon, cpeHeightM: numb
     if (g === null) return null;
     ground.push(g);
     const d = p.f * D;
-    const c = obstacles && d > NEAR_ANTENNA_M && D - d > NEAR_ANTENNA_M ? at.cover(p.lat, p.lon) : null;
-    if (c === BUILT && obstacles!.buildingM > 0) obstacle.push({ h: obstacles!.buildingM, kind: 'edificio' });
-    else if (c === TREE && obstacles!.treeM > 0) obstacle.push({ h: obstacles!.treeM, kind: 'alberi' });
-    else if (c === SHRUB && obstacles!.treeM > 0) obstacle.push({ h: Math.min(SHRUB_M, obstacles!.treeM), kind: 'alberi' });
-    else obstacle.push(null);
+    obstacle.push(obstacles && d > NEAR_ANTENNA_M && D - d > NEAR_ANTENNA_M ? obstacleAt(at, p.lat, p.lon, obstacles) : null);
   }
   // the AP position in UISP may be a few tens of metres off the summit it stands on: its ground is
   // the highest point around it, else the summit itself would hide it
@@ -118,7 +114,9 @@ export function buildProfile(at: TerrainSampler, point: LatLon, cpeHeightM: numb
   // an antenna among roofs or trees is mounted above them (installers pick a spot that sees out):
   // at least ABOVE_M over the obstacles within AROUND_M, whatever height is set
   const cpeH = obstacles ? Math.max(cpeHeightM, localTop(at, point, obstacles) + ABOVE_M) : cpeHeightM;
-  const apTop = obstacles ? apGround + localTop(at, ap, obstacles) + ABOVE_M : -Infinity;
+  // the AP: its height is the one of the UISP site (or a sane GPS) when known; only the default
+  // height is raised over what stands around it
+  const apTop = obstacles && resolved.from === 'terreno' ? apGround + localTop(at, ap, obstacles) + ABOVE_M : -Infinity;
   return {
     D,
     freq: ap.frequency && ap.frequency > 1000 ? ap.frequency : 5600,
@@ -129,6 +127,26 @@ export function buildProfile(at: TerrainSampler, point: LatLon, cpeHeightM: numb
     d: pts.map((p) => p.f * D),
     altitudeFrom: resolved.from,
   };
+}
+
+/**
+ * What stands on the ground at a point: the building of the basemap footprints with its height
+ * where they were imported (a street between two houses is free there), else the class of the
+ * land cover with the average height; trees with their own height from the canopy map where it
+ * was imported, else trees and shrubs of the land cover. A tree height of 0 in the settings turns
+ * trees off.
+ */
+export function obstacleAt(at: TerrainSampler, lat: number, lon: number, o: ObstacleHeights): { h: number; kind: 'edificio' | 'alberi' } | null {
+  const b = at.building?.(lat, lon) ?? null;
+  if (b !== null && b > 0) return { h: b, kind: 'edificio' };
+  const c = at.cover(lat, lon);
+  if (c === BUILT && b === null && o.buildingM > 0) return { h: o.buildingM, kind: 'edificio' };
+  // the canopy map knows each tree and its height: where it was imported it replaces the classes
+  const t = at.canopy?.(lat, lon) ?? null;
+  if (t !== null) return t > 0 && o.treeM > 0 ? { h: t, kind: 'alberi' } : null;
+  if (c === TREE && o.treeM > 0) return { h: o.treeM, kind: 'alberi' };
+  if (c === SHRUB && o.treeM > 0) return { h: Math.min(SHRUB_M, o.treeM), kind: 'alberi' };
+  return null;
 }
 
 /** Highest ground within [r] metres of a point (5 × 5 samples), m a.s.l.; -Infinity when unknown. */
@@ -154,8 +172,12 @@ function localTop(at: TerrainSampler, p: LatLon, o: ObstacleHeights): number {
   let top = 0;
   for (const a of [-1, 0, 1]) {
     for (const b of [-1, 0, 1]) {
-      const c = at.cover(p.lat + a * dLat, p.lon + b * dLon);
-      const h = c === BUILT ? o.buildingM : c === TREE ? o.treeM : c === SHRUB ? Math.min(SHRUB_M, o.treeM) : 0;
+      const ob = obstacleAt(at, p.lat + a * dLat, p.lon + b * dLon, o);
+      // the roof of the building at the point with its real height (the antenna goes on it); the
+      // ones around and the trees only up to the average height: nobody mounts a CPE over the
+      // block of flats next door or a 25 m pine, they stay possible obstacles on the path
+      const own = a === 0 && b === 0 && ob?.kind === 'edificio';
+      const h = ob ? (own ? ob.h : Math.min(ob.h, ob.kind === 'alberi' ? o.treeM : o.buildingM)) : 0;
       if (h > top) top = h;
     }
   }
@@ -200,6 +222,8 @@ export function profileEffect(p: BuiltProfile): TerrainEffect {
     diffractionDb: Math.round(Math.min(60, diffraction + foliageDb) * 10) / 10,
     ...(foliageM > 0 ? { foliageM: Math.round(foliageM), foliageDb } : {}),
     ...(los.verdict !== bareVerdict ? { buildings: true } : {}),
+    // the point as the AP antenna sees it: degrees above (+) or below (−) its horizontal
+    elevDeg: Math.round(((Math.atan2(p.from - p.to, p.D) * 180) / Math.PI) * 10) / 10,
   };
 }
 

@@ -6,6 +6,8 @@ import { MAX_LINK_M } from '../domain/coverage-model.ts';
 import { createCoverageAccuracy } from '../services/coverage-accuracy.ts';
 import { isPtp } from '../services/uisp.ts';
 import type { Bbox } from '../services/terrain-store.ts';
+import { existsSync } from 'node:fs';
+import { PmTilesReader } from '../domain/pmtiles.ts';
 
 /** Area of the network: every AP that serves customers, plus the farthest link around it. */
 export function networkArea(aps: Array<{ location: { lat: number; lon: number } }>, marginM = MAX_LINK_M): Bbox | null {
@@ -38,7 +40,7 @@ export function terrainRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.get('/api/admin/terrain', admin, async () => {
     const aps = ctx.uisp ? await ctx.uisp.apsWithLocation().catch(() => []) : [];
-    return { ...ctx.terrain.status(), area: networkArea(aps.filter((a) => !isPtp(a))) };
+    return { ...ctx.terrain.status(), basemap: existsSync(ctx.cfg.mapFile), area: networkArea(aps.filter((a) => !isPtp(a))) };
   });
 
   app.post('/api/admin/terrain/import', admin, async (req) => {
@@ -47,8 +49,48 @@ export function terrainRoutes(app: FastifyInstance, ctx: AppContext) {
     const area = networkArea((await ctx.uisp.apsWithLocation()).filter((a) => !isPtp(a)));
     if (!area) throw new HttpError(409, 'no_aps');
     recordEvent(ctx.db, req.user!.id, 'terrain.import', 'Terreno e ostacoli', `area ${area.minLat.toFixed(2)}–${area.maxLat.toFixed(2)} N, ${area.minLon.toFixed(2)}–${area.maxLon.toFixed(2)} E`);
-    // when the new terrain is in, measure again: the history shows what changed
-    void ctx.terrain.importArea(area).then(() => accuracy.start());
+    // then the buildings of the basemap (no download); when all is in, measure again: the
+    // history shows what changed
+    void ctx.terrain
+      .importArea(area)
+      .then(() => (existsSync(ctx.cfg.mapFile) ? buildings(area) : undefined))
+      .then(() => accuracy.start());
+    return { started: true, area };
+  });
+
+  /** Buildings of the basemap over [area], with the reader closed at the end. */
+  async function buildings(area: Bbox) {
+    const reader = new PmTilesReader(ctx.cfg.mapFile);
+    try {
+      await ctx.terrain.importBuildings(area, reader, ctx.cfg.coverageBuildingM);
+    } finally {
+      await reader.close();
+    }
+  }
+
+  /**
+   * Tree heights of the canopy map (Meta/WRI CHM v2, AWS Open Data) for the area of the network:
+   * the server reads only the blocks it needs (about 4 MB per 0.1° tile).
+   */
+  app.post('/api/admin/terrain/canopy', admin, async (req) => {
+    if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
+    if (ctx.terrain.state().running) throw new HttpError(409, 'import_running');
+    const area = networkArea((await ctx.uisp.apsWithLocation()).filter((a) => !isPtp(a)));
+    if (!area) throw new HttpError(409, 'no_aps');
+    recordEvent(ctx.db, req.user!.id, 'terrain.canopy', 'Altezze degli alberi', `area ${area.minLat.toFixed(2)}–${area.maxLat.toFixed(2)} N, ${area.minLon.toFixed(2)}–${area.maxLon.toFixed(2)} E`);
+    void ctx.terrain.importCanopy(area).then(() => accuracy.start());
+    return { started: true, area };
+  });
+
+  /** Only the buildings of the basemap (already on the server: a minute or two, nothing downloaded). */
+  app.post('/api/admin/terrain/buildings', admin, async (req) => {
+    if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
+    if (ctx.terrain.state().running) throw new HttpError(409, 'import_running');
+    if (!existsSync(ctx.cfg.mapFile)) throw new HttpError(409, 'basemap_missing');
+    const area = networkArea((await ctx.uisp.apsWithLocation()).filter((a) => !isPtp(a)));
+    if (!area) throw new HttpError(409, 'no_aps');
+    recordEvent(ctx.db, req.user!.id, 'terrain.buildings', 'Edifici dalla mappa base', `area ${area.minLat.toFixed(2)}–${area.maxLat.toFixed(2)} N, ${area.minLon.toFixed(2)}–${area.maxLon.toFixed(2)} E`);
+    void buildings(area).then(() => accuracy.start());
     return { started: true, area };
   });
 }

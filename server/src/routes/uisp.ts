@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Readable } from 'node:stream';
+import { apModels } from '../services/model-inputs.ts';
 import { z } from 'zod';
 import { CPE_MODELS, cpeModelById, recommendCpe } from '../domain/cpe-models.ts';
 import { HttpError } from '../auth.ts';
@@ -113,7 +114,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     // hidden by closer ones with a worse signal
     const inRange = await uisp().nearestAps({ lat: q.lat, lon: q.lon }, 500, maxKm, allow);
     const radio = { eirpDbm: ctx.cfg.coverageEirpDbm, cpeGainDbi: ctx.cfg.coverageCpeGainDbi };
-    const models = await uisp().apModels(inRange.map((a) => a.id), radio).catch(() => new Map<string, ApModel>());
+    const models = await apModels(ctx, inRange.map((a) => a.id), radio).catch(() => new Map<string, ApModel>());
     const clientsShown = !keys || ctx.outages.config().installerClients;
     const heights = pointingConfig(db);
     const point = { lat: q.lat, lon: q.lon };
@@ -204,7 +205,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     const ap = (await uisp().apsWithLocation()).find((a) => a.id === q.apId && !isPtp(a));
     if (!ap) throw new HttpError(404, 'ap_not_found');
     const radio = { eirpDbm: ctx.cfg.coverageEirpDbm, cpeGainDbi: ctx.cfg.coverageCpeGainDbi };
-    const m = (await uisp().apModels([ap.id], radio)).get(ap.id);
+    const m = (await apModels(ctx, [ap.id], radio)).get(ap.id);
     if (!m) throw new HttpError(404, 'ap_not_found');
     const heights = pointingConfig(db);
     const theoretical = !m.fit;
