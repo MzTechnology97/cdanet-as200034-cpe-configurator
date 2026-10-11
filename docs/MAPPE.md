@@ -51,6 +51,7 @@ Connettori → **Immagini satellitari**: una o più fonti di foto aeree per le m
 | Google | chiave API con la Map Tiles API e un account di fatturazione | Satellite, Ibrida |
 | Ortofoto pubbliche (WMS) | niente: predefinite le ortofoto AGEA 2012 del Geoportale Nazionale, indirizzo e layer modificabili | Ortofoto (da zoom 9) |
 
+- **Visualizzazioni (admin):** nel selettore in alto a destra, come sfondo, la mappa base (tema del sistema, chiara, scura, grigia) e le foto aeree. Sopra si possono aggiungere i livelli **Strade e vie** (con i nomi), **Edifici**, **Località e nomi**, **Acque** e **Confini**, presi dalla mappa base: sulle foto aeree danno una vista ibrida anche con le ortofoto. Sfondo e livelli scelti restano su quel browser.
 - **Confronto:** ogni fonte attiva compare nel selettore in alto a destra delle mappe (per esempio «Satellite · Esri», «Ibrida · Mapbox»). Si attivano più fonti per confrontarle sullo stesso punto, poi si lascia accesa quella scelta; la vista scelta resta su quel browser.
 - **Chiavi e immagini:** le chiavi sono cifrate sul server e le immagini passano da lì (`/api/admin/map/imagery/...`, solo admin collegati). Nessuna chiave arriva ai browser.
 - **Cache:** il browser dell'admin tiene le immagini per 12 ore; sul server non viene salvato nulla.

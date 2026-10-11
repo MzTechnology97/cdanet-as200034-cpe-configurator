@@ -80,7 +80,7 @@ export async function createMap(el, { center = [37.57, 14.27], zoom = 9, onStatu
   const base = L.layerGroup().addTo(map);
   // OpenStreetMap's tile policy requires a Referer (the console sends none by default)
   const publicTiles = () => base.addLayer(L.tileLayer(config.fallback.url, { maxZoom: 19, attribution: config.fallback.attribution, referrerPolicy: 'strict-origin-when-cross-origin' }));
-  if (imagery && isAdminUser()) void addImagery(map, base);
+  if (imagery && isAdminUser()) void addViews(map, base, config);
   if (config.basemap && window.protomapsL) {
     const dark = matchMedia('(prefers-color-scheme: dark)').matches;
     const pm = window.protomapsL.leafletLayer({ url: config.basemap.tiles ?? config.basemap.url, flavor: dark ? 'dark' : 'light', lang: 'it', maxDataZoom: config.basemap.maxZoom });
@@ -142,34 +142,78 @@ const savedBase = () => {
   }
 };
 
+const OVERLAY_KEY = 'cda.mapOverlays';
+const savedOverlays = () => {
+  try {
+    return JSON.parse(localStorage.getItem(OVERLAY_KEY) ?? '[]');
+  } catch {
+    return [];
+  }
+};
+const remember = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* private mode: not remembered */
+  }
+};
+
 /**
- * Admins: aerial imagery of every provider switched on in Connettori → Immagini satellitari (through
- * the server), besides the basemap: one entry per view, to compare them on the same place. The
- * choice is remembered on this browser.
+ * Layers of the basemap that can be shown on their own, over any background (also the aerial
+ * imagery): the rules of the theme for those data layers only, on a transparent canvas.
  */
-async function addImagery(map, base) {
+const OVERLAYS = [
+  ['Strade e vie', ['roads'], ['roads']],
+  ['Edifici', ['buildings'], []],
+  ['Località e nomi', [], ['places', 'pois']],
+  ['Acque', ['water'], ['water']],
+  ['Confini', ['boundaries'], []],
+];
+
+/**
+ * Admins: views of the map. Backgrounds: the basemap in its themes (light, dark, grey) and the
+ * aerial imagery of every provider switched on in Connettori → Immagini satellitari (through the
+ * server), one entry each to compare them on the same place. Layers to add on top: roads and
+ * streets, buildings, places, water, borders. The choices are remembered on this browser.
+ */
+async function addViews(map, base, config) {
   const s = await api('/api/admin/map/satellite').catch(() => null);
-  if (!s?.available || !map.getContainer().isConnected) return;
+  if (!map.getContainer().isConnected) return;
   const L = window.L;
-  const layers = { Mappa: base };
-  for (const v of s.layers) {
+  const pm = config.basemap && window.protomapsL ? window.protomapsL : null;
+  const url = config.basemap ? (config.basemap.tiles ?? config.basemap.url) : null;
+  const vector = (opts) => pm.leafletLayer({ url, lang: 'it', maxDataZoom: config.basemap.maxZoom, ...opts });
+  const bases = { Mappa: base };
+  const overlays = {};
+  if (pm) {
+    bases['Mappa chiara'] = vector({ flavor: 'light' });
+    bases['Mappa scura'] = vector({ flavor: 'dark' });
+    bases['Mappa grigia'] = vector({ flavor: 'grayscale' });
+    // the rules of the light theme, split by data layer (a layer not added only lends its rules)
+    const theme = vector({ flavor: 'light' });
+    for (const [name, paint, labels] of OVERLAYS) {
+      const paintRules = theme.paintRules.filter((r) => paint.includes(r.dataLayer));
+      const labelRules = theme.labelRules.filter((r) => labels.includes(r.dataLayer));
+      if (paintRules.length || labelRules.length) overlays[name] = vector({ paintRules, labelRules, attribution: '' });
+    }
+  }
+  for (const v of s?.layers ?? []) {
     const opts = { maxZoom: 20, maxNativeZoom: v.maxNativeZoom, minZoom: v.minZoom, tileSize: 256 };
     const parts = v.parts.map(([provider, part], i) => authTileLayer(`/api/admin/map/imagery/${provider}/${part}/{z}/{x}/{y}`, { ...opts, ...(i === 0 ? { attribution: v.attribution } : {}) }));
-    layers[v.label] = parts.length === 1 ? parts[0] : L.layerGroup(parts);
+    bases[v.label] = parts.length === 1 ? parts[0] : L.layerGroup(parts);
   }
-  const chosen = layers[savedBase()];
+  if (Object.keys(bases).length === 1 && !Object.keys(overlays).length) return;
+  const chosen = bases[savedBase()];
   if (chosen && chosen !== base) {
     map.removeLayer(base);
     chosen.addTo(map);
   }
-  L.control.layers(layers, null, { position: 'topright' }).addTo(map);
-  map.on('baselayerchange', (e) => {
-    try {
-      localStorage.setItem(BASE_KEY, e.name);
-    } catch {
-      /* private mode: not remembered */
-    }
-  });
+  const on = new Set(savedOverlays());
+  for (const [name, layer] of Object.entries(overlays)) if (on.has(name)) layer.addTo(map);
+  L.control.layers(bases, overlays, { position: 'topright' }).addTo(map);
+  map.on('baselayerchange', (e) => remember(BASE_KEY, e.name));
+  const saveOverlays = () => remember(OVERLAY_KEY, JSON.stringify(Object.entries(overlays).filter(([, l]) => map.hasLayer(l)).map(([n]) => n)));
+  map.on('overlayadd overlayremove', saveOverlays);
 }
 
 /** Popup content as DOM (never HTML strings: names come from external systems). */
