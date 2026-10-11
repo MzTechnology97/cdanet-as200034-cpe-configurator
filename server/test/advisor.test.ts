@@ -61,11 +61,28 @@ describe('IA-AP: lettura dei dati e regole', () => {
     assert.deepEqual(analyzeNetwork([ap()], { range }), []);
   });
 
+  it('airtime: only a slow CPE, and as serious as the AP is busy in the evening', () => {
+    const load = (pct: number) => ({ eveningAirtimePct: pct, eveningUtilizationPct: pct / 2 }) as AdvisorInput['load'];
+    const st = [
+      station({ deviceId: 'slow', airtime: 0.2, capMbps: 50 }),
+      station({ deviceId: 'heavy', airtime: 0.3 }),
+      ...['a', 'b', 'c', 'd', 'e'].map((deviceId) => station({ deviceId })),
+    ];
+    const sev = (pct: number) => analyzeNetwork([ap({ stations: st, load: load(pct) })], { range }).filter((f) => f.kind === 'airtime').map((f) => `${f.cpe?.id}:${f.severity}`);
+    assert.deepEqual(sev(20), ['slow:info'], 'AP with room to spare: worth knowing, no alarm');
+    assert.deepEqual(sev(55), ['slow:attenzione']);
+    assert.deepEqual(sev(75), ['slow:critico']);
+    const f = analyzeNetwork([ap({ stations: st, load: load(75) })], { range }).find((x) => x.kind === 'airtime')!;
+    assert.match(f.detail, /capacità 50 Mbit\/s contro 200/);
+    assert.match(f.detail, /la sera è al 75%/);
+  });
+
   it('CPEs to fix: SNR, modulation, airtime, trend, polarisations, below the expected signal', () => {
     const st = [
       station({ deviceId: 'snr', rxSignal: -82, noise: -92 }),
       station({ deviceId: 'mcs', rxMcs: 3, rxMcsIdeal: 8 }),
       station({ deviceId: 'air', airtime: 0.12 }),
+      station({ deviceId: 'slowair', airtime: 0.12, capMbps: 60 }),
       station({ deviceId: 'trend', trendDb: -11 }),
       station({ deviceId: 'chains', chains: [-55, -66] }),
       station({ deviceId: 'exp' }),
@@ -75,7 +92,8 @@ describe('IA-AP: lettura dei dati e regole', () => {
     const by = (id: string) => f.filter((x) => x.cpe?.id === id).map((x) => `${x.kind}:${x.severity}`);
     assert.deepEqual(by('snr'), ['snr:critico']);
     assert.deepEqual(by('mcs'), ['mcs:info'], '5 levels below: worth knowing');
-    assert.deepEqual(by('air'), ['airtime:critico']);
+    assert.deepEqual(by('air'), [], 'a fast CPE downloading a lot is not a problem');
+    assert.deepEqual(by('slowair'), ['airtime:info'], 'slow, but the evening load of the AP is unknown');
     assert.deepEqual(by('trend'), ['trend:critico']);
     assert.deepEqual(by('chains'), ['chains:attenzione']);
     assert.deepEqual(by('exp'), ['expected:attenzione']);
@@ -167,11 +185,11 @@ describe('IA-AP: notifiche', () => {
     await advisor.run(healthy);
     await advisor.run(critical); // back within the week: no news
     assert.equal(sent.length, 0);
-    const other = [ap({ stations: [station({ deviceId: 'weak', rxSignal: -82, noise: -92 }), station({ deviceId: 'new', airtime: 0.2 }), station({ deviceId: 'a' }), station({ deviceId: 'b' }), station({ deviceId: 'c' })] })];
+    const other = [ap({ stations: [station({ deviceId: 'weak', rxSignal: -82, noise: -92 }), station({ deviceId: 'new', trendDb: -11 }), station({ deviceId: 'a' }), station({ deviceId: 'b' }), station({ deviceId: 'c' })] })];
     await advisor.run(other); // a really new critical finding
     assert.equal(sent.length, 1);
     assert.match(sent[0]!.title, /^🛠️ IA-AP: 1 nuovo problema critico/);
-    assert.match(sent[0]!.lines[0]!, /airtime/);
+    assert.match(sent[0]!.lines[0]!, /calo/);
     const s = advisor.summary();
     assert.equal(s.critico, 2);
     assert.equal(s.apsCritical, 1);
