@@ -116,7 +116,16 @@ export async function buildApp(
     uispSettings: { autoBackup: uispCfg?.autoBackup ?? cfg.uispAutoBackup, coverageMaxKm: uispCfg?.coverageMaxKm ?? cfg.coverageMaxKm },
     connectors,
     crm: createCrmSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
-    imagery: createImagery(db, sealer, { fetchImpl: opts.fetchImpl }),
+    imagery: createImagery(db, sealer, {
+      fetchImpl: opts.fetchImpl,
+      // the sea is at 0 m in the terrain model: 9×9 points of the tile, any of them on the sea
+      touchesSea: async ([s, w, n, e]) => {
+        const at = await dem.sampler(s, w, n, e);
+        if (!at) return false;
+        for (let i = 0; i <= 8; i++) for (let j = 0; j <= 8; j++) if ((at(s + ((n - s) * i) / 8, w + ((e - w) * j) / 8) ?? 1) <= 0) return true;
+        return false;
+      },
+    }),
     crmSync: undefined as unknown as CrmSync,
     apLoad: undefined as unknown as ApLoadService,
     advisor: undefined as unknown as Advisor,

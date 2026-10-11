@@ -179,6 +179,12 @@ async function openScene({ title, ariaLabel, legendItems, center, bearing, onLoa
   const dem = { type: 'raster-dem', tiles: ['cda://api/admin/map/terrain/{z}/{x}/{y}'], tileSize: 256, encoding: 'terrarium', minzoom: t.minZoom, maxzoom: t.maxZoom };
   const sources = { dem, shade: { ...dem } };
   const layers = [{ id: 'bg', type: 'background', paint: { 'background-color': '#d9dfd3' } }];
+  const bm = mapCfg?.basemap;
+  if (bm?.tiles) {
+    sources.osm = { type: 'vector', tiles: [bm.tiles.startsWith('http') ? bm.tiles : `${location.origin}${bm.tiles}`], minzoom: bm.minZoom ?? 0, maxzoom: bm.maxZoom ?? 15, attribution: '© OpenStreetMap' };
+    // the sea and the lakes under the photos: the coast tiles of the orthophotos are clear there
+    layers.push({ id: 'water', type: 'fill', source: 'osm', 'source-layer': 'water', paint: { 'fill-color': '#8fb8de' } });
+  }
   const pics = info.layers ?? [];
   pics.forEach((v, i) => {
     v.parts.forEach(([provider, part], k) => {
@@ -188,9 +194,7 @@ async function openScene({ title, ariaLabel, legendItems, center, bearing, onLoa
   });
   layers.push({ id: 'shade', type: 'hillshade', source: 'shade', paint: { 'hillshade-exaggeration': pics.length ? 0.15 : 0.6, 'hillshade-shadow-color': '#3f3f46' } });
   // buildings of the basemap in relief: OpenStreetMap height where mapped, else 7 m (2 floors)
-  const bm = mapCfg?.basemap;
   if (bm?.tiles) {
-    sources.osm = { type: 'vector', tiles: [bm.tiles.startsWith('http') ? bm.tiles : `${location.origin}${bm.tiles}`], minzoom: bm.minZoom ?? 0, maxzoom: bm.maxZoom ?? 15, attribution: '© OpenStreetMap' };
     layers.push({ id: 'buildings3d', type: 'fill-extrusion', source: 'osm', 'source-layer': 'buildings', minzoom: 13, paint: { 'fill-extrusion-color': '#e7e5e4', 'fill-extrusion-height': ['coalesce', ['get', 'height'], 7], 'fill-extrusion-base': ['coalesce', ['get', 'min_height'], 0], 'fill-extrusion-opacity': 0.88 } });
   }
   let shown = -1;

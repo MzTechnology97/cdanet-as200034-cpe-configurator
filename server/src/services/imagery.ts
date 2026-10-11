@@ -73,11 +73,22 @@ export function tileBounds3857(z: number, x: number, y: number): [number, number
   return [-W + x * size, W - (y + 1) * size, -W + (x + 1) * size, W - y * size];
 }
 
-/** GetMap URL of one 256 px tile from a WMS 1.3.0 service in EPSG:3857. */
-export function wmsTileUrl(base: string, layers: string, z: number, x: number, y: number): string {
+/**
+ * GetMap URL of one 256 px tile from a WMS 1.3.0 service in EPSG:3857. [transparent]: PNG with
+ * the empty parts clear (the sea of the AGEA orthophotos, white in JPEG): ten times heavier, so
+ * only for the tiles that touch the sea.
+ */
+export function wmsTileUrl(base: string, layers: string, z: number, x: number, y: number, transparent = false): string {
   const [minx, miny, maxx, maxy] = tileBounds3857(z, x, y);
-  const q = new URLSearchParams({ SERVICE: 'WMS', REQUEST: 'GetMap', VERSION: '1.3.0', LAYERS: layers, STYLES: '', CRS: 'EPSG:3857', BBOX: `${minx},${miny},${maxx},${maxy}`, WIDTH: '256', HEIGHT: '256', FORMAT: 'image/jpeg' });
+  const q = new URLSearchParams({ SERVICE: 'WMS', REQUEST: 'GetMap', VERSION: '1.3.0', LAYERS: layers, STYLES: '', CRS: 'EPSG:3857', BBOX: `${minx},${miny},${maxx},${maxy}`, WIDTH: '256', HEIGHT: '256', FORMAT: transparent ? 'image/png' : 'image/jpeg', ...(transparent ? { TRANSPARENT: 'TRUE' } : {}) });
   return `${base}${base.includes('?') ? '&' : '?'}${q}`;
+}
+
+/** [south, west, north, east] in degrees of a web-mercator tile. */
+export function tileBoundsDeg(z: number, x: number, y: number): [number, number, number, number] {
+  const n = 2 ** z;
+  const lat = (row: number) => (Math.atan(Math.sinh(Math.PI * (1 - (2 * row) / n))) * 180) / Math.PI;
+  return [lat(y + 1), (x / n) * 360 - 180, lat(y), ((x + 1) / n) * 360 - 180];
 }
 
 /** Upstream URL of a tile of Mapbox or Esri (Google needs a session, see [createImagery]). */
@@ -102,8 +113,25 @@ export interface ImageryLayer {
   minZoom: number;
 }
 
-export function createImagery(db: Db, sealer: Sealer, opts: { fetchImpl?: typeof fetch | undefined } = {}) {
+/**
+ * [touchesSea]: whether a box ([south, west, north, east]) reaches the sea, from the terrain model;
+ * the WMS tiles there come transparent, so the sea of the map shows instead of white.
+ */
+export function createImagery(db: Db, sealer: Sealer, opts: { fetchImpl?: typeof fetch | undefined; touchesSea?: (box: [number, number, number, number]) => Promise<boolean> } = {}) {
   const doFetch = opts.fetchImpl ?? fetch;
+  // a tile is on the coast or not for good: remembered (the last few thousand)
+  const coast = new Map<string, boolean>();
+  const seaTile = async (z: number, x: number, y: number) => {
+    if (!opts.touchesSea) return false;
+    const k = `${z}/${x}/${y}`;
+    let v = coast.get(k);
+    if (v === undefined) {
+      v = await opts.touchesSea(tileBoundsDeg(z, x, y)).catch(() => false);
+      if (coast.size > 5000) coast.delete(coast.keys().next().value!);
+      coast.set(k, v);
+    }
+    return v;
+  };
   const read = (): { stored: Stored; updatedAt: string | null; updatedBy: string | null } => {
     const row = (k: string) =>
       db.prepare('SELECT s.value, s.updated_at, u.username FROM settings s LEFT JOIN users u ON u.id = s.updated_by WHERE s.key = ?').get(k) as
@@ -157,7 +185,7 @@ export function createImagery(db: Db, sealer: Sealer, opts: { fetchImpl?: typeof
       if (!w?.url) throw new HttpError(503, 'imagery_not_configured');
       // orthophotos are heavy to render far out: nothing below zoom 9
       if (z < 9) return null;
-      url = wmsTileUrl(w.url, w.layers, z, x, y);
+      url = wmsTileUrl(w.url, w.layers, z, x, y, await seaTile(z, x, y));
     } else {
       const key = override?.key ?? (enabled(provider) ? keyOf(provider) : null);
       if (!key) throw new HttpError(503, 'imagery_not_configured');
