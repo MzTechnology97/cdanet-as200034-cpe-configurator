@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { PmTilesReader } from '../domain/pmtiles.ts';
 import type { AppContext } from '../context.ts';
 import { HttpError } from '../auth.ts';
-import { MAPBOX_ATTRIBUTION } from '../services/mapbox.ts';
+import { PROVIDERS } from '../services/imagery.ts';
 
 /**
  * Basemap (Protomaps PMTiles, OpenStreetMap data) served from the data volume. The file is
@@ -126,15 +126,18 @@ export function mapRoutes(app: FastifyInstance, ctx: AppContext) {
     return reply.send(createReadStream(file, { start, end }));
   });
 
-  // ---- Satellite imagery (admins only): Mapbox through this server, the token never leaves it ----
-  app.get('/api/admin/map/satellite', { preHandler: ctx.auth.requireAdmin }, async () => ({ available: ctx.mapbox.available(), attribution: MAPBOX_ATTRIBUTION }));
+  // ---- Aerial imagery (admins only): providers of Connettori through this server, keys never leave it ----
+  app.get('/api/admin/map/satellite', { preHandler: ctx.auth.requireAdmin }, async () => {
+    const layers = ctx.imagery.layers();
+    return { available: layers.length > 0, layers };
+  });
 
-  app.get('/api/admin/map/satellite/:kind/:z/:x/:y', { preHandler: ctx.auth.requireAdmin }, async (req, reply) => {
+  app.get('/api/admin/map/imagery/:provider/:part/:z/:x/:y', { preHandler: ctx.auth.requireAdmin }, async (req, reply) => {
     const p = z
-      .object({ kind: z.enum(['satellite', 'hybrid']), z: z.coerce.number().int().min(0).max(20), x: z.coerce.number().int().min(0), y: z.coerce.number().int().min(0) })
+      .object({ provider: z.enum(PROVIDERS), part: z.string().max(20), z: z.coerce.number().int().min(0).max(21), x: z.coerce.number().int().min(0), y: z.coerce.number().int().min(0) })
       .parse(req.params);
     if (p.x >= 2 ** p.z || p.y >= 2 ** p.z) throw new HttpError(400, 'invalid_tile');
-    const t = await ctx.mapbox.tile(p.kind, p.z, p.x, p.y);
+    const t = await ctx.imagery.tile(p.provider, p.part, p.z, p.x, p.y);
     // kept by the browser of this admin only (no shared cache, nothing stored on the server)
     reply.header('Cache-Control', 'private, max-age=43200');
     if (!t) return reply.code(204).send();

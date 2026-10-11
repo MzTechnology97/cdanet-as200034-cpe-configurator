@@ -32,7 +32,7 @@ import { createTelegram } from './services/telegram.ts';
 import type { Uisp } from './services/uisp.ts';
 import { createConnectors } from './services/connectors.ts';
 import { createCrmSettings } from './services/crm.ts';
-import { createMapboxSettings } from './services/mapbox.ts';
+import { createImagery } from './services/imagery.ts';
 import { createCrmSync, type CrmSync } from './services/crm-sync.ts';
 import { crmRoutes } from './routes/crm.ts';
 import { connectorRoutes } from './routes/connectors.ts';
@@ -113,7 +113,7 @@ export async function buildApp(
     uispSettings: { autoBackup: uispCfg?.autoBackup ?? cfg.uispAutoBackup, coverageMaxKm: uispCfg?.coverageMaxKm ?? cfg.coverageMaxKm },
     connectors,
     crm: createCrmSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
-    mapbox: createMapboxSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
+    imagery: createImagery(db, sealer, { fetchImpl: opts.fetchImpl }),
     crmSync: undefined as unknown as CrmSync,
     apLoad: undefined as unknown as ApLoadService,
     advisor: undefined as unknown as Advisor,

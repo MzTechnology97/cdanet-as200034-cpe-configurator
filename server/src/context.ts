@@ -8,7 +8,7 @@ import type { Geocoder } from './services/geocode.ts';
 import type { Uisp } from './services/uisp.ts';
 import type { Connectors } from './services/connectors.ts';
 import type { CrmSettings } from './services/crm.ts';
-import type { MapboxSettings } from './services/mapbox.ts';
+import type { Imagery } from './services/imagery.ts';
 import type { CrmSync } from './services/crm-sync.ts';
 import type { Modules } from './services/modules.ts';
 import type { Oui } from './services/oui.ts';
@@ -35,8 +35,8 @@ export interface AppContext {
   connectors: Connectors;
   /** CRM connector (ISP Billing): settings and client, configured from Connettori. */
   crm: CrmSettings;
-  /** Satellite imagery for the admins' maps (Connettori → Mapbox). */
-  mapbox: MapboxSettings;
+  /** Aerial imagery for the admins' maps (Connettori → Immagini satellitari). */
+  imagery: Imagery;
   /** RADIUS state copied from the CRM for the NOC (admins only). */
   crmSync: CrmSync;
   /** Load of the APs and capacity curve, refreshed hourly from UISP. */

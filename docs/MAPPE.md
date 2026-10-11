@@ -40,15 +40,22 @@ Finché la mappa non è installata, la console usa le tile pubbliche di OpenStre
 
 **Copertura**: il punto verificato, gli AP vicini con la linea di puntamento.
 
-## Satellite e ibrida per gli admin (v1.32.59)
+## Immagini satellitari per gli admin (v1.32.59)
 
-Con Connettori → **Mapbox** configurato (token di account.mapbox.com, cifrato sul server), le mappe della console degli amministratori hanno in alto a destra la scelta **Mappa / Satellite / Ibrida** (foto aerea, oppure foto con strade e nomi). La scelta resta su quel browser.
+Connettori → **Immagini satellitari**: una o più fonti di foto aeree per le mappe della console degli amministratori.
 
-- Le immagini passano dal server (`/api/admin/map/satellite/...`, solo admin collegati): il token non arriva mai ai browser.
-- Il browser dell'admin le tiene in cache per 12 ore; sul server non viene salvato nulla.
-- Gli installatori, la mappa nell'app e quella incorporata vedono sempre la mappa base.
-- Il consumo rientra nel piano gratuito di Mapbox se a usarla sono pochi admin.
-- Prossimo passo: vista 3D con il terreno TINITALY a 10 m, i settori degli AP e la linea di vista.
+| Fonte | Cosa serve | Viste |
+|---|---|---|
+| Mapbox | token (account.mapbox.com) | Satellite, Ibrida |
+| Esri (ArcGIS) | chiave API ArcGIS Location Platform con il privilegio Basemaps | Satellite, Ibrida (foto + strade + nomi) |
+| Google | chiave API con la Map Tiles API e un account di fatturazione | Satellite, Ibrida |
+| Ortofoto pubbliche (WMS) | niente: predefinite le ortofoto AGEA 2012 del Geoportale Nazionale, indirizzo e layer modificabili | Ortofoto (da zoom 9) |
+
+- **Confronto:** ogni fonte attiva compare nel selettore in alto a destra delle mappe (per esempio «Satellite · Esri», «Ibrida · Mapbox»). Si attivano più fonti per confrontarle sullo stesso punto, poi si lascia accesa quella scelta; la vista scelta resta su quel browser.
+- **Chiavi e immagini:** le chiavi sono cifrate sul server e le immagini passano da lì (`/api/admin/map/imagery/...`, solo admin collegati). Nessuna chiave arriva ai browser.
+- **Cache:** il browser dell'admin tiene le immagini per 12 ore; sul server non viene salvato nulla.
+- **Installatori e app:** gli installatori, la mappa nell'app e quella incorporata vedono sempre la mappa base.
+- **Prossimo passo:** vista 3D con il terreno TINITALY a 10 m, i settori degli AP e la linea di vista.
 
 ## Riservatezza per gli installatori
 

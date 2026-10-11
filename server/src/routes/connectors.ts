@@ -4,7 +4,7 @@ import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
 import { isPublicNominatim } from '../services/geocode.ts';
-import { isMapboxToken } from '../services/mapbox.ts';
+import { KEY_FORMAT, PROVIDERS, type Provider } from '../services/imagery.ts';
 import { TELEGRAM_EVENTS } from '../services/telegram.ts';
 
 /** Admin "Connettori": configure and test external integrations from the console. */
@@ -46,7 +46,7 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
     },
     telegram: ctx.modules.enabled('telegram') ? { ...ctx.telegram.view(), publicUrl: ctx.cfg.publicUrl ?? '' } : null,
     crm: ctx.crm.view(),
-    mapbox: ctx.mapbox.view(),
+    imagery: ctx.imagery.view(),
   }));
 
   app.put('/api/admin/connectors/uisp', admin, async (req) => {
@@ -173,28 +173,53 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
     return r;
   });
 
-  // ---- Mapbox: satellite imagery of the admins' maps -------------------------------------------
-  const mapboxToken = z.string().trim().max(400).refine((v) => v === '' || isMapboxToken(v), 'Token Mapbox non valido (pk.… o sk.…)');
-  const mapboxBody = z.object({ enabled: z.boolean(), token: mapboxToken.optional() }).strict();
+  // ---- Immagini satellitari: one or more providers for the admins' maps --------------------------
+  const NAMES: Record<Provider, string> = { mapbox: 'Mapbox', esri: 'Esri', google: 'Google', wms: 'Ortofoto WMS' };
+  const providerOf = (req: { params: unknown }) => z.enum(PROVIDERS).parse((req.params as { provider: string }).provider);
+  const keyField = (p: Provider) =>
+    z
+      .string()
+      .trim()
+      .max(600)
+      .refine((v) => v === '' || p === 'wms' || KEY_FORMAT[p].test(v), `Chiave ${NAMES[p]} non valida`);
+  const httpUrl = z
+    .string()
+    .trim()
+    .max(500)
+    .refine((v) => /^https?:\/\/[^\s/$.?#][^\s]*$/i.test(v), 'URL non valido');
+  const imageryBody = (p: Provider) =>
+    z
+      .object({
+        enabled: z.boolean(),
+        key: keyField(p).optional(),
+        url: httpUrl.optional(),
+        layers: z.string().trim().max(300).regex(/^[A-Za-z0-9_.:,\- ]*$/, 'Layer non validi').optional(),
+        label: z.string().trim().max(60).optional(),
+        attribution: z.string().trim().max(200).optional(),
+      })
+      .strict();
 
-  app.put('/api/admin/connectors/mapbox', admin, async (req) => {
-    const b = mapboxBody.parse(req.body);
-    ctx.mapbox.save({ enabled: b.enabled, token: b.token || undefined }, req.user!.id);
-    recordEvent(ctx.db, req.user!.id, 'connector.mapbox.update', 'Mapbox', `${b.enabled ? 'attivo' : 'disattivato'}${b.token ? ' · nuovo token' : ''}`);
-    return ctx.mapbox.view();
+  app.put('/api/admin/connectors/imagery/:provider', admin, async (req) => {
+    const p = providerOf(req);
+    const b = imageryBody(p).parse(req.body);
+    ctx.imagery.save(p, { ...b, key: b.key || undefined }, req.user!.id);
+    recordEvent(ctx.db, req.user!.id, 'connector.imagery.update', NAMES[p], `${b.enabled ? 'attivo' : 'disattivato'}${b.key ? ' · nuova chiave' : ''}${b.url ? ` · ${b.url.slice(0, 80)}` : ''}`);
+    return ctx.imagery.view();
   });
 
-  app.delete('/api/admin/connectors/mapbox', admin, async (req) => {
-    ctx.mapbox.reset();
-    recordEvent(ctx.db, req.user!.id, 'connector.mapbox.reset', 'Mapbox', 'configurazione rimossa');
-    return ctx.mapbox.view();
+  app.delete('/api/admin/connectors/imagery/:provider', admin, async (req) => {
+    const p = providerOf(req);
+    ctx.imagery.remove(p, req.user!.id);
+    recordEvent(ctx.db, req.user!.id, 'connector.imagery.reset', NAMES[p], 'configurazione rimossa');
+    return ctx.imagery.view();
   });
 
-  /** Tests the token in the form (empty: the saved one) with one tile, without saving it. */
-  app.post('/api/admin/connectors/mapbox/test', admin, async (req) => {
-    const b = z.object({ token: mapboxToken.optional() }).strict().parse(req.body ?? {});
-    const r = await ctx.mapbox.test(b.token || undefined);
-    recordEvent(ctx.db, req.user!.id, 'connector.mapbox.test', 'Mapbox', r.ok ? 'immagini disponibili' : `errore ${r.error}`);
+  /** One tile with the values in the form (empty: the saved ones), without saving them. */
+  app.post('/api/admin/connectors/imagery/:provider/test', admin, async (req) => {
+    const p = providerOf(req);
+    const b = imageryBody(p).partial({ enabled: true }).parse(req.body ?? {});
+    const r = await ctx.imagery.test(p, { key: b.key || undefined, url: b.url, layers: b.layers });
+    recordEvent(ctx.db, req.user!.id, 'connector.imagery.test', NAMES[p], r.ok ? 'immagini disponibili' : `errore ${r.error}`);
     return r;
   });
 }

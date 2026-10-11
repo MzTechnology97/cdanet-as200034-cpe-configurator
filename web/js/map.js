@@ -143,19 +143,20 @@ const savedBase = () => {
 };
 
 /**
- * Admins: satellite and hybrid imagery (Mapbox through the server, when configured in Connettori)
- * besides the basemap, with a switch on the map; the choice is remembered on this browser.
+ * Admins: aerial imagery of every provider switched on in Connettori → Immagini satellitari (through
+ * the server), besides the basemap: one entry per view, to compare them on the same place. The
+ * choice is remembered on this browser.
  */
 async function addImagery(map, base) {
   const s = await api('/api/admin/map/satellite').catch(() => null);
   if (!s?.available || !map.getContainer().isConnected) return;
   const L = window.L;
-  const opts = { maxZoom: 20, maxNativeZoom: 19, tileSize: 256, attribution: s.attribution };
-  const layers = {
-    Mappa: base,
-    Satellite: authTileLayer('/api/admin/map/satellite/satellite/{z}/{x}/{y}', opts),
-    Ibrida: authTileLayer('/api/admin/map/satellite/hybrid/{z}/{x}/{y}', opts),
-  };
+  const layers = { Mappa: base };
+  for (const v of s.layers) {
+    const opts = { maxZoom: 20, maxNativeZoom: v.maxNativeZoom, minZoom: v.minZoom, tileSize: 256 };
+    const parts = v.parts.map(([provider, part], i) => authTileLayer(`/api/admin/map/imagery/${provider}/${part}/{z}/{x}/{y}`, { ...opts, ...(i === 0 ? { attribution: v.attribution } : {}) }));
+    layers[v.label] = parts.length === 1 ? parts[0] : L.layerGroup(parts);
+  }
   const chosen = layers[savedBase()];
   if (chosen && chosen !== base) {
     map.removeLayer(base);
