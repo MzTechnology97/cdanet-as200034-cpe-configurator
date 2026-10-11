@@ -4,6 +4,7 @@ import android.os.Handler
 import android.os.Looper
 import android.webkit.JavascriptInterface
 import android.webkit.WebView
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -147,7 +148,8 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
     var simJson by remember { mutableStateOf<String?>(null) }
     var simCapacity by remember { mutableStateOf(false) }
     var page by remember { mutableStateOf<WebView?>(null) }
-    var los by remember { mutableStateOf<CoverageAp?>(null) }
+    // the AP whose link is open (the card shows the updated AP after every check)
+    var los by remember { mutableStateOf<String?>(null) }
 
     // admins: every AP on the map (and for the search by name), the default CPE height
     LaunchedEffect(admin) {
@@ -374,7 +376,8 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                 else if (d.hiddenWeak > 0) Text("${d.hiddenWeak} AP più deboli di ${d.hideBelowDbm} dBm non mostrati.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 d.aps.forEachIndexed { i, ap ->
                     if (i > 0) HorizontalDivider()
-                    Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
+                    // tapping an AP opens its link, as in UISP Design
+                    Column(Modifier.fillMaxWidth().clickable(enabled = modules["compass"] != false) { los = ap.id }.padding(vertical = 6.dp)) {
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text("↑", fontSize = 24.sp, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, modifier = Modifier.rotate(ap.bearing.toFloat()))
                             Column(Modifier.weight(1f).padding(start = 10.dp)) {
@@ -404,7 +407,7 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                         }
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(start = 34.dp)) {
                             TextButton(onClick = { page?.evaluateJavascript("window.cdaFocus(${JsonPrimitive(ap.id)})", null) }) { Text("Mappa") }
-                            if (modules["compass"] != false) OutlinedButton(onClick = { los = ap }) { Text("Visibilità") }
+                            if (modules["compass"] != false) OutlinedButton(onClick = { los = ap.id }) { Text("Collegamento") }
                             if (admin) OutlinedButton(onClick = { simulate(ap.id) }) { Text("Simula") }
                             if (onCompass != null) OutlinedButton(onClick = { onCompass(CompassTarget(ap.name.ifBlank { ap.id }, ap.bearing, ap.distanceM, p.lat, p.lon)) }) { Text("Bussola") }
                         }
@@ -418,11 +421,24 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
             }
         }
     }
-    los?.let { ap ->
+    val linkAp = los?.let { id -> result?.aps?.firstOrNull { it.id == id } }
+    linkAp?.let { ap ->
         val pt = point
         if (pt != null) {
             LineOfSightDialog(
                 c, pt.lat, pt.lon, ap.id, ap.name.ifBlank { ap.id }, heightM, bearing = ap.bearing, estimate = ap.estimate,
+                controls = LinkControls(
+                    frequencyMhz = ap.frequency,
+                    stations = ap.stations,
+                    loadLevel = ap.load?.level,
+                    noiseDbm = if (admin) ap.load?.noiseDbm else null,
+                    cpeModels = result?.cpeModels.orEmpty(),
+                    cpeId = cpe,
+                    cpeName = ap.cpe?.name,
+                    onCpe = { cpe = it },
+                    heightM = heightM,
+                    onHeight = { m -> height = if (m % 1.0 == 0.0) m.toInt().toString() else m.toString() },
+                ),
                 // admins: the link and its Fresnel zone on the map, under the dialog
                 onLoaded = { d -> if (d.ap?.lat != null) page?.evaluateJavascript("window.cdaLink(${it.cdanet.cpeconfigurator.data.AppJson.encodeToString(LosDto.serializer(), d)}, ${pt.lat}, ${pt.lon})", null) },
             ) { los = null }
