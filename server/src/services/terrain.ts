@@ -1,7 +1,7 @@
 import type { Db } from '../db.ts';
 import { estimateAt, MAX_LINK_M, type ApModel, type RadioDefaults, type SignalEstimate, type TerrainEffect } from '../domain/coverage-model.ts';
 import { distanceM, type LatLon } from '../domain/geo.ts';
-import { diffractionLossDb, lineOfSight, pathPoints, resolveApAltitude, type ProfilePoint } from '../domain/los.ts';
+import { diffractionLossDb, lineOfSight, pathPoints, resolveApAltitude, type ApAltitudeFrom, type ProfilePoint } from '../domain/los.ts';
 import type { TerrainSampler, TerrainStore } from './terrain-store.ts';
 
 /**
@@ -85,7 +85,7 @@ export interface BuiltProfile {
   obstacle: Array<{ h: number; kind: 'edificio' | 'alberi' } | null>;
   /** Distances along the path from the CPE, m. */
   d: number[];
-  altitudeFrom: 'gps' | 'uisp' | 'terreno' | null;
+  altitudeFrom: ApAltitudeFrom | null;
 }
 
 /**
@@ -114,7 +114,7 @@ export function buildProfile(at: TerrainSampler, point: LatLon, cpeHeightM: numb
   // the highest point around it, else the summit itself would hide it
   const apGround = Math.max(ground[n]!, highestAround(at, ap, AP_SPOT_M));
   ground[n] = apGround;
-  const resolved = resolveApAltitude(ap.gpsAltitude, apGround, ap.siteHeight ?? apHeightM);
+  const resolved = resolveApAltitude(ap.gpsAltitude, apGround, ap.siteHeight, apHeightM);
   // an antenna among roofs or trees is mounted above them (installers pick a spot that sees out):
   // at least ABOVE_M over the obstacles within AROUND_M, whatever height is set
   const cpeH = obstacles ? Math.max(cpeHeightM, localTop(at, point, obstacles) + ABOVE_M) : cpeHeightM;

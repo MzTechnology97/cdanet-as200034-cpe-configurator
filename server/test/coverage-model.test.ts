@@ -147,8 +147,18 @@ describe('Terreno: diffrazione (ITU-R P.526, Deygout)', () => {
 
 it('AP antenna altitude: a GPS value under the ground + 5 m is raised (never inside its own hill)', async () => {
   const { resolveApAltitude } = await import('../src/domain/los.ts');
-  assert.deepEqual(resolveApAltitude(954, 940, 15), { altitude: 954, from: 'gps' });
-  assert.deepEqual(resolveApAltitude(925, 940, 15), { altitude: 945, from: 'gps' }, 'GPS 15 m under the ground: ground + 5');
-  assert.deepEqual(resolveApAltitude(6, 520, 15), { altitude: 526, from: 'uisp' });
-  assert.deepEqual(resolveApAltitude(null, 520, 15), { altitude: 535, from: 'terreno' });
+  assert.deepEqual(resolveApAltitude(954, 940, null, 15), { altitude: 954, from: 'gps' });
+  assert.deepEqual(resolveApAltitude(925, 940, null, 15), { altitude: 945, from: 'gps' }, 'GPS 15 m under the ground: ground + 5');
+  assert.deepEqual(resolveApAltitude(6, 520, null, 15), { altitude: 526, from: 'uisp' });
+  assert.deepEqual(resolveApAltitude(null, 520, null, 15), { altitude: 535, from: 'terreno' });
+});
+
+it('AP antenna altitude: the site height in UISP wins over the GPS, an absurd GPS is discarded', async () => {
+  const { resolveApAltitude } = await import('../src/domain/los.ts');
+  // N23-D05 on the real network: GPS 901 m on 801.4 m of ground (99.6 m up), site 10 m
+  assert.deepEqual(resolveApAltitude(901, 801.4, 10, 15), { altitude: 811.4, from: 'sito' });
+  assert.deepEqual(resolveApAltitude(901, 801.4, null, 15), { altitude: 816.4, from: 'terreno' }, 'no site height: GPS 99.6 m up is not believed');
+  assert.deepEqual(resolveApAltitude(850, 801.4, null, 15), { altitude: 850, from: 'gps' }, '48.6 m up: within the limit');
+  assert.deepEqual(resolveApAltitude(null, 520, 0, 15), { altitude: 520, from: 'sito' }, 'site height 0 is a value');
+  assert.deepEqual(resolveApAltitude(901, null, 10, 15), { altitude: 901, from: 'gps' }, 'no terrain: the site height alone gives no altitude');
 });
