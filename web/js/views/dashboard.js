@@ -5,13 +5,14 @@ import { isOn as moduleOn } from '../modules.js';
 import { uispStatusCard } from './uisp-panel.js';
 
 export async function dashboardView() {
-  const [s, profiles, uisp, osm, net, privacy] = await Promise.all([
+  const [s, profiles, uisp, osm, net, privacy, ia] = await Promise.all([
     api('/api/admin/status'),
     api('/api/admin/profiles'),
     uispStatusCard(),
     osmStatus(),
     moduleOn('network_status') ? api('/api/network/status').catch(() => null) : null,
     api('/api/admin/privacy').catch(() => null),
+    api('/api/admin/advisor/summary').catch(() => null),
   ]);
   const missingProfiles = profiles.filter((p) => !p.templates.length).map((p) => p.model);
   const warnings = [];
@@ -27,7 +28,7 @@ export async function dashboardView() {
     'div',
     {},
     pageHead('Panoramica', `Server v${s.version}`),
-    todayTiles(s.today, net),
+    todayTiles(s.today, net, ia),
     warnings.length ? h('div', { class: 'notice warn' }, h('b', {}, 'Da completare'), h('ul', { class: 'plain' }, warnings.map((w) => h('li', {}, w)))) : h('div', { class: 'notice good' }, 'Configurazione completa: il provisioning è operativo.'),
     card(
       h('h2', {}, 'Attività ultimi 30 giorni'),
@@ -101,7 +102,7 @@ function tile(href, ic, value, label, tone = '') {
 }
 
 /** "Oggi": work orders, NOC approvals, open KO reports, the network at a glance. */
-function todayTiles(t, net) {
+function todayTiles(t, net, ia) {
   if (!t) return null;
   const tiles = [
     moduleOn('work_orders') ? tile('#/work-orders', 'pending_actions', `${t.workOrdersDone}/${t.workOrders}`, 'interventi di oggi fatti', '') : null,
@@ -111,6 +112,16 @@ function todayTiles(t, net) {
     tile('#/jobs', 'rocket_launch', t.jobs24h, 'provisioning nelle ultime 24 ore'),
     net ? tile('#/network', net.summary.down ? 'cloud_off' : 'hub', net.summary.down, 'AP non raggiungibili', net.summary.down ? 'bad' : 'good') : null,
     net && net.summary.powerOutage ? tile('#/network', 'bolt', net.summary.powerOutage, 'AP con guasto Enel vicino', 'warn') : null,
+    ia?.at ? tile('#/ia-ap', ia.critico ? 'warning_filled' : 'check_circle', ia.critico, `problemi critici IA-AP${ia.apsCritical ? ` su ${ia.apsCritical} AP` : ''}`, ia.critico ? 'bad' : 'good') : null,
+    ia?.optimizations.length ? tile('#/ia-ap', 'troubleshoot', ia.optimizations.length, optimizationLabel(ia.optimizations), 'warn') : null,
   ].filter(Boolean);
   return card(h('h2', {}, 'Oggi'), h('div', { class: 'tiles' }, tiles));
+}
+
+/** "ottimizzazione in corso su N1-D01" / "ottimizzazioni programmate · prossima N26-D06 alle 03:00". */
+function optimizationLabel(runs) {
+  const running = runs.find((r) => r.state === 'in_corso');
+  if (running) return `ottimizzazione in corso su ${running.apName}${runs.length > 1 ? `, altre ${runs.length - 1} in attesa` : ''}`;
+  const next = [...runs].sort((a, b) => a.startAt.localeCompare(b.startAt))[0];
+  return `${runs.length === 1 ? 'ottimizzazione programmata' : 'ottimizzazioni programmate'} · prossima ${next.apName} ${fmtDate(next.startAt)}`;
 }

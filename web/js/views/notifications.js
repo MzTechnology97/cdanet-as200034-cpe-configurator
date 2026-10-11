@@ -2,7 +2,9 @@ import { api } from '../api.js';
 import { badge, busy, card, fmtDate, h, mount, pageHead, toast } from '../dom.js';
 import { myTelegramCard } from './my-telegram.js';
 
-const ICON = { provisioning_failed: '❌', install_ko: '⛔', review_pending: '📶', install_activated: '✅', network_advice: '🛠️' };
+const ICON = { provisioning_failed: '❌', install_ko: '⛔', review_pending: '📶', install_activated: '✅', network_advice: '🛠️', network_optimizer: '🔧' };
+/** Notifications of IA-AP open its page, the others the history of the installation. */
+const IA_AP = new Set(['network_advice', 'network_optimizer']);
 
 /** Unread count for the bell and the menu (polled while logged in). */
 export async function unreadCount() {
@@ -29,7 +31,7 @@ export async function notificationsView({ user }) {
       listEl,
       r.items.length
         ? r.items.map((n) => {
-            const open = h('a', { href: n.mac ? `#/jobs?q=${encodeURIComponent(n.mac)}` : '#/jobs' }, 'Apri nello storico');
+            const open = IA_AP.has(n.kind) ? h('a', { href: '#/ia-ap' }, 'Apri IA-AP') : h('a', { href: n.mac ? `#/jobs?q=${encodeURIComponent(n.mac)}` : '#/jobs' }, 'Apri nello storico');
             open.onclick = () => markRead([n.id]);
             const read = h('button', { class: 'chip' }, 'Letta');
             read.onclick = () => busy(read, async () => (await markRead([n.id]), load()));

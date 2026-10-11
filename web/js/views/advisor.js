@@ -118,7 +118,7 @@ export async function advisorView() {
     h(
       'div',
       { class: 'ia-run' },
-      h('div', { class: 'ia-run-head' }, badge(...runState(r)), h('b', {}, r.apName), h('span', { class: 'small muted' }, `${r.mode === 'suggested' ? 'canale consigliato' : 'ricerca del canale migliore'} · ${ch(r.original)} → ${r.candidates.map(ch).join(', ')} · da ${r.by}`)),
+      h('div', { class: 'ia-run-head' }, badge(...runState(r)), h('b', {}, r.apName), h('span', { class: 'small muted' }, `${r.mode === 'suggested' ? 'canale consigliato' : 'ricerca del canale migliore'} · ${r.original ? `${ch(r.original)} → ` : 'prova '}${r.candidates.map(ch).join(', ')} · da ${r.by}`)),
       h('div', { class: 'small' }, r.step),
       r.missing.length ? h('div', { class: 'notice bad small' }, `CPE non riagganciate: ${r.missing.join(', ')}`) : null,
       h('div', {}, h('button', { type: 'button', class: 'small-btn', onclick: (e) => cancelRun(r, e.currentTarget) }, r.state === 'in_corso' ? 'Annulla e ripristina' : 'Annulla')),
@@ -263,6 +263,13 @@ export async function advisorView() {
       .map(([id, items]) => ({ id, items: items.sort(bySeverity), c: counts(items), name: state.by === 'ap' ? items[0].apName : (KINDS[id] ?? id) }))
       .sort((a, b) => b.c.critico - a.c.critico || b.c.attenzione - a.c.attenzione || b.items.length - a.items.length || a.name.localeCompare(b.name));
   };
+  /** The optimisation of an AP, running or scheduled, as a tag in the list. */
+  function optTag(apId) {
+    const r = opt.runs.find((x) => x.apId === apId && (x.state === 'in_corso' || x.state === 'programmato'));
+    if (!r) return null;
+    return h('span', { class: `ia-opt-tag ${r.state === 'in_corso' ? 'running' : ''}` }, r.state === 'in_corso' ? 'Ottimizzazione in corso' : `Ottimizzazione programmata ${fmtDate(r.startAt)}`);
+  }
+
   function select(by, id) {
     state.by = by;
     state.sel = id;
@@ -281,7 +288,7 @@ export async function advisorView() {
       h(
         'header',
         { class: 'ia-detail-head' },
-        h('div', {}, h('h2', {}, g.name), h('p', { class: 'small muted' }, state.by === 'ap' ? `${g.items.length} ${g.items.length === 1 ? 'avviso' : 'avvisi'} · ${own.length} sull’AP, ${cpes.length} sulle CPE` : `${g.items.length} avvisi su ${new Set(g.items.map((f) => f.apId)).size} AP`)),
+        h('div', {}, h('h2', {}, g.name, ' ', state.by === 'ap' ? optTag(g.id) : null), h('p', { class: 'small muted' }, state.by === 'ap' ? `${g.items.length} ${g.items.length === 1 ? 'avviso' : 'avvisi'} · ${own.length} sull’AP, ${cpes.length} sulle CPE` : `${g.items.length} avvisi su ${new Set(g.items.map((f) => f.apId)).size} AP`)),
         pills(g.c),
       ),
       ...runs.map(liveRun),
@@ -330,6 +337,7 @@ export async function advisorView() {
           { type: 'button', class: `ia-item${g === sel ? ' on' : ''}`, 'aria-current': g === sel ? 'true' : 'false', onclick: () => select(state.by, g.id) },
           h('span', { class: 'ia-item-top' }, h('span', { class: 'ia-item-name' }, g.name), pills(g.c)),
           h('span', { class: 'ia-item-sub' }, state.by === 'ap' ? g.items[0].title : `${new Set(g.items.map((f) => f.apId)).size} AP · ${g.items.filter((f) => f.cpe).length} CPE`),
+          state.by === 'ap' ? optTag(g.id) : null,
         ),
       ),
     );

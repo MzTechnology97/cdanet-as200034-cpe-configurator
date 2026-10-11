@@ -477,3 +477,5 @@ tr:hover > td { background: color-mix(in srgb, var(--brand) 4%, transparent); }
   .ia-detail { padding: 14px; }
   .ia-legend { grid-template-columns: 1fr; }
 }
+.ia-opt-tag { align-self: flex-start; margin-top: 2px; padding: 1px 8px; border-radius: 999px; font-size: .72rem; font-weight: 600; background: color-mix(in srgb, var(--brand) 14%, transparent); color: var(--brand); vertical-align: middle; }
+.ia-opt-tag.running { background: var(--warn-bg); color: var(--warn); }
