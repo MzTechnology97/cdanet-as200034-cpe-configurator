@@ -150,3 +150,30 @@ describe('IA-AP: lettura dei dati e regole', () => {
     assert.ok(strong!.centre + 20 <= 5800);
   });
 });
+
+describe('IA-AP: notifiche', () => {
+  it('a critical finding is told once a week, also when it comes and goes; the first run is the starting point', async () => {
+    const { DatabaseSync } = await import('node:sqlite');
+    const { createAdvisor } = await import('../src/services/ap-advisor.ts');
+    const db = new DatabaseSync(':memory:');
+    db.exec('CREATE TABLE settings(key TEXT PRIMARY KEY, value TEXT, updated_at TEXT, updated_by INTEGER)');
+    const sent: Array<{ title: string; lines: string[] }> = [];
+    const ctx = { db, uisp: null, cfg: { advisorFreqRange: '5120-5800', thresholds: { signalMin: -75 } }, notify: { inbox: { push: (_a: string, m: { title: string; lines: string[] }) => sent.push(m) } } } as never;
+    const advisor = createAdvisor(ctx);
+    const healthy = [ap()];
+    const critical = [ap({ stations: [station({ deviceId: 'weak', rxSignal: -82, noise: -92 })] })];
+    await advisor.run(critical); // first run: starting point, no message
+    assert.equal(sent.length, 0);
+    await advisor.run(healthy);
+    await advisor.run(critical); // back within the week: no news
+    assert.equal(sent.length, 0);
+    const other = [ap({ stations: [station({ deviceId: 'weak', rxSignal: -82, noise: -92 }), station({ deviceId: 'new', airtime: 0.2 }), station({ deviceId: 'a' }), station({ deviceId: 'b' }), station({ deviceId: 'c' })] })];
+    await advisor.run(other); // a really new critical finding
+    assert.equal(sent.length, 1);
+    assert.match(sent[0]!.title, /^🛠️ IA-AP: 1 nuovo problema critico/);
+    assert.match(sent[0]!.lines[0]!, /airtime/);
+    const s = advisor.summary();
+    assert.equal(s.critico, 2);
+    assert.equal(s.apsCritical, 1);
+  });
+});

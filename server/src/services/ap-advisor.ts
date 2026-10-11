@@ -14,6 +14,9 @@ import { obstacles, pointingConfig, terrainBetween, terrainSampler } from './ter
 
 const KEY = 'advisor.findings';
 const DISMISSED = 'advisor.dismissed';
+/** When each critical finding was last notified: a finding that comes and goes is told once a week. */
+const NOTIFIED = 'advisor.notified';
+const NOTIFY_AGAIN_MS = 7 * 86_400_000;
 
 interface Stored {
   at: string | null;
@@ -108,16 +111,24 @@ export function createAdvisor(ctx: AppContext, log?: (m: string) => void) {
       const since: Record<string, string> = {};
       for (const f of findings) since[f.id] = prev.since[f.id] ?? now;
       write(KEY, { at: now, findings, since } satisfies Stored);
-      // the NOC hears about the new critical findings (not about the ones it already knows or dismissed)
+      // the NOC hears about the critical findings it was not told about in the last week (a finding
+      // that disappears for an hour and comes back is not news), never about the dismissed ones
       const dismissed = read<Record<string, string>>(DISMISSED, {});
+      const known = read<Record<string, string> | null>(NOTIFIED, null);
+      const notified = known ?? {};
       // an AP under automatic optimisation is on a test channel: no alarms for it
       const testing = ctx.optimizer?.activeAp() ?? null;
-      const fresh = findings.filter((f) => f.severity === 'critico' && f.apId !== testing && !prev.since[f.id] && !(dismissed[f.id] && dismissed[f.id]! > now));
-      if (fresh.length && prev.at) {
+      const cutoff = Date.now() - NOTIFY_AGAIN_MS;
+      const fresh = findings.filter((f) => f.severity === 'critico' && f.apId !== testing && !(notified[f.id] && Date.parse(notified[f.id]!) > cutoff) && !(dismissed[f.id] && dismissed[f.id]! > now));
+      for (const f of fresh) notified[f.id] = now;
+      for (const [id, at] of Object.entries(notified)) if (Date.parse(at) < Date.now() - 4 * NOTIFY_AGAIN_MS) delete notified[id];
+      write(NOTIFIED, notified);
+      // first run (or first run of this rule): what is there now is the starting point, not news
+      if (fresh.length && prev.at && known) {
         ctx.notify.inbox.push('noc', {
           kind: 'network_advice',
-          title: `🛠️ Assistente rete: ${fresh.length} ${fresh.length === 1 ? 'nuovo problema critico' : 'nuovi problemi critici'}`,
-          lines: fresh.slice(0, 6).map((f) => `${f.apName}${f.cpe ? ` · ${f.cpe.name}` : ''}: ${f.title}`).concat(fresh.length > 6 ? [`…e altri ${fresh.length - 6}: vedi Assistente rete nella console.`] : []),
+          title: `🛠️ IA-AP: ${fresh.length} ${fresh.length === 1 ? 'nuovo problema critico' : 'nuovi problemi critici'}`,
+          lines: fresh.slice(0, 6).map((f) => `${f.apName}${f.cpe ? ` · ${f.cpe.name}` : ''}: ${f.title}`).concat(fresh.length > 6 ? [`…e altri ${fresh.length - 6}: vedi IA-AP nella console.`] : []),
         });
       }
     } catch (err) {
@@ -136,6 +147,15 @@ export function createAdvisor(ctx: AppContext, log?: (m: string) => void) {
     /** A stored finding by id. */
     finding(id: string): Finding | null {
       return read<Stored>(KEY, { at: null, findings: [], since: {} }).findings.find((f) => f.id === id) ?? null;
+    },
+    /** Counters for the Panoramica (open findings, dismissed ones left out). */
+    summary() {
+      const s = read<Stored>(KEY, { at: null, findings: [], since: {} });
+      const dismissed = read<Record<string, string>>(DISMISSED, {});
+      const now = nowIso();
+      const open = s.findings.filter((f) => !(dismissed[f.id] && dismissed[f.id]! > now));
+      const n = (sev: string) => open.filter((f) => f.severity === sev).length;
+      return { at: s.at, critico: n('critico'), attenzione: n('attenzione'), info: n('info'), apsCritical: new Set(open.filter((f) => f.severity === 'critico').map((f) => f.apId)).size };
     },
     /** Findings with "since" and the dismissed ones marked (until when). */
     view() {
