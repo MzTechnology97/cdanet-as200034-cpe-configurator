@@ -403,7 +403,7 @@ export function simulationOverlay(d, colorOf) {
  * the zoom of the link), each stretch coloured by what stands in it: green clear, orange inside
  * 60% of the zone, red over the line of sight. [p] is the answer of /api/pointing/profile.
  */
-export function drawFresnelLink(map, layer, from, p) {
+export function drawFresnelLink(map, layer, from, p, fit = {}) {
   const L = window.L;
   layer.clearLayers();
   const D = p.distanceM;
@@ -437,5 +437,5 @@ export function drawFresnelLink(map, layer, from, p) {
   flush();
   if (p.worst) L.circleMarker(at(p.worst.d), { radius: 6, color: '#dc2626', weight: 2, fillColor: '#fff', fillOpacity: 1 }).bindTooltip(`Punto critico a ${km(p.worst.d)}`).addTo(layer);
   L.circleMarker([p.ap.lat, p.ap.lon], { radius: 7, color: '#0f172a', weight: 3, fillColor: '#ffffff', fillOpacity: 1, interactive: false }).addTo(layer);
-  map.fitBounds(bounds, { maxZoom: 16 });
+  map.fitBounds(bounds, { maxZoom: 16, ...fit });
 }

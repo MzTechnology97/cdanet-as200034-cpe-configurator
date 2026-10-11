@@ -158,6 +158,42 @@ function cpeCell(c, goodDbm) {
   );
 }
 
+/**
+ * Indicative airMAX ac receive sensitivity at 40 MHz (dBm) for MCS 0…9, with the airOS rate
+ * multiplier: where the expected signal falls on the modulation scale, as in UISP Design.
+ */
+const MCS_SCALE = [
+  [-91, '1x'],
+  [-89, '2x'],
+  [-86, '3x'],
+  [-83, '4x'],
+  [-79, '6x'],
+  [-75, '8x'],
+  [-73, '9x'],
+  [-71, '10x'],
+  [-66, '12x'],
+  [-64, '13x'],
+];
+/** Magnetic declination in central Sicily (2026, east), to point with a compass. */
+const DECLINATION_DEG = 4;
+
+/** Expected signal on the modulation scale: the bar fills up to the signal, the reached MCS lit. */
+function signalBar(dbm) {
+  const lo = -95;
+  const hi = -50;
+  const pct = dbm == null ? 0 : Math.max(0, Math.min(100, ((dbm - lo) / (hi - lo)) * 100));
+  const bar = h('div', { class: 'mcs-bar' }, h('span', { class: 'mcs-fill' }));
+  bar.firstChild.style.width = `${pct}%`;
+  const reached = dbm == null ? -1 : MCS_SCALE.filter(([min]) => dbm >= min).length - 1;
+  return h(
+    'div',
+    { class: 'mcs' },
+    h('div', { class: 'mcs-head' }, h('span', {}, 'Segnale atteso'), h('b', {}, dbm == null ? '—' : `${dbm} dBm`)),
+    bar,
+    h('div', { class: 'mcs-steps' }, MCS_SCALE.map(([, label], k) => h('span', { class: k <= reached ? 'on' : '' }, label))),
+  );
+}
+
 export async function adminCoverageView() {
   const search = h('input', { type: 'search', class: 'grow', placeholder: 'Indirizzo, coordinate (37.56, 14.27) o nome di un AP', autocomplete: 'off' });
   const searchBtn = h('button', { type: 'submit', class: 'primary' }, 'Cerca');
@@ -174,6 +210,9 @@ export async function adminCoverageView() {
   cpe.onchange = () => point && check(point.la, point.lo, point.label);
   const choices = h('div', {});
   const el = h('div', { class: 'map map-tall' });
+  // the link of the selected AP docked on the map, as in UISP Design (AP | link | CPE)
+  const dock = h('div', { class: 'link-dock', hidden: true });
+  let selected = null; // the AP of the dock, reopened when the check is done again
   const mapNote = h('p', { class: 'small muted' });
   const simBox = h('div', {});
   const out = h('div', {});
@@ -259,6 +298,10 @@ export async function adminCoverageView() {
       fit(m, layers);
     }
     const best = useful[0] ?? r.aps[0];
+    // the dock follows the check: the same AP again (another CPE or height), closed otherwise
+    const again = selected ? r.aps.find((x) => x.id === selected) : null;
+    if (again) setTimeout(() => profile(again), 0);
+    else closeDock();
     const apTable = (list) =>
       table(
         [
@@ -277,12 +320,14 @@ export async function adminCoverageView() {
               h(
                 'div',
                 { class: 'btns ap-actions' },
-                h('button', { type: 'button', class: 'small-btn', onclick: () => simulate(a.id) }, 'Simula'),
-                h('button', { type: 'button', class: 'small-btn', onclick: (e) => profile(a, e.currentTarget) }, 'Visibilità'),
+                h('button', { type: 'button', class: 'small-btn', onclick: (e) => (e.stopPropagation(), simulate(a.id)) }, 'Simula'),
+                h('button', { type: 'button', class: 'small-btn', onclick: (e) => (e.stopPropagation(), profile(a, e.currentTarget)) }, 'Visibilità'),
               ),
           },
         ],
         list,
+        // a row opens the link on the map, as clicking a link in UISP Design
+        (a) => profile(a),
       );
     mount(
       out,
@@ -392,7 +437,84 @@ export async function adminCoverageView() {
   /** The link of Visibilità on the map with its Fresnel zone (admins: the AP position is known). */
   function drawLink(p) {
     if (!linkLayer || p.ap.lat == null || !point) return;
-    drawFresnelLink(map, linkLayer, [point.la, point.lo], p);
+    // the docked panel covers the bottom of the map: the link is framed above it
+    const below = dock.hidden ? 0 : dock.offsetHeight + 24;
+    drawFresnelLink(map, linkLayer, [point.la, point.lo], p, { paddingTopLeft: [20, 20], paddingBottomRight: [20, below] });
+  }
+
+  function closeDock() {
+    selected = null;
+    dock.hidden = true;
+    mount(dock);
+  }
+
+  /** The dock: AP (what UISP says) | the link | the CPE to install (what can be changed). */
+  function renderDock(p, a) {
+    const first = p.chart[0];
+    const last = p.chart[p.chart.length - 1];
+    const tilt = (Math.atan2(last.los - first.los, p.distanceM) * 180) / Math.PI;
+    const az = p.ap.lat != null ? bearing([point.la, point.lo], [p.ap.lat, p.ap.lon]) : a.bearing;
+    const e = a.estimate ?? null;
+    const noise = a.load?.noiseDbm ?? null;
+    const fact = (label, value, sub) => h('div', { class: 'dock-fact' }, h('small', {}, label), h('b', {}, value), sub ? h('span', {}, sub) : null);
+    const verdict = { clear: ['Linea libera', 'good'], fresnel: ['Fresnel invasa', 'warn'], blocked: [p.buildings ? 'Ostruita da edifici' : 'Ostruita dal terreno', 'bad'] }[p.verdict];
+    // CPE side: model and height change the check (and reopen this dock)
+    const model = h('select', {}, [...cpe.options].map((o) => h('option', { value: o.value, selected: o.value === cpe.value }, o.textContent)));
+    model.onchange = () => ((cpe.value = model.value), cpe.onchange());
+    const hM = Number(String(height.value).replace(',', '.')) || first.los - first.ground;
+    const step = (d) => () => {
+      height.value = String(Math.max(1, Math.min(60, Math.round(hM + d))));
+      check(point.la, point.lo, point.label);
+    };
+    const cap = e?.capacityMbps ?? null;
+    const capBar = h('div', { class: 'cap-bar' }, h('span'));
+    capBar.firstChild.style.width = `${cap == null ? 0 : Math.min(100, (cap / 400) * 100)}%`;
+    mount(
+      dock,
+      h(
+        'div',
+        { class: 'dock-grid' },
+        h(
+          'section',
+          { class: 'dock-side' },
+          h('div', { class: 'dock-title' }, h('span', { class: 'dock-tag ap' }, 'AP'), h('b', {}, a.name || a.id)),
+          h('div', { class: 'small muted' }, [a.model, a.ssid].filter(Boolean).join(' · ')),
+          h(
+            'div',
+            { class: 'dock-facts' },
+            fact('Frequenza', a.frequency ? `${a.frequency} MHz` : '—'),
+            fact('Clienti', a.stations ?? '—', a.load?.level ? `sera: ${a.load.level}` : null),
+            fact('Antenna', p.apAntenna ? `${p.apAntenna.aboveGroundM} m` : '—', p.apAntenna ? `${p.apAntenna.altitude} m s.l.m.` : null),
+            fact('Rumore', noise != null ? `${noise} dBm` : '—'),
+          ),
+        ),
+        h(
+          'section',
+          { class: 'dock-mid' },
+          h('div', { class: 'dock-title' }, badge(verdict[0], verdict[1]), h('span', { class: 'small muted' }, `${km(p.distanceM)} · Fresnel libera ${p.worst ? Math.max(0, Math.round((100 * p.worst.clearanceM) / (p.worst.fresnel60M / 0.6 || 1))) : 100}%`)),
+          h('div', { class: 'dock-cap' }, h('span', {}, 'Capacità stimata'), h('b', {}, cap == null ? '—' : `${cap} Mbit/s`)),
+          capBar,
+          e?.signalDbm != null && noise != null ? h('div', { class: 'small muted' }, `SNR atteso ${e.signalDbm - noise} dB`) : null,
+          h('div', { class: 'dock-chart' }, profileChart(p)),
+        ),
+        h(
+          'section',
+          { class: 'dock-side' },
+          h('div', { class: 'dock-title' }, h('span', { class: 'dock-tag cpe' }, 'CPE'), h('b', {}, point.label?.split(',')[0] ?? 'Punto')),
+          field('Modello', model),
+          h(
+            'div',
+            { class: 'dock-facts' },
+            h('div', { class: 'dock-fact' }, h('small', {}, 'Altezza'), h('div', { class: 'stepper' }, h('button', { type: 'button', onclick: step(-1), 'aria-label': 'Più bassa' }, '−'), h('b', {}, `${Math.round(hM)} m`), h('button', { type: 'button', onclick: step(1), 'aria-label': 'Più alta' }, '+'))),
+            fact('Puntamento', `${Math.round(az)}°`, `magnetico ${Math.round((az - DECLINATION_DEG + 360) % 360)}°`),
+            fact('Inclinazione', `${tilt >= 0 ? '+' : ''}${dec(tilt)}°`),
+          ),
+          signalBar(e?.signalDbm ?? null),
+        ),
+      ),
+      h('button', { type: 'button', class: 'dock-close', 'aria-label': 'Chiudi', onclick: closeDock }, '×'),
+    );
+    dock.hidden = false;
   }
 
   /** Line of sight from the checked point (with the CPE height above) to one AP. */
@@ -400,13 +522,16 @@ export async function adminCoverageView() {
     if (!point) return;
     const hM = Number(String(height.value).replace(',', '.'));
     if (!(hM >= 0.5 && hM <= 100)) return toast('Altezza della CPE non valida (0,5–100 m)');
-    await busy(btn, async () => {
+    // from a row (no button) or from Visibilità
+    await busy(btn ?? document.createElement('button'), async () => {
       let p;
       try {
         p = await api(`/api/pointing/profile?lat=${point.la}&lon=${point.lo}&apId=${encodeURIComponent(a.id)}&height=${hM}`);
       } catch (e) {
         return mount(profileBox, card(h('h2', {}, `Visibilità verso ${a.name}`), h('div', { class: 'notice bad' }, e.message)));
       }
+      selected = a.id;
+      renderDock(p, a);
       drawLink(p);
       const verdict = { clear: ['Visibilità libera', 'good'], fresnel: ['Linea libera ma zona di Fresnel invasa', 'warn'], blocked: [p.buildings ? 'Linea ostruita da edifici' : 'Linea ostruita dal terreno', 'bad'] }[p.verdict];
       mount(
@@ -502,7 +627,7 @@ export async function adminCoverageView() {
     ),
     card(
       h('h2', {}, 'Mappa della rete'),
-      el,
+      h('div', { class: 'map-stage' }, el, dock),
       legend([
         [STATE_COLOR.ok, 'AP in funzione'],
         [STATE_COLOR.degraded, 'molte CPE offline'],

@@ -477,3 +477,35 @@ tr:hover > td { background: color-mix(in srgb, var(--brand) 4%, transparent); }
   .ia-detail { padding: 14px; }
   .ia-legend { grid-template-columns: 1fr; }
 }
+
+/* Copertura: the link docked on the map (UISP Design) */
+.map-stage { position: relative; }
+.map-stage .map { margin: 8px 0; }
+.link-dock { position: absolute; left: 10px; right: 10px; bottom: 18px; z-index: 500; background: color-mix(in srgb, var(--surface) 94%, transparent); backdrop-filter: blur(6px); border: 1px solid var(--line); border-radius: 14px; box-shadow: 0 10px 30px rgba(0, 0, 0, .35); padding: 12px 14px; }
+.link-dock[hidden] { display: none; }
+.dock-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1.3fr) minmax(0, 1fr); gap: 12px; }
+.dock-side, .dock-mid { min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.dock-title { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.dock-tag { font-size: .68rem; font-weight: 800; letter-spacing: .06em; padding: 2px 7px; border-radius: 6px; color: #fff; }
+.dock-tag.ap { background: #2563eb; }
+.dock-tag.cpe { background: #f97316; }
+.dock-facts { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 10px; }
+.dock-fact { display: flex; flex-direction: column; min-width: 0; }
+.dock-fact small { font-size: .66rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.dock-fact span { font-size: .75rem; color: var(--muted); }
+.dock-cap { display: flex; justify-content: space-between; align-items: baseline; }
+.cap-bar, .mcs-bar { height: 6px; border-radius: 4px; background: var(--line); overflow: hidden; }
+.cap-bar span, .mcs-fill { display: block; height: 100%; background: linear-gradient(90deg, #2563eb, #22c55e); }
+.mcs-head { display: flex; justify-content: space-between; align-items: baseline; font-size: .85rem; }
+.mcs-steps { display: grid; grid-template-columns: repeat(10, 1fr); font-size: .64rem; color: var(--muted); text-align: center; margin-top: 3px; }
+.mcs-steps .on { color: var(--ink); font-weight: 700; }
+.dock-chart .link-chart-wrap { padding: 2px; }
+.dock-chart svg { max-height: 130px; }
+.stepper { display: inline-flex; align-items: center; gap: 8px; }
+.stepper button { min-height: 26px; width: 26px; padding: 0; border-radius: 6px; }
+.dock-close { position: absolute; top: 6px; right: 8px; min-height: 26px; width: 26px; padding: 0; border-radius: 50%; }
+.link-dock .field select { min-height: 32px; }
+@media (max-width: 1099px) {
+  .link-dock { position: static; margin-top: 8px; box-shadow: none; backdrop-filter: none; }
+  .dock-grid { grid-template-columns: 1fr; }
+}
