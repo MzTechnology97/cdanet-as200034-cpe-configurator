@@ -35,14 +35,25 @@ suspend fun startUpdate(c: AppContainer, info: UpdateInfo, onState: (UpdateState
         return
     }
     onState(UpdateState.Downloading(info))
+    var target = info
     onState(
-        runCatching { c.updater.download(info) }.fold(
-            onSuccess = { apk ->
-                c.updater.install(apk)
-                UpdateState.ReadyToInstall(info)
-            },
-            onFailure = { UpdateState.Failed(it.message ?: "Download non riuscito") },
-        ),
+        runCatching { c.updater.download(target) }
+            // a newer release was published after the check (the server always serves the latest
+            // APK): the fingerprint of the old one cannot match. Ask again and download that one.
+            .recoverCatching { e ->
+                val fresh = c.updater.check() ?: throw e
+                if (fresh.versionCode == target.versionCode && fresh.sha256.equals(target.sha256, ignoreCase = true)) throw e
+                target = fresh
+                onState(UpdateState.Downloading(fresh))
+                c.updater.download(fresh)
+            }
+            .fold(
+                onSuccess = { apk ->
+                    c.updater.install(apk)
+                    UpdateState.ReadyToInstall(target)
+                },
+                onFailure = { UpdateState.Failed(it.message ?: "Download non riuscito") },
+            ),
     )
 }
 
@@ -81,7 +92,8 @@ fun MandatoryUpdateScreen(c: AppContainer, info: UpdateInfo?, minVersion: String
             }
             is UpdateState.Failed -> {
                 Banner("Aggiornamento non riuscito: ${state.message}", BadRed)
-                BusyButton("Riprova", false, Modifier.fillMaxWidth()) { info?.let { i -> scope.launch { startUpdate(c, i, onState) } } ?: onRecheck() }
+                // asks the server again: the version offered may have changed meanwhile
+                BusyButton("Riprova", false, Modifier.fillMaxWidth()) { onRecheck() }
             }
             else -> if (info != null) {
                 BusyButton("Scarica e installa", false, Modifier.fillMaxWidth()) { scope.launch { startUpdate(c, info, onState) } }
