@@ -159,7 +159,15 @@ La mappa è la pagina `/map-embed.html` del server; i tocchi tornano all'app tra
 Dal GPS del telefono l'app mostra gli AP vicini (per gli installatori solo quelli assegnati):
 - **Lista**: distanza, altitudine dell'antenna (m s.l.m.), **azimut** (Nord vero), **tilt** e **segnale stimato**; per ogni AP i pulsanti **Mirino** e **Bussola**.
 - **Mappa**: la mappa della console (Protomaps sul nostro server) con la tua posizione e una freccia che segue la direzione del telefono; gli AP come punto (admin) o area approssimativa (installatori) con la linea di puntamento.
-- **Mirino in fotocamera**: inquadri con la fotocamera posteriore; il punto dell'AP viene disegnato dove si trova (azimut + tilt), con frecce quando è fuori schermo e il mirino che diventa verde (e vibra) quando sei allineato entro 2°. In basso: azimut e tilt richiesti e quelli attuali del telefono. Funziona in verticale; avvisa se la bussola non è calibrata (movimento a 8).
+- **Realtà aumentata** (Mirino da Trova l'AP e dall'installazione, *Realtà aumentata* da Copertura): sulla fotocamera posteriore, in verticale:
+  - **gli AP intorno** come segnali sulla loro direzione, con nome, distanza, segnale atteso e colore della valutazione; un tocco sull'etichetta sceglie l'AP. L'AP scelto è disegnato dove si trova davvero (tilt dal profilo): sotto la linea dell'orizzonte vuol dire coperto dalla collina;
+  - **l'orizzonte del terreno** (`/api/pointing/horizon`: angolo del terreno ogni 0,5° fino a 25 km, con la curvatura terrestre, TINITALY/SRTM) come linea azzurra: ciò che nella foto sta sopra la linea sono edifici e alberi, che il modello conosce solo in parte. In alto la distanza della cresta più alta inquadrata;
+  - **il tunnel di Fresnel** verso l'AP scelto: anelli del 60% della prima zona a 10 m, 25 m, 50 m… fino all'AP (dal profilo del server), rossi dove terreno, edifici o alberi ci entrano con la distanza e la causa; gli anelli vicini sono quelli da guardare per alberi e tetti;
+  - **nastro della bussola** in alto (±60°) con gli AP, mirino verde e vibrazione quando sei allineato entro 2°, frecce quando l'AP è fuori schermo, verdetto (linea libera, Fresnel invasa, ostruita) e indicazioni (*gira a destra*, *alza*);
+  - **Allinea sulle montagne**: l'app riconosce il profilo del cielo nella fotocamera e lo sovrappone a quello del terreno, correggendo la bussola (come un "peak finder"; serve un orizzonte con rilievo e cielo libero). In alternativa si trascina col dito per far combaciare la linea azzurra con le montagne; *Azzera* toglie la correzione;
+  - **Foto**: salva in Galleria › Pictures/CDA Net l'immagine con tutto il disegno, l'AP, le coordinate e l'ora.
+
+  Dal guided install mostra anche il segnale della CPE con il bip. Avvisa se la bussola non è calibrata (movimento a 8).
 
 **Tilt**: se UISP riporta l'altitudine dal GPS interno dell'AP, si usa quella (in lista "(GPS)"); altrimenti altitudine del terreno dal modello SRTM (il server scarica e tiene in cache solo le zone usate, ~12 MB per grado; `DEM_URL` vuoto lo disattiva) più le altezze dal suolo impostate dall'admin in Copertura → "Puntamento (app)" (antenne AP, default 15 m; CPE, default 6 m, modificabile dal tecnico). Tiene conto della curvatura terrestre.
 

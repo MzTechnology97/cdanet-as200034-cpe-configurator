@@ -121,7 +121,7 @@ enum class Screen(val title: String, val scroll: Boolean = true, val wide: Boole
     Acceptance("Collaudo"),
     Compass("Bussola verso l'AP"),
     Pointing("Trova l'AP", scroll = false),
-    ArAim("Mirino verso l'AP", scroll = false),
+    ArAim("Realtà aumentata", scroll = false),
     CpeHealth("Le mie CPE"),
     IpScanner("Scanner IP", scroll = false, wide = true),
     PortScanner("Port scanner"),
@@ -440,6 +440,7 @@ fun AppRoot(c: AppContainer) {
                     Screen.Coverage -> CoverageCheckScreen(
                         c,
                         onCompass = if (c.moduleOn("compass")) ({ t: it.cdanet.cpeconfigurator.field.CompassTarget -> c.compassTarget.value = t; go(Screen.Compass) }) else null,
+                        onAim = if (c.moduleOn("compass")) ({ t: it.cdanet.cpeconfigurator.field.CompassTarget -> c.compassTarget.value = t; arWithSignal = false; go(Screen.ArAim) }) else null,
                     )
                     Screen.Alignment -> WifiRequired(c, "alla Wi-Fi della CPE (management, es. \"LBE-5AC-Gen2:xxxx\") oppure a quella del router del cliente", "Il segnale si legge direttamente dalla CPE.") { AlignmentScreen(c) }
                     Screen.Diagnosis -> WifiRequired(c, "alla Wi-Fi della CPE (management, es. \"LBE-5AC-Gen2:xxxx\") oppure a quella del router del cliente", "La diagnosi interroga la CPE in rete locale.") { DiagnosisScreen(c) }

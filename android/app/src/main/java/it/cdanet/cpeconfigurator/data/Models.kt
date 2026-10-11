@@ -835,6 +835,10 @@ data class LosPointDto(
     val top: Double? = null,
 )
 
+/** Skyline of the terrain around a point (augmented reality): elevation every [stepDeg] from north. */
+@Serializable
+data class HorizonDto(val stepDeg: Double = 0.5, val el: List<Double> = emptyList(), val dist: List<Int> = emptyList(), val ground: Double? = null, val eye: Double? = null)
+
 @Serializable
 data class LosWorstDto(val d: Int = 0, val clearanceM: Double = 0.0, val fresnel60M: Double = 0.0)
 

@@ -10,6 +10,7 @@ import { MAX_LINK_M, rankCoverage, type ApModel } from '../domain/coverage-model
 import { failuresNear, fieldFailures } from '../services/field-samples.ts';
 import { buildProfile, estimateForAp, obstacles, pointingConfig, profileEffect, terrainSampler } from '../services/terrain.ts';
 import { elevationAngle } from '../services/dem.ts';
+import { computeHorizon, type Horizon } from '../services/horizon.ts';
 
 export { resolveApAltitude } from '../domain/los.ts';
 
@@ -158,5 +159,29 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
       ...r,
       chart,
     };
+  });
+
+  /**
+   * Skyline of the terrain around a point, for the augmented reality of the app: the elevation
+   * angle of the ground in every direction (0.5° steps, 25 km). No AP in it: same for everyone.
+   */
+  const horizons = new Map<string, Horizon>();
+  app.get('/api/pointing/horizon', { preHandler: [ctx.auth.requireUser, ctx.modules.require('compass')] }, async (req, reply) => {
+    const q = z.object({ lat: z.coerce.number(), lon: z.coerce.number(), height: z.coerce.number().min(0).max(100).optional() }).parse(req.query);
+    if (!isValidLatLon(q.lat, q.lon)) throw new HttpError(400, 'invalid_position');
+    const height = Math.round((q.height ?? config().cpeHeightM) * 2) / 2;
+    const key = `${q.lat.toFixed(4)},${q.lon.toFixed(4)},${height}`;
+    let hz = horizons.get(key);
+    if (!hz) {
+      const at = await terrainSampler(ctx.terrain, [{ lat: q.lat, lon: q.lon }], 25_500);
+      if (!at) throw new HttpError(503, 'dem_not_configured');
+      const made = computeHorizon(at, { lat: q.lat, lon: q.lon }, height);
+      if (!made) throw new HttpError(503, 'dem_unavailable');
+      hz = made;
+      horizons.set(key, hz);
+      while (horizons.size > 40) horizons.delete(horizons.keys().next().value!);
+    }
+    reply.header('Cache-Control', 'private, max-age=3600');
+    return { ...hz, cpeHeightM: height };
   });
 }

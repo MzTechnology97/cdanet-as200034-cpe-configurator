@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.install
 
+import it.cdanet.cpeconfigurator.ui.screens.toBeacon
 import it.cdanet.cpeconfigurator.data.PointingCache
 import it.cdanet.cpeconfigurator.data.ApiClient
 import it.cdanet.cpeconfigurator.data.CpeLocation
@@ -153,6 +154,9 @@ class InstallController(
             tiltDeg = ap.tiltDeg,
             altitude = ap.altitude,
             fromAltitude = p.from.altitude,
+            apId = ap.id,
+            heightM = p.from.height,
+            beacons = p.aps.map { it.toBeacon() },
         )
     }
 }
