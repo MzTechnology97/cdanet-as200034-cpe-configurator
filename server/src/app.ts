@@ -1,9 +1,9 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { parseClientHeader, versionAtLeast } from './domain/policy.ts';
 import { loadLatestRelease } from './services/releases.ts';
 import { dirname, join } from 'node:path';
 import fastifyStatic from '@fastify/static';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
 import { HttpError, createAuth } from './auth.ts';
 import type { Config } from './config.ts';
@@ -257,22 +257,51 @@ export async function buildApp(
   cpeAdminRoutes(app, ctx);
   connectorRoutes(app, ctx);
 
-  if (existsSync(join(cfg.staticDir, 'index.html'))) {
-    // Revalidate on every load (ETag/Last-Modified): after an auto-update the console must never mix old and new assets.
+  const hasWeb = existsSync(join(cfg.staticDir, 'index.html'));
+  // The console's own code (js/, css/, and vendor/ when a module imports it) is served under
+  // /v/<release>/: a new release (or a restart) is a new address, so the browser keeps those
+  // files for a year and asks for none of them again until the next update; the pages are the
+  // only thing it revalidates.
+  const release = `${version}-${Date.now().toString(36)}`;
+  const pages = new Map<string, string>();
+  const page = (file: string) => {
+    if (!pages.has(file)) {
+      const html = readFileSync(join(cfg.staticDir, file), 'utf8')
+        .replace(/(src|href)="\/?(js|css)\//g, `$1="/v/${release}/$2/`)
+        // vendor files and images from the root, whatever address the page was opened at
+        .replace(/(src|href)="(vendor|assets)\//g, '$1="/$2/');
+      pages.set(file, html);
+    }
+    return pages.get(file)!;
+  };
+  const sendPage = (reply: FastifyReply, file: string) => reply.header('Cache-Control', 'no-cache').type('text/html; charset=utf-8').send(page(file));
+  if (hasWeb) {
+    // Everything outside /v/<this release>/ revalidates on every load (ETag/Last-Modified): vendor
+    // files, icons, and the addresses of an older release (which answer with today's file).
     await app.register(fastifyStatic, {
       root: cfg.staticDir,
+      // the wiki and the other folders keep their index.html; the console's own pages (/, /index.html) are the routes below
       index: ['index.html'],
       cacheControl: false,
       setHeaders: (reply) => {
-        reply.header('Cache-Control', 'no-cache');
+        const tag = /^\/v\/([^/]+)\//.exec(reply.request.url)?.[1];
+        reply.header('Cache-Control', tag === release ? 'public, max-age=31536000, immutable' : 'no-cache');
       },
+    });
+    app.get('/', (_req, reply) => sendPage(reply, 'index.html'));
+    app.get('/index.html', (_req, reply) => sendPage(reply, 'index.html'));
+    app.get('/map-embed.html', (_req, reply) => sendPage(reply, 'map-embed.html'));
+    app.get<{ Params: { tag: string; '*': string } }>('/v/:tag/*', (req, reply) => {
+      const file = req.params['*'];
+      if (!/^(js|css|vendor)\//.test(file)) return reply.code(404).send({ error: 'not_found' });
+      return reply.sendFile(file);
     });
   }
   app.setNotFoundHandler((req, reply) => {
-    if (req.url.startsWith('/api/') || req.method !== 'GET' || !existsSync(join(cfg.staticDir, 'index.html'))) {
+    if (req.url.startsWith('/api/') || req.method !== 'GET' || !hasWeb) {
       return reply.code(404).send({ error: 'not_found' });
     }
-    return reply.sendFile('index.html');
+    return sendPage(reply, 'index.html');
   });
 
   return { app, ctx };

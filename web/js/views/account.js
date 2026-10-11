@@ -3,6 +3,15 @@ import { openAttestation } from './privacy.js';
 import { badge, busy, card, field, fmtDate, h, mount, pageHead, stat, toast } from '../dom.js';
 import { myTelegramCard } from './my-telegram.js';
 
+const loadScript = (src) =>
+  new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = src;
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.append(s);
+  });
+
 /** Own account: password change and "log out everywhere" (admins and installers). */
 export async function accountView() {
   const a = await api('/api/auth/account');
@@ -86,6 +95,8 @@ function totpCard(a) {
     start.onclick = () =>
       busy(start, async () => {
         const s = await api('/api/auth/totp/setup', { method: 'POST', body: { password: p.value } });
+        // the QR library only here, where it is used (not with every page of the console)
+        if (!window.qrcode) await loadScript('/vendor/qrcode.js').catch(() => {});
         const qr = window.qrcode ? window.qrcode(0, 'M') : null;
         let svg = null;
         if (qr) {
