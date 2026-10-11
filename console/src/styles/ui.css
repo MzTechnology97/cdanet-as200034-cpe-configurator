@@ -81,3 +81,39 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .ui-skeleton { display: grid; gap: var(--sp-2); }
 .ui-sk { display: block; height: 14px; border-radius: 6px; background: linear-gradient(90deg, var(--surface-3), var(--surface-2), var(--surface-3)); background-size: 200% 100%; animation: ui-shimmer 1.2s ease-in-out infinite; }
 @keyframes ui-shimmer { from { background-position: 100% 0; } to { background-position: -100% 0; } }
+
+/* label → value pairs, details, lists */
+.ui-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: var(--sp-3) var(--sp-4); margin: 0; }
+.ui-facts div { display: grid; gap: 2px; min-width: 0; }
+.ui-facts dt { font-size: var(--fs-xs); font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.ui-facts dd { margin: 0; font-weight: 600; overflow-wrap: anywhere; }
+.ui-details > summary { cursor: pointer; font-weight: 700; list-style: none; display: flex; align-items: center; gap: var(--sp-2); }
+.ui-details > summary::before { content: '▸'; color: var(--muted); transition: transform .15s var(--ease); }
+.ui-details[open] > summary::before { transform: rotate(90deg); }
+.ui-details[open] > summary { margin-bottom: var(--sp-3); }
+.ui-list { margin: var(--sp-1) 0 0; padding-left: 1.2em; }
+.ui-mono { font-family: var(--font-mono); overflow-wrap: anywhere; }
+.ui-small { font-size: var(--fs-xs); }
+.ui-card-head a { font-size: var(--fs-sm); font-weight: 600; }
+
+/* checkbox with its label */
+.ui-check { display: flex; align-items: center; gap: var(--sp-2); cursor: pointer; }
+.ui-check input { width: 18px; height: 18px; accent-color: var(--brand); }
+
+/* Notifiche */
+.nt-day + .nt-day { margin-top: var(--sp-3); }
+.nt-day-title { margin: 0 0 var(--sp-2); font-size: var(--fs-xs); font-weight: 700; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.nt-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.nt-item { position: relative; display: flex; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); }
+.nt-item.unread { background: color-mix(in srgb, var(--tone-bg) 45%, var(--surface)); border-color: color-mix(in srgb, var(--tone) 30%, var(--line)); }
+.nt-icon { display: grid; place-items: center; width: 36px; height: 36px; flex: none; border-radius: 50%; background: var(--tone-bg); }
+.nt-icon .icon { width: 20px; height: 20px; fill: var(--tone); }
+.nt-text { flex: 1; min-width: 0; display: grid; gap: 2px; }
+.nt-head { display: flex; justify-content: space-between; gap: var(--sp-3); align-items: baseline; }
+.nt-head strong { overflow-wrap: anywhere; }
+.nt-body { margin: 0; color: var(--muted); font-size: var(--fs-sm); white-space: pre-line; }
+.nt-open { min-height: 32px; padding: 0 var(--sp-3); margin-left: calc(-1 * var(--sp-3)); text-decoration: none; color: var(--brand-ink); }
+.nt-item .ui-btn-ghost { min-height: 32px; font-size: var(--fs-sm); }
+.nt-dot { position: absolute; top: var(--sp-3); right: var(--sp-3); width: 9px; height: 9px; border-radius: 50%; background: var(--brand); }
+.nt-item.unread .nt-head { padding-right: var(--sp-4); }
+.nt-kinds { display: grid; gap: var(--sp-2); grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
