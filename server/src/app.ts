@@ -14,6 +14,8 @@ import { adminRoutes } from './routes/admin.ts';
 import { acceptanceRoutes } from './routes/acceptance.ts';
 import { koRoutes } from './routes/ko.ts';
 import { notificationRoutes } from './routes/notifications.ts';
+import { liveRoutes } from './routes/live.ts';
+import { createLive } from './services/live.ts';
 import { fieldRoutes } from './routes/field.ts';
 import { provisioningRoutes } from './routes/provisioning.ts';
 import { replaceRoutes } from './routes/replace.ts';
@@ -107,6 +109,7 @@ export async function buildApp(
   const dem = createDem({ dir: cfg.dem.dir, baseUrl: cfg.dem.url, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) });
   const ctx: AppContext = {
     cfg,
+    live: createLive(),
     db,
     sealer,
     auth: createAuth(db, cfg.jwtSecret, cfg.jwtTtlHours),
@@ -158,8 +161,9 @@ export async function buildApp(
       if (modules.enabled('telegram')) void telegram.sendTo(chatId, html);
     },
     userOn: (id) => modules.stateFor(id).power_outages,
+    onChange: () => ctx.live.publish('outages', 'all'),
   });
-  ctx.notify = createNotifier(db, cfg, telegram, () => ctx.uisp, version, () => modules.enabled('telegram'));
+  ctx.notify = createNotifier(db, cfg, telegram, () => ctx.uisp, version, () => modules.enabled('telegram'), undefined, (ids) => ctx.live.publish('notifications', ids));
 
   const app = Fastify({
     logger:
@@ -235,6 +239,7 @@ export async function buildApp(
   acceptanceRoutes(app, ctx);
   koRoutes(app, ctx);
   notificationRoutes(app, ctx);
+  liveRoutes(app, ctx);
   replaceRoutes(app, ctx);
   statsRoutes(app, ctx);
   outageRoutes(app, ctx);

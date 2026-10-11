@@ -37,6 +37,8 @@ export function createInbox(
   sendPersonal: (chatId: string, html: string) => void,
   escape: (s: string) => string,
   link: (mac: string) => string,
+  /** Told who got a notification (the live updates of their console). */
+  onPushed?: (userIds: number[]) => void,
 ) {
   /** Kinds the user receives on Telegram (default: their own installations only). */
   function telegramKinds(userId: number): NotifyKind[] {
@@ -74,6 +76,7 @@ export function createInbox(
       insert.run(now, u.id, n.kind, n.title, n.lines.join('\n'), n.jobId ?? null, n.mac ?? '');
       if (u.chat && telegramKinds(u.id).includes(n.kind)) sendPersonal(u.chat, html);
     }
+    if (users.length) onPushed?.(users.map((u) => u.id));
     return users.length;
   }
 

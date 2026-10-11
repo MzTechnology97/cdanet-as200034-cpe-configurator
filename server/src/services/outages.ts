@@ -220,6 +220,8 @@ export function createOutages(
     sendPersonal?: (chatId: string, html: string) => void;
     /** The user may receive outage notifications (module on for them). */
     userOn?: (userId: number) => boolean;
+    /** An outage appeared or ended in a check (live updates of the console). */
+    onChange?: () => void;
   },
 ) {
   const f = opts.fetchImpl ?? fetch;
@@ -466,7 +468,9 @@ export function createOutages(
          ON CONFLICT(id) DO UPDATE SET data = excluded.data, zones = excluded.zones, last_seen = excluded.last_seen, ended_at = NULL`,
       );
       const seen = new Set<number>();
+      let changed = false;
       for (const { o, where, impact } of inside) {
+        if (!known.has(o.id)) changed = true;
         seen.add(o.id);
         upsert.run(
           o.id,
@@ -488,6 +492,7 @@ export function createOutages(
       }
       for (const [id] of known) {
         if (seen.has(id)) continue;
+        changed = true;
         const row = db.prepare('SELECT data, zones FROM power_outages WHERE id = ?').get(id) as { data: string; zones: string };
         db.prepare('UPDATE power_outages SET ended_at = ? WHERE id = ?').run(now, id);
         const o = JSON.parse(row.data) as PowerOutage;
@@ -500,6 +505,7 @@ export function createOutages(
       // keep 30 days of history
       db.prepare('DELETE FROM power_outages WHERE ended_at IS NOT NULL AND ended_at < ?').run(new Date(Date.now() - 30 * 86400_000).toISOString());
       lastRun = { at: now, ok: true, fetched: all.length };
+      if (changed) opts.onChange?.();
     } catch (err) {
       lastRun = { at: nowIso(), ok: false, error: (err as Error).message, fetched: 0 };
       opts.log?.(`outages: ${(err as Error).message}`);

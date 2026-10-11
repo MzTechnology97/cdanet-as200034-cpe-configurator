@@ -9,7 +9,9 @@
 }
 
 (console) {
-	encode zstd gzip
+	# everything compressed except the live updates (/api/events): each event must leave at once
+	@compress not path /api/events
+	encode @compress zstd gzip
 	header {
 		X-Content-Type-Options "nosniff"
 		Referrer-Policy "no-referrer"
