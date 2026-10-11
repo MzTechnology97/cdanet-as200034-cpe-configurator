@@ -6,7 +6,7 @@ import { describe, it } from 'node:test';
 import { crc32, deflateRawSync, deflateSync } from 'node:zlib';
 import { toUtm } from '../src/domain/utm.ts';
 import { createDem } from '../src/services/dem.ts';
-import { foliageLossDb, profileEffect, type BuiltProfile } from '../src/services/terrain.ts';
+import { foliageLossDb, profileEffect, type BuiltProfile, obstructionPenaltyDb } from '../src/services/terrain.ts';
 import { createTerrainStore, tinitalyExtent, worldCoverTiles } from '../src/services/terrain-store.ts';
 import { openGeoTiff } from '../src/services/tiff.ts';
 
@@ -231,16 +231,20 @@ describe('Terreno e ostacoli: effetto sul collegamento', () => {
   };
 
   it('buildings are solid, trees attenuate with the stretch of crowns crossed', () => {
-    assert.deepEqual(profileEffect(prof(null, 0, 0, 0)), { verdict: 'clear', lossDb: 0 });
+    assert.deepEqual(profileEffect(prof(null, 0, 0, 0)), { verdict: 'clear', lossDb: 0, diffractionDb: 0 });
     const town = profileEffect(prof('edificio', 15, 900, 1100));
     assert.equal(town.verdict, 'blocked');
     assert.equal(town.buildings, true);
-    assert.ok(town.lossDb > 10, JSON.stringify(town));
+    assert.ok(town.diffractionDb! > 10, JSON.stringify(town));
+    // the loss applied: the empirical penalty of a disturbed Fresnel zone (UISP Design), ~5 dB on 2 km
+    assert.equal(town.lossDb, obstructionPenaltyDb(2000));
+    assert.ok(town.lossDb > 4 && town.lossDb < 6, String(town.lossDb));
     const wood = profileEffect(prof('alberi', 15, 900, 1100));
     assert.equal(wood.verdict, 'clear', 'trees do not block, they attenuate');
     assert.ok(wood.foliageM! >= 175 && wood.foliageM! <= 225, JSON.stringify(wood));
     assert.ok(Math.abs(wood.foliageDb! - foliageLossDb(wood.foliageM!)) < 0.1);
-    assert.ok(wood.lossDb > 10 && wood.lossDb <= 20.1, JSON.stringify(wood));
+    assert.ok(wood.diffractionDb! > 10 && wood.diffractionDb! <= 20.1, JSON.stringify(wood));
+    assert.equal(wood.lossDb, obstructionPenaltyDb(2000), 'crowns in the Fresnel zone: the same penalty');
     const low = profileEffect(prof('alberi', 5, 900, 1100));
     assert.equal(low.foliageM ?? 0, 0, 'crowns under the line of sight');
     assert.ok(foliageLossDb(10) > 3 && foliageLossDb(10) < 4.5);

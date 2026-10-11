@@ -54,6 +54,8 @@ export interface ApModel {
 export interface TerrainEffect {
   verdict: 'clear' | 'fresnel' | 'blocked';
   lossDb: number;
+  /** Knife-edge diffraction (and foliage) of the profile, dB: what a deep obstruction may cost. */
+  diffractionDb?: number;
   /** Metres of the line of sight inside tree crowns (land cover), and their share of [lossDb]. */
   foliageM?: number;
   foliageDb?: number;

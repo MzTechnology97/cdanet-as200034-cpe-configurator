@@ -449,19 +449,19 @@ class ApiClient(
 
     /** The same answer as is, for the embedded map (positions, approximate areas, served sectors). */
     /** [heightM]: CPE above the ground, for the terrain towards each AP (null: the server default). */
-    suspend fun coverageJson(lat: Double, lon: Double, heightM: Double? = null): String =
-        request("GET", "/api/coverage?lat=$lat&lon=$lon&limit=5" + (heightM?.let { "&height=$it" } ?: ""))
+    suspend fun coverageJson(lat: Double, lon: Double, heightM: Double? = null, cpe: String = "auto"): String =
+        request("GET", "/api/coverage?lat=$lat&lon=$lon&limit=5" + (heightM?.let { "&height=$it" } ?: "") + "&cpe=" + java.net.URLEncoder.encode(cpe, "UTF-8"))
 
     /** Admins: more APs and a wider radius (the server ignores both for installers). */
-    suspend fun coverageJson(lat: Double, lon: Double, limit: Int, km: Int?, heightM: Double? = null): String =
-        request("GET", "/api/coverage?lat=$lat&lon=$lon&limit=$limit" + (km?.let { "&km=$it" } ?: "") + (heightM?.let { "&height=$it" } ?: ""))
+    suspend fun coverageJson(lat: Double, lon: Double, limit: Int, km: Int?, heightM: Double? = null, cpe: String = "auto"): String =
+        request("GET", "/api/coverage?lat=$lat&lon=$lon&limit=$limit" + (km?.let { "&km=$it" } ?: "") + (heightM?.let { "&height=$it" } ?: "") + "&cpe=" + java.net.URLEncoder.encode(cpe, "UTF-8"))
 
     /** "Stato rete" as is: admins get every AP with its position (base map of Verifica copertura). */
     suspend fun networkStatusJson(): String = request("GET", "/api/network/status")
 
     /** Admins: radio simulation of one AP (estimated signal of a new CPE all around it). */
-    suspend fun coverageSimulationJson(apId: String): String =
-        request("GET", "/api/admin/coverage/simulation?apId=" + java.net.URLEncoder.encode(apId, "UTF-8"))
+    suspend fun coverageSimulationJson(apId: String, cpe: String? = null): String =
+        request("GET", "/api/admin/coverage/simulation?apId=" + java.net.URLEncoder.encode(apId, "UTF-8") + (cpe?.let { "&cpe=" + java.net.URLEncoder.encode(it, "UTF-8") } ?: ""))
 
     /** Admins: default CPE height of Impostazioni server (metres above ground). */
     /** Home shortcuts of the account, the same on every phone (null: never customised). */

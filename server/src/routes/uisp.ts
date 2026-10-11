@@ -1,6 +1,7 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Readable } from 'node:stream';
 import { z } from 'zod';
+import { CPE_MODELS, cpeModelById, recommendCpe } from '../domain/cpe-models.ts';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
@@ -92,8 +93,12 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
         km: z.coerce.number().min(1).max(200).optional(),
         /** Height of the CPE above the ground, for the terrain (default: Puntamento settings). */
         height: z.coerce.number().min(0).max(100).optional(),
+        /** CPE to install: a model of the catalogue, or "auto" (the one proposed for each AP). */
+        cpe: z.string().max(40).default('auto'),
       })
       .parse(req.query);
+    const chosenCpe = q.cpe === 'auto' ? null : cpeModelById(q.cpe);
+    if (q.cpe !== 'auto' && !chosenCpe) throw new HttpError(400, 'unknown_cpe_model');
     // admins: no limits (up to 50 APs, the distance they ask up to 200 km); installers, from the
     // web or the app alike: the number set in Impostazioni server, within the configured radius
     const isAdmin = req.user!.role === 'admin';
@@ -114,10 +119,30 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     const point = { lat: q.lat, lon: q.lon };
     // the terrain towards every AP, as in Visibilità: a hill in the way lowers the expected signal
     const at = await terrainSampler(ctx.terrain, [point, ...inRange]);
+    // the model is calibrated on the reference CPE (Impostazioni server, a LiteBeam 5AC): another
+    // CPE changes the expected signal by its difference of antenna gain (AP side: what UISP says)
+    const refGain = radio.cpeGainDbi;
+    const cpeFor = (e: { signalDbm: number | null } | null, distanceM: number) => {
+      const proposed = e?.signalDbm != null ? recommendCpe(e.signalDbm, refGain, distanceM, ctx.cfg.thresholds.signalGood) : null;
+      // nothing reaches a good signal: the reference CPE, the estimate the other tools give
+      const model = chosenCpe ?? proposed?.model ?? cpeModelById('lbe5ac')!;
+      return { model, proposed };
+    };
+    // the estimate of every AP with the reference CPE (terrain included), computed once
+    const raw = new Map(inRange.map((a) => [a.id, estimateForAp(models.get(a.id), a, point, at, { cpeM: q.height ?? heights.cpeHeightM, apM: heights.apHeightM }, radio, obstacles(ctx))]));
     const estimateFor = (a: (typeof inRange)[number]) => {
-      const e = estimateForAp(models.get(a.id), a, point, at, { cpeM: q.height ?? heights.cpeHeightM, apM: heights.apHeightM }, radio, obstacles(ctx));
+      const e = raw.get(a.id) ?? null;
+      if (!e) return e;
+      const { model } = cpeFor(e, a.distanceM);
+      const shift = (v: number | null) => (v === null ? null : Math.round(v + model.gainDbi - refGain));
+      const signalDbm = shift(e.signalDbm);
       // capacity of the new link from the curve of the real CPEs (and how this AP does on it)
-      return e && { ...e, basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null, capacityMbps: ctx.apLoad.capacity(a.id, e.signalDbm) };
+      return { ...e, signalDbm, low: shift(e.low), high: shift(e.high), basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null, capacityMbps: signalDbm === null ? null : ctx.apLoad.capacity(a.id, signalDbm) };
+    };
+    // the CPE of every AP: the one asked for, or the one proposed (with the signal it would give)
+    const cpeOf = (a: (typeof inRange)[number]) => {
+      const { model, proposed } = cpeFor(raw.get(a.id) ?? null, a.distanceM);
+      return { id: model.id, name: model.name, gainDbi: model.gainDbi, auto: !chosenCpe, proposed: proposed ? { id: proposed.model.id, name: proposed.model.name, signalDbm: proposed.signalDbm } : null };
     };
     // load of the AP in the evening (installers: only the verdict, admins every number)
     const loadOf = (id: string) => {
@@ -131,7 +156,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     // installations given up near here for radio reasons (no signal, no link, obstacles)
     const failed = fieldFailures(db);
     const ranked = rankCoverage(
-      inRange.map((a) => ({ ...a, estimate: estimateFor(a), load: loadOf(a.id), failures: failuresNear(failed, point, a.name).sameAp })),
+      inRange.map((a) => ({ ...a, estimate: estimateFor(a), cpe: cpeOf(a), load: loadOf(a.id), failures: failuresNear(failed, point, a.name).sameAp })),
       ctx.cfg.thresholds.signalMin,
     );
     // installers: only the APs worth a try (no inactive ones, none whose best case is below the minimum)
@@ -152,6 +177,10 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       /** Installations given up for radio reasons within 300 m of the point (any AP). */
       failuresNearby: failuresNear(failed, point, null).any,
       hideBelowDbm: ctx.cfg.coverageHideBelowDbm,
+      /** CPEs that can be chosen (the reference of the model first), and the one asked for. */
+      cpeModels: CPE_MODELS.filter((m) => m.current).map((m) => ({ id: m.id, name: m.name, gainDbi: m.gainDbi, beamDeg: m.beamDeg })),
+      cpe: chosenCpe ? chosenCpe.id : 'auto',
+      goodSignalDbm: ctx.cfg.thresholds.signalGood,
       aps: aps.map(({ lat, lon, siteId: _site, gpsAltitude: _alt, siteHeight: _h, ...a }) => {
         const m = a.ssid ? SSID_PARTS.exec(a.ssid) : null;
         const base = { ...a, node: m ? Number(m[1]) : null, district: m ? Number(m[2]) : null, relay: m?.[3] ? Number(m[3]) : null };
@@ -170,7 +199,8 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
    * Out to where the signal falls to −80 dBm in the main lobe, at most 20 km (farthest real link).
    */
   app.get('/api/admin/coverage/simulation', mod('coverage', admin), async (req) => {
-    const q = z.object({ apId: z.string().min(1).max(80) }).parse(req.query);
+    const q = z.object({ apId: z.string().min(1).max(80), cpe: z.string().max(40).optional() }).parse(req.query);
+    const simCpe = cpeModelById(q.cpe) ?? cpeModelById('lbe5ac')!;
     const ap = (await uisp().apsWithLocation()).find((a) => a.id === q.apId && !isPtp(a));
     if (!ap) throw new HttpError(404, 'ap_not_found');
     const radio = { eirpDbm: ctx.cfg.coverageEirpDbm, cpeGainDbi: ctx.cfg.coverageCpeGainDbi };
@@ -204,8 +234,9 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
         const b = ((Math.atan2(dx, dy) * 180) / Math.PI + 360) % 360;
         const cell = { lat: ap.location.lat + dy / mPerLat, lon: ap.location.lon + dx / mPerLon };
         const terrain = at ? terrainBetween(at, cell, heights.cpeHeightM, target, heights.apHeightM, obs, Math.max(40, cellM / 8), 240) : null;
-        const e = estimateAt(m, d, b, ap.frequency, radio, terrain);
-        if (e.signalDbm === null) continue;
+        const e0 = estimateAt(m, d, b, ap.frequency, radio, terrain);
+        if (e0.signalDbm === null) continue;
+        const e = { ...e0, signalDbm: Math.round(e0.signalDbm + simCpe.gainDbi - radio.cpeGainDbi) };
         cells.push({
           i,
           j,
@@ -232,6 +263,8 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       cells,
       cellM: Math.round(cellM),
       n,
+      cpe: { id: simCpe.id, name: simCpe.name, gainDbi: simCpe.gainDbi },
+      cpeModels: CPE_MODELS.filter((x) => x.current).map((x) => ({ id: x.id, name: x.name, gainDbi: x.gainDbi })),
       radiusM,
       sector: m.sector,
       servedM: m.servedM,
