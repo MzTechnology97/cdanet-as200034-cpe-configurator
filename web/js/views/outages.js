@@ -7,7 +7,10 @@ import { myTelegramCard } from './my-telegram.js';
 const KIND = { guasto_mt: ['Guasto MT', 'bad'], guasto_bt: ['Guasto BT', 'warn'], lavoro: ['Lavoro programmato', ''], altro: ['Interruzione', 'warn'] };
 const local = (s) => (s ? s.replace('T', ' ').replace(/^(\d{4})-(\d{2})-(\d{2})/, '$3/$2/$1') : '—');
 const dist = (m) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} m`);
-const osm = (o) => `https://www.openstreetmap.org/?mlat=${o.lat}&mlon=${o.lon}#map=15/${o.lat}/${o.lon}`;
+
+/** Shows a point on the page's own map (set by outagesMap): the outage or the zone, never an external site. */
+let showOnMap = null;
+const mapLink = (o, text) => h('button', { type: 'button', class: 'link', title: 'Mostra sulla mappa', onclick: () => showOnMap?.(o) }, text);
 
 /**
  * New area of interest: GPS of the device (with the address filled in), address search or typed
@@ -96,7 +99,7 @@ const zonesTable = (zones, del, owner = false) =>
     [
       ...(owner ? [{ label: 'Installatore', key: 'owner' }] : []),
       { label: 'Nome', key: 'name' },
-      { label: 'Centro', render: (z) => h('a', { href: osm(z), target: '_blank', rel: 'noopener' }, `${z.lat.toFixed(4)}, ${z.lon.toFixed(4)}`) },
+      { label: 'Centro', render: (z) => mapLink(z, `${z.lat.toFixed(4)}, ${z.lon.toFixed(4)}`) },
       { label: 'Raggio', render: (z) => `${z.radiusKm} km` },
       {
         label: '',
@@ -132,7 +135,7 @@ const myZonesTable = (zones, onChange, del) => {
   };
   return table(
     [
-      { label: 'Zona', render: (z) => h('div', {}, h('strong', {}, z.name), h('div', { class: 'small muted' }, h('a', { href: osm(z), target: '_blank', rel: 'noopener' }, `${z.lat.toFixed(4)}, ${z.lon.toFixed(4)}`), ` · ${z.radiusKm} km`)) },
+      { label: 'Zona', render: (z) => h('div', {}, h('strong', {}, z.name), h('div', { class: 'small muted' }, mapLink(z, `${z.lat.toFixed(4)}, ${z.lon.toFixed(4)}`), ` · ${z.radiusKm} km`)) },
       { label: 'Ora', render: (z) => (z.activeCount ? badge(`${z.activeCount} ${z.activeCount === 1 ? 'interruzione' : 'interruzioni'}`, 'warn') : badge('nessuna', 'good')) },
       { label: 'Avvisi', render: (z) => h('div', { class: 'btns' }, check(z, 'notifyMt', 'MT'), check(z, 'notifyBt', 'BT'), check(z, 'notifyPlanned', 'lavori')) },
       {
@@ -168,11 +171,23 @@ function outagesMap(admin) {
     ]),
     note,
   );
+  // outage and zone markers by id, to open them from the lists
+  const markers = new Map();
+  let map = null;
+  showOnMap = (o) => {
+    if (!map) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    const m = markers.get(o.id);
+    if (m?.getBounds) map.fitBounds(m.getBounds().pad(0.1), { maxZoom: 15 });
+    else map.setView(m ? m.getLatLng() : [o.lat, o.lon], Math.max(map.getZoom(), 15));
+    m?.openPopup();
+  };
   (async () => {
-    const map = await createMap(el);
+    map = await createMap(el);
     if (!map) return;
     const d = await api('/api/outages/map');
-    const layers = drawOutages(map, d);
+    const layers = drawOutages(map, d, (o, marker) => markers.set(o.id, marker));
+    for (const [i, z] of (d.zones ?? []).entries()) markers.set(z.id, layers[i]);
     fit(map, layers);
   })().catch((e) => (note.textContent = e.message));
   return box;
@@ -322,7 +337,7 @@ export async function outagesView({ user }) {
                 { label: 'Clienti', key: 'customers' },
                 { label: 'Dal', render: (o) => local(o.start) },
                 { label: 'Ripristino previsto', render: (o) => local(o.expectedRestore) },
-                { label: '', render: (o) => h('a', { href: osm(o), target: '_blank', rel: 'noopener' }, 'mappa') },
+                { label: '', render: (o) => h('button', { type: 'button', class: 'small-btn', onclick: () => showOnMap?.(o) }, 'Mappa') },
               ],
               d.active,
             )
