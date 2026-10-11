@@ -175,6 +175,15 @@ function direction(m: Pick<ApModel, 'sector' | 'antenna' | 'pattern'>, b: number
 /** Theory at [d] m: EIRP + CPE gain − free space − real losses (no pattern, no terrain). */
 const theory = (d: number, freqMHz: number | null, r: RadioDefaults) => r.eirpDbm + r.cpeGainDbi - REAL_LOSS_DB - freeSpaceLossDb(d, freqMHz);
 
+/**
+ * Customers needed to guess the served sector from where they are: with fewer, their arc is a
+ * sliver (two customers make an arc of a few degrees) and would put most new points "outside".
+ */
+export const MIN_ARC_CUSTOMERS = 5;
+
+/** The sector guessed from the customers, only when there are enough of them. */
+const guessedArc = (samples: Sample[]) => (samples.length >= MIN_ARC_CUSTOMERS ? servedArc(samples.map((s) => s.b)) : null);
+
 /** Smallest arc containing all the bearings. */
 export function servedArc(bearings: number[]): { center: number; width: number } | null {
   if (bearings.length < 2) return null;
@@ -227,7 +236,7 @@ export function networkCalibrationDb(
     const { samples } = samplesOf(a.ap, a.clients);
     const sig = withSignal(samples);
     if (sig.length < 3) continue;
-    const dir = { sector: a.heading ?? servedArc(samples.map((s) => s.b)), antenna: a.heading !== null, pattern: a.pattern ?? null };
+    const dir = { sector: a.heading ?? guessedArc(samples), antenna: a.heading !== null, pattern: a.pattern ?? null };
     offsets.push(median(sig.map((s) => s.s - theory(s.d, a.freqMHz, r) + direction(dir, s.b, s.e).lossDb + s.t)));
   }
   if (offsets.length < 3) return null;
@@ -251,7 +260,7 @@ export function buildApModel(
   const ds = samples.map((s) => s.d).sort((a, b) => a - b);
   const servedM = ds.length ? Math.round(ds[Math.min(ds.length - 1, Math.floor(ds.length * 0.9))]!) : null;
   // the real antenna: its azimuth is also the centre of the sector
-  const sector = pattern ? { center: pattern.azimuth, width: 90 } : (heading ?? servedArc(samples.map((s) => s.b)));
+  const sector = pattern ? { center: pattern.azimuth, width: 90 } : (heading ?? guessedArc(samples));
   const m: ApModel = { samples, ignored: all.length - samples.length, sector, antenna: heading !== null || pattern !== null, servedM, prior: priorDb, fit: null, pattern };
   const sig = withSignal(samples);
   if (!sig.length) return m;

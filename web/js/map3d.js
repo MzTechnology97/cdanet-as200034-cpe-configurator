@@ -128,7 +128,7 @@ const remembered = () => {
  */
 async function openScene({ title, ariaLabel, legendItems, center, bearing, onLoad }) {
   const stage = h('div', { class: 'map3d-stage' });
-  const status = h('span', { class: 'small muted' }, 'Caricamento del terreno…');
+  const status = h('span', { class: 'small muted' }, 'Caricamento del terreno… La prima volta il server prepara il rilievo di questa zona: può volerci fino a un minuto, poi resta pronto.');
   const views = h('div', { class: 'map3d-views' });
   const tools = h('div', { class: 'map3d-views' });
   const imagery = h('select', { 'aria-label': 'Immagini' });
@@ -137,8 +137,13 @@ async function openScene({ title, ariaLabel, legendItems, center, bearing, onLoa
     map?.remove();
     root.remove();
     document.removeEventListener('keydown', onKey);
+    window.removeEventListener('hashchange', close);
+    // in the app: the map goes back to its size
+    window.CdaApp?.on3d?.(false);
   };
   const onKey = (e) => e.key === 'Escape' && close();
+  // another page of the console: the 3D view goes with the page it was opened from
+  window.addEventListener('hashchange', close);
   const root = h(
     'div',
     { class: 'map3d', role: 'dialog', 'aria-label': ariaLabel },
@@ -157,6 +162,8 @@ async function openScene({ title, ariaLabel, legendItems, center, bearing, onLoa
   );
   document.body.append(root);
   document.addEventListener('keydown', onKey);
+  // in the app: the map takes the whole screen while the 3D view is open
+  window.CdaApp?.on3d?.(true);
 
   let gl;
   let info;
@@ -305,6 +312,56 @@ export async function openSimulation3d({ d, image, bounds, legendItems, title })
       preset('Verso l’AP', () => fit(all, (main + 180) % 360, 62));
       preset('Dall’alto', () => fit(all, 0, 0));
       fit(all, (main + 180) % 360, 58);
+    },
+  });
+}
+
+/**
+ * The area a 2D map shows, in 3D (the "3D" button of the admin maps): same centre and scale,
+ * tilted; the APs of the view as tags and, when the page has them, the simulation drawn on the
+ * map and the link being checked. [extras]: { aps, sim: { d, image, bounds, legendItems, title },
+ * link: { from, label, p, apName } } given by the page (map.cda3d).
+ */
+export async function openArea3d({ map: m2d, extras = {} }) {
+  const c = m2d.getCenter();
+  const b = m2d.getBounds();
+  const { aps = [], sim = null, link = null } = extras;
+  const legend = sim?.legendItems ?? (link ? [['los', 'linea di vista'], ['ok', 'Fresnel 60% libera'], ['bad', 'Fresnel invasa']] : []);
+  await openScene({
+    title: `3D · ${sim?.title ?? (link ? `${link.label ?? 'Punto'} → ${link.apName}` : 'zona della mappa')}`,
+    ariaLabel: 'Vista 3D della mappa',
+    legendItems: [...legend, ['ap', 'AP']],
+    center: [c.lat, c.lng],
+    bearing: 0,
+    onLoad: ({ map, tag, fit, preset, tools }) => {
+      if (sim) {
+        const [[s, w], [n, e]] = sim.bounds;
+        map.addSource('sim', { type: 'canvas', canvas: sim.image, animate: false, coordinates: [[w, n], [e, n], [e, s], [w, s]] });
+        map.addLayer({ id: 'sim', type: 'raster', source: 'sim', paint: { 'raster-opacity': 0.72, 'raster-resampling': 'linear', 'raster-fade-duration': 0 } }, map.getLayer('buildings3d') ? 'buildings3d' : undefined);
+        const opacity = h('input', { type: 'range', min: 0, max: 100, value: 72, 'aria-label': 'Intensità della simulazione' });
+        opacity.oninput = () => map.setPaintProperty('sim', 'raster-opacity', Number(opacity.value) / 100);
+        tools.append(h('label', { class: 'small map3d-range' }, 'Simulazione ', opacity));
+      }
+      if (link?.p?.ap?.lat != null && link.p.chart?.length) {
+        const to = [link.p.ap.lat, link.p.ap.lon];
+        const geo = linkGeometry(link.from, to, link.p.chart);
+        for (const [id, data] of Object.entries({ fresnel: geo.fresnel, line: geo.line, obstacles: geo.obstacles, masts: geo.masts })) map.addSource(id, { type: 'geojson', data });
+        const extr = (id, color, opacity) => map.addLayer({ id, type: 'fill-extrusion', source: id, paint: { 'fill-extrusion-color': color, 'fill-extrusion-base': ['get', 'base'], 'fill-extrusion-height': ['get', 'top'], 'fill-extrusion-opacity': opacity } });
+        extr('obstacles', ['match', ['get', 'kind'], 'edificio', '#9ca3af', '#15803d'], 0.85);
+        extr('masts', ['match', ['get', 'kind'], 'ap', '#2563eb', '#f97316'], 1);
+        extr('line', '#1d4ed8', 0.95);
+        extr('fresnel', ['case', ['get', 'hit'], '#ef4444', '#38bdf8'], 0.35);
+        tag(link.from[0], link.from[1], `CPE ${Math.round(link.p.mountedM ?? link.p.cpeHeightM ?? 0)} m`, 'cpe');
+      }
+      // the APs inside the view (at most 80, the link's AP first)
+      const inView = aps.filter((a) => a.lat != null && b.contains([a.lat, a.lon])).slice(0, 80);
+      for (const a of inView) tag(a.lat, a.lon, a.name, link && a.id === link.p?.ap?.id ? 'ap' : 'other');
+      const all = [[b.getSouth(), b.getWest()], [b.getNorth(), b.getEast()]];
+      preset('Da sud', () => fit(all, 0, 62));
+      preset('Da nord', () => fit(all, 180, 62));
+      preset('Dall’alto', () => fit(all, 0, 0));
+      // the same scale as the 2D map (MapLibre counts 512 px tiles: one zoom level less), tilted
+      map.jumpTo({ center: [c.lng, c.lat], zoom: Math.max(1, m2d.getZoom() - 1), pitch: 60, bearing: 0 });
     },
   });
 }

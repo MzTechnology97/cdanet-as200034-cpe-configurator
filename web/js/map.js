@@ -211,6 +211,22 @@ async function addViews(map, base, config) {
   const on = new Set(savedOverlays());
   for (const [name, layer] of Object.entries(overlays)) if (on.has(name)) layer.addTo(map);
   L.control.layers(bases, overlays, { position: 'topright' }).addTo(map);
+  // admins: the same area in 3D (terrain, imagery, buildings), with what the page adds (map.cda3d)
+  if (s) {
+    const Btn = L.Control.extend({
+      options: { position: 'topright' },
+      onAdd() {
+        const b = L.DomUtil.create('button', 'map-3d-btn');
+        b.type = 'button';
+        b.textContent = '3D';
+        b.title = 'Vista 3D di questa zona';
+        L.DomEvent.disableClickPropagation(b);
+        b.onclick = () => import('./map3d.js').then((m) => m.openArea3d({ map, extras: map.cda3d?.() ?? {} }));
+        return b;
+      },
+    });
+    new Btn().addTo(map);
+  }
   map.on('baselayerchange', (e) => remember(BASE_KEY, e.name));
   const saveOverlays = () => remember(OVERLAY_KEY, JSON.stringify(Object.entries(overlays).filter(([, l]) => map.hasLayer(l)).map(([n]) => n)));
   map.on('overlayadd overlayremove', saveOverlays);
@@ -387,7 +403,7 @@ export function simulationOverlay(d, colorOf) {
     img.data[k] = parseInt(color.slice(1, 3), 16);
     img.data[k + 1] = parseInt(color.slice(3, 5), 16);
     img.data[k + 2] = parseInt(color.slice(5, 7), 16);
-    img.data[k + 3] = Math.round(255 * (d.theoretical ? 0.42 : c.confidence === 'bassa' ? 0.28 : 0.55));
+    img.data[k + 3] = Math.round(255 * (c.blocked ? 0.22 : d.theoretical ? 0.42 : c.confidence === 'bassa' ? 0.28 : 0.55));
   }
   g.putImageData(img, 0, 0);
   const bounds = [

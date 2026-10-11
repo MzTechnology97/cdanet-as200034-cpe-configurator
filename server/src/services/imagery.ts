@@ -192,7 +192,8 @@ export function createImagery(db: Db, sealer: Sealer, opts: { fetchImpl?: typeof
         if (!enabled(p)) continue;
         if (p === 'wms') {
           const w = read().stored.wms!;
-          out.push({ id: 'wms', label: w.label || WMS_DEFAULT.label, parts: [['wms', 'ortofoto']], attribution: w.attribution || WMS_DEFAULT.attribution, maxNativeZoom: 20, minZoom: 9 });
+          // the AGEA WMS draws nothing (white tiles) under zoom 11: the base map shows there instead
+          out.push({ id: 'wms', label: w.label || WMS_DEFAULT.label, parts: [['wms', 'ortofoto']], attribution: w.attribution || WMS_DEFAULT.attribution, maxNativeZoom: 20, minZoom: 11 });
           continue;
         }
         const native = p === 'google' ? 20 : 19;

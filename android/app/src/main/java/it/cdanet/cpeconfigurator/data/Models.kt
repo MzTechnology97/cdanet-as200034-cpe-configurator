@@ -186,6 +186,9 @@ data class SignalEstimateDto(
     val capacityMbps: Int? = null,
     /** What a new customer would get at the evening peak (the link shared with the others), Mbit/s. */
     val eveningMbps: Int? = null,
+    /** Expected SNR (signal − noise of the AP) and the airMAX modulation it allows (0 = 1x … 9 = 13x, −1 none). */
+    val snrDb: Int? = null,
+    val mcs: Int? = null,
 ) {
     /** "−63 dBm (−67…−59) · affidabilità alta · fuori dal settore servito"; null if there is no estimate. */
     fun describe(): String? = signalDbm?.let { s ->
@@ -197,6 +200,7 @@ data class SignalEstimateDto(
             if (tooFar) "oltre 20 km: troppo lontano" else null,
             terrain?.describe(),
             capacityMbps?.let { "capacità ~$it Mbit/s" + (eveningMbps?.let { e -> ", la sera ~$e" } ?: "") },
+            mcs?.takeIf { it >= 0 }?.let { m -> "modulazione attesa ${listOf("1x", "2x", "3x", "4x", "6x", "8x", "9x", "10x", "12x", "13x").getOrElse(m) { "" }}" + (snrDb?.let { " (SNR $it dB)" } ?: "") },
             // no customers on the AP yet: free-space estimate from the radio parameters
             if (theoretical) "stima teorica: AP senza clienti" else basis?.let { b -> "calibrata su $b clienti" },
         ).joinToString(" · ")
@@ -587,6 +591,8 @@ data class SimulationInfoDto(
     val load: ApLoadDto? = null,
     /** The cells carry the capacity of a new link (cap). */
     val capacity: Boolean = false,
+    /** Share of the link a new customer gets at the evening peak (speed in the evening = cap × share). */
+    val eveningShare: Double? = null,
 )
 
 @Serializable

@@ -160,38 +160,48 @@ function cpeCell(c, goodDbm) {
 }
 
 /**
- * Indicative airMAX ac receive sensitivity at 40 MHz (dBm) for MCS 0…9, with the airOS rate
- * multiplier: where the expected signal falls on the modulation scale, as in UISP Design.
+ * airMAX ac modulations (rate multiplier of airOS and UISP Design) and the SNR each needs, dB:
+ * the modulation follows the signal-to-noise ratio, not the signal alone (same table as the server).
  */
 const MCS_SCALE = [
-  [-91, '1x'],
-  [-89, '2x'],
-  [-86, '3x'],
-  [-83, '4x'],
-  [-79, '6x'],
-  [-75, '8x'],
-  [-73, '9x'],
-  [-71, '10x'],
-  [-66, '12x'],
-  [-64, '13x'],
+  [4, '1x'],
+  [7, '2x'],
+  [10, '3x'],
+  [13, '4x'],
+  [17, '6x'],
+  [21, '8x'],
+  [23, '9x'],
+  [25, '10x'],
+  [29, '12x'],
+  [31, '13x'],
 ];
 /** Magnetic declination in central Sicily (2026, east), to point with a compass. */
 export const DECLINATION_DEG = 4;
 
-/** Expected signal on the modulation scale: the bar fills up to the signal, the reached MCS lit. */
-export function signalBar(dbm) {
-  const lo = -95;
-  const hi = -50;
-  const pct = dbm == null ? 0 : Math.max(0, Math.min(100, ((dbm - lo) / (hi - lo)) * 100));
+/**
+ * Expected modulation of the link, as in UISP Design: the scale 1x…13x lit up to the modulation
+ * the expected SNR allows (signal against the noise of the AP, computed by the server), the bar
+ * filled with the SNR; the signal in dBm aside. [e]: the estimate (signalDbm, snrDb, mcs).
+ */
+export function signalBar(e) {
+  const dbm = e?.signalDbm ?? null;
+  const snr = e?.snrDb ?? (dbm == null ? null : dbm + 92);
+  const reached = e?.mcs ?? (snr == null ? -1 : MCS_SCALE.filter(([need]) => snr >= need).length - 1);
+  const pct = snr == null ? 0 : Math.max(0, Math.min(100, (snr / 35) * 100));
   const bar = h('div', { class: 'mcs-bar' }, h('span', { class: 'mcs-fill' }));
   bar.firstChild.style.width = `${pct}%`;
-  const reached = dbm == null ? -1 : MCS_SCALE.filter(([min]) => dbm >= min).length - 1;
   return h(
     'div',
     { class: 'mcs' },
-    h('div', { class: 'mcs-head' }, h('span', {}, 'Segnale atteso'), h('b', {}, dbm == null ? '—' : `${dbm} dBm`)),
+    h(
+      'div',
+      { class: 'mcs-head' },
+      h('span', {}, 'Modulazione attesa'),
+      h('b', {}, reached >= 0 ? `${MCS_SCALE[reached][1]} · SNR ${snr} dB` : snr == null ? '—' : `nessuna · SNR ${snr} dB`),
+    ),
     bar,
     h('div', { class: 'mcs-steps' }, MCS_SCALE.map(([, label], k) => h('span', { class: k <= reached ? 'on' : '' }, label))),
+    h('div', { class: 'small muted' }, dbm == null ? '' : `Segnale atteso ${dbm} dBm${e?.snrDb == null ? ' · rumore dell’AP non noto, considerato −92 dBm' : ''}`),
   );
 }
 
@@ -227,6 +237,7 @@ export async function adminCoverageView() {
   let simLayer = null; // radio simulation of one AP
   let point = null;
   let allAps = [];
+  const view3d = { sim: null, link: null };
 
   // CPE height: starts from the default of Impostazioni server, changed for every check
   api('/api/admin/pointing/config')
@@ -281,6 +292,7 @@ export async function adminCoverageView() {
     if (!map) return null;
     const L = window.L;
     simLayer = L.layerGroup().addTo(map);
+    map.cda3d = () => ({ aps: allAps, sim: view3d.sim, link: view3d.link });
     base = L.layerGroup().addTo(map);
     pointLayer = L.layerGroup().addTo(map);
     linkLayer = L.layerGroup().addTo(map);
@@ -424,8 +436,13 @@ export async function adminCoverageView() {
     const draw = (mode) => {
       simLayer.clearLayers();
       // clearly no coverage: left blank, not a red disc
-      overlay = simulationOverlay(d, (c) => (c.dbm < d.minDbm - 15 ? null : mode === 'cap' ? (c.cap == null ? null : capColor(c.cap)) : mode === 'eve' ? (c.cap == null ? null : capColor(c.cap * d.eveningShare)) : scaleColor(c.dbm))).addTo(simLayer);
+      // only where a CPE would work: below the minimum by more than 5 dB, or behind a hill that
+      // hides the AP with a signal under the minimum, the map stays empty (the real shape, not a disc)
+      const usable = (c) => c.dbm >= d.minDbm - 5 && !(c.blocked && c.dbm < d.minDbm);
+      overlay = simulationOverlay(d, (c) => (!usable(c) ? null : mode === 'cap' ? (c.cap == null ? null : capColor(c.cap)) : mode === 'eve' ? (c.cap == null ? null : capColor(c.cap * d.eveningShare)) : scaleColor(c.dbm))).addTo(simLayer);
       shown = mode;
+      const scale = (mode === 'dbm' ? SCALE.filter(([min]) => min >= d.minDbm - 5) : CAP_SCALE).map(([, color, text]) => ['scale', text, color]);
+      view3d.sim = { d, image: overlay.canvas, bounds: overlay.cellBounds, legendItems: scale, title: `simulazione di ${d.ap.name}` };
       // learned: the area already served; theory: the sector of the antenna (azimuth from UISP)
       if (d.sector && (d.servedM || d.theoretical)) {
         const reach = d.servedM || d.radiusM;
@@ -434,7 +451,7 @@ export async function adminCoverageView() {
         L.polygon(pts, { color: '#0f172a', weight: 1.5, fill: false, dashArray: '4 5', interactive: false }).addTo(simLayer);
       }
       L.circleMarker([d.ap.lat, d.ap.lon], { radius: 8, color: '#0f172a', weight: 3, fillColor: '#ffffff', fillOpacity: 1, interactive: false }).addTo(simLayer);
-      mount(legendBox, legend((mode === 'cap' || mode === 'eve' ? CAP_SCALE : SCALE).map(([, color, text]) => [color, text])));
+      mount(legendBox, legend((mode === 'cap' || mode === 'eve' ? CAP_SCALE : SCALE.filter(([min]) => min >= d.minDbm - 5)).map(([, color, text]) => [color, text])));
     };
     const legendBox = h('div', {});
     const mode = h('select', {}, h('option', { value: 'dbm' }, 'Segnale'), d.capacity ? h('option', { value: 'cap' }, 'Capacità del collegamento') : null, d.capacity && d.eveningShare != null ? h('option', { value: 'eve' }, 'Velocità la sera') : null);
@@ -442,7 +459,7 @@ export async function adminCoverageView() {
     let overlay = null;
     const MODE_NAME = { dbm: 'segnale', cap: 'capacità del collegamento', eve: 'velocità la sera' };
     // the same coloured cells on the terrain in relief, with the buildings
-    const view3d = h('button', { type: 'button', class: 'small-btn', onclick: () => overlay && openSimulation3d({ d, image: overlay.canvas, bounds: overlay.cellBounds, title: `3D · simulazione di ${d.ap.name} · ${MODE_NAME[shown] ?? 'segnale'}`, legendItems: (shown === 'dbm' ? SCALE : CAP_SCALE).map(([, color, text]) => ['scale', text, color]) }) }, 'Vista 3D');
+    const sim3d = h('button', { type: 'button', class: 'small-btn', onclick: () => overlay && openSimulation3d({ d, image: overlay.canvas, bounds: overlay.cellBounds, title: `3D · simulazione di ${d.ap.name} · ${MODE_NAME[shown] ?? 'segnale'}`, legendItems: (shown === 'dbm' ? SCALE.filter(([min]) => min >= d.minDbm - 5) : CAP_SCALE).map(([, color, text]) => ['scale', text, color]) }) }, 'Vista 3D');
     mode.onchange = () => draw(mode.value);
     draw('dbm');
     if (!point) m.fitBounds(L.latLng(d.ap.lat, d.ap.lon).toBounds(d.radiusM * 2.1));
@@ -462,7 +479,7 @@ export async function adminCoverageView() {
         ),
         ' ',
         clearBtn(),
-        h('div', { class: 'row' }, field('Mostra', mode), view3d),
+        h('div', { class: 'row' }, field('Mostra', mode), sim3d),
         legendBox,
         d.load ? h('div', { class: 'small' }, 'Carico serale dell’AP: ', loadCell(d.load)) : null,
         h(
@@ -474,14 +491,15 @@ export async function adminCoverageView() {
             : 'I clienti già collegati correggono la teoria, con un peso che cresce con il loro numero: pochi clienti, stima vicina alla teoria.',
           d.capacity ? ' Capacità: dal segnale stimato con la curva segnale → capacità delle CPE reali della rete (e di come va questo AP); è la velocità del collegamento radio, la sera condivisa con gli altri clienti dell’AP.' : '',
           d.eveningShare != null ? ` Velocità la sera: la capacità per la parte di tempo radio che l’AP ha libera al picco serale (${Math.round(d.eveningShare * 100)}%, mai meno della parte equa tra i suoi clienti).` : '',
-          ' Area vuota: nessuna copertura (sotto −90 dBm). Colori tenui: stima poco affidabile. Tratteggio: settore dell’antenna o area già servita. Per un punto preciso usa Visibilità.',
+          ` Area vuota: segnale sotto ${d.minDbm - 5} dBm o AP nascosto da una collina. Colori tenui: stima poco affidabile o collina in mezzo (da verificare). Tratteggio: settore dell’antenna o area già servita. Per un punto preciso usa Visibilità.`,
+          d.antenna ? '' : ' Antenna e azimut dell’AP non sono indicati: la stima è uguale in tutte le direzioni (per questo può sembrare un cerchio). Indicali in Antenne degli AP per il fascio vero.',
         ),
       ),
     );
   }
 
   function clearBtn() {
-    return h('button', { type: 'button', class: 'small-btn', onclick: () => (simLayer?.clearLayers(), mount(simBox)) }, 'Togli simulazione');
+    return h('button', { type: 'button', class: 'small-btn', onclick: () => (simLayer?.clearLayers(), mount(simBox), (view3d.sim = null)) }, 'Togli simulazione');
   }
 
   /** The link of Visibilità on the map with its Fresnel zone (admins: the AP position is known). */
@@ -562,7 +580,7 @@ export async function adminCoverageView() {
             fact('Inclinazione', `${tilt >= 0 ? '+' : ''}${dec(tilt)}°`),
           ),
           p.roofM ? h('div', { class: 'small muted' }, `Sul tetto: edificio di ${p.roofM} m, antenna a ${dec(p.mountedM)} m dal suolo`) : p.mountedM > hM + 0.4 ? h('div', { class: 'small muted' }, `Sopra gli ostacoli vicini: antenna a ${dec(p.mountedM)} m dal suolo`) : null,
-          signalBar(e?.signalDbm ?? null),
+          signalBar(e),
         ),
       ),
       h('button', { type: 'button', class: 'dock-close', 'aria-label': 'Chiudi', onclick: closeDock }, '×'),
@@ -587,6 +605,7 @@ export async function adminCoverageView() {
         return mount(profileBox, card(h('h2', {}, `Visibilità verso ${a.name}`), h('div', { class: 'notice bad' }, e.message)));
       }
       selected = a.id;
+      view3d.link = { from: [point.la, point.lo], label: point.label?.split(',')[0], p, apName: a.name || a.id };
       renderDock(p, a);
       drawLink(p);
       const verdict = { clear: ['Visibilità libera', 'good'], fresnel: ['Linea libera ma zona di Fresnel invasa', 'warn'], blocked: [p.buildings ? 'Linea ostruita da edifici' : 'Linea ostruita dal terreno', 'bad'] }[p.verdict];
@@ -618,7 +637,7 @@ export async function adminCoverageView() {
             ['#38bdf8', 'prima zona di Fresnel'],
             ['#f59e0b', 'limite del 60%'],
           ]),
-          h('p', { class: 'small muted' }, p.terrainSource === 'tinitaly' ? 'Terreno TINITALY (10 m), edifici e alberi da ESA WorldCover con le altezze di Impostazioni server → Simulazione radio. Cambia l’altezza della CPE sopra e premi di nuovo Visibilità.' : 'Modello del terreno SRTM (circa 30 m): qui non sono scaricati terreno a 10 m, edifici e alberi. Cambia l’altezza della CPE sopra e premi di nuovo Visibilità.'),
+          h('p', { class: 'small muted' }, p.terrainSource === 'tinitaly' ? 'Terreno TINITALY (10 m); edifici dalle sagome di OpenStreetMap e alberi con la loro altezza dove importati (Terreno e ostacoli), altrimenti dalla mappa ESA con le altezze medie. Cambia l’altezza della CPE sopra e premi di nuovo Visibilità.' : 'Modello del terreno SRTM (circa 30 m): qui non sono scaricati terreno a 10 m, edifici e alberi. Cambia l’altezza della CPE sopra e premi di nuovo Visibilità.'),
         ),
       );
     });
@@ -825,7 +844,7 @@ function terrainCard() {
     const area = s.area ? `${s.area.minLat.toFixed(2)}–${s.area.maxLat.toFixed(2)}° N, ${s.area.minLon.toFixed(2)}–${s.area.maxLon.toFixed(2)}° E` : 'nessun AP con posizione';
     const go = h('button', { type: 'button', disabled: imp.running || !s.area }, s.dtmTiles ? 'Aggiorna per l’area della rete' : 'Scarica terreno e ostacoli');
     const bld = h('button', { type: 'button', disabled: imp.running || !s.area }, s.buildingTiles ? 'Aggiorna gli edifici' : 'Edifici dalla mappa base');
-    const trees = h('button', { type: 'button', disabled: imp.running || !s.area }, s.canopyTiles ? 'Completa le altezze degli alberi' : 'Altezze degli alberi');
+    const trees = h('button', { type: 'button', disabled: imp.running || !s.area }, s.canopyTiles ? 'Aggiorna le altezze degli alberi' : 'Altezze degli alberi');
     const REGIONS = { SICI: 'Sicilia', CALA: 'Calabria', CAMP: 'Campania', PUGL: 'Puglia', BASI: 'Basilicata', SARD: 'Sardegna', LAZI: 'Lazio' };
     const region = h('select', {}, Object.entries(REGIONS).map(([k, v]) => h('option', { value: k, selected: k === (s.anncsu?.region ?? 'SICI') }, v)));
     const civics = h('button', { type: 'button', disabled: s.anncsu?.import?.running || !s.area }, s.anncsu?.civics ? 'Aggiorna i civici' : 'Scarica i civici ANNCSU');
@@ -937,7 +956,7 @@ function antennasCard() {
     const rows = (onlyTodo.checked ? s.aps.filter(todo) : s.aps).slice(0, 300);
     const groups = ['Ubiquiti', 'RF elements'].map((v) => h('optgroup', { label: v }, lib.filter((p) => p.vendor === v).map((p) => h('option', { value: p.id }, `${p.name} · ${p.gainDbi ?? '?'} dBi · ${p.hBeam}°×${p.vBeam}°`))));
     const row = (a) => {
-      const ant = h('select', {}, h('option', { value: '' }, a.external ? '— da indicare —' : a.antennaFrom === 'modello' ? 'integrata (dal modello)' : '—'), ...groups.map((g) => g.cloneNode(true)));
+      const ant = h('select', {}, h('option', { value: '' }, a.external ? '— da indicare —' : a.antennaFrom === 'modello' ? 'integrata (dal modello)' : 'integrata (diagramma non pubblicato)'), ...groups.map((g) => g.cloneNode(true)));
       ant.value = a.antennaFrom === 'admin' ? a.antennaId : '';
       const az = h('input', { type: 'number', class: 'ant-num', min: 0, max: 359, step: 1, value: a.azimuth ?? '', placeholder: a.uispAzimuth != null ? `UISP ${a.uispAzimuth}°` : a.suggested ? `clienti ~${a.suggested.azimuth}°` : '°' });
       const tilt = h('input', { type: 'number', class: 'ant-num', min: -30, max: 30, step: 0.5, value: a.tilt ?? '', placeholder: '°' });

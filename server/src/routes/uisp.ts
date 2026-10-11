@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Readable } from 'node:stream';
-import { eveningShare } from '../domain/ap-load.ts';
+import { eveningShare, expectedModulation } from '../domain/ap-load.ts';
 import { apModels } from '../services/model-inputs.ts';
 import { z } from 'zod';
 import { CPE_MODELS, cpeModelById, recommendCpe } from '../domain/cpe-models.ts';
@@ -143,7 +143,8 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       const cap = signalDbm === null ? null : ctx.apLoad.capacity(a.id, signalDbm);
       const share = eveningShare(ctx.apLoad.load(a.id));
       // what a new customer would get at the evening peak: the link shared with the others
-      return { ...e, signalDbm, low: shift(e.low), high: shift(e.high), basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null, capacityMbps: cap, eveningMbps: cap !== null && share !== null ? Math.round(cap * share) : null };
+      const mod = expectedModulation(signalDbm, ctx.apLoad.load(a.id)?.noiseDbm ?? null);
+      return { ...e, signalDbm, low: shift(e.low), high: shift(e.high), basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null, capacityMbps: cap, eveningMbps: cap !== null && share !== null ? Math.round(cap * share) : null, ...(mod ? { snrDb: mod.snrDb, mcs: mod.mcs } : {}) };
     };
     // the CPE of every AP: the one asked for, or the one proposed (with the signal it would give)
     const cpeOf = (a: (typeof inRange)[number]) => {

@@ -1,3 +1,5 @@
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { crc32, deflateSync } from 'node:zlib';
 import type { Bbox, TerrainSampler } from './terrain-store.ts';
 
@@ -68,10 +70,28 @@ export function terrainTilePng(at: TerrainSampler, z: number, x: number, y: numb
 }
 
 /**
- * Tiles for the 3D map, kept in memory (the latest [max]): the terrain changes only when the
- * admin imports it again ([version] in the key).
+ * Tiles for the 3D map, kept in memory (the latest [max]) and, with [dir], on disk: making one
+ * takes seconds the first time, then it is read back even after a restart. The terrain changes
+ * only when the admin imports it again ([version]): the old tiles on disk are then thrown away.
  */
-export function createTerrainTiles(opts: { sampler: (b: Bbox) => Promise<TerrainSampler | null>; version: () => string; max?: number }) {
+export function createTerrainTiles(opts: { sampler: (b: Bbox) => Promise<TerrainSampler | null>; version: () => string; max?: number; dir?: string }) {
+  let diskVersion: string | null = null;
+  /** Folder of this terrain version (the others removed). */
+  const folder = (ver: string) => {
+    if (!opts.dir) return null;
+    const safe = ver.replace(/[^\w.-]/g, '_');
+    if (diskVersion !== safe) {
+      mkdirSync(opts.dir, { recursive: true });
+      const mark = join(opts.dir, 'version');
+      const old = existsSync(mark) ? readFileSync(mark, 'utf8') : null;
+      if (old !== safe) {
+        rmSync(join(opts.dir, 'tiles'), { recursive: true, force: true });
+        writeFileSync(mark, safe);
+      }
+      diskVersion = safe;
+    }
+    return join(opts.dir, 'tiles');
+  };
   const cache = new Map<string, Buffer | null>();
   const max = opts.max ?? 400;
   const running = new Map<string, Promise<Buffer | null>>();
@@ -87,8 +107,19 @@ export function createTerrainTiles(opts: { sampler: (b: Bbox) => Promise<Terrain
       const busy = running.get(key);
       if (busy) return busy;
       const job = (async () => {
+        const dir = folder(opts.version());
+        const file = dir ? join(dir, String(z), String(x), `${y}.png`) : null;
+        if (file && existsSync(file)) {
+          const png = readFileSync(file);
+          cache.set(key, png);
+          return png;
+        }
         const at = await opts.sampler(tileBbox(z, x, y));
         const png = at ? terrainTilePng(at, z, x, y) : null;
+        if (png && file) {
+          mkdirSync(join(dir!, String(z), String(x)), { recursive: true });
+          writeFileSync(file, png);
+        }
         cache.set(key, png);
         while (cache.size > max) cache.delete(cache.keys().next().value!);
         return png;

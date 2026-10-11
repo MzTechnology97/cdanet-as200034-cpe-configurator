@@ -155,7 +155,10 @@ export function createAnncsu(opts: { dir: string; fetchImpl?: typeof fetch; log?
           best = c;
         }
       }
-      return best ? { ...r, lat: best[2], lon: best[3], label: `${r.label} · civico ANNCSU`, type: 'anncsu' } : r;
+      // the label of the geocoder often stops at the street: the number in front, as Nominatim writes it
+      const num = `${a.number}${a.exp ? `/${a.exp.toUpperCase()}` : ''}`;
+      const label = /^\d/.test(r.label) ? r.label : `${num}, ${r.label}`;
+      return best ? { ...r, lat: best[2], lon: best[3], label: `${label} · civico ANNCSU`, type: 'anncsu' } : r;
     });
   }
 

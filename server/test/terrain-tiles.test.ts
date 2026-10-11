@@ -1,6 +1,9 @@
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { inflateSync } from 'node:zlib';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createTerrainTiles, fromTerrarium, terrainTilePng, terrarium, tileBbox } from '../src/services/terrain-tiles.ts';
 import type { TerrainSampler } from '../src/services/terrain-store.ts';
 
@@ -64,5 +67,24 @@ describe('3D map terrain tiles', () => {
     assert.equal(calls, 2);
     const none = createTerrainTiles({ sampler: async () => null, version: () => 'x' });
     assert.equal(await none.tile(12, 1, 1), null);
+  });
+
+  it('tiles kept on disk survive a restart, a new terrain throws them away', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'tiles3d-'));
+    try {
+      let calls = 0;
+      let version = 'a';
+      const make = () => createTerrainTiles({ sampler: async () => (calls++, { fine: true, ground: () => 100, cover: () => null }), version: () => version, dir });
+      const first = await make().tile(12, 2205, 1613);
+      // a restart: a new service, the memory empty, the disk not
+      const again = await make().tile(12, 2205, 1613);
+      assert.equal(calls, 1);
+      assert.deepEqual(again, first);
+      version = 'b';
+      await make().tile(12, 2205, 1613);
+      assert.equal(calls, 2);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
   });
 });

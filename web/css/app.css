@@ -546,3 +546,22 @@ tr:hover > td { background: color-mix(in srgb, var(--brand) 4%, transparent); }
 .ant-polar .lobe { fill: color-mix(in srgb, #2563eb 30%, transparent); stroke: #2563eb; stroke-width: 1.2; }
 .ant-num { width: 8.5rem; min-height: 32px; }
 .map3d-range { display: inline-flex; align-items: center; gap: 6px; } .map3d-range input { width: 110px; }
+/* the 3D button under the layers of the admin maps */
+.map-3d-btn { min-height: 0; width: 44px; height: 32px; padding: 0; border-radius: 6px; font-weight: 800; letter-spacing: .02em; background: var(--surface); color: var(--ink); border: 2px solid rgba(0, 0, 0, .2); box-shadow: none; cursor: pointer; }
+.map-3d-btn:hover { background: var(--surface-2); }
+
+/* the dock under the map (narrow screens): the profile at a readable size */
+@media (max-width: 1099px) {
+  .dock-chart svg { max-height: 260px; }
+}
+/* 3D view on a phone (and in the app's map): a compact bar, the scene gets the room */
+@media (max-width: 700px) {
+  .map3d-bar { padding: 6px 8px; gap: 6px; }
+  .map3d-bar b { font-size: .85rem; flex: 1 1 100%; }
+  .map3d-bar .small-btn { padding: 2px 8px; min-height: 28px; font-size: .78rem; }
+  .map3d-bar select { min-height: 28px; font-size: .8rem; max-width: 150px; }
+  .map3d-bar .muted { display: none; }
+  .map3d-close { position: absolute; top: 6px; right: 8px; }
+  .map3d { position: fixed; }
+  .map3d-legend { padding: 4px 8px; gap: 8px; font-size: .7rem; }
+}

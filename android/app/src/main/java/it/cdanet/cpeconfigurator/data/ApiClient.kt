@@ -133,6 +133,10 @@ class ApiClient(
         val b = Request.Builder().url(url)
         // only what a static page needs: byte ranges (PMTiles) and content negotiation
         headers.filterKeys { it.equals("Range", true) || it.equals("Accept", true) || it.equals("If-Range", true) }.forEach { (k, v) -> b.header(k, v) }
+        // the 3D view of the map (admins): terrain, imagery and their list need the session of the
+        // app; only these paths of our own server get it, the rest of the page stays without
+        val path = runCatching { java.net.URI(url).path }.getOrNull().orEmpty()
+        if (path.startsWith("/api/admin/map/")) session.token?.let { b.header("Authorization", "Bearer $it") }
         return TestTls.wrap(http).newCall(b.build()).execute()
     }
 
