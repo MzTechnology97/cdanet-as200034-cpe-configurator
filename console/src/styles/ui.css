@@ -211,3 +211,10 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .cp-contacts .ui-btn, .hl-actions a.ui-btn { text-decoration: none; }
 .cp-backups .hl-main { display: grid; }
 .page-head .ui-btn .icon, .ui-page-head .ui-btn .icon { width: 18px; height: 18px; fill: currentColor; }
+
+/* Clienti, maps */
+.cu-row { cursor: pointer; }
+.cu-row > .icon { width: 20px; height: 20px; fill: var(--muted); flex: none; }
+.mv { display: grid; gap: var(--sp-2); }
+.mv .map { border-radius: var(--radius); overflow: hidden; }
+.ui-drawer .mv .map { height: 300px; }
