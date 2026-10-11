@@ -308,7 +308,10 @@ export async function buildApp(
     });
   }
   app.setNotFoundHandler((req, reply) => {
-    if (req.url.startsWith('/api/') || req.method !== 'GET' || !hasWeb) {
+    // a missing file (a script of an older build, an image) is a 404, never the console page: a
+    // module answered with HTML breaks the page that asked for it
+    const path = req.url.split('?')[0] ?? '';
+    if (req.url.startsWith('/api/') || req.method !== 'GET' || !hasWeb || /\.[a-z0-9]{1,6}$/i.test(path)) {
       return reply.code(404).send({ error: 'not_found' });
     }
     return sendPage(reply, 'index.html');
