@@ -277,7 +277,7 @@ function NetworkPage({ admin }) {
 
   const s = data?.summary;
   const kpi = (k, label, value, cls, state) => html`
-    <button key=${k} type="button" class=${`ia-kpi ${cls}${state && shown.size === 1 && shown.has(state) ? ' on' : ''}${state ? '' : ' plain'}`} onClick=${state ? () => only(state) : undefined}>
+    <button key=${k} type="button" class=${`ia-kpi ${cls}${state && shown.size === 1 && shown.has(state) ? ' on' : ''}${state ? '' : ' static'}`} onClick=${state ? () => only(state) : undefined}>
       <span class="ia-kpi-value">${value}</span><span class="ia-kpi-label">${label}</span>
     </button>
   `;
