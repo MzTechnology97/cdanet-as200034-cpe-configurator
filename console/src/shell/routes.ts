@@ -47,8 +47,8 @@ export interface Group {
 
 export const ROUTES: Array<Route | Group> = [
   { group: 'Operatività' },
-  { id: 'dashboard', label: 'Panoramica', icon: 'home', admin: true, bottom: true, legacy: () => import('../../../web/js/views/dashboard.js').then((m) => m.dashboardView) },
-  { id: 'notifications', label: 'Notifiche', icon: 'notifications', legacy: () => import('../../../web/js/views/notifications.js').then((m) => m.notificationsView) },
+  { id: 'dashboard', label: 'Panoramica', icon: 'home', admin: true, bottom: true, react: () => import('../pages/Dashboard').then((m) => m.Dashboard) },
+  { id: 'notifications', label: 'Notifiche', icon: 'notifications', react: () => import('../pages/Notifications').then((m) => m.Notifications) },
   { id: 'work-orders', icon: 'pending_actions', label: 'Interventi', installerLabel: 'I miei interventi', module: 'work_orders', bottom: true, legacy: () => import('../../../web/js/views/work-orders.js').then((m) => m.workOrdersView) },
   { id: 'jobs', label: 'Storico provisioning', icon: 'history', legacy: () => import('../../../web/js/views/jobs.js').then((m) => m.jobsView) },
   { id: 'health', icon: 'monitor_heart', label: 'Salute CPE', installerLabel: 'Le mie CPE', module: 'cpe_health', bottom: true, legacy: () => import('../../../web/js/views/health.js').then((m) => m.healthView) },
