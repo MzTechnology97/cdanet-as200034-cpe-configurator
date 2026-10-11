@@ -18,6 +18,7 @@ import type { Telegram } from './services/telegram.ts';
 import type { Dem } from './services/dem.ts';
 import type { TerrainStore } from './services/terrain-store.ts';
 import type { Antennas } from './services/antennas.ts';
+import type { Anncsu } from './services/anncsu.ts';
 import type { ApLoadService } from './services/ap-load.ts';
 import type { Advisor } from './services/ap-advisor.ts';
 import type { Optimizer } from './services/ap-optimizer.ts';
@@ -55,6 +56,8 @@ export interface AppContext {
   terrain: TerrainStore;
   /** Radiation patterns of the makers and the antenna, azimuth and tilt of every AP (admins). */
   antennas: Antennas;
+  /** House numbers of ANNCSU with their coordinates (one region, area of the network). */
+  anncsu: Anncsu;
   serverSettings: ServerSettings;
   notify: Notifier;
   version: string;

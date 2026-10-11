@@ -1,7 +1,7 @@
 import { api } from '../api.js';
 import { badge, busy, card, field, fmtDate, h, mount, pageHead, table, toast } from '../dom.js';
 import { createMap, drawFresnelLink, fit, legend, pointPicker, popup, simulationOverlay, towards, MAP_COLORS as C } from '../map.js';
-import { openLink3d } from '../map3d.js';
+import { openLink3d, openSimulation3d } from '../map3d.js';
 import { estimateCell, loadCell, orientArrows, osmLink, RATING } from './coverage.js';
 
 /**
@@ -424,7 +424,8 @@ export async function adminCoverageView() {
     const draw = (mode) => {
       simLayer.clearLayers();
       // clearly no coverage: left blank, not a red disc
-      simulationOverlay(d, (c) => (c.dbm < d.minDbm - 15 ? null : mode === 'cap' ? (c.cap == null ? null : capColor(c.cap)) : scaleColor(c.dbm))).addTo(simLayer);
+      overlay = simulationOverlay(d, (c) => (c.dbm < d.minDbm - 15 ? null : mode === 'cap' ? (c.cap == null ? null : capColor(c.cap)) : mode === 'eve' ? (c.cap == null ? null : capColor(c.cap * d.eveningShare)) : scaleColor(c.dbm))).addTo(simLayer);
+      shown = mode;
       // learned: the area already served; theory: the sector of the antenna (azimuth from UISP)
       if (d.sector && (d.servedM || d.theoretical)) {
         const reach = d.servedM || d.radiusM;
@@ -433,15 +434,21 @@ export async function adminCoverageView() {
         L.polygon(pts, { color: '#0f172a', weight: 1.5, fill: false, dashArray: '4 5', interactive: false }).addTo(simLayer);
       }
       L.circleMarker([d.ap.lat, d.ap.lon], { radius: 8, color: '#0f172a', weight: 3, fillColor: '#ffffff', fillOpacity: 1, interactive: false }).addTo(simLayer);
-      mount(legendBox, legend((mode === 'cap' ? CAP_SCALE : SCALE).map(([, color, text]) => [color, text])));
+      mount(legendBox, legend((mode === 'cap' || mode === 'eve' ? CAP_SCALE : SCALE).map(([, color, text]) => [color, text])));
     };
     const legendBox = h('div', {});
-    const mode = h('select', {}, h('option', { value: 'dbm' }, 'Segnale'), d.capacity ? h('option', { value: 'cap' }, 'Capacità del collegamento') : null);
+    const mode = h('select', {}, h('option', { value: 'dbm' }, 'Segnale'), d.capacity ? h('option', { value: 'cap' }, 'Capacità del collegamento') : null, d.capacity && d.eveningShare != null ? h('option', { value: 'eve' }, 'Velocità la sera') : null);
+    let shown = 'dbm';
+    let overlay = null;
+    const MODE_NAME = { dbm: 'segnale', cap: 'capacità del collegamento', eve: 'velocità la sera' };
+    // the same coloured cells on the terrain in relief, with the buildings
+    const view3d = h('button', { type: 'button', class: 'small-btn', onclick: () => overlay && openSimulation3d({ d, image: overlay.canvas, bounds: overlay.cellBounds, title: `3D · simulazione di ${d.ap.name} · ${MODE_NAME[shown] ?? 'segnale'}`, legendItems: (shown === 'dbm' ? SCALE : CAP_SCALE).map(([, color, text]) => ['scale', text, color]) }) }, 'Vista 3D');
     mode.onchange = () => draw(mode.value);
     draw('dbm');
     if (!point) m.fitBounds(L.latLng(d.ap.lat, d.ap.lon).toBounds(d.radiusM * 2.1));
     const good = d.cells.filter((c) => c.dbm >= d.minDbm).length;
     const fast = d.cells.filter((c) => c.dbm >= d.minDbm && (c.cap ?? 0) >= 50).length;
+    const evening = d.eveningShare != null ? d.cells.filter((c) => c.dbm >= d.minDbm && (c.cap ?? 0) * d.eveningShare >= 30).length : null;
     mount(
       simBox,
       h(
@@ -451,11 +458,11 @@ export async function adminCoverageView() {
         h(
           'span',
           { class: 'small muted' },
-          ` · ${d.theoretical ? 'nessun cliente da cui calibrare' : `calibrata su ${d.customers} ${d.customers === 1 ? 'cliente' : 'clienti'}`}${d.ignored ? ` (${d.ignored} sull’AP o oltre 20 km, esclusi dal calcolo)` : ''} · raggio ${km(d.radiusM)} · ${Math.round((100 * good) / d.cells.length)}% dell’area sopra ${d.minDbm} dBm${d.capacity ? `, ${Math.round((100 * fast) / d.cells.length)}% con almeno 50 Mbit/s` : ''}`,
+          ` · ${d.theoretical ? 'nessun cliente da cui calibrare' : `calibrata su ${d.customers} ${d.customers === 1 ? 'cliente' : 'clienti'}`}${d.ignored ? ` (${d.ignored} sull’AP o oltre 20 km, esclusi dal calcolo)` : ''} · raggio ${km(d.radiusM)} · ${Math.round((100 * good) / d.cells.length)}% dell’area sopra ${d.minDbm} dBm${d.capacity ? `, ${Math.round((100 * fast) / d.cells.length)}% con almeno 50 Mbit/s` : ''}${evening !== null ? `, ${Math.round((100 * evening) / d.cells.length)}% con almeno 30 Mbit/s la sera` : ''}`,
         ),
         ' ',
         clearBtn(),
-        h('div', { class: 'row' }, field('Mostra', mode)),
+        h('div', { class: 'row' }, field('Mostra', mode), view3d),
         legendBox,
         d.load ? h('div', { class: 'small' }, 'Carico serale dell’AP: ', loadCell(d.load)) : null,
         h(
@@ -466,6 +473,7 @@ export async function adminCoverageView() {
             ? 'Stima teorica, margine ±8 dB: l’AP non ha ancora clienti con segnale da cui calibrarla.'
             : 'I clienti già collegati correggono la teoria, con un peso che cresce con il loro numero: pochi clienti, stima vicina alla teoria.',
           d.capacity ? ' Capacità: dal segnale stimato con la curva segnale → capacità delle CPE reali della rete (e di come va questo AP); è la velocità del collegamento radio, la sera condivisa con gli altri clienti dell’AP.' : '',
+          d.eveningShare != null ? ` Velocità la sera: la capacità per la parte di tempo radio che l’AP ha libera al picco serale (${Math.round(d.eveningShare * 100)}%, mai meno della parte equa tra i suoi clienti).` : '',
           ' Area vuota: nessuna copertura (sotto −90 dBm). Colori tenui: stima poco affidabile. Tratteggio: settore dell’antenna o area già servita. Per un punto preciso usa Visibilità.',
         ),
       ),
@@ -535,6 +543,7 @@ export async function adminCoverageView() {
           { class: 'dock-mid' },
           h('div', { class: 'dock-title' }, badge(verdict[0], verdict[1]), h('span', { class: 'small muted' }, `${km(p.distanceM)} · Fresnel libera ${p.worst ? Math.max(0, Math.round((100 * p.worst.clearanceM) / (p.worst.fresnel60M / 0.6 || 1))) : 100}%`)),
           h('div', { class: 'dock-cap' }, h('span', {}, 'Capacità stimata'), h('b', {}, cap == null ? '—' : `${cap} Mbit/s`)),
+          e?.eveningMbps != null ? h('div', { class: 'small muted' }, `La sera, condivisa con gli altri clienti dell’AP: ~${e.eveningMbps} Mbit/s`) : null,
           capBar,
           e?.signalDbm != null && noise != null ? h('div', { class: 'small muted' }, `SNR atteso ${e.signalDbm - noise} dB`) : null,
           h('div', { class: 'dock-chart' }, profileChart(p)),
@@ -817,6 +826,15 @@ function terrainCard() {
     const go = h('button', { type: 'button', disabled: imp.running || !s.area }, s.dtmTiles ? 'Aggiorna per l’area della rete' : 'Scarica terreno e ostacoli');
     const bld = h('button', { type: 'button', disabled: imp.running || !s.area }, s.buildingTiles ? 'Aggiorna gli edifici' : 'Edifici dalla mappa base');
     const trees = h('button', { type: 'button', disabled: imp.running || !s.area }, s.canopyTiles ? 'Completa le altezze degli alberi' : 'Altezze degli alberi');
+    const REGIONS = { SICI: 'Sicilia', CALA: 'Calabria', CAMP: 'Campania', PUGL: 'Puglia', BASI: 'Basilicata', SARD: 'Sardegna', LAZI: 'Lazio' };
+    const region = h('select', {}, Object.entries(REGIONS).map(([k, v]) => h('option', { value: k, selected: k === (s.anncsu?.region ?? 'SICI') }, v)));
+    const civics = h('button', { type: 'button', disabled: s.anncsu?.import?.running || !s.area }, s.anncsu?.civics ? 'Aggiorna i civici' : 'Scarica i civici ANNCSU');
+    civics.onclick = () =>
+      busy(civics, async () => {
+        if (!confirm(`Il server scarica l’archivio dei numeri civici della regione ${REGIONS[region.value]} dall’Agenzia delle Entrate (ANNCSU, dati aperti aggiornati ogni mese; per la Sicilia circa 37 MB) e tiene solo i civici con coordinate nell’area della rete. Procedo?`)) return;
+        await api('/api/admin/terrain/anncsu', { method: 'POST', body: { region: region.value } });
+        await load();
+      });
     trees.onclick = () =>
       busy(trees, async () => {
         if (!confirm(`Il server legge da AWS Open Data la mappa delle altezze degli alberi di Meta e World Resources Institute (CHM v2, CC BY 4.0) per l’area della rete (${area}): solo i pezzi che servono, circa 4 MB ogni riquadro di 0,1° (per la rete intera circa 500 MB letti, 30–60 MB salvati). Procedo?`)) return;
@@ -856,11 +874,16 @@ function terrainCard() {
           ? `Alberi veri: altezza di ogni albero dalla mappa Meta/WRI su ${s.canopyTiles} riquadri (${fmtDate(s.canopyAt)}), al posto della classe «alberi» di ESA con l’altezza media.`
           : 'Alberi: oggi la classe «alberi» di ESA con l’altezza media. Con «Altezze degli alberi» il calcolo usa l’altezza di ogni albero della mappa Meta/WRI (circa 1 m, letta a 4 m).'),
         h('div', { class: 'row' }, go, s.basemap ? bld : null, trees),
+        h('p', {}, s.anncsu?.civics
+          ? `Civici ANNCSU (${s.anncsu.regionName}, ${s.anncsu.file}): ${s.anncsu.civics.toLocaleString('it-IT')} numeri civici con coordinate nell’area della rete. Quando un indirizzo cercato ha via e numero, la ricerca lo mette sulla casa invece che sulla via.`
+          : 'Civici: la ricerca di un indirizzo usa OpenStreetMap, che spesso conosce la via ma non il numero. Con l’archivio nazionale dei civici (ANNCSU, Agenzia delle Entrate – ISTAT) il punto cade sulla casa.'),
+        s.anncsu?.import?.running ? h('div', { class: 'notice' }, `${s.anncsu.import.phase}…`) : s.anncsu?.import?.error ? h('div', { class: 'notice bad' }, `Civici: ${s.anncsu.import.error}`) : null,
+        h('div', { class: 'row' }, field('Regione dei civici', region), civics),
         h('p', { class: 'small muted' }, `Area della rete: ${area}, cioè gli AP più 20 km intorno. Le altezze medie di edifici e vegetazione si impostano in Impostazioni server → Simulazione radio. Fonti: TINITALY 1.1, Tarquini et al. (2023), INGV, doi:10.13127/tinitaly/1.1 (CC BY 4.0); ESA WorldCover 10 m 2021 v200, doi:10.5281/zenodo.7254221 (CC BY 4.0); edifici © OpenStreetMap contributors (ODbL) tramite Protomaps; alberi: Meta e World Resources Institute, Canopy Height Maps v2 (CC BY 4.0).`),
       ),
     );
     clearTimeout(timer);
-    if (imp.running) timer = setTimeout(() => load().catch(() => {}), 3000);
+    if (imp.running || s.anncsu?.import?.running) timer = setTimeout(() => load().catch(() => {}), 3000);
   };
   const load = async () => show(await api('/api/admin/terrain'));
   load().catch((e) => mount(box, h('div', { class: 'notice bad' }, e.message)));

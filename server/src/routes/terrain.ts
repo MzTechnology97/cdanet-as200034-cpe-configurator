@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
@@ -8,6 +9,7 @@ import { isPtp } from '../services/uisp.ts';
 import type { Bbox } from '../services/terrain-store.ts';
 import { existsSync } from 'node:fs';
 import { PmTilesReader } from '../domain/pmtiles.ts';
+import { REGIONS } from '../services/anncsu.ts';
 
 /** Area of the network: every AP that serves customers, plus the farthest link around it. */
 export function networkArea(aps: Array<{ location: { lat: number; lon: number } }>, marginM = MAX_LINK_M): Bbox | null {
@@ -40,7 +42,7 @@ export function terrainRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.get('/api/admin/terrain', admin, async () => {
     const aps = ctx.uisp ? await ctx.uisp.apsWithLocation().catch(() => []) : [];
-    return { ...ctx.terrain.status(), basemap: existsSync(ctx.cfg.mapFile), area: networkArea(aps.filter((a) => !isPtp(a))) };
+    return { ...ctx.terrain.status(), basemap: existsSync(ctx.cfg.mapFile), anncsu: { ...ctx.anncsu.status(), import: ctx.anncsu.state() }, area: networkArea(aps.filter((a) => !isPtp(a))) };
   });
 
   app.post('/api/admin/terrain/import', admin, async (req) => {
@@ -80,6 +82,19 @@ export function terrainRoutes(app: FastifyInstance, ctx: AppContext) {
     recordEvent(ctx.db, req.user!.id, 'terrain.canopy', 'Altezze degli alberi', `area ${area.minLat.toFixed(2)}–${area.maxLat.toFixed(2)} N, ${area.minLon.toFixed(2)}–${area.maxLon.toFixed(2)} E`);
     void ctx.terrain.importCanopy(area).then(() => accuracy.start());
     return { started: true, area };
+  });
+
+  /** House numbers of ANNCSU for one region (Agenzia delle Entrate open data, tens of MB). */
+  app.post('/api/admin/terrain/anncsu', admin, async (req) => {
+    const { region } = z.object({ region: z.string().regex(/^[A-Z]{4}$/) }).parse(req.body);
+    if (!REGIONS[region]) throw new HttpError(400, 'unknown_region');
+    if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
+    if (ctx.anncsu.state().running) throw new HttpError(409, 'import_running');
+    const area = networkArea((await ctx.uisp.apsWithLocation()).filter((a) => !isPtp(a)));
+    if (!area) throw new HttpError(409, 'no_aps');
+    recordEvent(ctx.db, req.user!.id, 'terrain.anncsu', 'Civici ANNCSU', REGIONS[region]!);
+    void ctx.anncsu.importRegion(region, area);
+    return { started: true };
   });
 
   /** Only the buildings of the basemap (already on the server: a minute or two, nothing downloaded). */

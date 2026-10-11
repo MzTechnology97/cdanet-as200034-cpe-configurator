@@ -54,6 +54,7 @@ import { createServerSettings } from './services/server-settings.ts';
 import { createDem } from './services/dem.ts';
 import { createTerrainStore } from './services/terrain-store.ts';
 import { createAntennas } from './services/antennas.ts';
+import { createAnncsu } from './services/anncsu.ts';
 import { createApLoad, type ApLoadService } from './services/ap-load.ts';
 import { createAdvisor, type Advisor } from './services/ap-advisor.ts';
 import { createOptimizer, type Optimizer } from './services/ap-optimizer.ts';
@@ -129,6 +130,7 @@ export async function buildApp(
     dem,
     terrain: createTerrainStore({ dir: cfg.terrainDir, dem, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
     antennas: createAntennas({ dir: join(dirname(cfg.terrainDir), 'antennas'), db, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
+    anncsu: createAnncsu({ dir: join(dirname(cfg.terrainDir), 'anncsu'), ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
     notify: undefined as unknown as Notifier,
     version,
   };

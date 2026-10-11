@@ -394,7 +394,11 @@ export function simulationOverlay(d, colorOf) {
     [d.ap.lat - d.radiusM / mPerLat, d.ap.lon - d.radiusM / mPerLon],
     [d.ap.lat + d.radiusM / mPerLat, d.ap.lon + d.radiusM / mPerLon],
   ];
-  return L.imageOverlay(canvas.toDataURL(), bounds, { interactive: false, className: 'sim-overlay' });
+  const overlay = L.imageOverlay(canvas.toDataURL(), bounds, { interactive: false, className: 'sim-overlay' });
+  // the same picture for the 3D view
+  overlay.canvas = canvas;
+  overlay.cellBounds = bounds;
+  return overlay;
 }
 
 /**

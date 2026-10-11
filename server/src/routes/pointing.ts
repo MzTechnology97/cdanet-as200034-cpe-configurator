@@ -1,5 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { eveningShare } from '../domain/ap-load.ts';
 import { apModels } from '../services/model-inputs.ts';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
@@ -69,7 +70,9 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
     const at = await terrainSampler(ctx.terrain, [{ lat: q.lat, lon: q.lon }, ...inRange]);
     const estimateFor = (a: (typeof inRange)[number]) => {
       const e = estimateForAp(models.get(a.id), a, { lat: q.lat, lon: q.lon }, at, { cpeM: height, apM: c.apHeightM }, radio, obstacles(ctx));
-      return e && { ...e, basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null, capacityMbps: ctx.apLoad.capacity(a.id, e.signalDbm) };
+      const cap = ctx.apLoad.capacity(a.id, e?.signalDbm ?? null);
+      const share = eveningShare(ctx.apLoad.load(a.id));
+      return e && { ...e, basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null, capacityMbps: cap, eveningMbps: cap !== null && share !== null ? Math.round(cap * share) : null };
     };
     const failed = fieldFailures(db);
     const ranked = rankCoverage(

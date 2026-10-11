@@ -180,7 +180,7 @@ private fun LinkFacts(d: LosDto, bearing: Int?, estimate: SignalEstimateDto?, la
     val facts = buildList {
         add(Triple("Distanza", km(d.distanceM), "${d.frequencyMhz} MHz"))
         add(Triple("Fresnel libera", "${fresnelFreePct(d)}%", d.worst?.let { "punto critico a ${km(it.d)}" } ?: "su tutto il collegamento"))
-        estimate?.capacityMbps?.let { add(Triple("Capacità stimata", "$it Mbit/s", "collegamento radio")) }
+        estimate?.capacityMbps?.let { add(Triple("Capacità stimata", "$it Mbit/s", estimate.eveningMbps?.let { e -> "la sera ~$e Mbit/s" } ?: "collegamento radio")) }
         if (bearing != null) {
             val magnetic = ((bearing - declinationDeg(lat, lon)).roundToInt() + 360) % 360
             add(Triple("CPE → AP", "$bearing° ${dirOf(bearing)}", "magnetico $magnetic° · inclinazione ${signed(tilt)}°"))

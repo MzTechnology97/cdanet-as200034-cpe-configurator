@@ -38,7 +38,7 @@ export function estimateCell(e) {
     e.beyondServed ? h('div', { class: 'small' }, 'più lontano dei clienti attuali') : null,
     e.tooFar ? h('div', { class: 'small' }, 'oltre 20 km: troppo lontano per un aggancio') : null,
     e.terrain ? h('div', { class: 'small' }, terrainText(e.terrain)) : null,
-    e.capacityMbps ? h('div', { class: 'small' }, `capacità del collegamento ~${e.capacityMbps} Mbit/s`) : null,
+    e.capacityMbps ? h('div', { class: 'small' }, `capacità del collegamento ~${e.capacityMbps} Mbit/s${e.eveningMbps != null ? `, la sera ~${e.eveningMbps}` : ''}`) : null,
     e.theoretical
       ? h('div', { class: 'small muted' }, 'stima teorica: l’AP non ha ancora clienti')
       : e.basis != null
@@ -166,7 +166,7 @@ export async function coverageView({ user } = {}) {
           fact('Distanza', km(a.distanceM)),
           fact('Puntamento', `${a.bearing}° ${a.direction}`, `magnetico ${Math.round((a.bearing - DECLINATION_DEG + 360) % 360)}° · inclinazione ${tilt >= 0 ? '+' : ''}${Math.round(tilt * 10) / 10}°`),
           fact('Fresnel libera', `${free}%`, p.worst ? `punto critico a ${km(Math.round(p.worst.d / 50) * 50)}` : 'su tutto il collegamento'),
-          a.estimate?.capacityMbps != null ? fact('Capacità stimata', `${a.estimate.capacityMbps} Mbit/s`) : null,
+          a.estimate?.capacityMbps != null ? fact('Capacità stimata', `${a.estimate.capacityMbps} Mbit/s`, a.estimate.eveningMbps != null ? `la sera ~${a.estimate.eveningMbps} Mbit/s` : null) : null,
           a.cpe ? fact('CPE', a.cpe.name, `${a.cpe.gainDbi} dBi${a.cpe.auto ? (a.cpe.proposed ? ' · consigliata' : '') : ''}`) : null,
           h('div', { class: 'link-fact' }, h('small', {}, 'Altezza CPE'), h('div', { class: 'stepper' }, h('button', { type: 'button', onclick: step(-1) }, '−'), h('strong', {}, `${Math.round(first.los - first.ground)} m`), h('button', { type: 'button', onclick: step(1) }, '+'))),
         ),

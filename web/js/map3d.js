@@ -122,15 +122,15 @@ const remembered = () => {
 };
 
 /**
- * Opens the 3D view of the link from [from] ([lat, lon], [label]) to the AP of the profile [p]
- * (admins: the profile carries the AP position). [others]: APs around ({ name, lat, lon }).
+ * A full-screen 3D scene over the console: the coverage terrain from our server, the aerial
+ * imagery of Connettori (one at a time, remembered), the buildings of the basemap in relief
+ * (OpenStreetMap heights where mapped), sky and fog. [onLoad] adds what the scene is about.
  */
-export async function openLink3d({ from, label, p, apName, others = [] }) {
-  if (p.ap?.lat == null || !p.chart?.length) return;
-  const to = [p.ap.lat, p.ap.lon];
+async function openScene({ title, ariaLabel, legendItems, center, bearing, onLoad }) {
   const stage = h('div', { class: 'map3d-stage' });
   const status = h('span', { class: 'small muted' }, 'Caricamento del terreno…');
   const views = h('div', { class: 'map3d-views' });
+  const tools = h('div', { class: 'map3d-views' });
   const imagery = h('select', { 'aria-label': 'Immagini' });
   let map = null;
   const close = () => {
@@ -141,27 +141,18 @@ export async function openLink3d({ from, label, p, apName, others = [] }) {
   const onKey = (e) => e.key === 'Escape' && close();
   const root = h(
     'div',
-    { class: 'map3d', role: 'dialog', 'aria-label': `Collegamento 3D con ${apName}` },
-    h(
-      'div',
-      { class: 'map3d-bar' },
-      h('b', {}, `3D · ${label ?? 'Punto'} → ${apName}`),
-      views,
-      imagery,
-      status,
-      h('button', { type: 'button', class: 'map3d-close', 'aria-label': 'Chiudi', onclick: close }, '×'),
-    ),
+    { class: 'map3d', role: 'dialog', 'aria-label': ariaLabel },
+    h('div', { class: 'map3d-bar' }, h('b', {}, title), views, tools, imagery, status, h('button', { type: 'button', class: 'map3d-close', 'aria-label': 'Chiudi', onclick: close }, '×')),
     stage,
     h(
       'div',
       { class: 'map3d-legend small' },
-      h('span', {}, h('i', { class: 'sw los' }), 'linea di vista'),
-      h('span', {}, h('i', { class: 'sw ok' }), 'Fresnel 60% libera'),
-      h('span', {}, h('i', { class: 'sw bad' }), 'Fresnel invasa'),
-      h('span', {}, h('i', { class: 'sw bld' }), 'edifici'),
-      h('span', {}, h('i', { class: 'sw tree' }), 'alberi'),
-      h('span', {}, h('i', { class: 'sw ap' }), 'AP'),
-      h('span', {}, h('i', { class: 'sw cpe' }), 'CPE'),
+      legendItems.map(([cls, text, color]) => {
+        const sw = h('i', { class: `sw ${cls}` });
+        // a colour of the scale: through the style object (no inline styles in the page policy)
+        if (color) sw.style.background = color;
+        return h('span', {}, sw, text);
+      }),
     ),
   );
   document.body.append(root);
@@ -169,19 +160,18 @@ export async function openLink3d({ from, label, p, apName, others = [] }) {
 
   let gl;
   let info;
+  let mapCfg;
   try {
-    [gl, info] = await Promise.all([loadMapLibre(), api('/api/admin/map/satellite')]);
+    [gl, info, mapCfg] = await Promise.all([loadMapLibre(), api('/api/admin/map/satellite'), api('/api/map/config').catch(() => null)]);
   } catch (e) {
     status.textContent = e.message;
-    return;
+    return null;
   }
-  if (!root.isConnected) return;
-  const geo = linkGeometry(from, to, p.chart);
+  if (!root.isConnected) return null;
   const t = info.terrain ?? { minZoom: 10, maxZoom: 14 };
   const dem = { type: 'raster-dem', tiles: ['cda://api/admin/map/terrain/{z}/{x}/{y}'], tileSize: 256, encoding: 'terrarium', minzoom: t.minZoom, maxzoom: t.maxZoom };
   const sources = { dem, shade: { ...dem } };
   const layers = [{ id: 'bg', type: 'background', paint: { 'background-color': '#d9dfd3' } }];
-  // aerial imagery of Connettori, one picture at a time (the one chosen last time first)
   const pics = info.layers ?? [];
   pics.forEach((v, i) => {
     v.parts.forEach(([provider, part], k) => {
@@ -189,8 +179,13 @@ export async function openLink3d({ from, label, p, apName, others = [] }) {
       layers.push({ id: `img${i}_${k}`, type: 'raster', source: `img${i}_${k}`, layout: { visibility: 'none' } });
     });
   });
-  // relief: on its own without imagery, faint on the pictures
   layers.push({ id: 'shade', type: 'hillshade', source: 'shade', paint: { 'hillshade-exaggeration': pics.length ? 0.15 : 0.6, 'hillshade-shadow-color': '#3f3f46' } });
+  // buildings of the basemap in relief: OpenStreetMap height where mapped, else 7 m (2 floors)
+  const bm = mapCfg?.basemap;
+  if (bm?.tiles) {
+    sources.osm = { type: 'vector', tiles: [bm.tiles.startsWith('http') ? bm.tiles : `${location.origin}${bm.tiles}`], minzoom: bm.minZoom ?? 0, maxzoom: bm.maxZoom ?? 15, attribution: '© OpenStreetMap' };
+    layers.push({ id: 'buildings3d', type: 'fill-extrusion', source: 'osm', 'source-layer': 'buildings', minzoom: 13, paint: { 'fill-extrusion-color': '#e7e5e4', 'fill-extrusion-height': ['coalesce', ['get', 'height'], 7], 'fill-extrusion-base': ['coalesce', ['get', 'min_height'], 0], 'fill-extrusion-opacity': 0.88 } });
+  }
   const show = (i) => {
     pics.forEach((v, j) => v.parts.forEach((_, k) => map.setLayoutProperty(`img${j}_${k}`, 'visibility', i === j ? 'visible' : 'none')));
     try {
@@ -205,58 +200,111 @@ export async function openLink3d({ from, label, p, apName, others = [] }) {
     imagery.onchange = () => show(Number(imagery.value));
   } else imagery.hidden = true;
 
-  const linkBearing = bearingOf(from, to);
   map = new gl.Map({
     container: stage,
     style: { version: 8, sources, layers, terrain: { source: 'dem', exaggeration: 1 }, sky: { 'sky-color': '#7fb2e5', 'horizon-color': '#dbe9f6', 'fog-color': '#e8eef4', 'sky-horizon-blend': 0.6, 'horizon-fog-blend': 0.6, 'fog-ground-blend': 0.85 } },
-    center: [(from[1] + to[1]) / 2, (from[0] + to[0]) / 2],
+    center: [center[1], center[0]],
     zoom: 13,
     pitch: 60,
-    bearing: linkBearing - 90,
+    bearing,
     maxPitch: 85,
     attributionControl: { compact: true },
   });
   map.addControl(new gl.NavigationControl({ visualizePitch: true }), 'top-right');
   map.on('error', (e) => console.warn('3D', e?.error?.message ?? e));
-
-  const fit = (bearing, pitch, focus = null) => {
-    const pts = focus ? [focus, [focus[0] + (to[0] - from[0]) * 0.35, focus[1] + (to[1] - from[1]) * 0.35]] : [from, to];
+  const tag = (lat, lon, text, cls) => new gl.Marker({ element: h('div', { class: `map3d-tag ${cls}` }, text), anchor: 'bottom' }).setLngLat([lon, lat]).addTo(map);
+  /** Camera on a box of [lat, lon] points, from [b] degrees and [pitch]. */
+  const fit = (pts, b, pitch, zoomUp = 0.1) => {
     const lats = pts.map((x) => x[0]);
     const lons = pts.map((x) => x[1]);
-    const cam = map.cameraForBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: 110, bearing });
-    map.easeTo({ center: cam?.center, zoom: (cam?.zoom ?? 13) + (focus ? 0.3 : 0.1), bearing, pitch, duration: 900 });
+    const cam = map.cameraForBounds([[Math.min(...lons), Math.min(...lats)], [Math.max(...lons), Math.max(...lats)]], { padding: 110, bearing: b });
+    map.easeTo({ center: cam?.center, zoom: (cam?.zoom ?? 13) + zoomUp, bearing: b, pitch, duration: 900 });
   };
-  const presets = [
-    ['Di lato', () => fit(linkBearing - 90, 62)],
-    ['Dalla CPE', () => fit(linkBearing, 72, from)],
-    ['Dall’AP', () => fit((linkBearing + 180) % 360, 72, to)],
-    ['Dall’alto', () => fit(linkBearing - 90, 0)],
-  ];
-  for (const [name, go] of presets) views.append(h('button', { type: 'button', class: 'small-btn', onclick: go }, name));
-
+  const preset = (name, go) => views.append(h('button', { type: 'button', class: 'small-btn', onclick: go }, name));
   map.on('load', () => {
     if (pics.length) show(start);
-    map.addSource('fresnel', { type: 'geojson', data: geo.fresnel });
-    map.addSource('line', { type: 'geojson', data: geo.line });
-    map.addSource('obstacles', { type: 'geojson', data: geo.obstacles });
-    map.addSource('masts', { type: 'geojson', data: geo.masts });
-    const extr = (id, source, color, opacity) =>
-      map.addLayer({ id, type: 'fill-extrusion', source, paint: { 'fill-extrusion-color': color, 'fill-extrusion-base': ['get', 'base'], 'fill-extrusion-height': ['get', 'top'], 'fill-extrusion-opacity': opacity } });
-    extr('obstacles', 'obstacles', ['match', ['get', 'kind'], 'edificio', '#9ca3af', '#15803d'], 0.85);
-    extr('masts', 'masts', ['match', ['get', 'kind'], 'ap', '#2563eb', '#f97316'], 1);
-    extr('line', 'line', '#1d4ed8', 0.95);
-    extr('fresnel', 'fresnel', ['case', ['get', 'hit'], '#ef4444', '#38bdf8'], 0.35);
-    const tag = (lat, lon, text, cls) => new gl.Marker({ element: h('div', { class: `map3d-tag ${cls}` }, text), anchor: 'bottom' }).setLngLat([lon, lat]).addTo(map);
-    tag(from[0], from[1], `CPE ${Math.round(p.cpeHeightM ?? 0)} m`, 'cpe');
-    tag(to[0], to[1], `${apName}${p.apAntenna ? ` · ${p.apAntenna.aboveGroundM} m` : ''}`, 'ap');
-    // the other APs within the view, as pins (no height or sector known for them here)
-    const span = Math.max(Math.abs(to[0] - from[0]), Math.abs(to[1] - from[1])) * 1.5 + 0.02;
-    const mid = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2];
-    others
-      .filter((a) => a.lat != null && Math.abs(a.lat - to[0]) + Math.abs(a.lon - to[1]) > 2e-3 && Math.abs(a.lat - mid[0]) < span && Math.abs(a.lon - mid[1]) < span)
-      .slice(0, 40)
-      .forEach((a) => tag(a.lat, a.lon, a.name, 'other'));
-    status.textContent = `${info.terrain?.fine ? 'Terreno TINITALY 10 m' : 'Terreno SRTM 30 m'}${pics.length ? '' : ' · nessuna foto aerea in Connettori'}`;
-    fit(linkBearing - 90, 62);
+    status.textContent = `${info.terrain?.fine ? 'Terreno TINITALY 10 m' : 'Terreno SRTM 30 m'}${bm?.tiles ? ' · edifici OSM' : ''}${pics.length ? '' : ' · nessuna foto aerea in Connettori'}`;
+    onLoad({ map, gl, tag, fit, preset, tools, status });
+  });
+  return map;
+}
+
+/**
+ * Opens the 3D view of the link from [from] ([lat, lon], [label]) to the AP of the profile [p]
+ * (admins: the profile carries the AP position). [others]: APs around ({ name, lat, lon }).
+ */
+export async function openLink3d({ from, label, p, apName, others = [] }) {
+  if (p.ap?.lat == null || !p.chart?.length) return;
+  const to = [p.ap.lat, p.ap.lon];
+  const geo = linkGeometry(from, to, p.chart);
+  const linkBearing = bearingOf(from, to);
+  await openScene({
+    title: `3D · ${label ?? 'Punto'} → ${apName}`,
+    ariaLabel: `Collegamento 3D con ${apName}`,
+    legendItems: [['los', 'linea di vista'], ['ok', 'Fresnel 60% libera'], ['bad', 'Fresnel invasa'], ['bld', 'edifici'], ['tree', 'alberi'], ['ap', 'AP'], ['cpe', 'CPE']],
+    center: [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2],
+    bearing: linkBearing - 90,
+    onLoad: ({ map, tag, fit, preset }) => {
+      map.addSource('fresnel', { type: 'geojson', data: geo.fresnel });
+      map.addSource('line', { type: 'geojson', data: geo.line });
+      map.addSource('obstacles', { type: 'geojson', data: geo.obstacles });
+      map.addSource('masts', { type: 'geojson', data: geo.masts });
+      const extr = (id, source, color, opacity) =>
+        map.addLayer({ id, type: 'fill-extrusion', source, paint: { 'fill-extrusion-color': color, 'fill-extrusion-base': ['get', 'base'], 'fill-extrusion-height': ['get', 'top'], 'fill-extrusion-opacity': opacity } });
+      extr('obstacles', 'obstacles', ['match', ['get', 'kind'], 'edificio', '#9ca3af', '#15803d'], 0.85);
+      extr('masts', 'masts', ['match', ['get', 'kind'], 'ap', '#2563eb', '#f97316'], 1);
+      extr('line', 'line', '#1d4ed8', 0.95);
+      extr('fresnel', 'fresnel', ['case', ['get', 'hit'], '#ef4444', '#38bdf8'], 0.35);
+      tag(from[0], from[1], `CPE ${Math.round(p.mountedM ?? p.cpeHeightM ?? 0)} m`, 'cpe');
+      tag(to[0], to[1], `${apName}${p.apAntenna ? ` · ${p.apAntenna.aboveGroundM} m` : ''}`, 'ap');
+      const span = Math.max(Math.abs(to[0] - from[0]), Math.abs(to[1] - from[1])) * 1.5 + 0.02;
+      const mid = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2];
+      others
+        .filter((a) => a.lat != null && Math.abs(a.lat - to[0]) + Math.abs(a.lon - to[1]) > 2e-3 && Math.abs(a.lat - mid[0]) < span && Math.abs(a.lon - mid[1]) < span)
+        .slice(0, 40)
+        .forEach((a) => tag(a.lat, a.lon, a.name, 'other'));
+      const towardsAp = (pt, other) => [pt, [pt[0] + (other[0] - pt[0]) * 0.35, pt[1] + (other[1] - pt[1]) * 0.35]];
+      preset('Di lato', () => fit([from, to], linkBearing - 90, 62));
+      preset('Dalla CPE', () => fit(towardsAp(from, to), linkBearing, 72, 0.3));
+      preset('Dall’AP', () => fit(towardsAp(to, from), (linkBearing + 180) % 360, 72, 0.3));
+      preset('Dall’alto', () => fit([from, to], linkBearing - 90, 0));
+      fit([from, to], linkBearing - 90, 62);
+    },
+  });
+}
+
+/**
+ * Opens the radio simulation of an AP in 3D: the coloured cells ([image]: a canvas of the cells,
+ * north up, over [bounds] = [[south, west], [north, east]]) draped on the terrain with the
+ * buildings in relief and the AP. [legendItems]: [class, text, colour] of the scale shown.
+ */
+export async function openSimulation3d({ d, image, bounds, legendItems, title }) {
+  const [[s, w], [n, e]] = bounds;
+  const ap = [d.ap.lat, d.ap.lon];
+  const main = d.sector ? d.sector.center : 0;
+  const ahead = [ap[0] + (Math.cos((main * Math.PI) / 180) * (n - s)) / 3, ap[1] + (Math.sin((main * Math.PI) / 180) * (e - w)) / 3];
+  await openScene({
+    title,
+    ariaLabel: title,
+    legendItems,
+    center: ap,
+    bearing: main,
+    onLoad: ({ map, tag, fit, preset, tools }) => {
+      // the canvas itself (a data: URL would be fetched, which the page policy does not allow)
+      map.addSource('sim', { type: 'canvas', canvas: image, animate: false, coordinates: [[w, n], [e, n], [e, s], [w, s]] });
+      // over the pictures, under the buildings
+      map.addLayer({ id: 'sim', type: 'raster', source: 'sim', paint: { 'raster-opacity': 0.72, 'raster-resampling': 'linear', 'raster-fade-duration': 0 } }, map.getLayer('buildings3d') ? 'buildings3d' : undefined);
+      tag(ap[0], ap[1], d.ap.name, 'ap');
+      const opacity = h('input', { type: 'range', min: 0, max: 100, value: 72, 'aria-label': 'Intensità della simulazione', title: 'Intensità della simulazione' });
+      opacity.oninput = () => map.setPaintProperty('sim', 'raster-opacity', Number(opacity.value) / 100);
+      tools.append(h('label', { class: 'small map3d-range' }, 'Simulazione ', opacity));
+      // the camera on the coloured cells (the computed radius goes farther than the coverage)
+      const lit = (d.cells ?? []).filter((c) => c.dbm >= (d.minDbm ?? -80) - 15);
+      const all = lit.length ? [[Math.min(...lit.map((c) => c.lat)), Math.min(...lit.map((c) => c.lon))], [Math.max(...lit.map((c) => c.lat)), Math.max(...lit.map((c) => c.lon))]] : [[s, w], [n, e]];
+      preset('Dall’AP', () => fit([ap, ahead], main, 70, 0.4));
+      preset('Verso l’AP', () => fit(all, (main + 180) % 360, 62));
+      preset('Dall’alto', () => fit(all, 0, 0));
+      fit(all, (main + 180) % 360, 58);
+    },
   });
 }
