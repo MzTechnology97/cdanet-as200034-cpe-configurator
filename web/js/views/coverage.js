@@ -42,7 +42,7 @@ export function estimateCell(e) {
     e.theoretical
       ? h('div', { class: 'small muted' }, 'stima teorica: l’AP non ha ancora clienti')
       : e.basis != null
-        ? h('div', { class: 'small muted' }, `calibrata su ${e.basis} clienti${e.nearby ? `, ${e.nearby} vicini` : ''}`)
+        ? h('div', { class: 'small muted' }, `calibrata su ${e.basis} ${e.basis === 1 ? 'cliente' : 'clienti'}${e.nearby ? `, ${e.nearby} ${e.nearby === 1 ? 'vicino' : 'vicini'}` : ''}`)
         : null,
   );
 }

@@ -144,7 +144,8 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
       return { ...pt, ground: Math.round((p.ground[i]! + bulge) * 10) / 10, ...(o ? { obstacle: o.kind, top: Math.round((p.ground[i]! + bulge + o.h) * 10) / 10 } : {}) };
     });
     return {
-      ap: { id: ap.id, name: ap.name },
+      // admins: where the AP is, to draw the link and its Fresnel zone on the map
+      ap: { id: ap.id, name: ap.name, ...(keys ? {} : { lat: ap.lat, lon: ap.lon }) },
       distanceM: keys ? roughDistance(p.D, ctx.cfg.installerDistanceStepM) : Math.round(p.D),
       cpeHeightM: height,
       frequencyMhz: p.freq,

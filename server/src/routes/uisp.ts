@@ -184,7 +184,8 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     let reach = 1500;
     while (reach < MAX_LINK_M && (estimateAt(m, reach + 500, main, ap.frequency, radio).signalDbm ?? -999) >= -80) reach += 500;
     const radiusM = Math.min(MAX_LINK_M, Math.max(1500, reach));
-    const n = 40;
+    // cells of about 120–250 m (finer close to the AP), at most 140 × 140
+    const n = Math.min(140, Math.max(60, Math.round((2 * radiusM) / 220)));
     const cellM = (2 * radiusM) / n;
     const mPerLat = 111_320;
     const mPerLon = 111_320 * Math.cos((ap.location.lat * Math.PI) / 180);
@@ -193,7 +194,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     // capacity of a new link at each cell (curve of the real CPEs, this AP's factor)
     const capOf = (dbm: number) => ctx.apLoad.capacity(ap.id, dbm);
     const target = { lat: ap.location.lat, lon: ap.location.lon, gpsAltitude: ap.altitude, siteHeight: ap.siteHeight, frequency: ap.frequency };
-    const cells: Array<{ lat: number; lon: number; dbm: number; confidence: string; blocked?: true }> = [];
+    const cells: Array<{ i: number; j: number; lat: number; lon: number; dbm: number; confidence: string; blocked?: true }> = [];
     for (let i = 0; i < n; i++) {
       for (let j = 0; j < n; j++) {
         const dx = -radiusM + (i + 0.5) * cellM;
@@ -206,6 +207,8 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
         const e = estimateAt(m, d, b, ap.frequency, radio, terrain);
         if (e.signalDbm === null) continue;
         cells.push({
+          i,
+          j,
           lat: Math.round(cell.lat * 1e6) / 1e6,
           lon: Math.round(cell.lon * 1e6) / 1e6,
           dbm: e.signalDbm,
@@ -228,6 +231,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       capacity: ctx.apLoad.curve() !== null,
       cells,
       cellM: Math.round(cellM),
+      n,
       radiusM,
       sector: m.sector,
       servedM: m.servedM,

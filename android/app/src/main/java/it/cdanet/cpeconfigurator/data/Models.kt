@@ -839,7 +839,17 @@ data class LosDto(
     val foliageM: Int = 0,
     /** Buildings are what blocks or enters the Fresnel zone. */
     val buildings: Boolean = false,
+    /** The AP (admins: with its position, to draw the link on the map). */
+    val ap: LosApDto? = null,
+    /** Admins: where the AP antenna is put and where its altitude comes from. */
+    val apAntenna: LosApAntennaDto? = null,
 )
+
+@Serializable
+data class LosApDto(val id: String = "", val name: String = "", val lat: Double? = null, val lon: Double? = null)
+
+@Serializable
+data class LosApAntennaDto(val altitude: Int = 0, val aboveGroundM: Int = 0, val from: String? = null, val reported: Double? = null)
 
 /** An airOS image of the target version the server offers for the field upgrade. */
 @Serializable

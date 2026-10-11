@@ -45,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import it.cdanet.cpeconfigurator.R
 import it.cdanet.cpeconfigurator.core.AppContainer
+import it.cdanet.cpeconfigurator.data.LosDto
 import it.cdanet.cpeconfigurator.data.AppJson
 import it.cdanet.cpeconfigurator.data.CoverageAp
 import it.cdanet.cpeconfigurator.data.CoverageDto
@@ -231,6 +232,8 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
     LaunchedEffect(page, baseJson) { if (baseJson != null) page?.evaluateJavascript("window.cdaCoverageBase($baseJson)", null) }
     LaunchedEffect(page, resultJson, point) {
         val p = point
+        // a new point: the link of the previous Visibilità goes away
+        page?.evaluateJavascript("window.cdaClearLink()", null)
         if (resultJson != null && p != null) page?.evaluateJavascript("window.cdaCoverage(Object.assign($resultJson, { lat: ${p.lat}, lon: ${p.lon} }))", null)
     }
     LaunchedEffect(page, simJson, simCapacity) { page?.evaluateJavascript(if (simJson != null) "window.cdaSimulation($simJson, '${if (simCapacity) "cap" else "dbm"}')" else "window.cdaClearSimulation()", null) }
@@ -292,6 +295,13 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
         }
 
         EmbeddedMap(c, "window.cdaCoverageMode()", Modifier.fillMaxWidth().height(380.dp).padding(vertical = 4.dp), bridge = bridge) { page = it }
+        // the first tap places the point; then the map moves freely and the point is dragged
+        if (point != null) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text("Trascina il punto per spostarlo.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                TextButton(onClick = { page?.evaluateJavascript("window.cdaPickPoint()", null) }) { Text("Nuovo punto sulla mappa") }
+            }
+        }
         if (busy == "check" || busy == "sim") Text(if (busy == "sim") "Simulazione in corso…" else "Valutazione degli AP…", style = MaterialTheme.typography.bodySmall)
 
         sim?.let { s ->
@@ -381,7 +391,13 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
     }
     los?.let { ap ->
         val pt = point
-        if (pt != null) LineOfSightDialog(c, pt.lat, pt.lon, ap.id, ap.name.ifBlank { ap.id }, heightM) { los = null }
+        if (pt != null) {
+            LineOfSightDialog(
+                c, pt.lat, pt.lon, ap.id, ap.name.ifBlank { ap.id }, heightM, bearing = ap.bearing, estimate = ap.estimate,
+                // admins: the link and its Fresnel zone on the map, under the dialog
+                onLoaded = { d -> if (d.ap?.lat != null) page?.evaluateJavascript("window.cdaLink(${it.cdanet.cpeconfigurator.data.AppJson.encodeToString(LosDto.serializer(), d)}, ${pt.lat}, ${pt.lon})", null) },
+            ) { los = null }
+        }
     }
 }
 

@@ -63,3 +63,11 @@ describe('Geocoder: local Nominatim with public fallback', () => {
     assert.equal(isPublicNominatim('http://nominatim:8080'), false);
   });
 });
+
+describe('Geocoder: one entry per place', () => {
+  it('the same address returned twice by Nominatim (two OSM ways) is listed once', async () => {
+    const twice = (async () => new Response(JSON.stringify([...HIT, { ...HIT[0], lat: '37.5801' }, { display_name: 'Via Roma 2, Enna', lat: '37.59', lon: '14.13', type: 'house' }]), { status: 200, headers: { 'content-type': 'application/json' } })) as typeof fetch;
+    const r = await createGeocoder({ url: 'http://nominatim:8080', fetchImpl: twice }).search('Via Roma Enna');
+    assert.deepEqual(r.map((x) => x.label), ['Via Roma 1, 94100 Enna EN', 'Via Roma 2, Enna']);
+  });
+});

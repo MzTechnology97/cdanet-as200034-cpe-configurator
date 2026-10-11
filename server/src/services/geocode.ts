@@ -94,9 +94,11 @@ export function createGeocoder(opts: GeocoderOptions) {
     });
     if (!r.ok) throw new HttpError(502, 'geocoder_error', { status: r.status });
     const list = (await r.json()) as Array<{ display_name?: string; lat?: string; lon?: string; type?: string }>;
+    const seen = new Set<string>();
     return list
       .map((x) => ({ label: String(x.display_name ?? ''), lat: Number(x.lat), lon: Number(x.lon), type: String(x.type ?? '') }))
-      .filter((x) => Number.isFinite(x.lat) && Number.isFinite(x.lon));
+      .filter((x) => Number.isFinite(x.lat) && Number.isFinite(x.lon))
+      .filter((x) => (seen.has(x.label) ? false : (seen.add(x.label), true)));
   }
 
   async function statusAt(base: string) {

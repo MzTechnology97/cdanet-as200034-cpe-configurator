@@ -67,6 +67,11 @@ Vedi [CRM.md](CRM.md).
   - azioni RADIUS dal NOC (disconnetti, sospendi, riattiva).
 - **Da chiedere a ISP Billing**: scrittura delle attività (esito, stato), elenco tecnici, scarico a magazzino del seriale sul cliente, webhook.
 
+## Da valutare
+
+- **Console in React** (richiesta dell'utente, 11/10/2026): riscrivere la grafica della console web con React (componenti, stato, grafici e mappe più curati) per renderla più bella e uniforme. Da valutare costi e benefici (build con bundler nel container, CSP, mappe Leaflet/MapLibre come componenti, migrazione pagina per pagina) prima di partire.
+- **Mappa 3D** stile UISP Design: terreno TINITALY a 10 m con le foto aeree, AP con i settori, collegamenti e zona di Fresnel in 3D.
+
 ## Da verificare sul campo
 
 Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). Funzioni scritte e testate senza l'apparato reale: vanno provate su una CPE di laboratorio (o sul telefono) prima dell'uso in produzione.
@@ -82,6 +87,7 @@ Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). 
 
 ## Già rilasciato
 
+- v1.32.62: Copertura: Visibilità come in UISP Design (riquadri del collegamento con distanza, puntamenti e inclinazioni dai due lati, altezze, segnale stimato, Fresnel libera; profilo con antenne, ellisse di Fresnel e asse in km; collegamento e zona di Fresnel colorata sulla mappa); punto da verificare fisso e trascinabile (i clic e i tocchi successivi muovono solo la mappa, «Nuovo punto sulla mappa»), anche nell'app; simulazione più fine e sfumata (celle di 120–250 m, un'immagine invece di migliaia di quadrati); indirizzi doppi tolti; messaggio corretto quando gli AP sono nascosti dalla soglia.
 - v1.32.60: IA-AP rifatta graficamente: contatori che filtrano, barra degli strumenti, elenco per AP o per tipo di problema a sinistra e dettaglio a destra (schede per l'AP, tabella per le CPE, «Cosa fare» una volta per tipo), un solo menu «Ignora…» (7/30/90 giorni), storico delle ottimizzazioni in tabella.
 - v1.32.59: mappe della console con **immagini satellitari** solo per gli admin, da più fonti da confrontare (Mapbox, Esri, Google, ortofoto pubbliche AGEA via WMS): Connettori → Immagini satellitari con le chiavi cifrate sul server, immagini attraverso il server, una voce per fonte nel selettore della mappa; temi della mappa (chiara, scura, grigia) e livelli attivabili sopra qualsiasi sfondo (strade e vie, edifici, località, acque, confini); installatori e app con la mappa base.
 - v1.32.58: Copertura → Affidabilità della stima: elenco dei clienti collegati ma dati per ostruiti, con cosa copre la linea (terreno, edifici, alberi), dove e di quanto alzare la CPE; *Verifica* apre punto e profilo verso l'AP. Il profilo di Visibilità disegna edifici e alberi e, per gli admin, dice a che quota è l'antenna dell'AP e da dove viene (GPS di UISP, altezza in UISP, predefinita).

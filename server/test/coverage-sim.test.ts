@@ -21,6 +21,9 @@ describe('Copertura: radio simulation of an AP (admins)', () => {
     assert.equal(typeof s.ap.lat, 'number');
     assert.equal(s.minDbm, -75);
     assert.ok(Array.isArray(s.cells));
+    // fine grid: cells with their place in it, drawn as one image
+    assert.ok(s.n >= 60 && s.n <= 140, String(s.n));
+    assert.ok(s.cells.every((c: { i: number; j: number }) => c.i >= 0 && c.i < s.n && c.j >= 0 && c.j < s.n));
     for (const c of s.cells) assert.ok(typeof c.dbm === 'number' && typeof c.lat === 'number' && typeof c.lon === 'number');
     if (s.cells.length) assert.ok(s.radiusM >= 1500 && s.cellM > 0);
 
