@@ -169,9 +169,14 @@ export const RULES = {
   /** Share of an AP's CPEs below their ideal modulation that points to the channel (critical: 75%). */
   mcsShare: 0.5,
   mcsShareCritical: 0.75,
-  airtimeShare: 0.05,
-  airtimeCritical: 0.1,
+  /**
+   * A CPE's share of the AP airtime (UISP reads it at one moment: a customer downloading right then
+   * is not a problem). It counts only if the CPE is also slow (low SNR, modulation below the ideal,
+   * capacity under airtimeSlowCap of the AP median) and the AP is busy in the evening.
+   */
+  airtimeShare: 0.1,
   airtimeVsMedian: 3,
+  airtimeSlowCap: 0.5,
   trendWarning: -6,
   trendCritical: -10,
   belowExpected: -10,
@@ -306,6 +311,9 @@ export function analyzeNetwork(inputs: AdvisorInput[], o: AdvisorOptions): Findi
     const base = { apId: ap.apId, apName: ap.apName };
     const st = ap.stations;
     const medAir = median(st.map((s) => s.airtime).filter((v): v is number => v !== null)) ?? 0;
+    const medCap = median(st.map((s) => s.capMbps).filter((v): v is number => v !== null));
+    // evening load of the AP, % (airtime or channel use): how much a slow CPE really costs the others
+    const apBusy = ap.load ? Math.max(ap.load.eveningAirtimePct ?? -1, ap.load.eveningUtilizationPct ?? -1) : -1;
     // ---- CPEs ----
     for (const s of st) {
       const cpe = { id: s.deviceId, name: s.name, mac: s.mac };
@@ -318,8 +326,26 @@ export function analyzeNetwork(inputs: AdvisorInput[], o: AdvisorOptions): Findi
       if (gap > RULES.mcsGap) {
         out.push({ ...base, cpe, id: `mcs:${key}`, kind: 'mcs', severity: gap >= RULES.mcsGapWarning ? 'attenzione' : 'info', title: `Modulazione sotto l’ideale di ${gap} livelli`, detail: `MCS ricezione ${s.rxMcs ?? '—'} (ideale ${s.rxMcsIdeal ?? '—'}), trasmissione ${s.txMcs ?? '—'} (ideale ${s.txMcsIdeal ?? '—'}): il segnale basterebbe, qualcosa disturba.`, action: 'Probabile interferenza o riflessioni: controlla puntamento e catene; se tocca più CPE dello stesso AP, cambia canale.' });
       }
-      if (s.airtime !== null && s.airtime >= RULES.airtimeShare && s.airtime >= RULES.airtimeVsMedian * medAir) {
-        out.push({ ...base, cpe, id: `airtime:${key}`, kind: 'airtime', severity: s.airtime >= RULES.airtimeCritical ? 'critico' : 'attenzione', title: `Occupa il ${fmt(s.airtime * 100)}% dell’airtime dell’AP`, detail: `La mediana delle CPE di questo AP è ${fmt(medAir * 100)}%: una CPE lenta (modulazione bassa) rallenta tutti.`, action: 'Migliora il collegamento di questa CPE (puntamento, palo più alto, altro AP) o limitane la banda.' });
+      // a big share of the airtime matters only for a slow CPE (it takes the time of the others to
+      // move little data) and only as much as the AP is busy: a fast customer downloading is normal
+      const slowWhy = [
+        snr !== null && snr < RULES.snrWarning ? `SNR ${Math.round(snr)} dB` : null,
+        gap > RULES.mcsGap ? `modulazione ${gap} livelli sotto l’ideale` : null,
+        s.capMbps !== null && medCap !== null && medCap > 0 && s.capMbps <= RULES.airtimeSlowCap * medCap ? `capacità ${s.capMbps} Mbit/s contro ${Math.round(medCap)} delle altre CPE` : null,
+      ].filter((v): v is string => v !== null);
+      if (s.airtime !== null && s.airtime >= RULES.airtimeShare && s.airtime >= RULES.airtimeVsMedian * medAir && slowWhy.length) {
+        const severity: Severity = apBusy >= RULES.busyCritical ? 'critico' : apBusy >= RULES.busyWarning ? 'attenzione' : 'info';
+        const load = apBusy >= 0 ? `l’AP la sera è al ${Math.round(apBusy)}%` : 'il carico serale dell’AP non è noto';
+        out.push({
+          ...base,
+          cpe,
+          id: `airtime:${key}`,
+          kind: 'airtime',
+          severity,
+          title: `CPE lenta che occupa il ${fmt(s.airtime * 100)}% dell’airtime`,
+          detail: `${slowWhy.join(', ')}; la mediana delle CPE di questo AP è ${fmt(medAir * 100)}% di airtime. ${severity === 'info' ? `Oggi pesa poco: ${load}.` : `Rallenta gli altri clienti: ${load}.`}`,
+          action: 'Migliora il collegamento di questa CPE (puntamento, palo più alto, altro AP) o limitane la banda.',
+        });
       }
       if (s.trendDb !== null && s.trendDb <= RULES.trendWarning) {
         out.push({ ...base, cpe, id: `trend:${key}`, kind: 'trend', severity: s.trendDb <= RULES.trendCritical ? 'critico' : 'attenzione', title: `Segnale in calo di ${fmt(-s.trendDb)} dB in una settimana`, detail: 'Ultime 24 ore rispetto ai primi due giorni della settimana.', action: 'Un calo lento indica antenna che si sposta, vegetazione che cresce o un connettore che si ossida: programma un sopralluogo prima del guasto.' });

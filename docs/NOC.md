@@ -35,7 +35,7 @@ Dati usati, tutti da UISP: stazioni collegate (segnale, rumore, modulazione attu
 |---|---|---|
 | SNR basso | CPE | sotto 20 dB (critico sotto 12) |
 | Modulazione | CPE / AP | 4 o più livelli sotto l'ideale (attenzione da 6); sull'AP quando almeno metà delle CPE (minimo 4) è sotto (critico tre quarti) |
-| Airtime eccessivo | CPE | oltre il 5% dell'airtime (critico 10%) e 3 volte la mediana dell'AP |
+| CPE lenta che occupa airtime | CPE | almeno il 10% dell'airtime e 3 volte la mediana dell'AP, **solo se la CPE è lenta** (SNR sotto 20 dB, modulazione più di 3 livelli sotto l'ideale o capacità sotto la metà della mediana dell'AP). Gravità dal carico serale dell'AP: attenzione oltre il 50%, critico oltre il 70%, altrimenti solo informazione. Una CPE veloce che scarica molto non è un problema (l'airtime UISP è letto in un istante) |
 | Segnale in calo | CPE | ultimo giorno peggiore dei primi due della settimana di 6 dB (critico 10) |
 | Sotto il segnale atteso | CPE | 10 dB sotto la stima del modello: puntamento o ostacolo nuovo |
 | Polarizzazioni | CPE | le due catene differiscono di 8 dB o più |
