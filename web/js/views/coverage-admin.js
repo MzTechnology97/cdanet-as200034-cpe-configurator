@@ -147,6 +147,17 @@ function linkFacts(p, from, estimate) {
   );
 }
 
+/** The CPE of a row: the model used for the estimate, proposed or chosen. */
+function cpeCell(c, goodDbm) {
+  if (!c) return '—';
+  return h(
+    'div',
+    {},
+    h('b', {}, c.name),
+    h('div', { class: 'small muted' }, `${c.gainDbi} dBi${c.auto ? (c.proposed ? ' · consigliata' : ` · nessuna arriva a ${goodDbm} dBm: di riferimento`) : ' · scelta'}`),
+  );
+}
+
 export async function adminCoverageView() {
   const search = h('input', { type: 'search', class: 'grow', placeholder: 'Indirizzo, coordinate (37.56, 14.27) o nome di un AP', autocomplete: 'off' });
   const searchBtn = h('button', { type: 'submit', class: 'primary' }, 'Cerca');
@@ -154,6 +165,13 @@ export async function adminCoverageView() {
   // the farthest real link is 20 km (usually under 15): beyond that no AP is worth proposing
   const howFar = h('select', {}, ...[5, 10, 15, 20].map((n) => h('option', { value: n, selected: n === 20 }, `entro ${n} km`)));
   const height = h('input', { type: 'number', min: 0.5, max: 100, step: 0.5, value: 6, inputmode: 'decimal' });
+  // the CPE to install: proposed for each AP, or one model for all (the list comes with the answer)
+  const cpe = h('select', {}, h('option', { value: 'auto' }, 'Consigliata per ogni AP'));
+  const cpeOptions = (models) => {
+    if (cpe.options.length > 1 || !models?.length) return;
+    for (const m of models) cpe.append(h('option', { value: m.id }, `${m.name} · ${m.gainDbi} dBi`));
+  };
+  cpe.onchange = () => point && check(point.la, point.lo, point.label);
   const choices = h('div', {});
   const el = h('div', { class: 'map map-tall' });
   const mapNote = h('p', { class: 'small muted' });
@@ -219,7 +237,8 @@ export async function adminCoverageView() {
     try {
       // every AP in range, already ranked by the server (50 is its maximum): nothing to choose by hand
       const hM = Number(String(height.value).replace(',', '.'));
-      r = await api(`/api/coverage?lat=${la}&lon=${lo}&limit=50&km=${howFar.value}${hM >= 0.5 && hM <= 100 ? `&height=${hM}` : ''}`);
+      r = await api(`/api/coverage?lat=${la}&lon=${lo}&limit=50&km=${howFar.value}${hM >= 0.5 && hM <= 100 ? `&height=${hM}` : ''}&cpe=${encodeURIComponent(cpe.value)}`);
+      cpeOptions(r.cpeModels);
     } catch (e) {
       return mount(out, h('div', { class: 'notice bad' }, e.message));
     }
@@ -247,6 +266,7 @@ export async function adminCoverageView() {
           { label: 'AP', render: (a) => h('div', {}, h('b', {}, a.name || a.id), h('div', { class: 'small muted' }, [a.ssid, a.siteName].filter(Boolean).join(' · '))) },
           { label: 'Distanza', render: (a) => km(a.distanceM) },
           { label: 'Puntamento', render: (a) => h('span', { class: 'bearing' }, h('span', { class: 'arrow', 'data-deg': a.bearing }, '↑'), ` ${a.bearing}° ${a.direction}`) },
+          { label: 'CPE', render: (a) => cpeCell(a.cpe, r.goodSignalDbm) },
           { label: 'Segnale stimato', render: (a) => h('div', {}, estimateCell(a.estimate), a.failures ? h('div', { class: 'small' }, `${a.failures} ${a.failures === 1 ? 'installazione fallita' : 'installazioni fallite'} qui vicino verso questo AP`) : null) },
           { label: 'Carico (20–23)', render: (a) => loadCell(a.load) },
           { label: 'Client', render: (a) => a.stations ?? '—' },
@@ -301,7 +321,7 @@ export async function adminCoverageView() {
     mount(simBox, h('p', { class: 'small muted' }, 'Simulazione in corso…'));
     let d;
     try {
-      d = await api(`/api/admin/coverage/simulation?apId=${encodeURIComponent(apId)}`);
+      d = await api(`/api/admin/coverage/simulation?apId=${encodeURIComponent(apId)}${cpe.value !== 'auto' ? `&cpe=${encodeURIComponent(cpe.value)}` : ''}`);
     } catch (e) {
       return mount(simBox, h('div', { class: 'notice bad' }, e.message));
     }
@@ -340,7 +360,7 @@ export async function adminCoverageView() {
       h(
         'div',
         { class: 'sim-info' },
-        h('b', {}, `Simulazione ${d.theoretical ? 'teorica ' : ''}di ${d.ap.name}`),
+        h('b', {}, `Simulazione ${d.theoretical ? 'teorica ' : ''}di ${d.ap.name}${d.cpe ? ` con ${d.cpe.name}` : ''}`),
         h(
           'span',
           { class: 'small muted' },
@@ -477,7 +497,7 @@ export async function adminCoverageView() {
       h('h2', {}, 'Verifica un punto'),
       form,
       choices,
-      h('div', { class: 'row' }, field('Cerca gli AP entro', howFar), field('Altezza della CPE dal suolo (m)', height)),
+      h('div', { class: 'row' }, field('Cerca gli AP entro', howFar), field('Altezza della CPE dal suolo (m)', height), field('CPE da installare', cpe)),
       h('p', { class: 'small muted' }, 'Scrivi un indirizzo, delle coordinate o il nome di un AP, oppure clicca sulla mappa. L’altezza della CPE vale per la visibilità di questo punto.'),
     ),
     card(

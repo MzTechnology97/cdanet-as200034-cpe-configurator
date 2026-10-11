@@ -525,6 +525,8 @@ data class CoverageAp(
     val frequency: Int? = null,
     val distanceM: Int,
     val bearing: Int,
+    /** The CPE the estimate is for (chosen, or proposed for this AP). */
+    val cpe: CoverageCpeDto? = null,
     val direction: String,
     val node: Int? = null,
     val district: Int? = null,
@@ -631,7 +633,21 @@ data class CoverageDto(
     /** Installations given up for radio reasons within 300 m (any AP). */
     val failuresNearby: Int = 0,
     val hideBelowDbm: Int = -70,
+    /** CPEs that can be chosen, the one asked for ("auto": proposed for each AP), the good signal. */
+    val cpeModels: List<CpeModelDto> = emptyList(),
+    val cpe: String = "auto",
+    val goodSignalDbm: Int = -65,
 )
+
+@Serializable
+data class CpeModelDto(val id: String, val name: String, val gainDbi: Int = 0, val beamDeg: Double = 0.0)
+
+/** The CPE an estimate is for: chosen, or proposed for the AP (null when none reaches a good signal). */
+@Serializable
+data class CoverageCpeDto(val id: String, val name: String, val gainDbi: Int = 0, val auto: Boolean = true, val proposed: ProposedCpeDto? = null)
+
+@Serializable
+data class ProposedCpeDto(val id: String, val name: String, val signalDbm: Int? = null)
 
 @Serializable
 /** isDefault = default for the signed-in installer (personal default if any, else the model default). */

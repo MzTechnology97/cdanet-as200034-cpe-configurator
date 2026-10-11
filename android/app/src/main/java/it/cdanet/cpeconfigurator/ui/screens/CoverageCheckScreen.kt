@@ -132,6 +132,8 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
     val gps = remember { it.cdanet.cpeconfigurator.network.LocationHelper(context) }
     var query by remember { mutableStateOf("") }
     var height by remember { mutableStateOf("") }
+    // the CPE to install: proposed for each AP ("auto") or one model for all
+    var cpe by remember { mutableStateOf("auto") }
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var suggestions by remember { mutableStateOf<List<GeocodeResult>>(emptyList()) }
@@ -174,7 +176,7 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
             busy = "check"
             try {
                 val h = height.replace(',', '.').toDoubleOrNull()?.takeIf { it in 0.5..100.0 }
-                val json = if (admin) c.api.coverageJson(lat, lon, 10, null, h) else c.api.coverageJson(lat, lon, h)
+                val json = if (admin) c.api.coverageJson(lat, lon, 10, null, h, cpe) else c.api.coverageJson(lat, lon, h, cpe)
                 result = AppJson.decodeFromString(CoverageDto.serializer(), json)
                 resultJson = json
                 point = CheckedPoint(lat, lon, label ?: runCatching { c.api.reverseGeocode(lat, lon)?.label }.getOrNull()?.takeIf { it.isNotBlank() } ?: String.format(java.util.Locale.US, "%.5f, %.5f", lat, lon))
@@ -192,7 +194,7 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
             busy = "sim"
             error = null
             try {
-                val json = c.api.coverageSimulationJson(apId)
+                val json = c.api.coverageSimulationJson(apId, cpe.takeIf { it != "auto" })
                 sim = AppJson.decodeFromString(SimulationInfoDto.serializer(), json)
                 simJson = json
             } catch (e: Exception) {
@@ -239,6 +241,11 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
     LaunchedEffect(page, simJson, simCapacity) { page?.evaluateJavascript(if (simJson != null) "window.cdaSimulation($simJson, '${if (simCapacity) "cap" else "dbm"}')" else "window.cdaClearSimulation()", null) }
 
     val heightM = height.replace(',', '.').toDoubleOrNull()?.takeIf { it in 0.5..100.0 }
+    // another CPE: the same point with its antenna gain
+    LaunchedEffect(cpe) {
+        val p = point ?: return@LaunchedEffect
+        check(p.lat, p.lon, p.label)
+    }
     // the CPE height changes the terrain towards each AP: check the same point again
     LaunchedEffect(heightM) {
         val p = point ?: return@LaunchedEffect
@@ -292,6 +299,17 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                 supporting = if (height.isNotBlank() && heightM == null) "Da 0,5 a 100 m" else "Dal terreno all'antenna montata: conta per il segnale stimato e la visibilità.",
                 isError = height.isNotBlank() && heightM == null,
             )
+            val models = result?.cpeModels.orEmpty()
+            if (models.isNotEmpty()) {
+                val options = listOf("auto") + models.map { it.id }
+                it.cdanet.cpeconfigurator.ui.Dropdown(
+                    "CPE da installare",
+                    options,
+                    cpe,
+                    { id -> if (id == "auto") "Consigliata per ogni AP" else models.first { it.id == id }.let { m -> "${m.name} · ${m.gainDbi} dBi" } },
+                    { cpe = it },
+                )
+            }
         }
 
         EmbeddedMap(c, "window.cdaCoverageMode()", Modifier.fillMaxWidth().height(380.dp).padding(vertical = 4.dp), bridge = bridge) { page = it }
@@ -369,6 +387,17 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                                     style = MaterialTheme.typography.bodySmall,
                                 )
                                 ap.estimate?.describe()?.let { Text(it, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium) }
+                                ap.cpe?.let { k ->
+                                    Text(
+                                        "CPE ${k.name} (${k.gainDbi} dBi)" + when {
+                                            !k.auto -> ""
+                                            k.proposed != null -> " · consigliata"
+                                            else -> " · nessuna arriva a ${result?.goodSignalDbm ?: -65} dBm"
+                                        },
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    )
+                                }
                                 ap.load?.describe()?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = if (ap.load.level == "carico") MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant) }
                                 if (ap.failures > 0) Text("${ap.failures} ${if (ap.failures == 1) "installazione fallita" else "installazioni fallite"} qui vicino verso questo AP", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                             }

@@ -66,9 +66,27 @@ describe('Copertura: il terreno entra nella stima', () => {
     const east = await n2(14.15); // ~4.4 km, behind the ridge
     assert.equal(west.estimate.terrain.verdict, 'clear', JSON.stringify(west.estimate));
     assert.equal(east.estimate.terrain.verdict, 'blocked', JSON.stringify(east.estimate));
-    assert.ok(east.estimate.terrain.lossDb > 20);
-    assert.ok(east.estimate.signalDbm <= west.estimate.signalDbm - 20, `${east.estimate.signalDbm} vs ${west.estimate.signalDbm}`);
+    // the ridge would cost a lot of knife-edge diffraction; the loss applied is the penalty of a
+    // disturbed Fresnel zone (UISP Design), closer to what connected customers really get
+    assert.ok(east.estimate.terrain.diffractionDb > 20, JSON.stringify(east.estimate.terrain));
+    assert.ok(east.estimate.terrain.lossDb > 5 && east.estimate.terrain.lossDb < 10, JSON.stringify(east.estimate.terrain));
+    assert.ok(east.estimate.signalDbm <= west.estimate.signalDbm - 5, `${east.estimate.signalDbm} vs ${west.estimate.signalDbm}`);
     assert.notEqual(east.rating, 'buono');
+
+    // the CPE to install: its antenna gain moves the expected signal (AP side: what UISP says)
+    const withCpe = async (cpe: string) => (await app.inject({ method: 'GET', url: `/api/coverage?lat=37.6&lon=14.05&limit=20&cpe=${cpe}`, headers: H })).json();
+    const lbe = await withCpe('lbe5ac');
+    const pbe = await withCpe('pbe5ac');
+    const a1 = lbe.aps.find((a: { id: string }) => a.id === 'ap-n2');
+    const a2 = pbe.aps.find((a: { id: string }) => a.id === 'ap-n2');
+    assert.equal(a2.estimate.signalDbm - a1.estimate.signalDbm, 2, 'PowerBeam 25 dBi vs LiteBeam 23 dBi');
+    assert.equal(a2.cpe.id, 'pbe5ac');
+    assert.equal(a2.cpe.auto, false);
+    assert.ok(lbe.cpeModels.some((m: { id: string }) => m.id === 'loco5ac'));
+    const auto = (await withCpe('auto')).aps.find((a: { id: string }) => a.id === 'ap-n2');
+    assert.equal(auto.cpe.auto, true);
+    if (auto.cpe.proposed) assert.equal(auto.cpe.id, auto.cpe.proposed.id);
+    assert.equal((await app.inject({ method: 'GET', url: '/api/coverage?lat=37.6&lon=14.05&cpe=nope', headers: H })).statusCode, 400);
 
     // AP vicini: the same estimate
     const pointing = (await app.inject({ method: 'GET', url: '/api/pointing?lat=37.6&lon=14.15&limit=15', headers: H })).json();
