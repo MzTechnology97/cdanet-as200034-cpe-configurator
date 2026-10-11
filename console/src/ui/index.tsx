@@ -1,4 +1,4 @@
-import { type ButtonHTMLAttributes, type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ButtonHTMLAttributes, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { Icon } from './Icon';
 
 /**
@@ -178,6 +178,32 @@ export function Drawer({ title, onClose, children, footer }: { title: string; on
         <div className="ui-drawer-body">{children}</div>
         {footer && <footer className="ui-drawer-foot">{footer}</footer>}
       </aside>
+    </div>
+  );
+}
+
+/** Something still made by web/js (DOM: a chart, a card), shown as it is; made again when [deps] change. */
+export function Dom({ make, deps = [] }: { make: () => Node | null; deps?: unknown[] }) {
+  const host = useRef<HTMLDivElement>(null);
+  useLayoutEffect(() => {
+    const n = make();
+    if (n) host.current?.replaceChildren(n);
+    else host.current?.replaceChildren();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, deps);
+  return <div ref={host} className="ui-dom" />;
+}
+
+/** Sections of a page side by side (they scroll sideways on phones). */
+export function Tabs<T extends string>({ value, tabs, onChange }: { value: T; tabs: Array<{ value: T; label: string; badge?: ReactNode }>; onChange: (v: T) => void }) {
+  return (
+    <div className="ui-tabs" role="tablist">
+      {tabs.map((t) => (
+        <button key={t.value} type="button" role="tab" aria-selected={t.value === value} className={t.value === value ? 'on' : ''} onClick={() => onChange(t.value)}>
+          {t.label}
+          {t.badge}
+        </button>
+      ))}
     </div>
   );
 }

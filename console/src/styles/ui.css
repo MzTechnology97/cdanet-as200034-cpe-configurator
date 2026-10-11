@@ -193,3 +193,21 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .wo-card footer { margin-top: var(--sp-2); }
 .wo-card footer .ui-btn { min-height: 32px; }
 .ui-field textarea { min-height: 72px; resize: vertical; }
+
+/* tabs */
+.ui-tabs { display: flex; gap: 2px; overflow-x: auto; border-bottom: 1px solid var(--line); scrollbar-width: none; }
+.ui-tabs::-webkit-scrollbar { display: none; }
+.ui-tabs button { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 10px var(--sp-4); border: 0; border-bottom: 2px solid transparent; background: none; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; }
+.ui-tabs button:hover { color: var(--ink); }
+.ui-tabs button.on { color: var(--brand-ink); border-bottom-color: var(--brand); }
+.ui-dom { min-width: 0; }
+.ui-dom svg.chart { width: 100%; height: auto; }
+
+/* Gestione CPE */
+.cp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
+.cp-wireless { margin-top: var(--sp-2); display: grid; gap: var(--sp-3); }
+.cp-auto { display: grid; gap: var(--sp-2); align-content: start; }
+.cp-contacts { display: flex; flex-wrap: wrap; gap: var(--sp-2); }
+.cp-contacts .ui-btn, .hl-actions a.ui-btn { text-decoration: none; }
+.cp-backups .hl-main { display: grid; }
+.page-head .ui-btn .icon, .ui-page-head .ui-btn .icon { width: 18px; height: 18px; fill: currentColor; }
