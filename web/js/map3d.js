@@ -128,7 +128,7 @@ const remembered = () => {
  */
 async function openScene({ title, ariaLabel, legendItems, center, bearing, onLoad }) {
   const stage = h('div', { class: 'map3d-stage' });
-  const status = h('span', { class: 'small muted' }, 'Caricamento del terreno…');
+  const status = h('span', { class: 'small muted' }, 'Caricamento del terreno… La prima volta il server prepara il rilievo di questa zona: può volerci fino a un minuto, poi resta pronto.');
   const views = h('div', { class: 'map3d-views' });
   const tools = h('div', { class: 'map3d-views' });
   const imagery = h('select', { 'aria-label': 'Immagini' });
