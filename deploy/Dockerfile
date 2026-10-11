@@ -5,6 +5,16 @@ WORKDIR /app/server
 COPY server/package.json server/package-lock.json ./
 RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
 
+# The web console (console/, React + Vite) built into web/app: files with a content hash in their
+# name, served under /app/ and cached by the browsers until the next release.
+FROM node:24-alpine AS console
+WORKDIR /src/console
+COPY console/package.json console/package-lock.json ./
+RUN npm ci --ignore-scripts && npm cache clean --force
+COPY console ./
+COPY web /src/web
+RUN npm run build
+
 FROM node:24-alpine
 ARG VERSION=dev
 ARG REVISION=unknown
@@ -20,6 +30,7 @@ COPY --from=deps /app/server/node_modules ./node_modules
 COPY server/package.json ./
 COPY server/src ./src
 COPY web /app/web
+COPY --from=console /src/web/app /app/web/app
 # Deploy files of this version: the updater applies them after an update (no installer re-run).
 COPY deploy/docker-compose.yml deploy/Caddyfile /app/deploy/
 COPY deploy/updater/update.sh /app/deploy/updater/

@@ -258,6 +258,9 @@ export async function buildApp(
   connectorRoutes(app, ctx);
 
   const hasWeb = existsSync(join(cfg.staticDir, 'index.html'));
+  // The console built by Vite (console/ → web/app): its pages and files with a content hash in
+  // their name under /app/assets/. Without a build (development) the files of web/ as they are.
+  const built = existsSync(join(cfg.staticDir, 'app', 'index.html'));
   // The console's own code (js/, css/, and vendor/ when a module imports it) is served under
   // /v/<release>/: a new release (or a restart) is a new address, so the browser keeps those
   // files for a year and asks for none of them again until the next update; the pages are the
@@ -265,6 +268,7 @@ export async function buildApp(
   const release = `${version}-${Date.now().toString(36)}`;
   const pages = new Map<string, string>();
   const page = (file: string) => {
+    if (!pages.has(file) && built) pages.set(file, readFileSync(join(cfg.staticDir, 'app', file), 'utf8'));
     if (!pages.has(file)) {
       const html = readFileSync(join(cfg.staticDir, file), 'utf8')
         .replace(/(src|href)="\/?(js|css)\//g, `$1="/v/${release}/$2/`)
@@ -284,8 +288,9 @@ export async function buildApp(
       index: ['index.html'],
       cacheControl: false,
       setHeaders: (reply) => {
-        const tag = /^\/v\/([^/]+)\//.exec(reply.request.url)?.[1];
-        reply.header('Cache-Control', tag === release ? 'public, max-age=31536000, immutable' : 'no-cache');
+        const url = reply.request.url;
+        const tag = /^\/v\/([^/]+)\//.exec(url)?.[1];
+        reply.header('Cache-Control', tag === release || (built && url.startsWith('/app/assets/')) ? 'public, max-age=31536000, immutable' : 'no-cache');
       },
     });
     app.get('/', (_req, reply) => sendPage(reply, 'index.html'));

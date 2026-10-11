@@ -53,4 +53,24 @@ describe('Console web: file con la versione nell’indirizzo', () => {
     assert.match((await t.app.inject({ method: 'GET', url: '/map-embed.html' })).body, /src="\/v\/1\.0\.0-test-[a-z0-9]+\/js\/map-embed\.js"/);
     assert.equal((await t.app.inject({ method: 'GET', url: '/api/nulla' })).statusCode, 404);
   });
+
+  it('with the Vite build (web/app) its pages are served, its hashed files kept a year', async () => {
+    const dir = webDir();
+    mkdirSync(join(dir, 'app/assets'), { recursive: true });
+    writeFileSync(join(dir, 'app/index.html'), '<script type="module" src="/app/assets/main-AbC123.js"></script>');
+    writeFileSync(join(dir, 'app/map-embed.html'), '<script type="module" src="/app/assets/embed-XyZ789.js"></script>');
+    writeFileSync(join(dir, 'app/assets/main-AbC123.js'), 'console.log(1);');
+    const t = await testApp({ STATIC_DIR: dir });
+    for (const url of ['/', '/index.html', '/qualcosa/profondo']) {
+      const r = await t.app.inject({ method: 'GET', url });
+      assert.match(r.body, /\/app\/assets\/main-AbC123\.js/, url);
+      assert.equal(r.headers['cache-control'], 'no-cache', url);
+    }
+    assert.match((await t.app.inject({ method: 'GET', url: '/map-embed.html' })).body, /embed-XyZ789/);
+    const code = await t.app.inject({ method: 'GET', url: '/app/assets/main-AbC123.js' });
+    assert.equal(code.statusCode, 200);
+    assert.equal(code.headers['cache-control'], 'public, max-age=31536000, immutable');
+    assert.equal((await t.app.inject({ method: 'GET', url: '/vendor/lib/lib.js' })).headers['cache-control'], 'no-cache', 'vendor as before');
+    assert.equal((await t.app.inject({ method: 'GET', url: '/wiki/' })).statusCode, 200, 'wiki as before');
+  });
 });

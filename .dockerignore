@@ -1,0 +1,6 @@
+# never sent to the image build: dependencies are installed inside it, builds are made inside it
+**/node_modules
+web/app
+.git
+.dev
+android
