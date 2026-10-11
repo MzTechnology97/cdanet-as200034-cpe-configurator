@@ -10,7 +10,7 @@ const KINDS = {
   busy: 'Carico serale',
   mcs: 'Modulazione',
   snr: 'SNR basso',
-  airtime: 'Airtime eccessivo',
+  airtime: 'CPE lenta che occupa airtime',
   trend: 'Segnale in calo',
   expected: 'Sotto il segnale atteso',
   chains: 'Polarizzazioni',
