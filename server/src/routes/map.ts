@@ -3,6 +3,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { PmTilesReader } from '../domain/pmtiles.ts';
 import type { AppContext } from '../context.ts';
+import { HttpError } from '../auth.ts';
+import { MAPBOX_ATTRIBUTION } from '../services/mapbox.ts';
 
 /**
  * Basemap (Protomaps PMTiles, OpenStreetMap data) served from the data volume. The file is
@@ -122,5 +124,20 @@ export function mapRoutes(app: FastifyInstance, ctx: AppContext) {
     if (start >= i.size || end < start) return reply.code(416).header('Content-Range', `bytes */${i.size}`).send({ error: 'bad_range' });
     reply.code(206).header('Content-Type', 'application/octet-stream').header('Content-Range', `bytes ${start}-${end}/${i.size}`).header('Content-Length', end - start + 1);
     return reply.send(createReadStream(file, { start, end }));
+  });
+
+  // ---- Satellite imagery (admins only): Mapbox through this server, the token never leaves it ----
+  app.get('/api/admin/map/satellite', { preHandler: ctx.auth.requireAdmin }, async () => ({ available: ctx.mapbox.available(), attribution: MAPBOX_ATTRIBUTION }));
+
+  app.get('/api/admin/map/satellite/:kind/:z/:x/:y', { preHandler: ctx.auth.requireAdmin }, async (req, reply) => {
+    const p = z
+      .object({ kind: z.enum(['satellite', 'hybrid']), z: z.coerce.number().int().min(0).max(20), x: z.coerce.number().int().min(0), y: z.coerce.number().int().min(0) })
+      .parse(req.params);
+    if (p.x >= 2 ** p.z || p.y >= 2 ** p.z) throw new HttpError(400, 'invalid_tile');
+    const t = await ctx.mapbox.tile(p.kind, p.z, p.x, p.y);
+    // kept by the browser of this admin only (no shared cache, nothing stored on the server)
+    reply.header('Cache-Control', 'private, max-age=43200');
+    if (!t) return reply.code(204).send();
+    return reply.type(t.type).send(t.body);
   });
 }

@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { badge, busy, card, field, fmtDate, h, mount, pageHead, stat, toast } from '../dom.js';
 import { crmCard } from './crm-card.js';
+import { mapboxCard } from './mapbox-card.js';
 import { telegramCard } from './telegram-card.js';
 
 const ERRORS = {
@@ -144,6 +145,7 @@ export async function connectorsView() {
     crmCard(data.crm, async () => document.getElementById('view').replaceChildren(await connectorsView())),
     data.telegram ? telegramCard(data.telegram, async () => document.getElementById('view').replaceChildren(await connectorsView())) : null,
     geocoderCard(data.geocoder),
+    data.mapbox ? mapboxCard(data.mapbox, async () => document.getElementById('view').replaceChildren(await connectorsView())) : null,
   );
 }
 

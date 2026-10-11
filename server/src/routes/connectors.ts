@@ -4,6 +4,7 @@ import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
 import { isPublicNominatim } from '../services/geocode.ts';
+import { isMapboxToken } from '../services/mapbox.ts';
 import { TELEGRAM_EVENTS } from '../services/telegram.ts';
 
 /** Admin "Connettori": configure and test external integrations from the console. */
@@ -45,6 +46,7 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
     },
     telegram: ctx.modules.enabled('telegram') ? { ...ctx.telegram.view(), publicUrl: ctx.cfg.publicUrl ?? '' } : null,
     crm: ctx.crm.view(),
+    mapbox: ctx.mapbox.view(),
   }));
 
   app.put('/api/admin/connectors/uisp', admin, async (req) => {
@@ -168,6 +170,31 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!b.url || !b.apiId || !apiKey) throw new HttpError(400, 'crm_incomplete');
     const r = await ctx.crm.build({ url: b.url, apiId: b.apiId, apiKey }).test();
     recordEvent(ctx.db, req.user!.id, 'connector.crm.test', b.url, 'modules' in r ? `${r.modules.filter((m) => m.ok).length}/${r.modules.length} moduli leggibili` : `errore ${r.error}`);
+    return r;
+  });
+
+  // ---- Mapbox: satellite imagery of the admins' maps -------------------------------------------
+  const mapboxToken = z.string().trim().max(400).refine((v) => v === '' || isMapboxToken(v), 'Token Mapbox non valido (pk.… o sk.…)');
+  const mapboxBody = z.object({ enabled: z.boolean(), token: mapboxToken.optional() }).strict();
+
+  app.put('/api/admin/connectors/mapbox', admin, async (req) => {
+    const b = mapboxBody.parse(req.body);
+    ctx.mapbox.save({ enabled: b.enabled, token: b.token || undefined }, req.user!.id);
+    recordEvent(ctx.db, req.user!.id, 'connector.mapbox.update', 'Mapbox', `${b.enabled ? 'attivo' : 'disattivato'}${b.token ? ' · nuovo token' : ''}`);
+    return ctx.mapbox.view();
+  });
+
+  app.delete('/api/admin/connectors/mapbox', admin, async (req) => {
+    ctx.mapbox.reset();
+    recordEvent(ctx.db, req.user!.id, 'connector.mapbox.reset', 'Mapbox', 'configurazione rimossa');
+    return ctx.mapbox.view();
+  });
+
+  /** Tests the token in the form (empty: the saved one) with one tile, without saving it. */
+  app.post('/api/admin/connectors/mapbox/test', admin, async (req) => {
+    const b = z.object({ token: mapboxToken.optional() }).strict().parse(req.body ?? {});
+    const r = await ctx.mapbox.test(b.token || undefined);
+    recordEvent(ctx.db, req.user!.id, 'connector.mapbox.test', 'Mapbox', r.ok ? 'immagini disponibili' : `errore ${r.error}`);
     return r;
   });
 }

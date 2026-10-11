@@ -40,6 +40,16 @@ Finché la mappa non è installata, la console usa le tile pubbliche di OpenStre
 
 **Copertura**: il punto verificato, gli AP vicini con la linea di puntamento.
 
+## Satellite e ibrida per gli admin (v1.32.59)
+
+Con Connettori → **Mapbox** configurato (token di account.mapbox.com, cifrato sul server), le mappe della console degli amministratori hanno in alto a destra la scelta **Mappa / Satellite / Ibrida** (foto aerea, oppure foto con strade e nomi). La scelta resta su quel browser.
+
+- Le immagini passano dal server (`/api/admin/map/satellite/...`, solo admin collegati): il token non arriva mai ai browser.
+- Il browser dell'admin le tiene in cache per 12 ore; sul server non viene salvato nulla.
+- Gli installatori, la mappa nell'app e quella incorporata vedono sempre la mappa base.
+- Il consumo rientra nel piano gratuito di Mapbox se a usarla sono pochi admin.
+- Prossimo passo: vista 3D con il terreno TINITALY a 10 m, i settori degli AP e la linea di vista.
+
 ## Riservatezza per gli installatori
 
 - POP e AP sono mostrati **solo come area approssimativa** (cerchio di 1,5 km): la posizione è quella della cella di circa 1 km che contiene il punto reale, spostata di un valore fisso calcolato con un segreto del server. Non cambia tra una richiesta e l'altra, quindi non si può ricavare il punto reale facendo la media di più richieste. Le coordinate reali non arrivano mai al browser o all'app dell'installatore.

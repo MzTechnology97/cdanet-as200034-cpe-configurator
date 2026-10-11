@@ -1,5 +1,6 @@
 import { api } from './api.js';
 import { h } from './dom.js';
+import { isAdminUser } from './terms.js';
 
 /**
  * Console maps: Leaflet + Protomaps basemap served by our server (OpenStreetMap data, no external
@@ -67,28 +68,34 @@ const attached = (el) =>
  * If the local basemap draws nothing within a few seconds (old browser engine, broken file) the
  * public OpenStreetMap tiles are added instead; [onStatus] receives what happened (diagnostics).
  */
-export async function createMap(el, { center = [37.57, 14.27], zoom = 9, onStatus = null } = {}) {
+export async function createMap(el, { center = [37.57, 14.27], zoom = 9, onStatus = null, imagery = true } = {}) {
   await Promise.all([loadVendor(), attached(el)]);
   if (!el.isConnected) return null;
   // read every time: the basemap may have been installed meanwhile
   const config = await api('/api/map/config');
   const L = window.L;
   const map = L.map(el, { center, zoom, scrollWheelZoom: false });
+  // the basemap lives in a group: the layer switch of the admins shows/hides it as one, even when
+  // the public tiles replace it
+  const base = L.layerGroup().addTo(map);
   // OpenStreetMap's tile policy requires a Referer (the console sends none by default)
-  const publicTiles = () => L.tileLayer(config.fallback.url, { maxZoom: 19, attribution: config.fallback.attribution, referrerPolicy: 'strict-origin-when-cross-origin' }).addTo(map);
+  const publicTiles = () => base.addLayer(L.tileLayer(config.fallback.url, { maxZoom: 19, attribution: config.fallback.attribution, referrerPolicy: 'strict-origin-when-cross-origin' }));
+  if (imagery && isAdminUser()) void addImagery(map, base);
   if (config.basemap && window.protomapsL) {
     const dark = matchMedia('(prefers-color-scheme: dark)').matches;
-    const pm = window.protomapsL.leafletLayer({ url: config.basemap.tiles ?? config.basemap.url, flavor: dark ? 'dark' : 'light', lang: 'it', maxDataZoom: config.basemap.maxZoom }).addTo(map);
+    const pm = window.protomapsL.leafletLayer({ url: config.basemap.tiles ?? config.basemap.url, flavor: dark ? 'dark' : 'light', lang: 'it', maxDataZoom: config.basemap.maxZoom });
+    base.addLayer(pm);
     const start = reads.ok;
     setTimeout(() => {
-      if (!el.isConnected) return;
+      // an admin looking at the satellite: the basemap was not drawn, nothing to judge
+      if (!el.isConnected || !map.hasLayer(base)) return;
       const size = map.getSize();
       // no tile read: unreadable here, or outside the downloaded area
       const working = reads.ok - start > (config.basemap.tiles ? 0 : 3);
       const other = reads.other.size ? `, altre richieste fallite: ${[...reads.other].join(' ')}` : '';
       onStatus?.(working ? 'basemap_ok' : 'basemap_fallback', `letture ${reads.ok - start} ok, ${reads.fail} fallite${reads.error ? ` (${reads.error})` : ''}, mappa ${size.x}×${size.y}, zoom ${map.getZoom()}${other}`);
       if (!working) {
-        map.removeLayer(pm);
+        base.removeLayer(pm);
         publicTiles();
       }
     }, 8000);
@@ -100,6 +107,68 @@ export async function createMap(el, { center = [37.57, 14.27], zoom = 9, onStatu
   map.on('focus', () => map.scrollWheelZoom.enable());
   map.on('blur', () => map.scrollWheelZoom.disable());
   return map;
+}
+
+/**
+ * Tiles read with the session of the admin (the imagery goes through our server): fetched, then
+ * shown from a blob. An empty answer (no imagery there) leaves the tile blank.
+ */
+function authTileLayer(url, options) {
+  const L = window.L;
+  const Layer = L.TileLayer.extend({
+    createTile(coords, done) {
+      const img = document.createElement('img');
+      img.alt = '';
+      api(this.getTileUrl(coords), { raw: true })
+        .then(async (r) => {
+          if (!r.ok || r.status === 204) return done(null, img);
+          img.onload = () => (URL.revokeObjectURL(img.src), done(null, img));
+          img.onerror = () => done(new Error('tile'), img);
+          img.src = URL.createObjectURL(await r.blob());
+        })
+        .catch((e) => done(e, img));
+      return img;
+    },
+  });
+  return new Layer(url, options);
+}
+
+const BASE_KEY = 'cda.mapBase';
+const savedBase = () => {
+  try {
+    return localStorage.getItem(BASE_KEY);
+  } catch {
+    return null;
+  }
+};
+
+/**
+ * Admins: satellite and hybrid imagery (Mapbox through the server, when configured in Connettori)
+ * besides the basemap, with a switch on the map; the choice is remembered on this browser.
+ */
+async function addImagery(map, base) {
+  const s = await api('/api/admin/map/satellite').catch(() => null);
+  if (!s?.available || !map.getContainer().isConnected) return;
+  const L = window.L;
+  const opts = { maxZoom: 20, maxNativeZoom: 19, tileSize: 256, attribution: s.attribution };
+  const layers = {
+    Mappa: base,
+    Satellite: authTileLayer('/api/admin/map/satellite/satellite/{z}/{x}/{y}', opts),
+    Ibrida: authTileLayer('/api/admin/map/satellite/hybrid/{z}/{x}/{y}', opts),
+  };
+  const chosen = layers[savedBase()];
+  if (chosen && chosen !== base) {
+    map.removeLayer(base);
+    chosen.addTo(map);
+  }
+  L.control.layers(layers, null, { position: 'topright' }).addTo(map);
+  map.on('baselayerchange', (e) => {
+    try {
+      localStorage.setItem(BASE_KEY, e.name);
+    } catch {
+      /* private mode: not remembered */
+    }
+  });
 }
 
 /** Popup content as DOM (never HTML strings: names come from external systems). */
