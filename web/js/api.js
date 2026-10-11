@@ -57,6 +57,7 @@ const MESSAGES = {
   module_disabled: 'Funzionalità disattivata dall’amministratore',
   connector_incomplete: 'Servono indirizzo UISP e token',
   uisp_not_configured: 'UISP non configurato (Connettori)',
+  basemap_missing: 'Mappa base non installata sul server (sudo cdanet-cpe map update)',
   uisp_tls_error: 'Certificato TLS di UISP non valido',
   optimizer_disabled: 'Ottimizzazione automatica spenta: Impostazioni server → Assistente rete',
   finding_not_optimizable: 'Questo avviso non si risolve cambiando il canale dell’AP',

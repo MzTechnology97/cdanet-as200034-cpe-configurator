@@ -846,6 +846,10 @@ data class LosWorstDto(val d: Int = 0, val clearanceM: Double = 0.0, val fresnel
 data class LosDto(
     val distanceM: Int = 0,
     val cpeHeightM: Double = 0.0,
+    /** Where the antenna really is above the ground: on the roof, above the obstacles around. */
+    val mountedM: Double? = null,
+    /** Height of the building at the point (basemap footprints), m. */
+    val roofM: Int? = null,
     val frequencyMhz: Int = 5600,
     val verdict: String = "clear",
     val worst: LosWorstDto? = null,

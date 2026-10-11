@@ -104,11 +104,7 @@ export function buildProfile(at: TerrainSampler, point: LatLon, cpeHeightM: numb
     if (g === null) return null;
     ground.push(g);
     const d = p.f * D;
-    const c = obstacles && d > NEAR_ANTENNA_M && D - d > NEAR_ANTENNA_M ? at.cover(p.lat, p.lon) : null;
-    if (c === BUILT && obstacles!.buildingM > 0) obstacle.push({ h: obstacles!.buildingM, kind: 'edificio' });
-    else if (c === TREE && obstacles!.treeM > 0) obstacle.push({ h: obstacles!.treeM, kind: 'alberi' });
-    else if (c === SHRUB && obstacles!.treeM > 0) obstacle.push({ h: Math.min(SHRUB_M, obstacles!.treeM), kind: 'alberi' });
-    else obstacle.push(null);
+    obstacle.push(obstacles && d > NEAR_ANTENNA_M && D - d > NEAR_ANTENNA_M ? obstacleAt(at, p.lat, p.lon, obstacles) : null);
   }
   // the AP position in UISP may be a few tens of metres off the summit it stands on: its ground is
   // the highest point around it, else the summit itself would hide it
@@ -129,6 +125,26 @@ export function buildProfile(at: TerrainSampler, point: LatLon, cpeHeightM: numb
     d: pts.map((p) => p.f * D),
     altitudeFrom: resolved.from,
   };
+}
+
+/**
+ * What stands on the ground at a point: the building of the basemap footprints with its height
+ * where they were imported (a street between two houses is free there), else the class of the
+ * land cover with the average height; trees with their own height from the canopy map where it
+ * was imported, else trees and shrubs of the land cover. A tree height of 0 in the settings turns
+ * trees off.
+ */
+export function obstacleAt(at: TerrainSampler, lat: number, lon: number, o: ObstacleHeights): { h: number; kind: 'edificio' | 'alberi' } | null {
+  const b = at.building?.(lat, lon) ?? null;
+  if (b !== null && b > 0) return { h: b, kind: 'edificio' };
+  const c = at.cover(lat, lon);
+  if (c === BUILT && b === null && o.buildingM > 0) return { h: o.buildingM, kind: 'edificio' };
+  // the canopy map knows each tree and its height: where it was imported it replaces the classes
+  const t = at.canopy?.(lat, lon) ?? null;
+  if (t !== null) return t > 0 && o.treeM > 0 ? { h: t, kind: 'alberi' } : null;
+  if (c === TREE && o.treeM > 0) return { h: o.treeM, kind: 'alberi' };
+  if (c === SHRUB && o.treeM > 0) return { h: Math.min(SHRUB_M, o.treeM), kind: 'alberi' };
+  return null;
 }
 
 /** Highest ground within [r] metres of a point (5 × 5 samples), m a.s.l.; -Infinity when unknown. */
@@ -154,8 +170,7 @@ function localTop(at: TerrainSampler, p: LatLon, o: ObstacleHeights): number {
   let top = 0;
   for (const a of [-1, 0, 1]) {
     for (const b of [-1, 0, 1]) {
-      const c = at.cover(p.lat + a * dLat, p.lon + b * dLon);
-      const h = c === BUILT ? o.buildingM : c === TREE ? o.treeM : c === SHRUB ? Math.min(SHRUB_M, o.treeM) : 0;
+      const h = obstacleAt(at, p.lat + a * dLat, p.lon + b * dLon, o)?.h ?? 0;
       if (h > top) top = h;
     }
   }

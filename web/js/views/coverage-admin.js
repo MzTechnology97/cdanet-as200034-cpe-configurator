@@ -511,6 +511,7 @@ export async function adminCoverageView() {
             fact('Puntamento', `${Math.round(az)}°`, `magnetico ${Math.round((az - DECLINATION_DEG + 360) % 360)}°`),
             fact('Inclinazione', `${tilt >= 0 ? '+' : ''}${dec(tilt)}°`),
           ),
+          p.roofM ? h('div', { class: 'small muted' }, `Sul tetto: edificio di ${p.roofM} m, antenna a ${dec(p.mountedM)} m dal suolo`) : p.mountedM > hM + 0.4 ? h('div', { class: 'small muted' }, `Sopra gli ostacoli vicini: antenna a ${dec(p.mountedM)} m dal suolo`) : null,
           signalBar(e?.signalDbm ?? null),
         ),
       ),
@@ -770,6 +771,19 @@ function terrainCard() {
     const imp = s.import ?? {};
     const area = s.area ? `${s.area.minLat.toFixed(2)}–${s.area.maxLat.toFixed(2)}° N, ${s.area.minLon.toFixed(2)}–${s.area.maxLon.toFixed(2)}° E` : 'nessun AP con posizione';
     const go = h('button', { type: 'button', disabled: imp.running || !s.area }, s.dtmTiles ? 'Aggiorna per l’area della rete' : 'Scarica terreno e ostacoli');
+    const bld = h('button', { type: 'button', disabled: imp.running || !s.area }, s.buildingTiles ? 'Aggiorna gli edifici' : 'Edifici dalla mappa base');
+    const trees = h('button', { type: 'button', disabled: imp.running || !s.area }, s.canopyTiles ? 'Completa le altezze degli alberi' : 'Altezze degli alberi');
+    trees.onclick = () =>
+      busy(trees, async () => {
+        if (!confirm(`Il server legge da AWS Open Data la mappa delle altezze degli alberi di Meta e World Resources Institute (CHM v2, CC BY 4.0) per l’area della rete (${area}): solo i pezzi che servono, circa 4 MB ogni riquadro di 0,1° (per la rete intera circa 500 MB letti, 30–60 MB salvati). Procedo?`)) return;
+        await api('/api/admin/terrain/canopy', { method: 'POST', body: {} });
+        await load();
+      });
+    bld.onclick = () =>
+      busy(bld, async () => {
+        await api('/api/admin/terrain/buildings', { method: 'POST', body: {} });
+        await load();
+      });
     go.onclick = () =>
       busy(go, async () => {
         if (!confirm(`Il server scarica il modello del terreno TINITALY 1.1 (INGV, 10 m) e la mappa del suolo ESA WorldCover 2021 per l’area della rete (${area}): per la Sicilia circa 800 MB da INGV e 60 MB da ESA, convertiti e poi cancellati (restano circa 300–400 MB). Procedo?`)) return;
@@ -789,8 +803,16 @@ function terrainCard() {
           : imp.error
             ? h('div', { class: 'notice bad' }, `Ultimo scaricamento interrotto (${imp.phase}): ${imp.error}. Riprova: riparte da dove si era fermato.`)
             : null,
-        h('div', { class: 'row' }, go),
-        h('p', { class: 'small muted' }, `Area della rete: ${area}, cioè gli AP più 20 km intorno. Le altezze medie di edifici e vegetazione si impostano in Impostazioni server → Simulazione radio. Fonti: TINITALY 1.1, Tarquini et al. (2023), INGV, doi:10.13127/tinitaly/1.1 (CC BY 4.0); ESA WorldCover 10 m 2021 v200, doi:10.5281/zenodo.7254221 (CC BY 4.0).`),
+        h('p', {}, s.buildingTiles
+          ? `Edifici veri dalla mappa base: ${s.buildings.toLocaleString('it-IT')} sagome su ${s.buildingTiles} riquadri (${fmtDate(s.buildingsAt)}). Al posto della classe «edificato» di ESA (che copre anche strade e piazze) il calcolo usa le sagome di OpenStreetMap con la loro altezza dove è mappata, altrimenti quella media (3 m per i manufatti piccoli); la CPE si considera sul tetto, 2 m sopra.`
+          : s.basemap
+            ? 'Edifici: non ancora presi dalla mappa base. Con «Edifici dalla mappa base» il calcolo usa le sagome vere degli edifici di OpenStreetMap invece della classe «edificato» di ESA.'
+            : 'Edifici: serve la mappa base installata sul server (sudo cdanet-cpe map update).'),
+        h('p', {}, s.canopyTiles
+          ? `Alberi veri: altezza di ogni albero dalla mappa Meta/WRI su ${s.canopyTiles} riquadri (${fmtDate(s.canopyAt)}), al posto della classe «alberi» di ESA con l’altezza media.`
+          : 'Alberi: oggi la classe «alberi» di ESA con l’altezza media. Con «Altezze degli alberi» il calcolo usa l’altezza di ogni albero della mappa Meta/WRI (circa 1 m, letta a 4 m).'),
+        h('div', { class: 'row' }, go, s.basemap ? bld : null, trees),
+        h('p', { class: 'small muted' }, `Area della rete: ${area}, cioè gli AP più 20 km intorno. Le altezze medie di edifici e vegetazione si impostano in Impostazioni server → Simulazione radio. Fonti: TINITALY 1.1, Tarquini et al. (2023), INGV, doi:10.13127/tinitaly/1.1 (CC BY 4.0); ESA WorldCover 10 m 2021 v200, doi:10.5281/zenodo.7254221 (CC BY 4.0); edifici © OpenStreetMap contributors (ODbL) tramite Protomaps; alberi: Meta e World Resources Institute, Canopy Height Maps v2 (CC BY 4.0).`),
       ),
     );
     clearTimeout(timer);

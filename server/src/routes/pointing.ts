@@ -149,6 +149,9 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
       ap: { id: ap.id, name: ap.name, ...(keys ? {} : { lat: ap.lat, lon: ap.lon }) },
       distanceM: keys ? roughDistance(p.D, ctx.cfg.installerDistanceStepM) : Math.round(p.D),
       cpeHeightM: height,
+      // where the antenna really is: on the roof of the building at the point, above what is around
+      mountedM: Math.round((p.from - p.ground[0]!) * 10) / 10,
+      roofM: at.building?.(q.lat, q.lon) || null,
       frequencyMhz: p.freq,
       terrainSource: at.fine ? 'tinitaly' : 'srtm',
       lossDb: effect.lossDb,

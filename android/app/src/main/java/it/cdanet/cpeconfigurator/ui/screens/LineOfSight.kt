@@ -229,6 +229,7 @@ private fun CpeControls(k: LinkControls, d: LosDto) {
         verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Text("CPE DA INSTALLARE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        d.roofM?.let { roof -> Text("Sul tetto: edificio di circa $roof m, antenna a ${fmt(d.mountedM ?: h)} m dal suolo", style = MaterialTheme.typography.bodySmall) }
         if (k.cpeModels.isNotEmpty()) {
             val options = listOf("auto") + k.cpeModels.map { it.id }
             it.cdanet.cpeconfigurator.ui.Dropdown(
