@@ -89,12 +89,21 @@ async function openLevel(range: Range, url: string, wantPx: number): Promise<Lev
 }
 
 /** HTTP range reader (null when the file does not exist: sea, outside the coverage). */
-export function httpRange(fetchImpl: typeof fetch = fetch): Range {
+export function httpRange(fetchImpl: typeof fetch = fetch, retries = 4): Range {
   return async (url, start, length) => {
-    const r = await fetchImpl(url, { headers: { Range: `bytes=${start}-${start + length - 1}` }, signal: AbortSignal.timeout(120_000) });
-    if (r.status === 404 || r.status === 403) return null;
-    if (!r.ok) throw new Error(`canopy: HTTP ${r.status}`);
-    return Buffer.from(await r.arrayBuffer());
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const r = await fetchImpl(url, { headers: { Range: `bytes=${start}-${start + length - 1}` }, signal: AbortSignal.timeout(120_000) });
+        if (r.status === 404 || r.status === 403) return null;
+        if (!r.ok && r.status < 500) throw Object.assign(new Error(`canopy: HTTP ${r.status}`), { final: true });
+        if (!r.ok) throw new Error(`canopy: HTTP ${r.status}`);
+        return Buffer.from(await r.arrayBuffer());
+      } catch (e) {
+        // a dropped connection or a busy server: again after a pause (1, 2, 4, 8 s)
+        if ((e as { final?: boolean }).final || attempt >= retries) throw e;
+        await new Promise((res) => setTimeout(res, 1000 * 2 ** attempt));
+      }
+    }
   };
 }
 
