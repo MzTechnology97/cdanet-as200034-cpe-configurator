@@ -182,3 +182,21 @@ export function eveningShare(l: Pick<ApLoad, 'eveningAirtimePct' | 'eveningUtili
   return Math.round(Math.max(fair, Math.min(1, 1 - busy / 100)) * 100) / 100;
 }
 
+/**
+ * airMAX ac modulations (rate multiplier shown by airOS and UISP Design) and the SNR each needs,
+ * dB, from MCS 0 to 9: the modulation follows the signal-to-noise ratio, not the signal alone.
+ */
+export const AIRMAX_MCS: Array<[snrDb: number, label: string]> = [
+  [4, '1x'], [7, '2x'], [10, '3x'], [13, '4x'], [17, '6x'], [21, '8x'], [23, '9x'], [25, '10x'], [29, '12x'], [31, '13x'],
+];
+/** Noise floor when the AP's is not known, dBm (typical of a quiet 5 GHz channel). */
+export const DEFAULT_NOISE_DBM = -92;
+
+/** Expected SNR and modulation of a new link: signal against the noise of the AP. */
+export function expectedModulation(signalDbm: number | null, noiseDbm: number | null): { snrDb: number; mcs: number; label: string | null } | null {
+  if (signalDbm === null) return null;
+  const snrDb = Math.round(signalDbm - (noiseDbm ?? DEFAULT_NOISE_DBM));
+  const mcs = AIRMAX_MCS.filter(([need]) => snrDb >= need).length - 1;
+  return { snrDb, mcs, label: mcs >= 0 ? AIRMAX_MCS[mcs]![1] : null };
+}
+

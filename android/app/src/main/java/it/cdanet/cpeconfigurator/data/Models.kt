@@ -186,6 +186,9 @@ data class SignalEstimateDto(
     val capacityMbps: Int? = null,
     /** What a new customer would get at the evening peak (the link shared with the others), Mbit/s. */
     val eveningMbps: Int? = null,
+    /** Expected SNR (signal − noise of the AP) and the airMAX modulation it allows (0 = 1x … 9 = 13x, −1 none). */
+    val snrDb: Int? = null,
+    val mcs: Int? = null,
 ) {
     /** "−63 dBm (−67…−59) · affidabilità alta · fuori dal settore servito"; null if there is no estimate. */
     fun describe(): String? = signalDbm?.let { s ->

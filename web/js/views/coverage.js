@@ -171,7 +171,7 @@ export async function coverageView({ user } = {}) {
           h('div', { class: 'link-fact' }, h('small', {}, 'Altezza CPE'), h('div', { class: 'stepper' }, h('button', { type: 'button', onclick: step(-1) }, '−'), h('strong', {}, `${Math.round(first.los - first.ground)} m`), h('button', { type: 'button', onclick: step(1) }, '+'))),
         ),
         p.roofM ? h('p', { class: 'small muted' }, `Sul tetto: edificio di circa ${p.roofM} m, antenna a ${Math.round(p.mountedM)} m dal suolo.`) : null,
-        signalBar(a.estimate?.signalDbm ?? null),
+        signalBar(a.estimate),
         profileChart(p),
         h('p', { class: 'small muted' }, p.verdict === 'clear' ? 'Profilo del terreno con edifici e alberi; verifica sempre a vista sul posto.' : p.raiseCpeM > 0 && p.raiseCpeM <= 15 ? `Alzando la CPE di ${Math.round(p.raiseCpeM * 10) / 10} m si libera la linea.` : 'Con questo AP la linea non si libera alzando la CPE: valuta un altro AP o un altro punto della casa.'),
       ),
