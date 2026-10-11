@@ -152,6 +152,8 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
       lossDb: effect.lossDb,
       foliageM: effect.foliageM ?? 0,
       buildings: effect.buildings ?? false,
+      // admins: where the AP antenna is put (altitude a.s.l., above its ground, from GPS / UISP / default)
+      ...(keys ? {} : { apAntenna: { altitude: Math.round(p.to), aboveGroundM: Math.round(p.to - p.ground[p.ground.length - 1]!), from: p.altitudeFrom, reported: ap.gpsAltitude ?? null } }),
       ...r,
       chart,
     };

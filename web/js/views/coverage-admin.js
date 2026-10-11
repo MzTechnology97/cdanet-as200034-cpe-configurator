@@ -51,6 +51,8 @@ const s = (tag, attrs = {}) => {
   return el;
 };
 
+const ALT_FROM = { gps: 'altitudine GPS di UISP', uisp: 'altezza dal suolo scritta in UISP', terreno: 'altezza predefinita (Impostazioni server), UISP non la indica' };
+
 /** Terrain profile between the point and the AP: ground, line of sight and 60% of the first Fresnel zone. */
 function profileChart(p) {
   const W = 760;
@@ -58,15 +60,21 @@ function profileChart(p) {
   const pad = { l: 46, r: 12, t: 12, b: 26 };
   const pts = p.chart;
   const D = pts[pts.length - 1].d || 1;
-  const ys = pts.flatMap((q) => [q.ground, q.los, q.fresnel60]);
+  const ys = pts.flatMap((q) => [q.ground, q.los, q.fresnel60, q.top ?? q.ground]);
   const lo = Math.floor(Math.min(...ys) - 5);
   const hi = Math.ceil(Math.max(...ys) + 5);
   const x = (d) => pad.l + ((W - pad.l - pad.r) * d) / D;
   const y = (v) => pad.t + ((H - pad.t - pad.b) * (hi - v)) / (hi - lo || 1);
   const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'los-chart', role: 'img', 'aria-label': 'Profilo del terreno' });
   const ground = `M${x(0)},${y(lo)} ` + pts.map((q) => `L${x(q.d)},${y(q.ground)}`).join(' ') + ` L${x(D)},${y(lo)} Z`;
+  // buildings and trees of the land cover, standing on the ground (one bar per sample)
+  const step = pts.length > 1 ? Math.max(1.5, (x(pts[1].d) - x(pts[0].d)) * 0.9) : 2;
+  const obstacles = pts
+    .filter((q) => q.obstacle && q.top > q.ground)
+    .map((q) => s('rect', { x: x(q.d) - step / 2, y: y(q.top), width: step, height: Math.max(1, y(q.ground) - y(q.top)), class: q.obstacle === 'edificio' ? 'los-building' : 'los-tree' }));
   svg.append(
     s('path', { d: ground, class: 'los-ground' }),
+    ...obstacles,
     s('path', { d: 'M' + pts.map((q) => `${x(q.d)},${y(q.fresnel60)}`).join(' L'), class: 'los-fresnel' }),
     s('path', { d: 'M' + pts.map((q) => `${x(q.d)},${y(q.los)}`).join(' L'), class: 'los-line' }),
   );
@@ -326,7 +334,7 @@ export async function adminCoverageView() {
       } catch (e) {
         return mount(profileBox, card(h('h2', {}, `Visibilità verso ${a.name}`), h('div', { class: 'notice bad' }, e.message)));
       }
-      const verdict = { clear: ['Visibilità libera', 'good'], fresnel: ['Linea libera ma zona di Fresnel invasa', 'warn'], blocked: ['Linea ostruita dal terreno', 'bad'] }[p.verdict];
+      const verdict = { clear: ['Visibilità libera', 'good'], fresnel: ['Linea libera ma zona di Fresnel invasa', 'warn'], blocked: [p.buildings ? 'Linea ostruita da edifici' : 'Linea ostruita dal terreno', 'bad'] }[p.verdict];
       mount(
         profileBox,
         card(
@@ -343,13 +351,18 @@ export async function adminCoverageView() {
                 ? ` · alzando la CPE di ${dec(p.raiseCpeM)} m si libera`
                 : ` · non basta un palo di ${MAX_MAST_M} m: scegli un altro AP`,
           ),
+          p.apAntenna
+            ? h('p', { class: 'small' }, `Antenna dell’AP a ${p.apAntenna.altitude} m s.l.m., ${p.apAntenna.aboveGroundM} m sopra il suolo: ${ALT_FROM[p.apAntenna.from] ?? 'altezza predefinita'}${p.apAntenna.reported !== null ? ` (in UISP: ${p.apAntenna.reported} m)` : ''}. Se l’antenna è più alta, correggi l’altitudine in UISP.`)
+            : null,
           profileChart(p),
           legend([
             ['#a8a29e', 'terreno (con la curvatura terrestre)'],
+            ['#78716c', 'edifici'],
+            ['#4d7c0f', 'alberi'],
             ['#2563eb', 'linea di vista'],
             ['#f59e0b', '60% della prima zona di Fresnel'],
           ]),
-          h('p', { class: 'small muted' }, 'Modello del terreno SRTM (circa 30 m): edifici e alberi non ci sono. Cambia l’altezza della CPE sopra e premi di nuovo Visibilità.'),
+          h('p', { class: 'small muted' }, p.terrainSource === 'tinitaly' ? 'Terreno TINITALY (10 m), edifici e alberi da ESA WorldCover con le altezze di Impostazioni server → Simulazione radio. Cambia l’altezza della CPE sopra e premi di nuovo Visibilità.' : 'Modello del terreno SRTM (circa 30 m): qui non sono scaricati terreno a 10 m, edifici e alberi. Cambia l’altezza della CPE sopra e premi di nuovo Visibilità.'),
         ),
       );
     });
@@ -426,7 +439,15 @@ export async function adminCoverageView() {
     ),
     out,
     profileBox,
-    accuracyCard(),
+    accuracyCard({
+      // a blocked customer: its position (UISP), its CPE height, then the profile towards its AP
+      inspect: async (b, btn) => {
+        height.value = b.cpeHeightM;
+        await check(b.lat, b.lon, b.device);
+        await profile({ id: b.apId, name: b.ap }, btn);
+        profileBox.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      },
+    }),
     terrainCard(),
   );
 }
@@ -435,7 +456,7 @@ export async function adminCoverageView() {
  * Affidabilità della stima: the model measured on the real customers (each one estimated without
  * itself), the history to compare before/after, the APs and the customers it gets most wrong.
  */
-function accuracyCard() {
+function accuracyCard({ inspect }) {
   const box = h('div', {}, h('p', { class: 'muted' }, 'Caricamento…'));
   let timer = null;
   const TERRAIN = { tinitaly: 'terreno 10 m', srtm: 'terreno 30 m', nessuno: 'senza terreno' };
@@ -487,6 +508,26 @@ function accuracyCard() {
               ],
               last.aps,
             ), h('p', { class: 'small muted' }, 'Tendenza positiva: la stima è più ottimista del reale (antenna più bassa, potenza minore o ostacoli non visti); negativa: più pessimista (azimut, altezza dell’antenna, potenza maggiore). Controlla in UISP azimut e altezza di questi AP.'))
+          : null,
+        last?.blocked?.length
+          ? h(
+              'details',
+              {},
+              h('summary', {}, `Collegati ma dati per ostruiti: ${last.blocked.length} da verificare`),
+              h('p', { class: 'small muted' }, 'Questi clienti funzionano, ma per il modello qualcosa copre la linea verso l’AP. Verifica apre il punto sulla mappa e il profilo del terreno con l’altezza della CPE: di solito l’antenna dell’AP è più alta di quanto dice UISP, la CPE è su un palo o un terrazzo più alto, oppure l’ostacolo (un edificio o un bosco) nella realtà non c’è.'),
+              table(
+                [
+                  { label: 'CPE', render: (b) => h('div', {}, b.deviceId ? h('a', { href: `#/cpe?id=${encodeURIComponent(b.deviceId)}` }, b.device) : b.device, h('div', { class: 'small muted mono' }, b.mac ?? '')) },
+                  { label: 'AP', render: (b) => h('div', {}, b.ap, h('div', { class: 'small muted' }, b.apAltitudeFrom ? ALT_FROM[b.apAltitudeFrom] ?? '' : '')) },
+                  { label: 'Reale / stimato', render: (b) => `${b.realDbm} / ${b.estimateDbm} dBm` },
+                  { label: 'Cosa copre', render: (b) => `${b.cause}, ${b.where}` },
+                  { label: 'CPE più alta di', render: (b) => (b.raiseCpeM === null ? 'oltre 60 m' : `${b.raiseCpeM} m`) },
+                  { label: 'Distanza', render: (b) => `${(b.distanceM / 1000).toFixed(2)} km` },
+                  { label: '', render: (b) => h('button', { type: 'button', class: 'small-btn', onclick: (e) => inspect(b, e.currentTarget) }, 'Verifica') },
+                ],
+                last.blocked,
+              ),
+            )
           : null,
         last?.worst?.length
           ? h('details', {}, h('summary', {}, 'Clienti stimati peggio'), table(

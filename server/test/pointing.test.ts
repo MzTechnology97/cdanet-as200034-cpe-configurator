@@ -117,6 +117,10 @@ describe('Puntamento: terreno e tilt', () => {
     assert.equal(lj.cpeHeightM, 4);
     assert.ok(lj.chart.length >= 17);
     assert.ok(!los.body.includes('"lat"') && !los.body.includes('"lon"'), 'no AP position');
+    assert.equal(lj.apAntenna, undefined, 'installers do not see the AP antenna altitude');
+    const admin = (await app.inject({ method: 'GET', url: '/api/pointing/profile?lat=37.58&lon=14.12&apId=ap-n2', headers: H })).json();
+    assert.equal(typeof admin.apAntenna.altitude, 'number', 'admins: where the AP antenna is');
+    assert.ok(admin.apAntenna.aboveGroundM > 0 && admin.apAntenna.from, JSON.stringify(admin.apAntenna));
     assert.equal((await app.inject({ method: 'GET', url: '/api/pointing/profile?lat=37.58&lon=14.12&apId=ap-unknown', headers: T })).statusCode, 404);
     await app.close();
   });

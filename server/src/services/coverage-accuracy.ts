@@ -3,7 +3,8 @@ import { nowIso } from '../db.ts';
 import { buildApModel, estimateAt, MAX_LINK_M, rateCoverage } from '../domain/coverage-model.ts';
 import { bearingDeg, distanceM } from '../domain/geo.ts';
 import { isPtp } from './uisp.ts';
-import { obstacles, pointingConfig, terrainBetween, terrainSampler } from './terrain.ts';
+import { buildProfile, obstacles, pointingConfig, terrainBetween, terrainSampler } from './terrain.ts';
+import type { TerrainSampler } from './terrain-store.ts';
 import { cpeHeights, fieldFailures } from './field-samples.ts';
 import { parseMac } from '../domain/policy.ts';
 
@@ -38,12 +39,72 @@ export interface AccuracySummary {
   failures?: { n: number; rated: Record<string, number> };
 }
 
+/**
+ * A connected customer the model calls blocked: what blocks the line (bare ground, buildings or
+ * trees of the land cover), where along the path, and how much higher the CPE should be to see the
+ * AP. To check one by one on the profile (admins: the position is the one in UISP).
+ */
+export interface BlockedCustomer {
+  deviceId: string | null;
+  device: string;
+  mac: string | null;
+  apId: string;
+  ap: string;
+  realDbm: number;
+  estimateDbm: number;
+  distanceM: number;
+  lat: number;
+  lon: number;
+  cpeHeightM: number;
+  cause: 'terreno' | 'edifici' | 'alberi';
+  where: 'vicino alla CPE' | 'vicino all’AP' | 'a metà strada';
+  /** Metres to add to the CPE for a clear line (null: more than 60 m). */
+  raiseCpeM: number | null;
+  /** Where the AP antenna altitude comes from (GPS of UISP, height in UISP, default height). */
+  apAltitudeFrom: string | null;
+}
+
 export interface AccuracyRun extends AccuracySummary {
+  /** Connected customers the model calls blocked: to check on the profile. */
+  blocked?: BlockedCustomer[];
   aps: Array<{ id: string; name: string; customers: number; biasDb: number; medianAbsDb: number }>;
   worst: Array<{ device: string; mac: string | null; ap: string; realDbm: number; estimateDbm: number; errorDb: number; terrain: string | null; distanceM: number }>;
 }
 
 const KEY = 'coverage.accuracy';
+const RAISE_STEPS = [2, 4, 6, 10, 15, 20, 30, 40, 60];
+
+/** Why a connected customer is called blocked, and how much higher the CPE should be. */
+export function explainBlocked(at: TerrainSampler, c: { lat: number; lon: number }, cpeHeightM: number, target: Parameters<typeof terrainBetween>[3], apHeightM: number, obs: ReturnType<typeof obstacles>) {
+  const bare = terrainBetween(at, c, cpeHeightM, target, apHeightM, null);
+  const noTrees = terrainBetween(at, c, cpeHeightM, target, apHeightM, { buildingM: obs.buildingM, treeM: 0 });
+  const cause: BlockedCustomer['cause'] = bare?.verdict === 'blocked' ? 'terreno' : noTrees?.verdict === 'blocked' ? 'edifici' : 'alberi';
+  let raiseCpeM: number | null = null;
+  for (const up of RAISE_STEPS) {
+    const v = terrainBetween(at, c, cpeHeightM + up, target, apHeightM, obs)?.verdict;
+    if (v && v !== 'blocked') {
+      raiseCpeM = up;
+      break;
+    }
+  }
+  // the highest obstruction above the line of sight: near the CPE, near the AP or in between
+  const p = buildProfile(at, c, cpeHeightM, target, apHeightM, obs);
+  let where: BlockedCustomer['where'] = 'a metà strada';
+  if (p) {
+    let worst = -Infinity;
+    let wd = 0;
+    for (let i = 1; i < p.d.length - 1; i++) {
+      const line = p.from + ((p.to - p.from) * p.d[i]!) / p.D;
+      const top = p.ground[i]! + (p.obstacle[i]?.kind === 'edificio' ? p.obstacle[i]!.h : 0);
+      if (top - line > worst) {
+        worst = top - line;
+        wd = p.d[i]!;
+      }
+    }
+    where = wd < Math.min(500, p.D / 4) ? 'vicino alla CPE' : p.D - wd < Math.min(500, p.D / 4) ? 'vicino all’AP' : 'a metà strada';
+  }
+  return { cause, raiseCpeM, where, apAltitudeFrom: p?.altitudeFrom ?? null };
+}
 const q = (v: number[], p: number) => {
   const s = [...v].sort((a, b) => a - b);
   return s.length ? s[Math.min(s.length - 1, Math.floor(s.length * p))]! : 0;
@@ -68,6 +129,7 @@ export function createCoverageAccuracy(ctx: AppContext) {
     const heights = cpeHeights(ctx.db);
     let realHeights = 0;
     const rows: Array<{ ap: string; err: number; real: number; est: number; verdict: string | null; device: string; mac: string | null; d: number; rating: string }> = [];
+    const blocked: BlockedCustomer[] = [];
     let fine = false;
     let any = false;
     for (const a of aps) {
@@ -92,6 +154,23 @@ export function createCoverageAccuracy(ctx: AppContext) {
         const e = estimateAt(m, d, bearingDeg(a.location, c), a.device.frequency, radio, terrain);
         if (e.signalDbm === null) continue;
         rows.push({ ap: a.device.id, err: e.signalDbm - c.signal!, real: c.signal!, est: e.signalDbm, verdict: terrain?.verdict ?? null, device: c.device.name, mac: c.device.mac, d: Math.round(d), rating: rateCoverage('active', e, min) });
+        if (at && terrain?.verdict === 'blocked' && c.signal! >= min) {
+          const cpeH = own ?? h.cpeHeightM;
+          blocked.push({
+            deviceId: c.device.id ?? null,
+            device: c.device.name,
+            mac: c.device.mac,
+            apId: a.device.id,
+            ap: a.device.name,
+            realDbm: c.signal!,
+            estimateDbm: e.signalDbm,
+            distanceM: Math.round(d),
+            lat: c.lat,
+            lon: c.lon,
+            cpeHeightM: cpeH,
+            ...explainBlocked(at, c, cpeH, target, h.apHeightM, obs),
+          });
+        }
       }
     }
     // the negative cases: where an installation failed, what would the model have said?
@@ -135,6 +214,7 @@ export function createCoverageAccuracy(ctx: AppContext) {
       unlikelyButConnected: rows.filter((x) => x.rating === 'improbabile' && x.real >= min).length,
       realHeights,
       failures: { n, rated },
+      blocked: blocked.sort((x, y) => x.ap.localeCompare(y.ap) || x.distanceM - y.distanceM),
       aps: perAp.filter((a) => a.customers >= 3).sort((x, y) => Math.abs(y.biasDb) - Math.abs(x.biasDb)).slice(0, 15),
       worst: rows
         .sort((x, y) => Math.abs(y.err) - Math.abs(x.err))
