@@ -368,6 +368,29 @@ tr:hover > td { background: color-mix(in srgb, var(--brand) 4%, transparent); }
 .advice .btns { align-items: center; margin-top: 4px; }
 .advice .btns > span { flex: 1 1 auto; }
 
+/* coverage simulation: one pixel per cell, scaled smoothly by the browser */
+.sim-overlay { image-rendering: auto; }
+/* the point to check: a pin that can be dragged; crosshair while a click will place it */
+.cpe-pin span { display: block; width: 22px; height: 22px; border-radius: 50%; background: #f97316; border: 3px solid #fff; box-shadow: 0 0 0 2px rgba(0, 0, 0, .35), 0 2px 6px rgba(0, 0, 0, .4); cursor: grab; }
+.leaflet-container.picking { cursor: crosshair; }
+.map-tools { display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; }
+.map-tools p { margin: 0; flex: 1 1 320px; }
+
+/* Visibilità: the link as in UISP Design (figures, profile with the Fresnel ellipse) */
+.link-head { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; margin-bottom: 10px; }
+.link-head h2 { margin: 0; }
+.link-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 10px; margin-bottom: 12px; }
+.link-fact { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); }
+.link-fact small { font-size: .7rem; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.link-fact strong { font-size: 1.05rem; }
+.link-chart-wrap { border: 1px solid var(--line); border-radius: 10px; background: var(--surface-2); padding: 6px; }
+.link-chart { width: 100%; height: auto; display: block; }
+.link-grid { stroke: var(--line); stroke-width: 1; }
+.link-fresnel { fill: rgba(56, 189, 248, .16); stroke: #38bdf8; stroke-width: 1.2; }
+.link-mast { stroke: var(--ink); stroke-width: 2.5; }
+.link-antenna { fill: #f97316; stroke: #fff; stroke-width: 2; }
+.link-label { font-size: 13px; font-weight: 700; fill: var(--ink); }
+.link-critical { stroke: #dc2626; stroke-width: 1.5; stroke-dasharray: 3 3; }
 /* IA-AP: counters, toolbar, two panes (list | detail) on wide screens */
 .ia-meta { margin: -8px 0 14px; }
 .ia-kpis { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin-bottom: 16px; }

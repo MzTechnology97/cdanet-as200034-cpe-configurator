@@ -1,4 +1,4 @@
-import { createMap, drawCoverage, drawOutages, fit, MAP_COLORS as C, popup, towards } from './map.js';
+import { createMap, drawCoverage, drawFresnelLink, drawOutages, fit, MAP_COLORS as C, pointPicker, popup, simulationOverlay, towards } from './map.js';
 
 /**
  * Map page embedded in the Android app ("Trova l'AP"). It has no session: the app passes the data
@@ -117,7 +117,10 @@ window.cdaCoverage = async (d) => {
   layer.clearLayers();
   arrow = null;
   coverageAps.clear();
-  fit(map, drawCoverage(layer, d.lat, d.lon, d.aps ?? [], (a, marker, bounds) => coverageAps.set(a.id, { marker, bounds })));
+  const layers = drawCoverage(layer, d.lat, d.lon, d.aps ?? [], (a, marker, bounds) => coverageAps.set(a.id, { marker, bounds }));
+  // in the coverage check the point is a pin that can be dragged (taps move the map only)
+  picker?.set(d.lat, d.lon, layer);
+  fit(map, layers);
 };
 
 /** Shows one AP of the coverage list: point and AP in view, AP details open. */
@@ -147,14 +150,22 @@ const simColor = (dbm) => SIM_SCALE.find(([min]) => dbm >= min)[1];
 const STATE_COLOR = { ok: '#14b8a6', degraded: '#f59e0b', down: '#dc2626' };
 let baseLayer = null;
 let simLayer = null;
-let tapToCheck = false;
+let picker = null;
 
-/** Turns on "tap a point to check it" (the app passes the point back to itself). */
+/**
+ * Turns on the point to check: the first tap places it (the app passes it back to itself); then
+ * taps move the map only and the point is dragged, or placed again after window.cdaPickPoint().
+ */
 window.cdaCoverageMode = async () => {
   const map = await ready;
-  if (!map || tapToCheck) return;
-  tapToCheck = true;
-  map.on('click', (e) => window.CdaApp?.onMapClick?.(e.latlng.lat, e.latlng.lng));
+  if (!map || picker) return;
+  picker = pointPicker(map, (lat, lon) => window.CdaApp?.onMapClick?.(lat, lon));
+};
+
+/** "Nuovo punto sulla mappa": the next tap places the point again. */
+window.cdaPickPoint = async () => {
+  await ready;
+  picker?.arm();
 };
 
 /** Admins: every AP with a position (data of /api/network/status), each one with "Simula copertura". */
@@ -199,21 +210,8 @@ window.cdaSimulation = async (d, mode = 'dbm') => {
   const L = window.L;
   simLayer ??= L.layerGroup().addTo(map);
   simLayer.clearLayers();
-  const half = d.cellM / 2;
-  const mPerLat = 111320;
-  const mPerLon = 111320 * Math.cos((d.ap.lat * Math.PI) / 180);
-  for (const c of d.cells ?? []) {
-    if (c.dbm < (d.minDbm ?? -75) - 15) continue; // clearly no coverage: left blank, not a red disc
-    const color = mode === 'cap' ? (c.cap == null ? null : capColor(c.cap)) : simColor(c.dbm);
-    if (!color) continue;
-    L.rectangle(
-      [
-        [c.lat - half / mPerLat, c.lon - half / mPerLon],
-        [c.lat + half / mPerLat, c.lon + half / mPerLon],
-      ],
-      { stroke: false, fillColor: color, fillOpacity: d.theoretical ? 0.3 : c.confidence === 'bassa' ? 0.18 : 0.38, interactive: false },
-    ).addTo(simLayer);
-  }
+  // one smooth image; clearly no coverage is left blank, not a red disc
+  simulationOverlay(d, (c) => (c.dbm < (d.minDbm ?? -75) - 15 ? null : mode === 'cap' ? (c.cap == null ? null : capColor(c.cap)) : simColor(c.dbm))).addTo(simLayer);
   if (d.sector && (d.servedM || d.theoretical)) {
     const reach = d.servedM || d.radiusM;
     const pts = [[d.ap.lat, d.ap.lon]];
@@ -229,4 +227,17 @@ let lastSim = null;
 window.cdaClearSimulation = async () => {
   lastSim = null;
   simLayer?.clearLayers();
+};
+
+/** Visibilità (admins): the link from the checked point to the AP and its Fresnel zone. */
+let linkLayer = null;
+window.cdaLink = async (p, lat, lon) => {
+  const map = await ready;
+  if (!map || !p?.ap || p.ap.lat == null) return;
+  linkLayer ??= window.L.layerGroup().addTo(map);
+  drawFresnelLink(map, linkLayer, [lat, lon], p);
+};
+window.cdaClearLink = async () => {
+  await ready;
+  linkLayer?.clearLayers();
 };

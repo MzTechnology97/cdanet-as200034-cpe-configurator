@@ -1,6 +1,6 @@
 import { api } from '../api.js';
 import { badge, busy, card, field, fmtDate, h, mount, pageHead, table, toast } from '../dom.js';
-import { createMap, fit, legend, popup, towards, MAP_COLORS as C } from '../map.js';
+import { createMap, drawFresnelLink, fit, legend, pointPicker, popup, simulationOverlay, towards, MAP_COLORS as C } from '../map.js';
 import { estimateCell, loadCell, orientArrows, osmLink, RATING } from './coverage.js';
 
 /**
@@ -33,7 +33,7 @@ const CAP_SCALE = [
 const capColor = (mbps) => CAP_SCALE.find(([min]) => mbps >= min)[1];
 /** Tallest mast worth suggesting for a CPE (same limit as the app). */
 const MAX_MAST_M = 12;
-const dec = (n) => String(n).replace('.', ',');
+const dec = (n) => String(Math.round(n * 10) / 10).replace('.', ',');
 
 /** "37.56, 14.27", "37,56 14,27", "37.56;14.27" → [lat, lon]; null if it is not a pair of coordinates. */
 export function parseCoords(text) {
@@ -53,43 +53,98 @@ const s = (tag, attrs = {}) => {
 
 const ALT_FROM = { gps: 'altitudine GPS di UISP', uisp: 'altezza dal suolo scritta in UISP', terreno: 'altezza predefinita (Impostazioni server), UISP non la indica' };
 
-/** Terrain profile between the point and the AP: ground, line of sight and 60% of the first Fresnel zone. */
+/** First Fresnel zone radius at [d] of a [D] m link, m. */
+const fresnelR = (d, D, freqMhz) => Math.sqrt(((299.79 / (freqMhz || 5600)) * d * Math.max(0, D - d)) / D);
+
+/**
+ * Elevation profile of the link, as in UISP Design: ground (with the earth bulge) and the obstacles
+ * on it, the two antennas on their masts, the line of sight, the whole first Fresnel zone (ellipse)
+ * and its 60% limit, distances along the bottom and the critical point.
+ */
 function profileChart(p) {
-  const W = 760;
-  const H = 220;
-  const pad = { l: 46, r: 12, t: 12, b: 26 };
-  const pts = p.chart;
+  const W = 980;
+  const H = 300;
+  const pad = { l: 52, r: 16, t: 18, b: 34 };
+  const pts = p.chart.map((q) => ({ ...q, r: fresnelR(q.d, p.distanceM, p.frequencyMhz) }));
   const D = pts[pts.length - 1].d || 1;
-  const ys = pts.flatMap((q) => [q.ground, q.los, q.fresnel60, q.top ?? q.ground]);
-  const lo = Math.floor(Math.min(...ys) - 5);
-  const hi = Math.ceil(Math.max(...ys) + 5);
+  const ys = pts.flatMap((q) => [q.ground, q.top ?? q.ground, q.los + q.r, q.los - q.r]);
+  const lo = Math.floor(Math.min(...ys) - 8);
+  const hi = Math.ceil(Math.max(...ys) + 8);
   const x = (d) => pad.l + ((W - pad.l - pad.r) * d) / D;
   const y = (v) => pad.t + ((H - pad.t - pad.b) * (hi - v)) / (hi - lo || 1);
-  const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'los-chart', role: 'img', 'aria-label': 'Profilo del terreno' });
-  const ground = `M${x(0)},${y(lo)} ` + pts.map((q) => `L${x(q.d)},${y(q.ground)}`).join(' ') + ` L${x(D)},${y(lo)} Z`;
-  // buildings and trees of the land cover, standing on the ground (one bar per sample)
-  const step = pts.length > 1 ? Math.max(1.5, (x(pts[1].d) - x(pts[0].d)) * 0.9) : 2;
-  const obstacles = pts
-    .filter((q) => q.obstacle && q.top > q.ground)
-    .map((q) => s('rect', { x: x(q.d) - step / 2, y: y(q.top), width: step, height: Math.max(1, y(q.ground) - y(q.top)), class: q.obstacle === 'edificio' ? 'los-building' : 'los-tree' }));
-  svg.append(
-    s('path', { d: ground, class: 'los-ground' }),
-    ...obstacles,
-    s('path', { d: 'M' + pts.map((q) => `${x(q.d)},${y(q.fresnel60)}`).join(' L'), class: 'los-fresnel' }),
-    s('path', { d: 'M' + pts.map((q) => `${x(q.d)},${y(q.los)}`).join(' L'), class: 'los-line' }),
-  );
+  const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'los-chart link-chart', role: 'img', 'aria-label': 'Profilo del collegamento' });
+  // grid and axes
+  const stepM = [100, 250, 500, 1000, 2000, 5000].find((st) => D / st <= 10) ?? 5000;
+  for (let d = 0; d <= D; d += stepM) {
+    svg.append(s('line', { x1: x(d), x2: x(d), y1: pad.t, y2: H - pad.b, class: 'link-grid' }));
+    const t = s('text', { x: x(d), y: H - 12, class: 'los-axis', 'text-anchor': d === 0 ? 'start' : 'middle' });
+    t.textContent = km(Math.round(d));
+    svg.append(t);
+  }
   for (const v of [lo, Math.round((lo + hi) / 2), hi]) {
+    svg.append(s('line', { x1: pad.l, x2: W - pad.r, y1: y(v), y2: y(v), class: 'link-grid' }));
     const t = s('text', { x: pad.l - 6, y: y(v) + 4, class: 'los-axis', 'text-anchor': 'end' });
     t.textContent = `${v} m`;
     svg.append(t);
   }
-  for (const [d, anchor, label] of [[0, 'start', 'Punto (CPE)'], [D, 'end', `AP · ${km(D)}`]]) {
-    const t = s('text', { x: x(d), y: H - 6, class: 'los-axis', 'text-anchor': anchor });
+  // Fresnel ellipse (whole first zone), then terrain and obstacles over it
+  const upper = pts.map((q) => `${x(q.d)},${y(q.los + q.r)}`);
+  const lower = pts.map((q) => `${x(q.d)},${y(q.los - q.r)}`).reverse();
+  svg.append(s('path', { d: `M${upper.join(' L')} L${lower.join(' L')} Z`, class: 'link-fresnel' }));
+  svg.append(s('path', { d: 'M' + pts.map((q) => `${x(q.d)},${y(q.los - 0.6 * q.r)}`).join(' L'), class: 'los-fresnel' }));
+  const step = pts.length > 1 ? Math.max(1.5, (x(pts[1].d) - x(pts[0].d)) * 0.95) : 2;
+  for (const q of pts) if (q.obstacle && q.top > q.ground) svg.append(s('rect', { x: x(q.d) - step / 2, y: y(q.top), width: step, height: Math.max(1, y(q.ground) - y(q.top)), class: q.obstacle === 'edificio' ? 'los-building' : 'los-tree' }));
+  svg.append(s('path', { d: `M${x(0)},${y(lo)} ` + pts.map((q) => `L${x(q.d)},${y(q.ground)}`).join(' ') + ` L${x(D)},${y(lo)} Z`, class: 'los-ground' }));
+  // line of sight, coloured where it is obstructed
+  svg.append(s('path', { d: 'M' + pts.map((q) => `${x(q.d)},${y(q.los)}`).join(' L'), class: 'los-line' }));
+  // the antennas on their masts
+  const first = pts[0];
+  const last = pts[pts.length - 1];
+  for (const [q, label, anchor, dx] of [[first, `CPE ${dec(first.los - first.ground)} m`, 'start', 6], [last, `AP ${dec(last.los - last.ground)} m`, 'end', -6]]) {
+    svg.append(s('line', { x1: x(q.d), x2: x(q.d), y1: y(q.ground), y2: y(q.los), class: 'link-mast' }));
+    svg.append(s('circle', { cx: x(q.d), cy: y(q.los), r: 5, class: 'link-antenna' }));
+    const t = s('text', { x: x(q.d) + dx, y: y(q.los) - 9, class: 'link-label', 'text-anchor': anchor });
     t.textContent = label;
     svg.append(t);
   }
-  if (p.worst) svg.append(s('circle', { cx: x(p.worst.d), cy: y(pts.reduce((a, q) => (Math.abs(q.d - p.worst.d) < Math.abs(a.d - p.worst.d) ? q : a)).ground), r: 5, class: 'los-worst' }));
-  return svg;
+  if (p.worst) {
+    const q = pts.reduce((a, b) => (Math.abs(b.d - p.worst.d) < Math.abs(a.d - p.worst.d) ? b : a));
+    svg.append(s('line', { x1: x(q.d), x2: x(q.d), y1: y(Math.max(q.ground, q.top ?? q.ground)), y2: y(q.los), class: 'link-critical' }));
+    svg.append(s('circle', { cx: x(q.d), cy: y(Math.max(q.ground, q.top ?? q.ground)), r: 5, class: 'los-worst' }));
+  }
+  return h('div', { class: 'link-chart-wrap' }, svg);
+}
+
+/** Bearing from [a] to [b], degrees from north. */
+const bearing = (a, b) => {
+  const f1 = (a[0] * Math.PI) / 180;
+  const f2 = (b[0] * Math.PI) / 180;
+  const dl = ((b[1] - a[1]) * Math.PI) / 180;
+  return ((Math.atan2(Math.sin(dl) * Math.cos(f2), Math.cos(f1) * Math.sin(f2) - Math.sin(f1) * Math.cos(f2) * Math.cos(dl)) * 180) / Math.PI + 360) % 360;
+};
+const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
+const dir = (deg) => `${Math.round(deg)}° ${DIRS[Math.round(deg / 45) % 8]}`;
+
+/** The figures of the link, as in the side panel of UISP Design. */
+function linkFacts(p, from, estimate) {
+  const first = p.chart[0];
+  const last = p.chart[p.chart.length - 1];
+  const tilt = (Math.atan2(last.los - first.los, p.distanceM) * 180) / Math.PI;
+  const az = p.ap.lat != null ? bearing(from, [p.ap.lat, p.ap.lon]) : null;
+  const clearPct = p.worst ? Math.round((100 * p.worst.clearanceM) / (p.worst.fresnel60M / 0.6 || 1)) : null;
+  const fact = (label, value, sub) => h('div', { class: 'link-fact' }, h('small', {}, label), h('strong', {}, value), sub ? h('span', { class: 'small muted' }, sub) : null);
+  return h(
+    'div',
+    { class: 'link-facts' },
+    fact('Distanza', km(p.distanceM)),
+    fact('Frequenza', `${p.frequencyMhz} MHz`),
+    az !== null ? fact('Puntamento CPE → AP', dir(az), `inclinazione ${tilt >= 0 ? '+' : ''}${dec(tilt)}°`) : null,
+    az !== null ? fact('Puntamento AP → CPE', dir((az + 180) % 360), `inclinazione ${-tilt >= 0 ? '+' : ''}${dec(-tilt)}°`) : null,
+    fact('Antenna CPE', `${dec(first.los - first.ground)} m dal suolo`, `${Math.round(first.los)} m s.l.m.`),
+    fact('Antenna AP', `${dec(last.los - last.ground)} m dal suolo`, `${Math.round(last.los)} m s.l.m.`),
+    estimate?.signalDbm != null ? fact('Segnale stimato', `${estimate.signalDbm} dBm`, estimate.low != null ? `${estimate.low}…${estimate.high} dBm` : null) : null,
+    clearPct !== null ? fact('Fresnel libera', `${Math.max(0, clearPct)}%`, `nel punto critico, a ${km(p.worst.d)}`) : fact('Fresnel libera', '100%', 'su tutto il collegamento'),
+  );
 }
 
 export async function adminCoverageView() {
@@ -109,6 +164,8 @@ export async function adminCoverageView() {
   let map = null;
   let base = null; // every AP
   let pointLayer = null; // the checked point and its APs
+  let linkLayer = null; // Visibilità: the link and its Fresnel zone
+  let picker = null;
   let simLayer = null; // radio simulation of one AP
   let point = null;
   let allAps = [];
@@ -127,8 +184,10 @@ export async function adminCoverageView() {
     simLayer = L.layerGroup().addTo(map);
     base = L.layerGroup().addTo(map);
     pointLayer = L.layerGroup().addTo(map);
+    linkLayer = L.layerGroup().addTo(map);
     // a click on the map checks that point
-    map.on('click', (e) => check(e.latlng.lat, e.latlng.lng, 'Punto scelto sulla mappa'));
+    // the first click places the point; then the map moves freely and the point is dragged
+    picker = pointPicker(map, (la, lo) => check(la, lo, 'Punto scelto sulla mappa'));
     setTimeout(() => map.invalidateSize(), 200);
     return map;
   }
@@ -147,7 +206,7 @@ export async function adminCoverageView() {
         .bindPopup(h('div', {}, popup(a.name, a.ssid && a.ssid !== a.name ? a.ssid : null, a.pop ? `POP ${a.pop}` : 'AP senza POP', a.model), h('div', { class: 'btns' }, sim)))
         .addTo(base);
     });
-    mapNote.textContent = `${pts.length} AP sulla mappa. Clic su un punto qualsiasi per verificarlo; clic su un AP per simularne la copertura.`;
+    mapNote.textContent = `${pts.length} AP sulla mappa. Il primo clic sulla mappa sceglie il punto da verificare; poi la mappa si sposta liberamente e il punto si sposta trascinandolo (o con Nuovo punto sulla mappa). Clic su un AP per simularne la copertura.`;
     if (pts.length && !point) fit(m, pts);
   }
 
@@ -171,7 +230,8 @@ export async function adminCoverageView() {
     if (m) {
       const L = window.L;
       pointLayer.clearLayers();
-      const layers = [L.circleMarker([la, lo], { radius: 8, color: C.point, weight: 3, fillOpacity: 0.95 }).bindPopup(popup(label, `${la.toFixed(5)}, ${lo.toFixed(5)}`)).addTo(pointLayer)];
+      linkLayer.clearLayers();
+      const layers = [picker.set(la, lo, pointLayer).bindPopup(popup(label, `${la.toFixed(5)}, ${lo.toFixed(5)}`, 'Trascina il punto per spostarlo'))];
       for (const a of useful) {
         const color = RATING_COLOR[a.rating] ?? '#64748b';
         L.polyline([[la, lo], [a.lat, a.lon]], { color, weight: a === useful[0] ? 4 : 2, dashArray: a === useful[0] ? null : '6 6', interactive: false }).addTo(pointLayer);
@@ -223,7 +283,7 @@ export async function adminCoverageView() {
               useful.length ? apTable(useful) : h('div', { class: 'notice warn' }, 'Nessun AP utilizzabile da qui: tutti quelli nel raggio sono improbabili o spenti.'),
               others.length ? h('details', { class: 'more-aps' }, h('summary', {}, `Altri ${others.length} AP nel raggio (segnale stimato insufficiente o non attivi)`), apTable(others)) : null,
             ]
-          : h('div', { class: 'notice warn' }, `Nessun AP con posizione entro ${r.maxKm} km da questo punto.`),
+          : h('div', { class: 'notice warn' }, r.hiddenWeak ? `Nessun AP con segnale stimato migliore di ${r.hideBelowDbm} dBm: ${r.hiddenWeak} ${r.hiddenWeak === 1 ? 'AP più debole non mostrato' : 'AP più deboli non mostrati'} (soglia in Impostazioni server → Copertura per gli installatori, −100 = tutti).` : `Nessun AP con posizione entro ${r.maxKm} km da questo punto.`),
         h(
           'p',
           { class: 'small muted' },
@@ -253,24 +313,11 @@ export async function adminCoverageView() {
         h('div', { class: 'notice warn' }, `${d.ap.name}: simulazione non possibile, ${d.customers ? 'troppo pochi clienti con segnale e posizione' : 'nessun cliente con posizione'} per stimare il segnale.`, ' ', clearBtn()),
       );
     }
-    const half = d.cellM / 2;
-    const mPerLat = 111320;
-    const mPerLon = 111320 * Math.cos((d.ap.lat * Math.PI) / 180);
-    // signal or capacity of a new link: same cells, two scales
+    // signal or capacity of a new link: same cells, two scales; one pixel per cell, drawn smooth
     const draw = (mode) => {
       simLayer.clearLayers();
-      for (const c of d.cells) {
-        if (c.dbm < d.minDbm - 15) continue; // clearly no coverage: left blank, not a red disc
-        const color = mode === 'cap' ? (c.cap == null ? null : capColor(c.cap)) : scaleColor(c.dbm);
-        if (!color) continue;
-        L.rectangle(
-          [
-            [c.lat - half / mPerLat, c.lon - half / mPerLon],
-            [c.lat + half / mPerLat, c.lon + half / mPerLon],
-          ],
-          { stroke: false, fillColor: color, fillOpacity: d.theoretical ? 0.3 : c.confidence === 'bassa' ? 0.18 : 0.38, interactive: false },
-        ).addTo(simLayer);
-      }
+      // clearly no coverage: left blank, not a red disc
+      simulationOverlay(d, (c) => (c.dbm < d.minDbm - 15 ? null : mode === 'cap' ? (c.cap == null ? null : capColor(c.cap)) : scaleColor(c.dbm))).addTo(simLayer);
       // learned: the area already served; theory: the sector of the antenna (azimuth from UISP)
       if (d.sector && (d.servedM || d.theoretical)) {
         const reach = d.servedM || d.radiusM;
@@ -297,7 +344,7 @@ export async function adminCoverageView() {
         h(
           'span',
           { class: 'small muted' },
-          ` · ${d.theoretical ? 'nessun cliente da cui calibrare' : `calibrata su ${d.customers} clienti`}${d.ignored ? ` (${d.ignored} sull’AP o oltre 20 km, esclusi dal calcolo)` : ''} · raggio ${km(d.radiusM)} · ${Math.round((100 * good) / d.cells.length)}% dell’area sopra ${d.minDbm} dBm${d.capacity ? `, ${Math.round((100 * fast) / d.cells.length)}% con almeno 50 Mbit/s` : ''}`,
+          ` · ${d.theoretical ? 'nessun cliente da cui calibrare' : `calibrata su ${d.customers} ${d.customers === 1 ? 'cliente' : 'clienti'}`}${d.ignored ? ` (${d.ignored} sull’AP o oltre 20 km, esclusi dal calcolo)` : ''} · raggio ${km(d.radiusM)} · ${Math.round((100 * good) / d.cells.length)}% dell’area sopra ${d.minDbm} dBm${d.capacity ? `, ${Math.round((100 * fast) / d.cells.length)}% con almeno 50 Mbit/s` : ''}`,
         ),
         ' ',
         clearBtn(),
@@ -322,6 +369,12 @@ export async function adminCoverageView() {
     return h('button', { type: 'button', class: 'small-btn', onclick: () => (simLayer?.clearLayers(), mount(simBox)) }, 'Togli simulazione');
   }
 
+  /** The link of Visibilità on the map with its Fresnel zone (admins: the AP position is known). */
+  function drawLink(p) {
+    if (!linkLayer || p.ap.lat == null || !point) return;
+    drawFresnelLink(map, linkLayer, [point.la, point.lo], p);
+  }
+
   /** Line of sight from the checked point (with the CPE height above) to one AP. */
   async function profile(a, btn) {
     if (!point) return;
@@ -334,33 +387,35 @@ export async function adminCoverageView() {
       } catch (e) {
         return mount(profileBox, card(h('h2', {}, `Visibilità verso ${a.name}`), h('div', { class: 'notice bad' }, e.message)));
       }
+      drawLink(p);
       const verdict = { clear: ['Visibilità libera', 'good'], fresnel: ['Linea libera ma zona di Fresnel invasa', 'warn'], blocked: [p.buildings ? 'Linea ostruita da edifici' : 'Linea ostruita dal terreno', 'bad'] }[p.verdict];
       mount(
         profileBox,
         card(
-          h('h2', {}, `Visibilità verso ${a.name}`),
+          h('div', { class: 'link-head' }, h('h2', {}, `Collegamento con ${a.name}`), badge(verdict[0], verdict[1])),
+          linkFacts(p, [point.la, point.lo], a.estimate),
           h(
             'p',
-            {},
-            badge(verdict[0], verdict[1]),
-            ` ${km(p.distanceM)} · CPE a ${dec(p.cpeHeightM)} m dal suolo · ${p.frequencyMhz} MHz`,
-            p.worst ? ` · punto critico a ${km(p.worst.d)}: margine ${dec(p.worst.clearanceM)} m (servono ${dec(p.worst.fresnel60M)} m)` : '',
+            { class: 'small' },
+            p.worst ? `Punto critico a ${km(p.worst.d)}: margine ${dec(p.worst.clearanceM)} m sulla linea di vista (per il 60% della zona di Fresnel ne servono ${dec(p.worst.fresnel60M)}).` : 'Linea di vista e zona di Fresnel libere su tutto il collegamento.',
             p.verdict === 'clear' || !(p.raiseCpeM > 0)
               ? ''
               : p.raiseCpeM <= MAX_MAST_M
-                ? ` · alzando la CPE di ${dec(p.raiseCpeM)} m si libera`
-                : ` · non basta un palo di ${MAX_MAST_M} m: scegli un altro AP`,
+                ? ` Alzando la CPE di ${dec(p.raiseCpeM)} m si libera.`
+                : ` Non basta un palo di ${MAX_MAST_M} m: scegli un altro AP.`,
           ),
           p.apAntenna
             ? h('p', { class: 'small' }, `Antenna dell’AP a ${p.apAntenna.altitude} m s.l.m., ${p.apAntenna.aboveGroundM} m sopra il suolo: ${ALT_FROM[p.apAntenna.from] ?? 'altezza predefinita'}${p.apAntenna.reported !== null ? ` (in UISP: ${p.apAntenna.reported} m)` : ''}. Se l’antenna è più alta, correggi l’altitudine in UISP.`)
             : null,
+          p.ap.lat != null ? h('p', { class: 'small muted' }, 'Sulla mappa: il collegamento e la sua prima zona di Fresnel (allargata per essere visibile, la forma è quella reale), verde dove è libera, arancione dove terreno o ostacoli entrano nel 60% della zona, rosso dove coprono la linea di vista.') : null,
           profileChart(p),
           legend([
             ['#a8a29e', 'terreno (con la curvatura terrestre)'],
             ['#78716c', 'edifici'],
             ['#4d7c0f', 'alberi'],
             ['#2563eb', 'linea di vista'],
-            ['#f59e0b', '60% della prima zona di Fresnel'],
+            ['#38bdf8', 'prima zona di Fresnel'],
+            ['#f59e0b', 'limite del 60%'],
           ]),
           h('p', { class: 'small muted' }, p.terrainSource === 'tinitaly' ? 'Terreno TINITALY (10 m), edifici e alberi da ESA WorldCover con le altezze di Impostazioni server → Simulazione radio. Cambia l’altezza della CPE sopra e premi di nuovo Visibilità.' : 'Modello del terreno SRTM (circa 30 m): qui non sono scaricati terreno a 10 m, edifici e alberi. Cambia l’altezza della CPE sopra e premi di nuovo Visibilità.'),
         ),
@@ -434,7 +489,7 @@ export async function adminCoverageView() {
         [STATE_COLOR.down, 'non raggiungibile'],
         [C.point, 'punto verificato'],
       ]),
-      mapNote,
+      h('div', { class: 'map-tools' }, mapNote, h('button', { type: 'button', class: 'small-btn', onclick: () => (picker?.arm(), toast('Clicca sulla mappa nel nuovo punto')) }, 'Nuovo punto sulla mappa')),
       simBox,
     ),
     out,

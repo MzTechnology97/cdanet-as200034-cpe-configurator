@@ -120,6 +120,7 @@ describe('Puntamento: terreno e tilt', () => {
     assert.equal(lj.apAntenna, undefined, 'installers do not see the AP antenna altitude');
     const admin = (await app.inject({ method: 'GET', url: '/api/pointing/profile?lat=37.58&lon=14.12&apId=ap-n2', headers: H })).json();
     assert.equal(typeof admin.apAntenna.altitude, 'number', 'admins: where the AP antenna is');
+    assert.equal(typeof admin.ap.lat, 'number', 'admins: the AP position, to draw the link on the map');
     assert.ok(admin.apAntenna.aboveGroundM > 0 && admin.apAntenna.from, JSON.stringify(admin.apAntenna));
     assert.equal((await app.inject({ method: 'GET', url: '/api/pointing/profile?lat=37.58&lon=14.12&apId=ap-unknown', headers: T })).statusCode, 404);
     await app.close();

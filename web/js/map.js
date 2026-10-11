@@ -316,3 +316,126 @@ export function drawCoverage(target, la, lo, aps, onAp = null) {
   return layers;
 }
 
+
+/**
+ * The point to check (the customer's CPE) on a map. A click or tap places it only when nothing is
+ * placed yet or after [arm] ("Nuovo punto sulla mappa"); then clicks and taps just move the map and
+ * the point is moved by dragging its pin. A click that ends a pan or zoom (touch screens, a map in a
+ * scrolling page) never counts. [onPick] receives the new position.
+ */
+export function pointPicker(map, onPick) {
+  const L = window.L;
+  let armed = true;
+  let pin = null;
+  let movedAt = 0;
+  const container = map.getContainer();
+  const mark = () => container.classList.toggle('picking', armed);
+  map.on('movestart zoomstart moveend zoomend', () => (movedAt = Date.now()));
+  map.on('click', (e) => {
+    if (!armed || Date.now() - movedAt < 400) return;
+    armed = false;
+    mark();
+    onPick(e.latlng.lat, e.latlng.lng);
+  });
+  mark();
+  return {
+    /** Shows the pin at the checked point; dragging it checks the new position. */
+    set(lat, lon, layer = map) {
+      pin?.remove();
+      pin = L.marker([lat, lon], { draggable: true, autoPan: true, title: 'Trascina per spostare il punto', icon: L.divIcon({ className: 'cpe-pin', html: '<span></span>', iconSize: [22, 22], iconAnchor: [11, 11] }) }).addTo(layer);
+      pin.on('dragend', () => {
+        const p = pin.getLatLng();
+        onPick(p.lat, p.lng);
+      });
+      armed = false;
+      mark();
+      return pin;
+    },
+    /** The next click (or tap) places a new point. */
+    arm() {
+      armed = true;
+      mark();
+    },
+    get armed() {
+      return armed;
+    },
+  };
+}
+
+/**
+ * Radio simulation as one image over the map: one pixel per cell (grid [d.n] × [d.n] around the
+ * AP), scaled smoothly by the browser instead of thousands of squares. [colorOf] gives the colour of
+ * a cell (null: left blank).
+ */
+export function simulationOverlay(d, colorOf) {
+  const L = window.L;
+  const n = d.n ?? Math.round((2 * d.radiusM) / d.cellM);
+  const mPerLat = 111320;
+  const mPerLon = 111320 * Math.cos((d.ap.lat * Math.PI) / 180);
+  const canvas = document.createElement('canvas');
+  canvas.width = n;
+  canvas.height = n;
+  const g = canvas.getContext('2d');
+  const img = g.createImageData(n, n);
+  for (const c of d.cells ?? []) {
+    const color = colorOf(c);
+    if (!color) continue;
+    const i = c.i ?? Math.floor(((c.lon - d.ap.lon) * mPerLon + d.radiusM) / d.cellM);
+    const j = c.j ?? Math.floor(((c.lat - d.ap.lat) * mPerLat + d.radiusM) / d.cellM);
+    if (i < 0 || j < 0 || i >= n || j >= n) continue;
+    const k = ((n - 1 - j) * n + i) * 4;
+    img.data[k] = parseInt(color.slice(1, 3), 16);
+    img.data[k + 1] = parseInt(color.slice(3, 5), 16);
+    img.data[k + 2] = parseInt(color.slice(5, 7), 16);
+    img.data[k + 3] = Math.round(255 * (d.theoretical ? 0.42 : c.confidence === 'bassa' ? 0.28 : 0.55));
+  }
+  g.putImageData(img, 0, 0);
+  const bounds = [
+    [d.ap.lat - d.radiusM / mPerLat, d.ap.lon - d.radiusM / mPerLon],
+    [d.ap.lat + d.radiusM / mPerLat, d.ap.lon + d.radiusM / mPerLon],
+  ];
+  return L.imageOverlay(canvas.toDataURL(), bounds, { interactive: false, className: 'sim-overlay' });
+}
+
+/**
+ * A link of Visibilità on a map, in plan as UISP Design shows it: the line from [from] to the AP
+ * (p.ap.lat/lon) and its first Fresnel zone (real shape, drawn wider in proportion to be seen at
+ * the zoom of the link), each stretch coloured by what stands in it: green clear, orange inside
+ * 60% of the zone, red over the line of sight. [p] is the answer of /api/pointing/profile.
+ */
+export function drawFresnelLink(map, layer, from, p) {
+  const L = window.L;
+  layer.clearLayers();
+  const D = p.distanceM;
+  const lambda = 299.79 / (p.frequencyMhz || 5600);
+  const [la, lo] = from;
+  const brg = (Math.atan2((p.ap.lon - lo) * Math.cos((la * Math.PI) / 180), p.ap.lat - la) * 180) / Math.PI;
+  const at = (d) => [la + ((p.ap.lat - la) * d) / D, lo + ((p.ap.lon - lo) * d) / D];
+  const pts = p.chart.map((q) => {
+    const r = Math.sqrt((lambda * q.d * Math.max(0, D - q.d)) / D);
+    const top = Math.max(q.ground, q.top ?? q.ground);
+    const clear = q.los - top;
+    return { ...q, r, status: clear < 0 ? 'bad' : clear < 0.6 * r ? 'warn' : 'good' };
+  });
+  const bounds = L.latLngBounds([from, [p.ap.lat, p.ap.lon]]).pad(0.2);
+  const zoom = Math.min(16, map.getBoundsZoom(bounds));
+  const mpp = (40075016.686 * Math.cos((la * Math.PI) / 180)) / 2 ** (zoom + 8);
+  const k = Math.max(1, (9 * mpp) / Math.max(...pts.map((q) => q.r), 0.1));
+  const left = pts.map((q) => towards(...at(q.d), brg - 90, q.r * k));
+  const right = pts.map((q) => towards(...at(q.d), brg + 90, q.r * k));
+  L.polygon([...left, ...right.reverse()], { color: '#38bdf8', weight: 1, fillColor: '#38bdf8', fillOpacity: 0.12, interactive: false }).addTo(layer);
+  const COLOR = { good: '#16a34a', warn: '#f59e0b', bad: '#dc2626' };
+  let run = [pts[0]];
+  const flush = () => run.length > 1 && L.polyline(run.map((q) => at(q.d)), { color: COLOR[run[1].status], weight: 5, opacity: 0.9, interactive: false }).addTo(layer);
+  for (const q of pts.slice(1)) {
+    run.push(q);
+    if (q.status !== run[run.length - 2].status) {
+      flush();
+      run = [q];
+    }
+  }
+  flush();
+  if (p.worst) L.circleMarker(at(p.worst.d), { radius: 6, color: '#dc2626', weight: 2, fillColor: '#fff', fillOpacity: 1 }).bindTooltip(`Punto critico a ${km(p.worst.d)}`).addTo(layer);
+  L.circleMarker([p.ap.lat, p.ap.lon], { radius: 7, color: '#0f172a', weight: 3, fillColor: '#ffffff', fillOpacity: 1, interactive: false }).addTo(layer);
+  map.fitBounds(bounds, { maxZoom: 16 });
+}
