@@ -565,3 +565,29 @@ tr:hover > td { background: color-mix(in srgb, var(--brand) 4%, transparent); }
   .map3d { position: fixed; }
   .map3d-legend { padding: 4px 8px; gap: 8px; font-size: .7rem; }
 }
+
+/* ---- Copertura (React) ---------------------------------------------------------------------- */
+.dom-host { display: contents; }
+.dom-inline { display: inline; }
+/* the answer for the point, in evidence: verdict, best AP and the two quick actions */
+.cov-verdict { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 14px 16px; margin: 10px 0 14px; border-radius: 12px; border: 1px solid var(--line); border-left-width: 5px; background: var(--surface-2); }
+.cov-verdict.good { border-left-color: var(--good); background: var(--good-bg); }
+.cov-verdict.warn { border-left-color: var(--warn); background: var(--warn-bg); }
+.cov-verdict.bad { border-left-color: var(--bad); background: var(--bad-bg); }
+.cov-verdict-title { font-size: 1.15rem; font-weight: 700; margin-bottom: 2px; }
+.cov-verdict.good .cov-verdict-title { color: var(--good); }
+.cov-verdict.warn .cov-verdict-title { color: var(--warn); }
+.cov-verdict.bad .cov-verdict-title { color: var(--bad); }
+/* figures in evidence (simulation, reliability, terrain, antennas) */
+.cov-figures { display: grid; grid-template-columns: repeat(auto-fit, minmax(170px, 1fr)); gap: 10px; margin: 10px 0 12px; }
+.cov-figure { display: flex; flex-direction: column; gap: 2px; padding: 10px 12px; border: 1px solid var(--line); border-left-width: 4px; border-left-color: var(--line); border-radius: 10px; background: var(--surface); }
+.cov-figure.on { border-left-color: var(--good); }
+.cov-figure.warn { border-left-color: var(--warn); }
+.cov-figure small { font-size: .74rem; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; }
+.cov-figure b { font-size: 1.35rem; line-height: 1.15; font-variant-numeric: tabular-nums; }
+.cov-figure span { font-size: .8rem; color: var(--muted); }
+.sim-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+.sim-info .ia-seg { margin-bottom: 8px; }
+/* the three tools under the map, one at a time */
+.cov-tools > .ia-seg { margin-bottom: 14px; }
+.cov-tab > div > p:first-child { margin-top: 0; }
