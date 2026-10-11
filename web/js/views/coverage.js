@@ -2,7 +2,8 @@ import { api } from '../api.js';
 import { badge, busy, card, field, h, mount, pageHead, table } from '../dom.js';
 import { createMap, drawCoverage, fit, legend, MAP_COLORS as C } from '../map.js';
 import { nms } from '../terms.js';
-import { adminCoverageView, DECLINATION_DEG, profileChart, signalBar } from './coverage-admin.js';
+import { adminCoverageView } from './coverage-admin.js';
+import { DECLINATION_DEG, profileChart, signalBar } from './coverage-link.js';
 
 /**
  * Coverage check: nearest APs to a position (address, coordinates or this device's GPS).

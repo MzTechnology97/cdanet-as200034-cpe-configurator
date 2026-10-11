@@ -3,7 +3,7 @@
  * so the pages moved to React and the others sit side by side.
  */
 import { toast } from './dom.js';
-import { html, useState } from './react.js';
+import { html, useEffect, useRef, useState } from './react.js';
 
 export const fmtDate = (iso) => (iso ? new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 
@@ -49,3 +49,39 @@ export const Segmented = ({ options, value, onChange, label }) => html`
 
 /** A label above its control, as field() of the classic pages. */
 export const Field = ({ label, children }) => html`<label>${label}${children}</label>`;
+
+/**
+ * A table as table() of dom.js: [columns] = [{ label, render(row) }], [rows], [onRow] for a click on
+ * a row, [keyOf] for the React keys. Narrow screens show each row as a labelled card (data-label).
+ */
+export const Table = ({ columns, rows, onRow, keyOf = (r, i) => r.id ?? i }) => html`
+  <div class="table-wrap">
+    <table>
+      <thead><tr>${columns.map((c, i) => html`<th key=${i}>${c.label}</th>`)}</tr></thead>
+      <tbody>
+        ${rows.length
+          ? rows.map(
+              (r, i) => html`
+                <tr key=${keyOf(r, i)} class=${onRow ? 'clickable' : ''} onClick=${onRow ? () => onRow(r) : undefined}>
+                  ${columns.map((c, j) => html`<td key=${j} data-label=${c.label || null}>${c.render ? c.render(r) : (r[c.key] ?? '—')}</td>`)}
+                </tr>
+              `,
+            )
+          : html`<tr><td colspan=${columns.length} class="muted empty">Nessun elemento.</td></tr>`}
+      </tbody>
+    </table>
+  </div>
+`;
+
+/**
+ * A DOM node built by the classic helpers (the profile chart, a legend) inside a React page: rebuilt
+ * when [deps] change. [make] returns the node.
+ */
+export function Dom({ make, deps = [], className = 'dom-host' }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const node = make();
+    ref.current?.replaceChildren(...(node ? [node] : []));
+  }, deps);
+  return html`<div ref=${ref} class=${className}></div>`;
+}

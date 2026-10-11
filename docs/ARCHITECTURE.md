@@ -65,12 +65,13 @@ Il client non esegue comandi forniti dal server: lettura, scrittura e `cfgmtd` s
 
 Moduli JavaScript serviti così come sono, senza build: `js/main.js` è il router (`#/pagina`), ogni pagina è una funzione in `js/views/` che restituisce l'elemento da mostrare. Le librerie stanno in `vendor/` (Leaflet, protomaps-leaflet, MapLibre GL, React, htm) e la CSP ammette solo script del server (`script-src 'self'`).
 
-**React, pagina per pagina.** Le pagine più complesse passano a React una alla volta, a partire da IA-AP; le altre restano com'erano.
+**React, pagina per pagina.** Le pagine più complesse passano a React una alla volta (IA-AP, Copertura per gli admin); le altre restano com'erano.
 - `js/react.js` carica React e ReactDOM (build di produzione in `vendor/react`) solo la prima volta che si apre una pagina React.
 - I componenti si scrivono con htm: template `` html`…` `` al posto del JSX, sempre senza build.
 - `reactView(Componente)` trasforma il componente in una pagina del router e lo smonta quando si cambia pagina, fermando timer e richieste.
 - `js/ui.js` raccoglie i componenti comuni (intestazione, schede, etichette, pulsante con attesa, segmenti), con le stesse classi CSS delle pagine classiche.
 - Come in `dom.js`, il testo passa sempre da React, che lo protegge dall'inserimento di markup.
+- Le mappe Leaflet restano imperative: la pagina crea la mappa una volta (un hook) e ne aggiorna i livelli negli effetti. I grafici già scritti con `dom.js` (il profilo del collegamento in `coverage-link.js`) entrano nei componenti con `Dom`.
 
 ## App Android (`android/`)
 
