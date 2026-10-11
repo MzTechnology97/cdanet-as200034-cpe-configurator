@@ -1,5 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { Readable } from 'node:stream';
+import { eveningShare } from '../domain/ap-load.ts';
 import { apModels } from '../services/model-inputs.ts';
 import { z } from 'zod';
 import { CPE_MODELS, cpeModelById, recommendCpe } from '../domain/cpe-models.ts';
@@ -76,7 +77,8 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
   // ---- Coverage: nearest APs only (never the full network map) ------------------------
   app.get('/api/geocode', user, async (req) => {
     const { q } = z.object({ q: z.string().trim().min(3).max(200) }).parse(req.query);
-    return ctx.geocoder.search(q);
+    // the house of ANNCSU when the geocoder stops at the street
+    return ctx.anncsu.refine(await ctx.geocoder.search(q), q);
   });
 
   app.get('/api/geocode/reverse', user, async (req) => {
@@ -138,7 +140,10 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       const shift = (v: number | null) => (v === null ? null : Math.round(v + model.gainDbi - refGain));
       const signalDbm = shift(e.signalDbm);
       // capacity of the new link from the curve of the real CPEs (and how this AP does on it)
-      return { ...e, signalDbm, low: shift(e.low), high: shift(e.high), basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null, capacityMbps: signalDbm === null ? null : ctx.apLoad.capacity(a.id, signalDbm) };
+      const cap = signalDbm === null ? null : ctx.apLoad.capacity(a.id, signalDbm);
+      const share = eveningShare(ctx.apLoad.load(a.id));
+      // what a new customer would get at the evening peak: the link shared with the others
+      return { ...e, signalDbm, low: shift(e.low), high: shift(e.high), basis: clientsShown ? e.basis : null, nearby: clientsShown ? e.nearby : null, capacityMbps: cap, eveningMbps: cap !== null && share !== null ? Math.round(cap * share) : null };
     };
     // the CPE of every AP: the one asked for, or the one proposed (with the signal it would give)
     const cpeOf = (a: (typeof inRange)[number]) => {
@@ -261,6 +266,8 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       antenna: m.antenna,
       load: ctx.apLoad.load(ap.id),
       capacity: ctx.apLoad.curve() !== null,
+      // share of the link a new customer gets at the evening peak (velocità la sera = cap × share)
+      eveningShare: eveningShare(ctx.apLoad.load(ap.id)),
       cells,
       cellM: Math.round(cellM),
       n,

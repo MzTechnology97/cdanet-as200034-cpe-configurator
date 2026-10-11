@@ -168,3 +168,17 @@ export function apCapacityFactor(c: CapacityCurve, own: CapacitySample[]): numbe
   if (r.length < 3) return 1;
   return Math.min(2, Math.max(0.5, Math.round(median(r)! * 100) / 100));
 }
+
+/**
+ * Share of the link capacity a new customer would get in the evening: the airtime the AP has free
+ * at the peak, never less than a fair share among its customers (the AP shares the time between
+ * the stations that want it). null when the load of the AP is not known.
+ */
+export function eveningShare(l: Pick<ApLoad, 'eveningAirtimePct' | 'eveningUtilizationPct' | 'stations'> | null | undefined): number | null {
+  if (!l) return null;
+  const busy = Math.max(l.eveningAirtimePct ?? -1, l.eveningUtilizationPct ?? -1);
+  if (busy < 0) return null;
+  const fair = 1 / ((l.stations ?? 0) + 1);
+  return Math.round(Math.max(fair, Math.min(1, 1 - busy / 100)) * 100) / 100;
+}
+

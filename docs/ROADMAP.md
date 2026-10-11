@@ -70,7 +70,7 @@ Vedi [CRM.md](CRM.md).
 ## Da valutare
 
 - **Console in React** (richiesta dell'utente, 11/10/2026): riscrivere la grafica della console web con React (componenti, stato, grafici e mappe più curati) per renderla più bella e uniforme. Da valutare costi e benefici (build con bundler nel container, CSP, mappe Leaflet/MapLibre come componenti, migrazione pagina per pagina) prima di partire.
-- **Realismo della copertura** (richiesto 11/10/2026): fatti edifici, alberi, CPE sul tetto, correzione locale, antenne vere e avvisi IA-AP (v1.32.72); restano simulazione sulla mappa 3D, mappa della velocità attesa, civici ANNCSU, LiDAR del Ministero dove disponibile.
+- **Realismo della copertura** (richiesto 11/10/2026): fatti edifici, alberi, CPE sul tetto, correzione locale, antenne vere e avvisi IA-AP (v1.32.72); fatti anche simulazione 3D, velocità la sera e civici ANNCSU (v1.32.73); resta il LiDAR del Ministero dove disponibile.
 - **Mappa 3D**: fatta la vista del collegamento (v1.32.70); restano i settori degli AP (servono azimut e antenna in UISP), la vista 3D di tutta la rete e la vista 3D nell'app.
 
 ## Da verificare sul campo
@@ -89,6 +89,7 @@ Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). 
 ## Già rilasciato
 
 - v1.32.65: IA-AP: un avviso critico viene notificato al massimo una volta alla settimana (prima tornava a ogni ricomparsa), notifiche con link a IA-AP; ottimizzazioni in corso e programmate in evidenza in Panoramica e sulla riga dell'AP; problemi critici IA-AP in Panoramica.
+- v1.32.73: **Simulazione in 3D** (celle sul terreno in rilievo con foto aeree ed edifici OSM in rilievo, anche nel collegamento 3D); **velocità la sera** (capacità × tempo radio libero al picco serale dell'AP) nella verifica, nel pannello del collegamento, nell'app e come scala della simulazione; **civici ANNCSU** per mettere l'indirizzo sulla casa; altezze sane di CPE e AP con edifici e alberi veri.
 - v1.32.72: **Realismo della copertura** (punti 1–4): edifici veri dalla mappa base (OSM) e altezze degli alberi Meta/WRI al posto delle classi ESA; CPE sul tetto; correzione locale dai clienti al netto del terreno del loro percorso; clienti reali e installazioni fallite sulla mappa admin; **antenne vere** degli AP (diagrammi Ubiquiti e RF elements scaricati dal server, antenna/azimut/tilt per AP, settore vero sulla mappa); IA-AP segnala AP senza azimut e Rocket senza antenna. Sui clienti reali: collegati ma dati per ostruiti −17%, scarto medio −2,3 → −1,7 dB.
 - v1.32.71: **Realtà aumentata** nell'app (mirino e Copertura → Realtà aumentata): AP intorno come segnali con segnale atteso e valutazione, orizzonte del terreno dal server (`/api/pointing/horizon`), tunnel della zona di Fresnel verso l'AP scelto (anelli rossi dove il profilo vede ostacoli), nastro della bussola, **bussola corretta riconoscendo il profilo delle montagne** nella fotocamera (o trascinando), foto con la sovrapposizione in galleria; scorciatoia in Oggi per usarla senza un intervento.
 - v1.32.70: **Vista 3D** del collegamento (admin, Copertura) come in UISP Design: terreno TINITALY/SRTM in rilievo dal nostro server, foto aeree di Connettori, linea di vista e tubo di Fresnel (rosso dove invaso), edifici e alberi sul percorso, pali di CPE e AP, AP vicini; viste di lato, dalla CPE, dall'AP e dall'alto. MapLibre GL 4.7.1 nel repo (BSD-3).

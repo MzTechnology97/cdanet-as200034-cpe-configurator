@@ -545,3 +545,4 @@ tr:hover > td { background: color-mix(in srgb, var(--brand) 4%, transparent); }
 .ant-polar .ring { fill: none; stroke: var(--line); }
 .ant-polar .lobe { fill: color-mix(in srgb, #2563eb 30%, transparent); stroke: #2563eb; stroke-width: 1.2; }
 .ant-num { width: 8.5rem; min-height: 32px; }
+.map3d-range { display: inline-flex; align-items: center; gap: 6px; } .map3d-range input { width: 110px; }

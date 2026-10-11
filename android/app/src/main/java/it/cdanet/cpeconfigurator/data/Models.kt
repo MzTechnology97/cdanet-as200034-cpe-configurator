@@ -184,6 +184,8 @@ data class SignalEstimateDto(
     val terrain: TerrainEffectDto? = null,
     /** Downlink capacity of the new link from the curve of the real CPEs, Mbit/s. */
     val capacityMbps: Int? = null,
+    /** What a new customer would get at the evening peak (the link shared with the others), Mbit/s. */
+    val eveningMbps: Int? = null,
 ) {
     /** "−63 dBm (−67…−59) · affidabilità alta · fuori dal settore servito"; null if there is no estimate. */
     fun describe(): String? = signalDbm?.let { s ->
@@ -194,7 +196,7 @@ data class SignalEstimateDto(
             if (beyondServed) "più lontano dei clienti attuali" else null,
             if (tooFar) "oltre 20 km: troppo lontano" else null,
             terrain?.describe(),
-            capacityMbps?.let { "capacità ~$it Mbit/s" },
+            capacityMbps?.let { "capacità ~$it Mbit/s" + (eveningMbps?.let { e -> ", la sera ~$e" } ?: "") },
             // no customers on the AP yet: free-space estimate from the radio parameters
             if (theoretical) "stima teorica: AP senza clienti" else basis?.let { b -> "calibrata su $b clienti" },
         ).joinToString(" · ")
