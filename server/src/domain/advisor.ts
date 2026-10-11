@@ -158,39 +158,74 @@ export interface Finding {
   params?: Record<string, number | string>;
 }
 
-/** Thresholds of the rules (tuned on the real network, October 2026). */
+/**
+ * Thresholds of the rules, tuned on the real network (631 CPEs on 107 APs, 11 October 2026): every
+ * CPE rule is checked against the capacity the CPE really gets compared with the CPEs of the whole
+ * network with the same SNR (peer capacity, peerCapacity). What does not lower it is not reported.
+ */
 export const RULES = {
+  /** SNR: 15–20 dB gives the same capacity per MHz as 20–25 (2,9 vs 3); below 15 it falls to a third. */
   snrCritical: 12,
-  snrWarning: 20,
-  /** Levels below the ideal modulation that are not normal any more (2 below is usual). */
-  mcsGap: 3,
-  /** From this many levels below the ideal a single CPE needs attention (4–5: worth knowing). */
-  mcsGapWarning: 6,
-  /** Share of an AP's CPEs below their ideal modulation that points to the channel (critical: 75%). */
-  mcsShare: 0.5,
-  mcsShareCritical: 0.75,
+  snrWarning: 15,
   /**
-   * A CPE's share of the AP airtime (UISP reads it at one moment: a customer downloading right then
-   * is not a problem). It counts only if the CPE is also slow (low SNR, modulation below the ideal,
-   * capacity under airtimeSlowCap of the AP median) and the AP is busy in the evening.
+   * Levels below the ideal modulation. 4–5 below is normal on this network (capacity 0,98 of the
+   * peers); from 6 the capacity falls (0,64): reported only if the CPE is really slower than its peers.
    */
+  mcsGap: 6,
+  /** AP: share of its CPEs (at least mcsApMin) 6+ levels below the ideal that points to the channel. */
+  mcsShare: 0.3,
+  mcsShareCritical: 0.5,
+  mcsApMin: 3,
+  /** A CPE slower than this share of its peers (same SNR across the network) has a real problem. */
+  slowPeers: 0.7,
+  /** A CPE's share of the AP airtime: it counts only for a slow CPE on a busy AP (see the rule). */
   airtimeShare: 0.1,
   airtimeVsMedian: 3,
-  airtimeSlowCap: 0.5,
   trendWarning: -6,
   trendCritical: -10,
+  /**
+   * Below the signal the coverage model expects: the model is off by 6 dB in a typical case, and
+   * from 10 to 20 dB below the CPEs have their normal capacity. Alone it counts from 20 dB.
+   */
   belowExpected: -10,
+  belowExpectedAlone: -20,
+  /** Polarisations: from 8 dB apart the capacity falls in part of the cases (0,71), so only with it. */
   chainGap: 8,
   busyWarning: 50,
   busyCritical: 70,
   noiseWarning: -78,
   /** Spectrum: a channel at least this much quieter (index) is worth the change. */
   channelGain: 4,
+  /** Narrower channel when the median SNR of the CPEs is below this (dB). */
+  narrowSnr: 15,
   /** CPE side busier than the AP side on the channel by this much (index): local interference. */
   cpeInterference: 6,
   /** Own APs closer than this on overlapping channels can interfere. */
   coChannelM: 6000,
 };
+
+/**
+ * Capacity of each link compared with the links of the whole network with the same SNR (±2 dB,
+ * per MHz of channel): 1 = like its peers, 0,5 = half. null when there are fewer than 5 peers.
+ */
+export function peerCapacity(inputs: AdvisorInput[]): (s: StationInput, widthMhz: number | null) => number | null {
+  const snrOf = (s: StationInput) => (s.rxSignal !== null && s.noise !== null ? s.rxSignal - s.noise : null);
+  const pts = inputs.flatMap((i) => i.stations.map((s) => ({ snr: snrOf(s), v: s.capMbps !== null && i.widthMhz ? s.capMbps / i.widthMhz : null }))).filter((p): p is { snr: number; v: number } => p.snr !== null && p.v !== null);
+  const cache = new Map<number, number | null>();
+  const peers = (snr: number) => {
+    if (!cache.has(snr)) {
+      const v = pts.filter((p) => Math.abs(p.snr - snr) <= 2).map((p) => p.v);
+      cache.set(snr, v.length >= 5 ? median(v) : null);
+    }
+    return cache.get(snr)!;
+  };
+  return (s, widthMhz) => {
+    const snr = snrOf(s);
+    if (snr === null || s.capMbps === null || !widthMhz) return null;
+    const m = peers(Math.round(snr));
+    return m ? s.capMbps / widthMhz / m : null;
+  };
+}
 
 /**
  * Change of a link's signal when the channel moves from [from] to [to] MHz: free-space loss
@@ -299,9 +334,38 @@ export interface AdvisorOptions {
 
 const fmt = (v: number) => String(Math.round(v * 10) / 10).replace('.', ',');
 
+/** Causes of a degraded link of one CPE, most telling first: they become one finding. */
+const LINK_KINDS = ['snr', 'chains', 'cpenoise', 'mcs', 'expected'];
+
+/**
+ * One finding per CPE for its link: low SNR, unbalanced polarisations, interference at the
+ * customer, low modulation and a signal below the expected one are often the same problem seen
+ * from different sides. The most serious (then most telling) stays, the others go into its detail.
+ */
+function mergeLinkFindings(out: Finding[]): Finding[] {
+  const order: Record<Severity, number> = { critico: 0, attenzione: 1, info: 2 };
+  const groups = new Map<string, Finding[]>();
+  for (const f of out) {
+    if (!f.cpe || !LINK_KINDS.includes(f.kind)) continue;
+    const k = `${f.apId}|${f.cpe.id ?? f.cpe.mac ?? f.cpe.name}`;
+    groups.set(k, [...(groups.get(k) ?? []), f]);
+  }
+  const drop = new Set<Finding>();
+  for (const g of groups.values()) {
+    if (g.length < 2) continue;
+    g.sort((a, b) => order[a.severity] - order[b.severity] || LINK_KINDS.indexOf(a.kind) - LINK_KINDS.indexOf(b.kind));
+    const [main, ...rest] = g;
+    main!.detail = `${main!.detail} Inoltre: ${rest.map((f) => f.title.charAt(0).toLowerCase() + f.title.slice(1)).join('; ')}.`;
+    for (const f of rest) drop.add(f);
+  }
+  return out.filter((f) => !drop.has(f));
+}
+
 /** Findings of the whole network: CPEs to fix, APs to fix, channels and widths to change. */
 export function analyzeNetwork(inputs: AdvisorInput[], o: AdvisorOptions): Finding[] {
   const out: Finding[] = [];
+  const peerOf = peerCapacity(inputs);
+  const pct = (v: number) => `${Math.round(v * 100)}%`;
   const own = inputs.filter((i) => i.frequency !== null && i.widthMhz !== null && i.location !== null);
   // channels already suggested to other APs: a near AP must not be sent onto them, and of two APs
   // on the same channel only one is told to move
@@ -311,7 +375,6 @@ export function analyzeNetwork(inputs: AdvisorInput[], o: AdvisorOptions): Findi
     const base = { apId: ap.apId, apName: ap.apName };
     const st = ap.stations;
     const medAir = median(st.map((s) => s.airtime).filter((v): v is number => v !== null)) ?? 0;
-    const medCap = median(st.map((s) => s.capMbps).filter((v): v is number => v !== null));
     // evening load of the AP, % (airtime or channel use): how much a slow CPE really costs the others
     const apBusy = ap.load ? Math.max(ap.load.eveningAirtimePct ?? -1, ap.load.eveningUtilizationPct ?? -1) : -1;
     // ---- CPEs ----
@@ -319,31 +382,31 @@ export function analyzeNetwork(inputs: AdvisorInput[], o: AdvisorOptions): Findi
       const cpe = { id: s.deviceId, name: s.name, mac: s.mac };
       const key = s.deviceId ?? s.mac ?? s.name;
       const snr = s.rxSignal !== null && s.noise !== null ? s.rxSignal - s.noise : null;
+      const peer = peerOf(s, ap.widthMhz);
+      const slowNote = peer !== null ? ` Capacità ${s.capMbps} Mbit/s, il ${pct(peer)} di quella delle CPE della rete con lo stesso SNR.` : '';
       if (snr !== null && snr < RULES.snrWarning) {
         out.push({ ...base, cpe, id: `snr:${key}`, kind: 'snr', severity: snr < RULES.snrCritical ? 'critico' : 'attenzione', title: `SNR basso: ${Math.round(snr)} dB`, detail: `Segnale all’AP ${s.rxSignal} dBm, rumore ${s.noise} dBm.`, action: 'Riallinea la CPE e controlla ostacoli e cavo; se il rumore è alto per tutto l’AP, vedi i suggerimenti di canale dell’AP.' });
       }
       const gap = Math.max(s.rxMcsIdeal !== null && s.rxMcs !== null ? s.rxMcsIdeal - s.rxMcs : 0, s.txMcsIdeal !== null && s.txMcs !== null ? s.txMcsIdeal - s.txMcs : 0);
-      if (gap > RULES.mcsGap) {
-        out.push({ ...base, cpe, id: `mcs:${key}`, kind: 'mcs', severity: gap >= RULES.mcsGapWarning ? 'attenzione' : 'info', title: `Modulazione sotto l’ideale di ${gap} livelli`, detail: `MCS ricezione ${s.rxMcs ?? '—'} (ideale ${s.rxMcsIdeal ?? '—'}), trasmissione ${s.txMcs ?? '—'} (ideale ${s.txMcsIdeal ?? '—'}): il segnale basterebbe, qualcosa disturba.`, action: 'Probabile interferenza o riflessioni: controlla puntamento e catene; se tocca più CPE dello stesso AP, cambia canale.' });
+      if (gap >= RULES.mcsGap && (peer === null || peer < RULES.slowPeers)) {
+        out.push({ ...base, cpe, id: `mcs:${key}`, kind: 'mcs', severity: 'attenzione', title: `Modulazione sotto l’ideale di ${gap} livelli`, detail: `MCS ricezione ${s.rxMcs ?? '—'} (ideale ${s.rxMcsIdeal ?? '—'}), trasmissione ${s.txMcs ?? '—'} (ideale ${s.txMcsIdeal ?? '—'}): il segnale basterebbe, qualcosa disturba.${slowNote}`, action: 'Probabile interferenza o riflessioni: controlla puntamento e catene; se tocca più CPE dello stesso AP, cambia canale.' });
       }
       // a big share of the airtime matters only for a slow CPE (it takes the time of the others to
-      // move little data) and only as much as the AP is busy: a fast customer downloading is normal
+      // move little data) on a busy AP: a fast customer downloading, or an AP with room, is normal
       const slowWhy = [
         snr !== null && snr < RULES.snrWarning ? `SNR ${Math.round(snr)} dB` : null,
-        gap > RULES.mcsGap ? `modulazione ${gap} livelli sotto l’ideale` : null,
-        s.capMbps !== null && medCap !== null && medCap > 0 && s.capMbps <= RULES.airtimeSlowCap * medCap ? `capacità ${s.capMbps} Mbit/s contro ${Math.round(medCap)} delle altre CPE` : null,
+        gap >= RULES.mcsGap ? `modulazione ${gap} livelli sotto l’ideale` : null,
+        peer !== null && peer < RULES.slowPeers ? `capacità ${s.capMbps} Mbit/s, il ${pct(peer)} delle CPE con lo stesso SNR` : null,
       ].filter((v): v is string => v !== null);
-      if (s.airtime !== null && s.airtime >= RULES.airtimeShare && s.airtime >= RULES.airtimeVsMedian * medAir && slowWhy.length) {
-        const severity: Severity = apBusy >= RULES.busyCritical ? 'critico' : apBusy >= RULES.busyWarning ? 'attenzione' : 'info';
-        const load = apBusy >= 0 ? `l’AP la sera è al ${Math.round(apBusy)}%` : 'il carico serale dell’AP non è noto';
+      if (s.airtime !== null && s.airtime >= RULES.airtimeShare && s.airtime >= RULES.airtimeVsMedian * medAir && slowWhy.length && apBusy >= RULES.busyWarning) {
         out.push({
           ...base,
           cpe,
           id: `airtime:${key}`,
           kind: 'airtime',
-          severity,
+          severity: apBusy >= RULES.busyCritical ? 'critico' : 'attenzione',
           title: `CPE lenta che occupa il ${fmt(s.airtime * 100)}% dell’airtime`,
-          detail: `${slowWhy.join(', ')}; la mediana delle CPE di questo AP è ${fmt(medAir * 100)}% di airtime. ${severity === 'info' ? `Oggi pesa poco: ${load}.` : `Rallenta gli altri clienti: ${load}.`}`,
+          detail: `${slowWhy.join(', ')}; la mediana delle CPE di questo AP è ${fmt(medAir * 100)}% di airtime. Rallenta gli altri clienti: l’AP la sera è al ${Math.round(apBusy)}%.`,
           action: 'Migliora il collegamento di questa CPE (puntamento, palo più alto, altro AP) o limitane la banda.',
         });
       }
@@ -352,11 +415,12 @@ export function analyzeNetwork(inputs: AdvisorInput[], o: AdvisorOptions): Findi
       }
       const exp = s.deviceId ? o.expected?.get(s.deviceId) : undefined;
       const real = s.deviceId ? o.cpeSignal?.get(s.deviceId) : undefined;
-      if (exp !== undefined && typeof real === 'number' && real - exp <= RULES.belowExpected) {
-        out.push({ ...base, cpe, id: `expected:${key}`, kind: 'expected', severity: 'attenzione', title: `${fmt(exp - real)} dB sotto il segnale atteso`, detail: `Riceve ${real} dBm, il modello di copertura si aspetta ${Math.round(exp)} dBm in quel punto (dalle CPE vicine dello stesso AP).`, action: 'Antenna probabilmente disallineata o ostruita: riallinea con lo strumento Puntamento dell’app.' });
+      if (exp !== undefined && typeof real === 'number' && (real - exp <= RULES.belowExpectedAlone || (real - exp <= RULES.belowExpected && peer !== null && peer < RULES.slowPeers))) {
+        out.push({ ...base, cpe, id: `expected:${key}`, kind: 'expected', severity: 'attenzione', title: `${fmt(exp - real)} dB sotto il segnale atteso`, detail: `Riceve ${real} dBm, il modello di copertura si aspetta ${Math.round(exp)} dBm in quel punto (dalle CPE vicine dello stesso AP).${slowNote}`, action: 'Antenna probabilmente disallineata o ostruita: riallinea con lo strumento Puntamento dell’app.' });
       }
-      if (s.chains.length >= 2 && Math.max(...s.chains) - Math.min(...s.chains) >= RULES.chainGap) {
-        out.push({ ...base, cpe, id: `chains:${key}`, kind: 'chains', severity: 'attenzione', title: `Polarizzazioni sbilanciate di ${Math.round(Math.max(...s.chains) - Math.min(...s.chains))} dB`, detail: `Catene: ${s.chains.join(' / ')} dBm.`, action: 'Controlla cavo, connettori e la rotazione dell’antenna (polarizzazione).' });
+      const chainGap = s.chains.length >= 2 ? Math.max(...s.chains) - Math.min(...s.chains) : 0;
+      if (chainGap >= RULES.chainGap && (peer !== null ? peer < RULES.slowPeers : chainGap >= RULES.chainGap + 4)) {
+        out.push({ ...base, cpe, id: `chains:${key}`, kind: 'chains', severity: 'attenzione', title: `Polarizzazioni sbilanciate di ${Math.round(Math.max(...s.chains) - Math.min(...s.chains))} dB`, detail: `Catene: ${s.chains.join(' / ')} dBm.${slowNote}`, action: 'Controlla cavo, connettori e la rotazione dell’antenna (polarizzazione).' });
       }
       // the customer's side much busier than the AP's on the channel in use: local interference
       if (s.spectrum.length && ap.frequency !== null && ap.widthMhz !== null) {
@@ -374,10 +438,11 @@ export function analyzeNetwork(inputs: AdvisorInput[], o: AdvisorOptions): Findi
     // ---- the AP ----
     // many CPEs below their ideal modulation: interference on the channel, not single installations
     const gaps = st.filter((s) => s.rxMcsIdeal !== null && s.rxMcs !== null);
-    const below = gaps.filter((s) => Math.max(s.rxMcsIdeal! - s.rxMcs!, s.txMcsIdeal !== null && s.txMcs !== null ? s.txMcsIdeal - s.txMcs : 0) > RULES.mcsGap);
-    if (gaps.length >= 4 && below.length / gaps.length >= RULES.mcsShare) {
+    const below = gaps.filter((s) => Math.max(s.rxMcsIdeal! - s.rxMcs!, s.txMcsIdeal !== null && s.txMcs !== null ? s.txMcsIdeal - s.txMcs : 0) >= RULES.mcsGap);
+    const mcsAp = gaps.length >= 4 && below.length >= RULES.mcsApMin && below.length / gaps.length >= RULES.mcsShare;
+    if (mcsAp) {
       const share = Math.round((100 * below.length) / gaps.length);
-      out.push({ ...base, id: `mcsap:${ap.apId}`, kind: 'mcs', severity: below.length / gaps.length >= RULES.mcsShareCritical ? 'critico' : 'attenzione', title: `${share}% delle CPE sotto la modulazione ideale`, detail: `${below.length} CPE su ${gaps.length} lavorano più di ${RULES.mcsGap} livelli sotto la modulazione che il loro segnale permetterebbe: tipico di un canale disturbato.`, action: 'Cambia canale (vedi il suggerimento se c’è) o restringi il canale; poi ricontrolla le modulazioni.' });
+      out.push({ ...base, id: `mcsap:${ap.apId}`, kind: 'mcs', severity: below.length / gaps.length >= RULES.mcsShareCritical ? 'critico' : 'attenzione', title: `${share}% delle CPE molto sotto la modulazione ideale`, detail: `${below.length} CPE su ${gaps.length} lavorano ${RULES.mcsGap} o più livelli sotto la modulazione che il loro segnale permetterebbe: tipico di un canale disturbato.`, action: 'Cambia canale (vedi il suggerimento se c’è) o restringi il canale; poi ricontrolla le modulazioni.' });
     }
     const l = ap.load;
     const busy = Math.max(l?.eveningAirtimePct ?? -1, l?.eveningUtilizationPct ?? -1);
@@ -385,7 +450,8 @@ export function analyzeNetwork(inputs: AdvisorInput[], o: AdvisorOptions): Findi
       out.push({ ...base, id: `busy:${ap.apId}`, kind: 'busy', severity: busy >= RULES.busyCritical ? 'critico' : 'attenzione', title: `Carico serale ${Math.round(busy)}%`, detail: `Airtime ${l?.eveningAirtimePct ?? '—'}%, utilizzo del canale ${l?.eveningUtilizationPct ?? '—'}%, picco ${l?.eveningPeakMbps ?? '—'} Mbit/s su ${l?.capacityMbps ?? '—'} con ${l?.stations ?? '—'} CPE (20–23, media della settimana).`, action: 'Sposta le CPE più lente o più lontane su AP vicini liberi, allarga il canale se lo spettro lo permette, o aggiungi un settore.' });
     }
     const noise = l?.noiseDbm ?? median(st.map((s) => s.noise).filter((v): v is number => v !== null));
-    if (noise !== null && noise >= RULES.noiseWarning) {
+    const noisy = noise !== null && noise >= RULES.noiseWarning;
+    if (noisy) {
       out.push({ ...base, id: `noise:${ap.apId}`, kind: 'noise', severity: 'attenzione', title: `Rumore alto all’AP: ${noise} dBm`, detail: 'Il rumore di fondo tipico è tra −95 e −85 dBm: qui qualcosa trasmette sullo stesso canale.', action: 'Cambia canale (vedi il suggerimento se c’è) o restringi il canale.' });
     }
     if (ap.frequency === null || ap.widthMhz === null) continue;
@@ -410,13 +476,14 @@ export function analyzeNetwork(inputs: AdvisorInput[], o: AdvisorOptions): Findi
     const links = { from: ap.frequency, signals: st.map((s) => s.rxSignal).filter((v): v is number => v !== null), minDbm: o.minDbm ?? -75 };
     const weakNow = links.signals.length ? Math.min(...links.signals) : null;
     const best = bestChannel(spectrum, ap.widthMhz, o.range, neighbours, links);
-    if (best && current !== null && (current - best.occupancy >= RULES.channelGain || (clash.length && !movedByOthers)) && best.centre !== ap.frequency) {
+    const symptom = (clash.length > 0 && !movedByOthers) || noisy || mcsAp;
+    if (best && current !== null && symptom && (current - best.occupancy >= RULES.channelGain || (clash.length && !movedByOthers)) && best.centre !== ap.frequency) {
       plan(ap.apId, best.centre, ap.widthMhz);
       out.push({ ...base, id: `channel:${ap.apId}`, kind: 'channel', severity: clash.length && !movedByOthers ? 'attenzione' : 'info', title: `Canale più libero: ${best.centre} MHz`, detail: `Occupazione dello spettro misurata dall’AP${cpeSide ? ' e dalle sue CPE' : ''}: ${fmt(current)} sul canale attuale (${ap.frequency}/${ap.widthMhz} MHz), ${fmt(best.occupancy)} su ${best.centre} MHz; nessun nostro AP entro ${RULES.coChannelM / 1000} km su quel canale.${weakNow !== null && best.weakestDbm !== null && Math.abs(best.weakestDbm - weakNow) >= 0.5 ? ` Cliente più debole: da ${weakNow} a circa ${fmt(best.weakestDbm)} dBm (antenne fuori dal loro centro banda e perdita di percorso a ${best.centre} MHz).` : ''}`, action: `Imposta l’AP su ${best.centre} MHz, ${ap.widthMhz} MHz di canale (le CPE seguono da sole), in un orario di basso traffico.`, params: { frequenza: best.centre, ampiezza: ap.widthMhz } });
     }
     const snrs = st.map((s) => (s.rxSignal !== null && s.noise !== null ? s.rxSignal - s.noise : null)).filter((v): v is number => v !== null);
     const medSnr = median(snrs);
-    if (medSnr !== null && medSnr < RULES.snrWarning && ap.widthMhz >= 40) {
+    if (medSnr !== null && medSnr < RULES.narrowSnr && ap.widthMhz >= 40) {
       const w = ap.widthMhz / 2;
       const ch = bestChannel(spectrum, w, o.range, neighbours, links);
       if (ch) plan(ap.apId, ch.centre, w);
@@ -429,5 +496,5 @@ export function analyzeNetwork(inputs: AdvisorInput[], o: AdvisorOptions): Findi
     }
   }
   const order: Record<Severity, number> = { critico: 0, attenzione: 1, info: 2 };
-  return out.sort((a, b) => order[a.severity] - order[b.severity] || a.apName.localeCompare(b.apName));
+  return mergeLinkFindings(out).sort((a, b) => order[a.severity] - order[b.severity] || a.apName.localeCompare(b.apName));
 }
