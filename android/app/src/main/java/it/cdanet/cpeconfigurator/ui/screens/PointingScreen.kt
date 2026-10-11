@@ -140,6 +140,9 @@ fun PointingScreen(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: (
         tiltDeg = a.tiltDeg,
         altitude = a.altitude,
         fromAltitude = d.from.altitude,
+        apId = a.id,
+        heightM = d.from.height,
+        beacons = d.aps.map { it.toBeacon() },
     )
 
     Column(Modifier.fillMaxSize()) {
@@ -261,3 +264,6 @@ private fun PointingMap(c: AppContainer, d: PointingDto, modifier: Modifier) {
     }
     EmbeddedMap(c, "window.cdaShow($json)", modifier) { page = it }
 }
+
+/** An AP of Trova l'AP as a beacon of the augmented reality. */
+fun PointingApDto.toBeacon() = it.cdanet.cpeconfigurator.field.ArBeacon(id, name.ifBlank { id }, bearing.toDouble(), tiltDeg, distanceM, estimate?.signalDbm, if (status.isNotBlank() && status != "active") "non attivo" else null)

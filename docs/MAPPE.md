@@ -6,6 +6,7 @@ Le mappe della console (Guasti Enel e Copertura) usano **Leaflet** con la mappa 
 |---|---|
 | Leaflet 1.9.4 (`web/vendor/leaflet`) | BSD-2-Clause |
 | protomaps-leaflet 5.1.0 (`web/vendor/protomaps-leaflet`) | BSD-3-Clause |
+| MapLibre GL JS 4.7.1 (`web/vendor/maplibre-gl`, solo vista 3D admin) | BSD-3-Clause |
 | Dati della mappa | © OpenStreetMap contributors (ODbL), build Protomaps |
 
 La ricerca indirizzi e il passaggio GPS → via restano su Nominatim (vedi [DEPLOY.md](DEPLOY.md)).
@@ -56,7 +57,8 @@ Connettori → **Immagini satellitari**: una o più fonti di foto aeree per le m
 - **Chiavi e immagini:** le chiavi sono cifrate sul server e le immagini passano da lì (`/api/admin/map/imagery/...`, solo admin collegati). Nessuna chiave arriva ai browser.
 - **Cache:** il browser dell'admin tiene le immagini per 12 ore; sul server non viene salvato nulla.
 - **Installatori e app:** gli installatori, la mappa nell'app e quella incorporata vedono sempre la mappa base.
-- **Prossimo passo:** vista 3D con il terreno TINITALY a 10 m, i settori degli AP e la linea di vista.
+- **Vista 3D (admin):** in Copertura, dal pannello del collegamento o dalla scheda «Collegamento con…», **Vista 3D** apre a tutto schermo il terreno in rilievo con sopra le foto aeree di Connettori (scelta in alto, ricordata dal browser), la **linea di vista** e il **60% della prima zona di Fresnel** come tubo (azzurro libero, rosso dove terreno, edifici o alberi ci entrano), gli edifici e gli alberi sul percorso, i pali di CPE e AP alle altezze del calcolo e gli altri AP intorno. Viste rapide *Di lato*, *Dalla CPE*, *Dall'AP*, *Dall'alto*; si ruota e inclina con il mouse (tasto destro o Ctrl) o con due dita. Le altezze sono reali; linea, tubo e pali sono allargati in proporzione alla lunghezza del collegamento per restare visibili.
+- **Terreno 3D:** è lo stesso del calcolo di copertura (TINITALY 10 m dove importato, altrimenti SRTM 30 m), servito dal server come piastrelle PNG in codifica Terrarium (`/api/admin/map/terrain/{z}/{x}/{y}`, zoom 10–14, solo admin), tenute in memoria (ultime 400) e rifatte dopo un nuovo import. Senza foto aeree il terreno è mostrato con l'ombreggiatura.
 
 ## Riservatezza per gli installatori
 

@@ -511,3 +511,27 @@ tr:hover > td { background: color-mix(in srgb, var(--brand) 4%, transparent); }
   .link-dock { position: static; margin-top: 8px; box-shadow: none; backdrop-filter: none; }
   .dock-grid { grid-template-columns: 1fr; }
 }
+
+/* Copertura: the link in 3D (MapLibre), full screen over the console */
+.map3d { position: fixed; inset: 0; z-index: 2000; display: flex; flex-direction: column; background: var(--bg); }
+.map3d-bar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 10px 14px; border-bottom: 1px solid var(--line); background: var(--surface); }
+.map3d-bar b { margin-right: 6px; }
+.map3d-views { display: flex; gap: 6px; flex-wrap: wrap; }
+.map3d-bar select { min-height: 32px; width: auto; }
+.map3d-close { margin-left: auto; min-height: 32px; width: 32px; padding: 0; border-radius: 50%; font-size: 1.1rem; }
+.map3d-stage { flex: 1; min-height: 0; position: relative; }
+.map3d-legend { display: flex; gap: 14px; flex-wrap: wrap; padding: 8px 14px; border-top: 1px solid var(--line); background: var(--surface); color: var(--muted); }
+.map3d-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.map3d-legend .sw { width: 14px; height: 10px; border-radius: 3px; display: inline-block; }
+.sw.los { background: #1d4ed8; }
+.sw.ok { background: #38bdf8; opacity: .6; }
+.sw.bad { background: #ef4444; opacity: .7; }
+.sw.bld { background: #9ca3af; }
+.sw.tree { background: #15803d; }
+.sw.ap { background: #2563eb; }
+.sw.cpe { background: #f97316; }
+.map3d-tag { padding: 2px 7px; border-radius: 6px; font: 600 12px/1.4 system-ui, sans-serif; color: #fff; white-space: nowrap; box-shadow: 0 2px 6px rgba(0, 0, 0, .4); transform: translateY(-6px); }
+.map3d-tag.ap { background: #2563eb; }
+.map3d-tag.cpe { background: #f97316; }
+.map3d-tag.other { background: rgba(15, 23, 42, .75); font-weight: 500; }
+.dock-3d { align-self: flex-start; }

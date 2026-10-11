@@ -28,6 +28,12 @@ data class CompassTarget(
     /** AP antenna and installation point altitude, metres a.s.l. */
     val altitude: Double? = null,
     val fromAltitude: Double? = null,
+    /** The AP in UISP (augmented reality: its profile and Fresnel zone). */
+    val apId: String? = null,
+    /** Height of the CPE above the ground: the skyline and the Fresnel zone are seen from there. */
+    val heightM: Double? = null,
+    /** The APs around, drawn as beacons in the augmented reality (the target among them). */
+    val beacons: List<ArBeacon> = emptyList(),
 )
 
 enum class CompassQuality { Good, Fair, Poor }

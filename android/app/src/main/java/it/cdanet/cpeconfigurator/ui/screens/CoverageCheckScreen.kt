@@ -125,7 +125,7 @@ private data class BaseAp(val id: String, val name: String, val lat: Double, val
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
-fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? = null) {
+fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? = null, onAim: ((CompassTarget) -> Unit)? = null) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val admin = c.session.isAdmin
@@ -410,6 +410,17 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                             if (modules["compass"] != false) OutlinedButton(onClick = { los = ap.id }) { Text("Collegamento") }
                             if (admin) OutlinedButton(onClick = { simulate(ap.id) }) { Text("Simula") }
                             if (onCompass != null) OutlinedButton(onClick = { onCompass(CompassTarget(ap.name.ifBlank { ap.id }, ap.bearing, ap.distanceM, p.lat, p.lon)) }) { Text("Bussola") }
+                            // on site: the APs over the camera, the skyline of the terrain and the Fresnel tunnel
+                            if (onAim != null) OutlinedButton(onClick = {
+                                onAim(
+                                    CompassTarget(
+                                        ap.name.ifBlank { ap.id }, ap.bearing, ap.distanceM, p.lat, p.lon,
+                                        apId = ap.id,
+                                        heightM = heightM,
+                                        beacons = result?.aps.orEmpty().map { b -> it.cdanet.cpeconfigurator.field.ArBeacon(b.id, b.name.ifBlank { b.id }, b.bearing.toDouble(), null, b.distanceM, b.estimate?.signalDbm, b.rating) },
+                                    ),
+                                )
+                            }) { Text("Realtà aumentata") }
                         }
                     }
                 }

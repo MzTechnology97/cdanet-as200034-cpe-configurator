@@ -43,7 +43,7 @@ import it.cdanet.cpeconfigurator.ui.Screen
 class Shortcut(val id: String, val title: String, val subtitle: String, @DrawableRes val icon: Int, val area: Area, val dest: Dest)
 
 /** Shown until the account customises its Home (and again with "Ripristina"). */
-val DEFAULT_SHORTCUTS = listOf("cpe", "alignment", "coverage", "near_aps", "lan", "guide")
+val DEFAULT_SHORTCUTS = listOf("cpe", "alignment", "coverage", "near_aps", "ar", "lan", "guide")
 
 /**
  * Every shortcut this account can have now: only features enabled for it, and without login only
@@ -64,6 +64,7 @@ fun shortcutCatalog(m: Map<String, Boolean>, admin: Boolean, offline: Boolean): 
     if (on && "Firmware" in cpe) add(Shortcut("firmware", "Firmware", "Aggiorna la CPE alla versione richiesta", R.drawable.ic_system_update, Area.Field, Dest(Screen.CpeHub, "Firmware")))
     // network
     if (on && m["coverage"] != false) add(Shortcut("coverage", "Verifica copertura", "Un indirizzo è coperto? Prima del sopralluogo", R.drawable.ic_map, Area.Network, Dest(Screen.Coverage)))
+    if (on && m["compass"] != false) add(Shortcut("ar", "Realtà aumentata", "Inquadra il paesaggio: AP, orizzonte e Fresnel da qui", R.drawable.ic_my_location, Area.Network, Dest(Screen.ArLive)))
     if (on && "AP vicini" in net) add(Shortcut("near_aps", "AP vicini", "Sul posto: AP intorno a te, bussola e mirino", R.drawable.ic_explore, Area.Network, Dest(Screen.NetHub, "AP vicini")))
     if (on && "Stato" in net) add(Shortcut("net_status", "Stato rete", "POP e AP raggiungibili, CPE offline", R.drawable.ic_hub, Area.Network, Dest(Screen.NetHub, "Stato")))
     if (on && "IA-AP" in net) add(Shortcut("ia_ap", "IA-AP", "AP e CPE da sistemare: segnale, canali, carico", R.drawable.ic_troubleshoot, Area.Network, Dest(Screen.NetHub, "IA-AP")))

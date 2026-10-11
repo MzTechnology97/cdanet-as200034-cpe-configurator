@@ -1,6 +1,7 @@
 import { api } from '../api.js';
 import { badge, busy, card, field, fmtDate, h, mount, pageHead, table, toast } from '../dom.js';
 import { createMap, drawFresnelLink, fit, legend, pointPicker, popup, simulationOverlay, towards, MAP_COLORS as C } from '../map.js';
+import { openLink3d } from '../map3d.js';
 import { estimateCell, loadCell, orientArrows, osmLink, RATING } from './coverage.js';
 
 /**
@@ -496,6 +497,7 @@ export async function adminCoverageView() {
           capBar,
           e?.signalDbm != null && noise != null ? h('div', { class: 'small muted' }, `SNR atteso ${e.signalDbm - noise} dB`) : null,
           h('div', { class: 'dock-chart' }, profileChart(p)),
+          p.ap.lat != null ? h('button', { type: 'button', class: 'small-btn dock-3d', onclick: () => show3d(p, a) }, 'Vista 3D') : null,
         ),
         h(
           'section',
@@ -518,6 +520,9 @@ export async function adminCoverageView() {
   }
 
   /** Line of sight from the checked point (with the CPE height above) to one AP. */
+  /** The link in 3D: terrain, imagery, line of sight and Fresnel tube, the APs around. */
+  const show3d = (p, a) => openLink3d({ from: [point.la, point.lo], label: point.label?.split(',')[0], p, apName: a.name || a.id, others: allAps });
+
   async function profile(a, btn) {
     if (!point) return;
     const hM = Number(String(height.value).replace(',', '.'));
@@ -537,7 +542,7 @@ export async function adminCoverageView() {
       mount(
         profileBox,
         card(
-          h('div', { class: 'link-head' }, h('h2', {}, `Collegamento con ${a.name}`), badge(verdict[0], verdict[1])),
+          h('div', { class: 'link-head' }, h('h2', {}, `Collegamento con ${a.name}`), badge(verdict[0], verdict[1]), p.ap.lat != null ? h('button', { type: 'button', class: 'small-btn', onclick: () => show3d(p, a) }, 'Vista 3D') : null),
           linkFacts(p, [point.la, point.lo], a.estimate),
           h(
             'p',

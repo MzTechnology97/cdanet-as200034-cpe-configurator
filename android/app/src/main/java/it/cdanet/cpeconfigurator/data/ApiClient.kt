@@ -312,6 +312,9 @@ class ApiClient(
     suspend fun lineOfSight(lat: Double, lon: Double, apId: String, height: Double?): LosDto =
         AppJson.decodeFromString(LosDto.serializer(), request("GET", "/api/pointing/profile?lat=$lat&lon=$lon&apId=${java.net.URLEncoder.encode(apId, "UTF-8")}" + (height?.let { "&height=$it" } ?: "")))
 
+    suspend fun horizon(lat: Double, lon: Double, height: Double?): HorizonDto =
+        AppJson.decodeFromString(HorizonDto.serializer(), request("GET", "/api/pointing/horizon?lat=$lat&lon=$lon" + (height?.let { "&height=$it" } ?: "")))
+
     suspend fun privacy(): PrivacyDto = AppJson.decodeFromString(PrivacyDto.serializer(), request("GET", "/api/privacy"))
 
     suspend fun acceptPrivacy(sha256: String, device: String) {

@@ -5,6 +5,7 @@ import { PmTilesReader } from '../domain/pmtiles.ts';
 import type { AppContext } from '../context.ts';
 import { HttpError } from '../auth.ts';
 import { PROVIDERS } from '../services/imagery.ts';
+import { createTerrainTiles, TERRAIN_MAX_ZOOM, TERRAIN_MIN_ZOOM } from '../services/terrain-tiles.ts';
 
 /**
  * Basemap (Protomaps PMTiles, OpenStreetMap data) served from the data volume. The file is
@@ -129,7 +130,19 @@ export function mapRoutes(app: FastifyInstance, ctx: AppContext) {
   // ---- Aerial imagery (admins only): providers of Connettori through this server, keys never leave it ----
   app.get('/api/admin/map/satellite', { preHandler: ctx.auth.requireAdmin }, async () => {
     const layers = ctx.imagery.layers();
-    return { available: layers.length > 0, layers };
+    const t = ctx.terrain.status();
+    // the 3D map: elevation tiles of the coverage terrain (TINITALY where imported, else SRTM)
+    return { available: layers.length > 0, layers, terrain: { minZoom: TERRAIN_MIN_ZOOM, maxZoom: TERRAIN_MAX_ZOOM, fine: t.dtmTiles > 0 } };
+  });
+
+  const terrainTiles = createTerrainTiles({ sampler: (b) => ctx.terrain.sampler(b), version: () => ctx.terrain.status().updatedAt ?? '0' });
+  app.get('/api/admin/map/terrain/:z/:x/:y', { preHandler: ctx.auth.requireAdmin }, async (req, reply) => {
+    const p = z.object({ z: z.coerce.number().int().min(TERRAIN_MIN_ZOOM).max(TERRAIN_MAX_ZOOM), x: z.coerce.number().int().min(0), y: z.coerce.number().int().min(0) }).parse(req.params);
+    if (p.x >= 2 ** p.z || p.y >= 2 ** p.z) throw new HttpError(400, 'invalid_tile');
+    const png = await terrainTiles.tile(p.z, p.x, p.y);
+    reply.header('Cache-Control', 'private, max-age=86400');
+    if (!png) return reply.code(204).send();
+    return reply.type('image/png').send(png);
   });
 
   app.get('/api/admin/map/imagery/:provider/:part/:z/:x/:y', { preHandler: ctx.auth.requireAdmin }, async (req, reply) => {
