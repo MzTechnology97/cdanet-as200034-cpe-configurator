@@ -70,6 +70,8 @@ export function notificationRoutes(app: FastifyInstance, ctx: AppContext) {
       .union([z.object({ all: z.literal(true) }).strict(), z.object({ ids: z.array(z.number().int().positive()).min(1).max(500) }).strict()])
       .parse(req.body);
     const marked = inbox().markRead(req.user!.id, 'all' in b ? 'all' : b.ids);
+    // the bell of the user's other open consoles
+    if (marked) ctx.live.publish('notifications', [req.user!.id]);
     return { ok: true, marked, unread: inbox().unread(req.user!.id) };
   });
 
