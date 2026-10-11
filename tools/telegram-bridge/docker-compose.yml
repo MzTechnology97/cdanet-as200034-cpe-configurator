@@ -1,0 +1,20 @@
+# Telegram bridge of the team bot: one poller, always on. Token and chats stay in telegram.env on
+# the server (never in the repository), chmod 600: TELEGRAM_BOT_TOKEN, ALLOWED_CHATS (comma),
+# GROUP_CHAT, OWNER_CHAT.
+services:
+  telegram-bridge:
+    image: node:24-alpine
+    container_name: telegram-bridge
+    restart: unless-stopped
+    working_dir: /app
+    command: ['node', 'bridge.mjs']
+    env_file: telegram.env
+    environment:
+      DATA_DIR: /data
+    volumes:
+      - ./bridge.mjs:/app/bridge.mjs:ro
+      - ./cli.mjs:/app/cli.mjs:ro
+      - ./data:/data
+    logging:
+      driver: json-file
+      options: { max-size: 5m, max-file: '3' }
