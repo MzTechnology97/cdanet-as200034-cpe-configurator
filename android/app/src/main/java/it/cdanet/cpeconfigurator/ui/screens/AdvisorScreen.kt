@@ -58,13 +58,14 @@ fun adviceKind(severity: String) = when (severity) {
 
 /**
  * Findings to show, grouped by AP in the server's order (critical first): only the open ones unless
- * [showDismissed], of one severity ("" = all), matching [query] on the AP or CPE name. Pure.
+ * [showDismissed], of one severity ("" = all, "problemi" = critical and to check, as on the web),
+ * matching [query] on the AP or CPE name. Pure.
  */
 fun adviceGroups(findings: List<AdvisorFindingDto>, severity: String, query: String, showDismissed: Boolean): List<Pair<String, List<AdvisorFindingDto>>> {
     val q = query.trim().lowercase()
     return findings
         .filter { showDismissed || it.dismissedUntil == null }
-        .filter { severity.isEmpty() || it.severity == severity }
+        .filter { severity.isEmpty() || it.severity == severity || (severity == "problemi" && it.severity != "info") }
         .filter { q.isEmpty() || it.apName.lowercase().contains(q) || it.cpe?.name.orEmpty().lowercase().contains(q) }
         .groupBy { it.apId }
         .map { (_, fs) -> fs.first().apName to fs.sortedBy { if (it.cpe == null) 0 else 1 } }
@@ -119,7 +120,8 @@ fun AdvisorScreen(c: AppContainer) {
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var info by remember { mutableStateOf<String?>(null) }
-    var severity by rememberSaveable { mutableStateOf("") }
+    // as on the web: the problems first, the suggestions (antennas to set, …) on request
+    var severity by rememberSaveable { mutableStateOf("problemi") }
     var query by rememberSaveable { mutableStateOf("") }
     var showDismissed by rememberSaveable { mutableStateOf(false) }
     var opt by remember { mutableStateOf<OptimizerDto?>(null) }
@@ -189,7 +191,7 @@ fun AdvisorScreen(c: AppContainer) {
             )
             opt?.let { o -> OptimizerCard(o, ::cancelRun) }
             Row(Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                listOf("" to "Tutti", "critico" to "Critici", "attenzione" to "Da guardare", "info" to "Suggerimenti").forEach { (k, l) ->
+                listOf("problemi" to "Problemi", "critico" to "Critici", "attenzione" to "Da guardare", "info" to "Suggerimenti", "" to "Tutti").forEach { (k, l) ->
                     FilterChip(selected = severity == k, onClick = { severity = k }, label = { Text(l) })
                 }
                 FilterChip(selected = showDismissed, onClick = { showDismissed = !showDismissed }, label = { Text("Ignorati") })
