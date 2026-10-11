@@ -53,7 +53,7 @@ export const ROUTES: Array<Route | Group> = [
   { id: 'jobs', label: 'Storico provisioning', icon: 'history', legacy: () => import('../../../web/js/views/jobs.js').then((m) => m.jobsView) },
   { id: 'health', icon: 'monitor_heart', label: 'Salute CPE', installerLabel: 'Le mie CPE', module: 'cpe_health', bottom: true, react: () => import('../pages/Health').then((m) => m.Health) },
   // one CPE managed as in the UISP app (opened from Salute CPE, not in the menu)
-  { id: 'cpe', icon: 'monitor_heart', label: 'CPE', module: 'cpe_health', admin: true, hidden: true, parent: 'health', legacy: () => import('../../../web/js/views/cpe.js').then((m) => m.cpeView) },
+  { id: 'cpe', icon: 'monitor_heart', label: 'Gestione CPE', module: 'cpe_health', admin: true, hidden: true, parent: 'health', react: () => import('../pages/CpeAdmin').then((m) => m.CpeAdmin) },
   { id: 'customers', icon: 'my_location', label: 'Clienti', admin: true, legacy: () => import('../../../web/js/views/customers.js').then((m) => m.customersView) },
   { id: 'stats', icon: 'query_stats', label: 'Statistiche', admin: true, module: 'stats', legacy: () => import('../../../web/js/views/stats.js').then((m) => m.statsView) },
   { id: 'outages', icon: 'power_off', label: 'Guasti Enel', module: 'power_outages', legacy: () => import('../../../web/js/views/outages.js').then((m) => m.outagesView) },

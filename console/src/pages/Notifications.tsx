@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { toast } from '../../../web/js/dom.js';
 import { myTelegramCard } from '../../../web/js/views/my-telegram.js';
 import { api } from '../lib/api';
 import { keys } from '../lib/query';
 import type { PageContext } from '../shell/routes';
-import { AsyncButton, Badge, Button, Card, EmptyState, Icon, Notice, PageHeader, Segmented, Skeleton } from '../ui';
+import { AsyncButton, Badge, Button, Card, Dom, EmptyState, Icon, Notice, PageHeader, Segmented, Skeleton } from '../ui';
 
 /** Notifiche: the NOC's notices (admins) and the outcome of one's installations, live. */
 
@@ -206,16 +206,7 @@ function TelegramPrefs({ admin }: { admin: boolean }) {
           </>
         )}
       </Card>
-      {p?.telegram.available && !p.telegram.linked && <LegacyCard make={() => myTelegramCard({ title: 'Collega Telegram' })} />}
+      {p?.telegram.available && !p.telegram.linked && <Dom make={() => myTelegramCard({ title: 'Collega Telegram' })} />}
     </>
   );
-}
-
-/** A card still made by web/js (DOM), shown as it is. */
-function LegacyCard({ make }: { make: () => Node }) {
-  const host = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    host.current?.replaceChildren(make());
-  }, []);
-  return <div ref={host} />;
 }
