@@ -2,7 +2,7 @@ import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
 import { deflateSync } from 'node:zlib';
 import { CANOPY_LEVEL_PX, CANOPY_URL, CANOPY_ZOOM, createCanopyReader, MIN_TREE_M, quadkey, rasterizeCanopy } from '../src/services/canopy.ts';
-import { obstacleAt } from '../src/services/terrain.ts';
+import { buildProfile, obstacleAt } from '../src/services/terrain.ts';
 import type { TerrainSampler } from '../src/services/terrain-store.ts';
 
 /**
@@ -106,5 +106,22 @@ describe('tree heights (canopy map)', () => {
     assert.deepEqual(obstacleAt({ ...base, canopy: () => null } as TerrainSampler, 37, 14, o), { h: 8, kind: 'alberi' });
     // trees off in the settings
     assert.equal(obstacleAt({ ...base, canopy: () => 18 } as TerrainSampler, 37, 14, { buildingM: 7, treeM: 0 }), null);
+  });
+
+  it('antennas stay at sane heights: no CPE over a 25 m pine, the UISP site height of the AP kept', () => {
+    const o = { buildingM: 8, treeM: 8 };
+    const point = { lat: 37.5, lon: 14.2 };
+    const ap = { lat: 37.53, lon: 14.2, gpsAltitude: null, siteHeight: 10, frequency: 5600 };
+    // a 25 m wood everywhere around both, flat ground at 300 m
+    const at = { fine: true, ground: () => 300, cover: () => 10, building: () => 0, canopy: () => 25 } as TerrainSampler;
+    const p = buildProfile(at, point, 6, ap, 15, o)!;
+    assert.equal(p.from - 300, 10, 'CPE raised at most over an average tree (8 + 2 m)');
+    assert.equal(p.to - 300, 10, 'AP at its UISP site height');
+    // the house of the point: its real roof
+    const house = { ...at, building: (lat: number) => (Math.abs(lat - 37.5) < 1e-4 ? 14 : 0), canopy: () => 0 } as TerrainSampler;
+    assert.equal(buildProfile(house, point, 6, ap, 15, o)!.from - 300, 16, 'CPE 2 m over its own 14 m roof');
+    // AP without site height nor GPS: the default height, raised over the trees around (capped)
+    const noSite = buildProfile(at, point, 6, { ...ap, siteHeight: null }, 15, o)!;
+    assert.equal(noSite.to - 300, 15);
   });
 });

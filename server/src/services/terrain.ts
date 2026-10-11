@@ -114,7 +114,9 @@ export function buildProfile(at: TerrainSampler, point: LatLon, cpeHeightM: numb
   // an antenna among roofs or trees is mounted above them (installers pick a spot that sees out):
   // at least ABOVE_M over the obstacles within AROUND_M, whatever height is set
   const cpeH = obstacles ? Math.max(cpeHeightM, localTop(at, point, obstacles) + ABOVE_M) : cpeHeightM;
-  const apTop = obstacles ? apGround + localTop(at, ap, obstacles) + ABOVE_M : -Infinity;
+  // the AP: its height is the one of the UISP site (or a sane GPS) when known; only the default
+  // height is raised over what stands around it
+  const apTop = obstacles && resolved.from === 'terreno' ? apGround + localTop(at, ap, obstacles) + ABOVE_M : -Infinity;
   return {
     D,
     freq: ap.frequency && ap.frequency > 1000 ? ap.frequency : 5600,
@@ -170,7 +172,12 @@ function localTop(at: TerrainSampler, p: LatLon, o: ObstacleHeights): number {
   let top = 0;
   for (const a of [-1, 0, 1]) {
     for (const b of [-1, 0, 1]) {
-      const h = obstacleAt(at, p.lat + a * dLat, p.lon + b * dLon, o)?.h ?? 0;
+      const ob = obstacleAt(at, p.lat + a * dLat, p.lon + b * dLon, o);
+      // the roof of the building at the point with its real height (the antenna goes on it); the
+      // ones around and the trees only up to the average height: nobody mounts a CPE over the
+      // block of flats next door or a 25 m pine, they stay possible obstacles on the path
+      const own = a === 0 && b === 0 && ob?.kind === 'edificio';
+      const h = ob ? (own ? ob.h : Math.min(ob.h, ob.kind === 'alberi' ? o.treeM : o.buildingM)) : 0;
       if (h > top) top = h;
     }
   }
