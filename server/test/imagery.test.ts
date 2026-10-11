@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { buildApp } from '../src/app.ts';
+import { createSealer } from '../src/crypto.ts';
 import { openDatabase } from '../src/db.ts';
-import { KEY_FORMAT, keyTileUrl, tileBounds3857, wmsTileUrl, WMS_DEFAULT } from '../src/services/imagery.ts';
+import { createImagery, KEY_FORMAT, keyTileUrl, tileBounds3857, tileBoundsDeg, wmsTileUrl, WMS_DEFAULT } from '../src/services/imagery.ts';
 import { ADMIN, testConfig } from './helpers.ts';
 
 const MAPBOX = 'pk.eyJ1IjoiZGVtbyIsImEiOiJ0ZXN0In0.c2VncmV0b2RpcHJvdmE';
@@ -22,8 +23,31 @@ describe('Mappe admin: immagini satellitari da più fonti', () => {
     assert.ok(w.startsWith(`${WMS_DEFAULT.url}&SERVICE=WMS`), w);
     assert.match(w, /CRS=EPSG%3A3857/);
     assert.match(w, /LAYERS=OI\.ORTOIMMAGINI\.2012\.32%2COI\.ORTOIMMAGINI\.2012\.33/);
+    assert.match(w, /FORMAT=image%2Fjpeg/);
+    assert.match(wmsTileUrl(WMS_DEFAULT.url, WMS_DEFAULT.layers, 13, 4419, 3189, true), /FORMAT=image%2Fpng&TRANSPARENT=TRUE/);
+    const [s, wst, n, e] = tileBoundsDeg(1, 1, 0);
+    assert.deepEqual([Math.round(s), wst, Math.round(n), e], [0, 0, 85, 180]);
     assert.ok(KEY_FORMAT.mapbox.test(MAPBOX) && KEY_FORMAT.esri.test(ESRI) && KEY_FORMAT.google.test(GOOGLE));
     assert.ok(!KEY_FORMAT.google.test('abc'));
+  });
+
+  it('AGEA orthophotos: transparent PNG only on the tiles that touch the sea (white in JPEG)', async () => {
+    const db = openDatabase(':memory:');
+    const asked: string[] = [];
+    const seaChecks: number[] = [];
+    const fetchImpl = (async (input: string | URL | Request) => {
+      asked.push(String(input));
+      return jpeg();
+    }) as typeof fetch;
+    // south of 37.0 is sea in this fake terrain
+    const im = createImagery(db, createSealer(Buffer.alloc(32, 7)), { fetchImpl, touchesSea: async ([s]) => (seaChecks.push(s), s < 37) });
+    im.save('wms', { enabled: true }, 1);
+    await im.tile('wms', 'ortofoto', 13, 4419, 3189); // 36.98: sea
+    await im.tile('wms', 'ortofoto', 13, 4420, 3172); // 37.57: inland
+    await im.tile('wms', 'ortofoto', 13, 4419, 3189); // the coast is remembered
+    assert.match(asked[0]!, /FORMAT=image%2Fpng&TRANSPARENT=TRUE/);
+    assert.match(asked[1]!, /FORMAT=image%2Fjpeg/);
+    assert.equal(seaChecks.length, 2);
   });
 
   it('every provider switched on is offered to admins, through the server, keys never sent back', async () => {
