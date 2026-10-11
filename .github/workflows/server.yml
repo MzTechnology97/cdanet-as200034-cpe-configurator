@@ -4,10 +4,10 @@ on:
   push:
     branches: [main, 'rewrite/**']
     tags: ['v*']
-    paths: ['server/**', 'web/**', 'deploy/**', 'VERSION', 'scripts/**', '.github/workflows/server.yml']
+    paths: ['server/**', 'web/**', 'console/**', 'deploy/**', 'VERSION', 'scripts/**', '.github/workflows/server.yml']
   pull_request:
     # tools/ too: the checks are required to merge, a PR touching only tools/ would wait forever
-    paths: ['server/**', 'web/**', 'deploy/**', 'VERSION', 'scripts/**', 'tools/**', '.github/workflows/server.yml']
+    paths: ['server/**', 'web/**', 'console/**', 'deploy/**', 'VERSION', 'scripts/**', 'tools/**', '.github/workflows/server.yml']
   workflow_dispatch:
 
 permissions:
@@ -29,7 +29,9 @@ jobs:
         with:
           node-version: '24'
           cache: npm
-          cache-dependency-path: server/package-lock.json
+          cache-dependency-path: |
+            server/package-lock.json
+            console/package-lock.json
       - run: node scripts/check-version.mjs
       - name: Install
         working-directory: server
@@ -40,6 +42,9 @@ jobs:
       - name: Unit and API tests
         working-directory: server
         run: npm test
+      - name: Web console (typecheck and build)
+        working-directory: console
+        run: npm ci --ignore-scripts && npm run build
       - name: Web console syntax
         run: for f in $(find web/js -name '*.js'); do node --check "$f"; done
       - name: Shell scripts
