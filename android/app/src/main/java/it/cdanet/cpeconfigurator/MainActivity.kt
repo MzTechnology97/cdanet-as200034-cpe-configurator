@@ -5,6 +5,7 @@ import android.os.Build
 import android.os.Bundle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.fragment.app.FragmentActivity
 import it.cdanet.cpeconfigurator.ui.AppRoot
@@ -27,7 +28,11 @@ class MainActivity : FragmentActivity() {
         if (savedInstanceState == null) permissionLauncher.launch(perms.toTypedArray())
         setContent {
             CdaTheme {
-                AppRoot(container)
+                // the background and the text colour of the theme for every screen, also those drawn
+                // outside the Scaffold (update, login, lock, privacy): no black text on the dark theme
+                androidx.compose.material3.Surface(androidx.compose.ui.Modifier.fillMaxSize(), color = androidx.compose.material3.MaterialTheme.colorScheme.background) {
+                    AppRoot(container)
+                }
             }
         }
     }
