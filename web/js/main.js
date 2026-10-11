@@ -1,65 +1,47 @@
 import { api, session } from './api.js';
 import { isOn, loadModules, modulesLoaded, resetModules } from './modules.js';
 import { h, mount, toast } from './dom.js';
-import { accountView } from './views/account.js';
-import { connectorsView } from './views/connectors.js';
-import { coverageView } from './views/coverage.js';
-import { dashboardView } from './views/dashboard.js';
-import { eventsView } from './views/events.js';
-import { healthView } from './views/health.js';
-import { customersView } from './views/customers.js';
-import { jobsView } from './views/jobs.js';
-import { modulesView } from './views/modules-view.js';
-import { outagesView } from './views/outages.js';
-import { serverSettingsView } from './views/server-settings.js';
-import { networkView } from './views/network.js';
 import { notificationsView, unreadCount } from './views/notifications.js';
 import { loginView } from './views/login.js';
-import { myTemplatesView } from './views/mytemplates.js';
-import { profilesView } from './views/profiles.js';
-import { routerosView } from './views/routeros.js';
-import { statsView } from './views/stats.js';
-import { usersView } from './views/users.js';
-import { wirelessView } from './views/wireless.js';
-import { adminGuideView } from './views/guide.js';
-import { workOrdersView } from './views/work-orders.js';
-import { firmwareView } from './views/firmware.js';
-import { privacyView } from './views/privacy.js';
-import { cpeView } from './views/cpe.js';
-import { advisorView } from './views/advisor.js';
 import { setAdmin } from './terms.js';
 import { icon } from './icons.js';
 
+/**
+ * A page loaded only when it is opened (its module and what it imports): the console starts with
+ * the shell, login and notifications, not with the code of every page.
+ */
+const page = (file, name) => (ctx) => import(`./views/${file}.js`).then((m) => m[name](ctx));
+
 const ROUTES = [
   { group: 'Operatività' },
-  { id: 'dashboard', label: 'Panoramica', icon: 'home', view: dashboardView, admin: true },
+  { id: 'dashboard', label: 'Panoramica', icon: 'home', view: page('dashboard', 'dashboardView'), admin: true },
   { id: 'notifications', label: 'Notifiche', icon: 'notifications', view: notificationsView },
-  { id: 'work-orders', icon: 'pending_actions', label: 'Interventi', installerLabel: 'I miei interventi', view: workOrdersView, module: 'work_orders' },
-  { id: 'jobs', label: 'Storico provisioning', icon: 'history', view: jobsView },
-  { id: 'health', icon: 'monitor_heart', label: 'Salute CPE', installerLabel: 'Le mie CPE', view: healthView, module: 'cpe_health' },
+  { id: 'work-orders', icon: 'pending_actions', label: 'Interventi', installerLabel: 'I miei interventi', view: page('work-orders', 'workOrdersView'), module: 'work_orders' },
+  { id: 'jobs', label: 'Storico provisioning', icon: 'history', view: page('jobs', 'jobsView') },
+  { id: 'health', icon: 'monitor_heart', label: 'Salute CPE', installerLabel: 'Le mie CPE', view: page('health', 'healthView'), module: 'cpe_health' },
   // one CPE managed as in the UISP app (opened from Salute CPE, not in the menu)
-  { id: 'cpe', icon: 'monitor_heart', label: 'CPE', view: cpeView, module: 'cpe_health', admin: true, hidden: true, parent: 'health' },
-  { id: 'customers', icon: 'my_location', label: 'Clienti', view: customersView, admin: true },
-  { id: 'stats', icon: 'query_stats', label: 'Statistiche', view: statsView, admin: true, module: 'stats' },
-  { id: 'outages', icon: 'power_off', label: 'Guasti Enel', view: outagesView, module: 'power_outages' },
-  { id: 'network', icon: 'hub', label: 'Stato rete', view: networkView, module: 'network_status' },
-  { id: 'ia-ap', icon: 'troubleshoot', label: 'IA-AP', view: advisorView, admin: true },
-  { id: 'mytemplates', icon: 'memory', label: 'Template disponibili', view: myTemplatesView, installer: true },
-  { id: 'coverage', icon: 'explore', label: 'Copertura', view: coverageView, module: 'coverage' },
-  { id: 'routeros', icon: 'router', label: 'MikroTik · RouterOS', view: routerosView, module: 'routeros' },
+  { id: 'cpe', icon: 'monitor_heart', label: 'CPE', view: page('cpe', 'cpeView'), module: 'cpe_health', admin: true, hidden: true, parent: 'health' },
+  { id: 'customers', icon: 'my_location', label: 'Clienti', view: page('customers', 'customersView'), admin: true },
+  { id: 'stats', icon: 'query_stats', label: 'Statistiche', view: page('stats', 'statsView'), admin: true, module: 'stats' },
+  { id: 'outages', icon: 'power_off', label: 'Guasti Enel', view: page('outages', 'outagesView'), module: 'power_outages' },
+  { id: 'network', icon: 'hub', label: 'Stato rete', view: page('network', 'networkView'), module: 'network_status' },
+  { id: 'ia-ap', icon: 'troubleshoot', label: 'IA-AP', view: page('advisor', 'advisorView'), admin: true },
+  { id: 'mytemplates', icon: 'memory', label: 'Template disponibili', view: page('mytemplates', 'myTemplatesView'), installer: true },
+  { id: 'coverage', icon: 'explore', label: 'Copertura', view: page('coverage', 'coverageView'), module: 'coverage' },
+  { id: 'routeros', icon: 'router', label: 'MikroTik · RouterOS', view: page('routeros', 'routerosView'), module: 'routeros' },
   { group: 'Amministrazione', admin: true },
-  { id: 'users', icon: 'person', label: 'Account', view: usersView, admin: true },
-  { id: 'wireless', icon: 'wifi_find', label: 'Reti Wi-Fi (WPA2)', view: wirelessView, admin: true },
-  { id: 'profiles', icon: 'settings_input_antenna', label: 'Profili airOS', view: profilesView, admin: true },
-  { id: 'firmware', icon: 'system_update', label: 'Firmware airOS', view: firmwareView, admin: true, module: 'firmware_upgrade' },
-  { id: 'connectors', icon: 'link', label: 'Connettori', view: connectorsView, admin: true },
-  { id: 'server', icon: 'dns', label: 'Impostazioni server', view: serverSettingsView, admin: true },
-  { id: 'modules', icon: 'handyman', label: 'Funzionalità', view: (ctx) => modulesView({ ...ctx, onChange: () => renderChrome(session.get()?.user) }), admin: true },
-  { id: 'privacy', icon: 'lock', label: 'Informativa privacy', view: privacyView, admin: true },
-  { id: 'events', icon: 'manage_search', label: 'Registro attività', view: eventsView, admin: true },
-  { id: 'admin-guide', icon: 'menu_book', label: 'Guida amministratore', view: adminGuideView, admin: true },
+  { id: 'users', icon: 'person', label: 'Account', view: page('users', 'usersView'), admin: true },
+  { id: 'wireless', icon: 'wifi_find', label: 'Reti Wi-Fi (WPA2)', view: page('wireless', 'wirelessView'), admin: true },
+  { id: 'profiles', icon: 'settings_input_antenna', label: 'Profili airOS', view: page('profiles', 'profilesView'), admin: true },
+  { id: 'firmware', icon: 'system_update', label: 'Firmware airOS', view: page('firmware', 'firmwareView'), admin: true, module: 'firmware_upgrade' },
+  { id: 'connectors', icon: 'link', label: 'Connettori', view: page('connectors', 'connectorsView'), admin: true },
+  { id: 'server', icon: 'dns', label: 'Impostazioni server', view: page('server-settings', 'serverSettingsView'), admin: true },
+  { id: 'modules', icon: 'handyman', label: 'Funzionalità', view: (ctx) => import('./views/modules-view.js').then((m) => m.modulesView({ ...ctx, onChange: () => renderChrome(session.get()?.user) })), admin: true },
+  { id: 'privacy', icon: 'lock', label: 'Informativa privacy', view: page('privacy', 'privacyView'), admin: true },
+  { id: 'events', icon: 'manage_search', label: 'Registro attività', view: page('events', 'eventsView'), admin: true },
+  { id: 'admin-guide', icon: 'menu_book', label: 'Guida amministratore', view: page('guide', 'adminGuideView'), admin: true },
   { group: 'Profilo' },
-  { id: 'account', icon: 'lock', label: 'Il mio account', view: accountView },
+  { id: 'account', icon: 'lock', label: 'Il mio account', view: page('account', 'accountView') },
   // static page, also opened by the app: same guide for installers and admins
   { id: 'guide', icon: 'menu_book', label: 'Guida installatore', href: '/wiki/' },
 ];
