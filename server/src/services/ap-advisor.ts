@@ -148,6 +148,8 @@ export function createAdvisor(ctx: AppContext, log?: (m: string) => void) {
       const since: Record<string, string> = {};
       for (const f of findings) since[f.id] = prev.since[f.id] ?? now;
       write(KEY, { at: now, findings, since } satisfies Stored);
+      // the IA-AP pages open in the admins' consoles show the new analysis
+      ctx.live?.publish('advisor', 'admins');
       // the NOC hears about the critical findings it was not told about in the last week (a finding
       // that disappears for an hour and comes back is not news), never about the dismissed ones
       const dismissed = read<Record<string, string>>(DISMISSED, {});
