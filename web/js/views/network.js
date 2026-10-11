@@ -1,250 +1,19 @@
 import { api } from '../api.js';
-import { badge, card, fmtDate, h, mount, pageHead, stat, toast } from '../dom.js';
+import { toast } from '../dom.js';
 import { createMap, fit, popup, towards } from '../map.js';
+import { Fragment, html, reactView, useEffect, useMemo, useRef, useState } from '../react.js';
 import { nms } from '../terms.js';
+import { Badge, Card, fmtDate, Notice, PageHead } from '../ui.js';
 
 const STATE = { ok: ['in funzione', 'good'], degraded: ['molte CPE offline', 'warn'], down: ['non raggiungibile', 'bad'] };
 const OFFLINE = { none: null, some: 'alcune CPE offline', many: 'molte CPE offline' };
 const STATE_COLOR = { ok: '#14b8a6', degraded: '#f59e0b', down: '#dc2626' };
+const ALL = ['ok', 'degraded', 'down'];
 const km = (m) => (m < 1000 ? `${m} m` : `${(m / 1000).toFixed(1).replace('.', ',')} km`);
 
 const ORDER = { down: 0, degraded: 1, ok: 2 };
 const byState = (a, b) => ORDER[a.state] - ORDER[b.state] || a.name.localeCompare(b.name, 'it', { numeric: true });
-
-/**
- * Filters shared by the map and the list: which AP states to show and a text search. The element
- * stays on the page across the refreshes (the list is rebuilt every minute, the filters are not).
- */
-function netFilters(onChange) {
-  const shown = new Set(['ok', 'degraded', 'down']);
-  const counts = { ok: 0, degraded: 0, down: 0 };
-  const search = h('input', { type: 'search', class: 'grow', placeholder: 'Cerca POP, AP o SSID' });
-  const chips = h('div', { class: 'state-chips' });
-  const drawChips = () =>
-    mount(
-      chips,
-      Object.keys(STATE).map((k) => {
-        const dot = h('i', { class: 'dot' });
-        dot.style.background = STATE_COLOR[k];
-        return h(
-          'button',
-          {
-            type: 'button',
-            class: `state-chip${shown.has(k) ? ' on' : ''}`,
-            'aria-pressed': shown.has(k) ? 'true' : 'false',
-            title: shown.has(k) ? 'Nascondi questi AP' : 'Mostra questi AP',
-            onclick: () => {
-              shown.has(k) ? shown.delete(k) : shown.add(k);
-              drawChips();
-              onChange();
-            },
-          },
-          dot,
-          STATE[k][0],
-          h('span', { class: 'count' }, String(counts[k])),
-        );
-      }),
-    );
-  search.addEventListener('input', () => onChange());
-  drawChips();
-  return {
-    search,
-    chips,
-    shown,
-    show: (k) => (shown.add(k), drawChips()),
-    query: () => search.value.trim().toLowerCase(),
-    setCounts(d) {
-      for (const k of Object.keys(counts)) counts[k] = 0;
-      for (const a of [...d.pops.flatMap((p) => p.aps), ...d.apsWithoutPop]) counts[a.state]++;
-      drawChips();
-    },
-  };
-}
-
 const apText = (a, popName) => `${a.name} ${a.ssid ?? ''} ${popName ?? ''}`.toLowerCase();
-
-/**
- * Admins: every POP and AP on the map, coloured by state. One click on an AP shows its details,
- * a double click opens (or closes) the sector already served by its customers; several sectors
- * can stay open together. Built once; each refresh redraws without moving the view.
- */
-function networkMap(filters, onSectors) {
-  const el = h('div', { class: 'map map-tall' });
-  const note = h('p', { class: 'small muted' });
-  const open = new Set();
-  const reset = h('button', { type: 'button', disabled: true, onclick: () => (open.clear(), render()) }, 'Chiudi tutti i fasci');
-  const byId = new Map();
-  let map = null;
-  let markerLayer = null;
-  let wedgeLayer = null;
-  let fitted = false;
-  let data = null;
-  let popupId = null;
-  let clickTimer = null;
-  let lastOpen = '';
-
-  const box = card(
-    h('h2', {}, 'Mappa della rete'),
-    h('div', { class: 'map-tools' }, filters.search, filters.chips, reset),
-    el,
-    h('p', { class: 'small muted' }, 'Clic su un AP: informazioni. Doppio clic: apre o chiude il fascio dei clienti già serviti (puoi aprirne più di uno).'),
-    note,
-  );
-
-  const apPopup = (a, popName) =>
-    popup(
-      a.name,
-      a.ssid && a.ssid !== a.name ? a.ssid : null,
-      popName ? `POP ${popName}` : 'AP senza POP',
-      STATE[a.state][0],
-      a.cpe ? `CPE ${a.cpe.total - a.cpe.offline}/${a.cpe.total} online` : null,
-      pppoeText(a),
-      a.model,
-      a.served?.servedM ? `settore ${a.served.width}° verso ${a.served.center}°, clienti fino a ${km(a.served.servedM)}` : 'nessun fascio: mancano clienti con posizione',
-      a.locationFrom === 'pop' ? 'posizione del POP (l’AP non ne ha una sua)' : null,
-      a.powerOutage ? 'guasto Enel vicino' : null,
-    );
-
-  function showPopup(id) {
-    const hit = byId.get(id);
-    if (!hit || !map) return;
-    popupId = id;
-    window.L.popup({ autoPan: true }).setLatLng(hit.latlng).setContent(hit.content()).openOn(map);
-  }
-
-  function toggle(id) {
-    const hit = byId.get(id);
-    if (!hit?.served) return void toast('Questo AP non ha ancora un fascio: mancano clienti con posizione.');
-    open.has(id) ? open.delete(id) : open.add(id);
-    render();
-  }
-
-  /** Redraws markers and open sectors from the last data, with the current filters. */
-  function render() {
-    if (!map || !data) return;
-    const L = window.L;
-    markerLayer.clearLayers();
-    wedgeLayer.clearLayers();
-    byId.clear();
-    const pts = [];
-    let missing = 0;
-    let hidden = 0;
-    const q = filters.query();
-    const ap = (a, popName) => {
-      if (a.lat == null || a.lon == null) return void missing++;
-      if (!filters.shown.has(a.state) || (q && !apText(a, popName).includes(q))) return void hidden++;
-      const color = STATE_COLOR[a.state];
-      const id = `ap:${a.id}`;
-      if (open.has(id) && a.served?.servedM) {
-        const wedge = [[a.lat, a.lon]];
-        for (let i = 0; i <= 24; i++) wedge.push(towards(a.lat, a.lon, a.served.center - a.served.width / 2 + (a.served.width * i) / 24, a.served.servedM));
-        L.polygon(wedge, { color, weight: 1.5, fillOpacity: 0.14, dashArray: '4 5', interactive: false }).addTo(wedgeLayer);
-      }
-      const m = L.circleMarker([a.lat, a.lon], { radius: open.has(id) ? 8 : 6, color, weight: open.has(id) ? 3 : 2, fillOpacity: 0.9, bubblingMouseEvents: false })
-        .bindTooltip(a.name)
-        .addTo(markerLayer);
-      // one click: details (after a short wait, so that a double click does not open them too)
-      m.on('click', () => {
-        clearTimeout(clickTimer);
-        clickTimer = setTimeout(() => showPopup(id), 260);
-      });
-      m.on('dblclick', (e) => {
-        L.DomEvent.stop(e);
-        clearTimeout(clickTimer);
-        toggle(id);
-      });
-      byId.set(id, { latlng: m.getLatLng(), served: !!a.served?.servedM, content: () => apPopup(a, popName), state: a.state });
-      pts.push(m);
-    };
-    for (const p of data.pops) {
-      if (p.lat != null && p.lon != null && (!q || `pop ${p.name}`.toLowerCase().includes(q) || p.aps.some((a) => apText(a, p.name).includes(q)))) {
-        const id = `pop:${p.id}`;
-        const m = L.circleMarker([p.lat, p.lon], { radius: 10, color: STATE_COLOR[p.state], weight: 3, fillColor: '#ffffff', fillOpacity: 1, bubblingMouseEvents: false })
-          .bindTooltip(`POP ${p.name}`)
-          .on('click', () => showPopup(id))
-          .on('dblclick', (e) => L.DomEvent.stop(e))
-          .addTo(markerLayer);
-        byId.set(id, { latlng: m.getLatLng(), content: () => popup(`POP ${p.name}`, `${p.aps.length} AP`, STATE[p.state][0], p.powerOutage ? 'guasto Enel vicino' : null) });
-        pts.push(m);
-      }
-      for (const a of p.aps) ap(a, p.name);
-    }
-    for (const a of data.apsWithoutPop) ap(a, null);
-    // sectors of APs no longer on the map (removed in UISP) are forgotten
-    for (const id of open) if (!data.pops.some((p) => p.aps.some((a) => `ap:${a.id}` === id)) && !data.apsWithoutPop.some((a) => `ap:${a.id}` === id)) open.delete(id);
-    reset.disabled = open.size === 0;
-    reset.textContent = open.size ? `Chiudi tutti i fasci (${open.size})` : 'Chiudi tutti i fasci';
-    if (String([...open]) !== lastOpen) ((lastOpen = String([...open])), onSectors());
-    note.textContent = [
-      `${pts.length} punti sulla mappa`,
-      hidden ? `${hidden} AP nascosti dai filtri` : null,
-      missing ? `${missing} AP senza posizione (correggila nel gestionale)` : null,
-    ]
-      .filter(Boolean)
-      .join(' · ')
-      .concat('. Cerchio bianco: POP; punti: AP.');
-    if (!fitted && pts.length) (fit(map, pts), (fitted = true));
-    // the details of a point the filters just hid make no sense any more
-    if (popupId && !byId.has(popupId)) map.closePopup();
-  }
-
-  async function draw(d) {
-    data = d;
-    if (!map) {
-      // the view is put on the page after its first load: Leaflet needs a laid out container
-      for (let i = 0; i < 60 && !el.isConnected; i++) await new Promise((r) => setTimeout(r, 50));
-      map = await createMap(el, { zoom: 10 });
-      if (!map) return;
-      // Leaflet is loaded by createMap: read it only now
-      wedgeLayer = window.L.layerGroup().addTo(map);
-      markerLayer = window.L.layerGroup().addTo(map);
-      map.on('popupclose', () => (popupId = null));
-      // the container got its final width after the map was created: no grey band on the right
-      setTimeout(() => map.invalidateSize(), 200);
-    }
-    render();
-  }
-
-  /** From the list: centre the AP, show its details and, if asked, open its sector. */
-  function focus(id, sector = false) {
-    if (!map) return;
-    const hit = byId.get(id);
-    if (!hit) return void toast('L’AP è nascosto dai filtri o non ha una posizione.');
-    if (sector && hit.served && !open.has(id)) (open.add(id), render());
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-    map.setView(hit.latlng, Math.max(map.getZoom(), 13));
-    showPopup(id);
-  }
-
-  function jump() {
-    const q = filters.query();
-    if (!q || !map) return;
-    const all = [...byId.entries()];
-    const hit = all.find(([id]) => id.startsWith('ap:')) ?? all[0];
-    if (hit) (map.setView(hit[1].latlng, 14), showPopup(hit[0]));
-  }
-
-  return { box, draw, render, focus, jump, isOpen: (id) => open.has(id), toggle };
-}
-
-/** CPE online over total, as a small bar (green, amber below 70%, red below 40%). */
-function cpeBar(a) {
-  if (!a.cpe) return OFFLINE[a.cpeOffline] ? h('span', { class: 'small' }, OFFLINE[a.cpeOffline]) : h('span', { class: 'muted' }, '—');
-  const online = a.cpe.total - a.cpe.offline;
-  const ratio = a.cpe.total ? online / a.cpe.total : 1;
-  const bar = h('i');
-  bar.style.width = `${Math.round(ratio * 100)}%`;
-  bar.style.background = ratio >= 0.7 ? STATE_COLOR.ok : ratio >= 0.4 ? STATE_COLOR.degraded : STATE_COLOR.down;
-  const pppoe = pppoeText(a);
-  return h(
-    'span',
-    { class: 'cpe-cell' },
-    h('span', { class: 'cpe-bar' }, bar),
-    h('span', { class: 'small' }, `${online}/${a.cpe.total}`),
-    // admins with the CRM: PPPoE sessions of the CPEs of the AP
-    pppoe ? h('span', { class: `small ${a.pppoe.offline ? 'bad-text' : 'muted'}`, title: 'Sessioni PPPoE dal RADIUS' }, ` · ${pppoe}`) : null,
-  );
-}
 
 /** "PPPoE 12 online · 2 offline · 1 sospeso" (admins, CRM connected), null otherwise. */
 function pppoeText(a) {
@@ -256,143 +25,338 @@ function pppoeText(a) {
   return `PPPoE ${parts.join(' · ')}`;
 }
 
-/** "Stato rete": POPs and APs (installers: the assigned ones), refreshed every minute. No notifications. */
-export async function networkView({ user }) {
-  const admin = user.role === 'admin';
-  const out = h('div', {}, h('p', { class: 'muted' }, 'Caricamento…'));
-  const summaryBox = h('div', {});
-  const listBox = h('div', {});
-  let data = null;
-  const filters = netFilters(() => {
-    netMap?.render();
-    if (data) drawList(data);
-  });
-  // the list follows the sectors opened or closed on the map
-  const netMap = admin ? networkMap(filters, () => data && drawList(data)) : null;
-  filters.search.addEventListener('keydown', (e) => e.key === 'Enter' && netMap?.jump());
-  // installers have no map: the filters go above their list
-  const listTools = admin ? null : h('div', { class: 'map-tools' }, filters.search, filters.chips);
-  let timer = null;
+const apPopup = (a, popName) =>
+  popup(
+    a.name,
+    a.ssid && a.ssid !== a.name ? a.ssid : null,
+    popName ? `POP ${popName}` : 'AP senza POP',
+    STATE[a.state][0],
+    a.cpe ? `CPE ${a.cpe.total - a.cpe.offline}/${a.cpe.total} online` : null,
+    pppoeText(a),
+    a.model,
+    a.served?.servedM ? `settore ${a.served.width}° verso ${a.served.center}°, clienti fino a ${km(a.served.servedM)}` : 'nessun fascio: mancano clienti con posizione',
+    a.locationFrom === 'pop' ? 'posizione del POP (l’AP non ne ha una sua)' : null,
+    a.powerOutage ? 'guasto Enel vicino' : null,
+  );
 
-  function drawList(d) {
-    const q = filters.query();
-    const groups = [...d.pops, ...(d.apsWithoutPop.length ? [{ id: null, name: 'AP senza POP', state: null, powerOutage: false, aps: d.apsWithoutPop }] : [])]
+/** CPE online over total, as a small bar (green, amber below 70%, red below 40%). */
+function CpeBar({ a }) {
+  if (!a.cpe) return OFFLINE[a.cpeOffline] ? html`<span class="small">${OFFLINE[a.cpeOffline]}</span>` : html`<span class="muted">—</span>`;
+  const online = a.cpe.total - a.cpe.offline;
+  const ratio = a.cpe.total ? online / a.cpe.total : 1;
+  const pppoe = pppoeText(a);
+  return html`
+    <span class="cpe-cell">
+      <span class="cpe-bar"><i style=${{ width: `${Math.round(ratio * 100)}%`, background: ratio >= 0.7 ? STATE_COLOR.ok : ratio >= 0.4 ? STATE_COLOR.degraded : STATE_COLOR.down }}></i></span>
+      <span class="small">${online}/${a.cpe.total}</span>
+      ${pppoe ? html`<span class=${`small ${a.pppoe.offline ? 'bad-text' : 'muted'}`} title="Sessioni PPPoE dal RADIUS"> · ${pppoe}</span>` : null}
+    </span>
+  `;
+}
+
+/** The state filters: one chip per state with its count; at least one stays on. */
+const StateChips = ({ shown, counts, onToggle }) => html`
+  <div class="state-chips">
+    ${ALL.map(
+      (k) => html`
+        <button key=${k} type="button" class=${`state-chip${shown.has(k) ? ' on' : ''}`} aria-pressed=${shown.has(k) ? 'true' : 'false'} title=${shown.has(k) ? 'Nascondi questi AP' : 'Mostra questi AP'} onClick=${() => onToggle(k)}>
+          <i class="dot" style=${{ background: STATE_COLOR[k] }}></i>${STATE[k][0]}<span class="count">${counts[k]}</span>
+        </button>
+      `,
+    )}
+  </div>
+`;
+
+/**
+ * Admins: every POP and AP on the map, coloured by state. One click on an AP shows its details,
+ * a double click opens (or closes) the sector already served by its customers; several sectors
+ * can stay open together. The map is created once; each refresh redraws without moving the view.
+ * [api] (a ref) receives focus(id, sector) for the list.
+ */
+function NetworkMap({ data, shown, q, open, setOpen, apiRef, tools }) {
+  const el = useRef(null);
+  const ctl = useRef(Promise.resolve(null));
+  const byId = useRef(new Map());
+  const popupId = useRef(null);
+  const fitted = useRef(false);
+  const [note, setNote] = useState('');
+
+  useEffect(() => {
+    let gone = false;
+    const ready = createMap(el.current, { zoom: 10 }).then((map) => {
+      if (!map || gone) return null;
+      const L = window.L;
+      const c = { map, L, wedges: L.layerGroup().addTo(map), markers: L.layerGroup().addTo(map), clickTimer: null };
+      map.on('popupclose', () => (popupId.current = null));
+      setTimeout(() => map.invalidateSize(), 200);
+      return c;
+    });
+    ctl.current = ready;
+    return () => {
+      gone = true;
+      ready.then((c) => c?.map.remove()).catch(() => {});
+    };
+  }, []);
+
+  const showPopup = (c, id) => {
+    const hit = byId.current.get(id);
+    if (!hit) return;
+    popupId.current = id;
+    c.L.popup({ autoPan: true }).setLatLng(hit.latlng).setContent(hit.content()).openOn(c.map);
+  };
+  const toggle = (id) => {
+    const hit = byId.current.get(id);
+    if (!hit?.served) return void toast('Questo AP non ha ancora un fascio: mancano clienti con posizione.');
+    setOpen((s) => {
+      const n = new Set(s);
+      n.has(id) ? n.delete(id) : n.add(id);
+      return n;
+    });
+  };
+
+  // markers and open sectors from the last data, with the current filters
+  useEffect(() => {
+    if (!data) return;
+    void ctl.current.then((c) => {
+      if (!c) return;
+      const { L } = c;
+      c.markers.clearLayers();
+      c.wedges.clearLayers();
+      byId.current.clear();
+      const pts = [];
+      let missing = 0;
+      let hidden = 0;
+      const ap = (a, popName) => {
+        if (a.lat == null || a.lon == null) return void missing++;
+        if (!shown.has(a.state) || (q && !apText(a, popName).includes(q))) return void hidden++;
+        const color = STATE_COLOR[a.state];
+        const id = `ap:${a.id}`;
+        if (open.has(id) && a.served?.servedM) {
+          const wedge = [[a.lat, a.lon]];
+          for (let i = 0; i <= 24; i++) wedge.push(towards(a.lat, a.lon, a.served.center - a.served.width / 2 + (a.served.width * i) / 24, a.served.servedM));
+          L.polygon(wedge, { color, weight: 1.5, fillOpacity: 0.14, dashArray: '4 5', interactive: false }).addTo(c.wedges);
+        }
+        const m = L.circleMarker([a.lat, a.lon], { radius: open.has(id) ? 8 : 6, color, weight: open.has(id) ? 3 : 2, fillOpacity: 0.9, bubblingMouseEvents: false })
+          .bindTooltip(a.name)
+          .addTo(c.markers);
+        // one click: details (after a short wait, so that a double click does not open them too)
+        m.on('click', () => {
+          clearTimeout(c.clickTimer);
+          c.clickTimer = setTimeout(() => showPopup(c, id), 260);
+        });
+        m.on('dblclick', (e) => {
+          L.DomEvent.stop(e);
+          clearTimeout(c.clickTimer);
+          toggle(id);
+        });
+        byId.current.set(id, { latlng: m.getLatLng(), served: !!a.served?.servedM, content: () => apPopup(a, popName) });
+        pts.push(m);
+      };
+      for (const p of data.pops) {
+        if (p.lat != null && p.lon != null && (!q || `pop ${p.name}`.toLowerCase().includes(q) || p.aps.some((a) => apText(a, p.name).includes(q)))) {
+          const id = `pop:${p.id}`;
+          const m = L.circleMarker([p.lat, p.lon], { radius: 10, color: STATE_COLOR[p.state], weight: 3, fillColor: '#ffffff', fillOpacity: 1, bubblingMouseEvents: false })
+            .bindTooltip(`POP ${p.name}`)
+            .on('click', () => showPopup(c, id))
+            .on('dblclick', (e) => L.DomEvent.stop(e))
+            .addTo(c.markers);
+          byId.current.set(id, { latlng: m.getLatLng(), content: () => popup(`POP ${p.name}`, `${p.aps.length} AP`, STATE[p.state][0], p.powerOutage ? 'guasto Enel vicino' : null) });
+          pts.push(m);
+        }
+        for (const a of p.aps) ap(a, p.name);
+      }
+      for (const a of data.apsWithoutPop) ap(a, null);
+      setNote(
+        [`${pts.length} punti sulla mappa`, hidden ? `${hidden} AP nascosti dai filtri` : null, missing ? `${missing} AP senza posizione (correggila nel gestionale)` : null]
+          .filter(Boolean)
+          .join(' · ')
+          .concat('. Cerchio bianco: POP; punti: AP.'),
+      );
+      if (!fitted.current && pts.length) {
+        fit(c.map, pts);
+        fitted.current = true;
+      }
+      // the details of a point the filters just hid make no sense any more
+      if (popupId.current && !byId.current.has(popupId.current)) c.map.closePopup();
+    });
+  }, [data, shown, q, open]);
+
+  // for the list and the search box: centre an AP, show its details, open its sector if asked
+  apiRef.current = {
+    focus: async (id, sector = false) => {
+      const c = await ctl.current;
+      const hit = byId.current.get(id);
+      if (!c) return;
+      if (!hit) return void toast('L’AP è nascosto dai filtri o non ha una posizione.');
+      if (sector && hit.served && !open.has(id)) setOpen((s) => new Set([...s, id]));
+      el.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      c.map.setView(hit.latlng, Math.max(c.map.getZoom(), 13));
+      showPopup(c, id);
+    },
+    jump: async () => {
+      const c = await ctl.current;
+      if (!q || !c) return;
+      const all = [...byId.current.entries()];
+      const hit = all.find(([id]) => id.startsWith('ap:')) ?? all[0];
+      if (hit) {
+        c.map.setView(hit[1].latlng, 14);
+        showPopup(c, hit[0]);
+      }
+    },
+    toggle,
+  };
+
+  return html`
+    <${Card}>
+      <h2>Mappa della rete</h2>
+      <div class="map-tools">
+        ${tools}
+        <button type="button" disabled=${open.size === 0} onClick=${() => setOpen(new Set())}>${open.size ? `Chiudi tutti i fasci (${open.size})` : 'Chiudi tutti i fasci'}</button>
+      </div>
+      <div class="map map-tall" ref=${el}></div>
+      <p class="small muted">Clic su un AP: informazioni. Doppio clic: apre o chiude il fascio dei clienti già serviti (puoi aprirne più di uno).</p>
+      <p class="small muted">${note}</p>
+    <//>
+  `;
+}
+
+/** "Stato rete": POPs and APs (installers: the assigned ones), refreshed every minute. No notifications. */
+function NetworkPage({ admin }) {
+  const [data, setData] = useState(null);
+  const [error, setError] = useState('');
+  const [shown, setShown] = useState(() => new Set(ALL));
+  const [query, setQuery] = useState('');
+  const [open, setOpen] = useState(() => new Set());
+  const mapApi = useRef(null);
+  const q = query.trim().toLowerCase();
+
+  useEffect(() => {
+    const load = () =>
+      api('/api/network/status')
+        .then((d) => (setData(d), setError('')))
+        .catch((e) => setError(e.message));
+    void load();
+    const t = setInterval(load, 60_000);
+    return () => clearInterval(t);
+  }, []);
+  // sectors of APs no longer on the map (removed in UISP) are forgotten
+  useEffect(() => {
+    if (!data || !open.size) return;
+    const ids = new Set([...data.pops.flatMap((p) => p.aps), ...data.apsWithoutPop].map((a) => `ap:${a.id}`));
+    if ([...open].some((id) => !ids.has(id))) setOpen(new Set([...open].filter((id) => ids.has(id))));
+  }, [data]);
+
+  const counts = useMemo(() => {
+    const c = { ok: 0, degraded: 0, down: 0 };
+    if (data) for (const a of [...data.pops.flatMap((p) => p.aps), ...data.apsWithoutPop]) c[a.state]++;
+    return c;
+  }, [data]);
+  const toggleState = (k) =>
+    setShown((s) => {
+      const n = new Set(s);
+      n.has(k) ? n.delete(k) : n.add(k);
+      return n.size ? n : new Set(ALL);
+    });
+  // a counter of the summary shows only that state; again, all of them
+  const only = (k) => setShown((s) => (s.size === 1 && s.has(k) ? new Set(ALL) : new Set([k])));
+
+  const groups = useMemo(() => {
+    if (!data) return [];
+    return [...data.pops, ...(data.apsWithoutPop.length ? [{ id: null, name: 'AP senza POP', state: null, powerOutage: false, aps: data.apsWithoutPop }] : [])]
       .map((p) => {
         const popHit = q && `pop ${p.name}`.toLowerCase().includes(q);
-        const aps = p.aps.filter((a) => filters.shown.has(a.state) && (!q || popHit || apText(a, p.name).includes(q))).sort(byState);
+        const aps = p.aps.filter((a) => shown.has(a.state) && (!q || popHit || apText(a, p.name).includes(q))).sort(byState);
         return { p, aps, popHit };
       })
       .filter(({ p, aps, popHit }) => aps.length || (!p.aps.length && (!q || popHit)));
-    const total = groups.reduce((n, g) => n + g.aps.length, 0);
-    const rows = [];
-    for (const { p, aps } of groups) {
-      const down = p.aps.filter((a) => a.state === 'down').length;
-      const degraded = p.aps.filter((a) => a.state === 'degraded').length;
-      rows.push(
-        h(
-          'tr',
-          { class: 'pop-row' },
-          h(
-            'td',
-            { colspan: 6 },
-            h(
-              'div',
-              { class: 'pop-head' },
-              h('b', {}, p.id == null ? p.name : `POP ${p.name}`),
-              p.state ? badge(STATE[p.state][0], STATE[p.state][1]) : null,
-              h('span', { class: 'small muted' }, [`${p.aps.length} AP`, down ? `${down} non raggiungibili` : null, degraded ? `${degraded} con molte CPE offline` : null].filter(Boolean).join(' · ')),
-              p.powerOutage ? badge('guasto Enel vicino', 'bad') : null,
-            ),
-          ),
-        ),
-      );
-      for (const a of aps) {
-        const id = `ap:${a.id}`;
-        rows.push(
-          h(
-            'tr',
-            { class: `ap-row state-${a.state}` },
-            h('td', { 'data-label': 'Stato' }, badge(STATE[a.state][0], STATE[a.state][1])),
-            h('td', { 'data-label': 'AP' }, h('div', { class: 'ap-name' }, h('b', {}, a.name), a.ssid && a.ssid !== a.name ? h('span', { class: 'small muted' }, a.ssid) : null)),
-            h('td', { 'data-label': 'CPE online' }, cpeBar(a)),
-            h('td', { 'data-label': 'Ultimo contatto' }, a.lastSeen ? h('span', { class: 'small' }, fmtDate(a.lastSeen)) : h('span', { class: 'muted' }, '—')),
-            h('td', { 'data-label': 'Note' }, a.powerOutage ? badge('guasto Enel vicino', 'bad') : a.model ? h('span', { class: 'small muted' }, a.model) : h('span', { class: 'muted' }, '—')),
-            netMap
-              ? h(
-                  'td',
-                  { class: 'ap-actions' },
-                  a.lat != null && a.lon != null
-                    ? h(
-                        'div',
-                        { class: 'btns' },
-                        h('button', { type: 'button', class: 'small-btn', onclick: () => netMap.focus(id) }, 'Mappa'),
-                        a.served?.servedM
-                          ? h('button', { type: 'button', class: `small-btn${netMap.isOpen(id) ? ' on' : ''}`, onclick: () => (netMap.isOpen(id) ? netMap.toggle(id) : netMap.focus(id, true)) }, netMap.isOpen(id) ? 'Chiudi fascio' : 'Fascio')
-                          : null,
-                      )
-                    : h('span', { class: 'small muted' }, 'senza posizione'),
-                )
-              : h('td', {}),
-          ),
-        );
-      }
-    }
-    mount(
-      listBox,
-      d.restricted && !d.assignedCount
-        ? h('div', { class: 'notice warn' }, 'Nessun POP/AP assegnato al tuo account: chiedi all’amministratore.')
-        : card(
-            h('h2', {}, d.restricted ? 'I tuoi POP e AP' : 'POP e AP'),
-            listTools,
-            rows.length
-              ? h(
-                  'div',
-                  { class: 'table-wrap' },
-                  h(
-                    'table',
-                    { class: 'net-table' },
-                    h('thead', {}, h('tr', {}, ['Stato', 'AP', 'CPE online', 'Ultimo contatto', 'Note', ''].map((t) => h('th', {}, t)))),
-                    h('tbody', {}, rows),
-                  ),
-                )
-              : h('p', { class: 'small muted' }, d.pops.length || d.apsWithoutPop.length ? 'Nessun AP con questi filtri.' : 'Nessun POP o AP.'),
-            h(
-              'p',
-              { class: 'small muted' },
-              `${total} AP mostrati. "Molte CPE offline": almeno il 30% delle CPE dell’AP non è raggiungibile (probabile problema di settore, non del singolo cliente).`,
-            ),
-          ),
-    );
-  }
+  }, [data, shown, q]);
+  const total = groups.reduce((n, g) => n + g.aps.length, 0);
 
-  async function load() {
-    let d;
-    try {
-      d = await api('/api/network/status');
-    } catch (e) {
-      mount(out, h('div', { class: 'notice bad' }, e.message));
-      return;
-    }
-    if (!document.body.contains(out) && timer) {
-      clearInterval(timer);
-      return;
-    }
-    data = d;
-    const s = d.summary;
-    filters.setCounts(d);
-    if (!out.contains(summaryBox)) mount(out, summaryBox, netMap ? netMap.box : null, listBox);
-    void netMap?.draw(d);
-    mount(
-      summaryBox,
-      card(
-        h('div', { class: 'grid' }, stat('AP', s.aps), stat('Non raggiungibili', s.down), stat('Con molte CPE offline', s.degraded), stat('Con guasto Enel vicino', s.powerOutage)),
-        h('p', { class: 'small muted' }, `Aggiornato ${fmtDate(d.generatedAt)} · si aggiorna ogni minuto${nms(' · dati da UISP', '')}.`),
-      ),
-    );
-    drawList(d);
-  }
+  const search = html`<input type="search" class="grow" placeholder="Cerca POP, AP o SSID" value=${query} onInput=${(e) => setQuery(e.target.value)} onKeyDown=${(e) => e.key === 'Enter' && mapApi.current?.jump()} />`;
+  const filters = html`${search}<${StateChips} shown=${shown} counts=${counts} onToggle=${toggleState} />`;
 
-  await load();
-  timer = setInterval(load, 60_000);
-  return h('div', {}, pageHead('Stato rete', admin ? 'Stato di POP e AP: raggiungibilità, CPE offline e guasti Enel vicini.' : 'Stato dei POP e degli AP che ti sono assegnati.'), out);
+  const s = data?.summary;
+  const kpi = (k, label, value, cls, state) => html`
+    <button key=${k} type="button" class=${`ia-kpi ${cls}${state && shown.size === 1 && shown.has(state) ? ' on' : ''}${state ? '' : ' plain'}`} onClick=${state ? () => only(state) : undefined}>
+      <span class="ia-kpi-value">${value}</span><span class="ia-kpi-label">${label}</span>
+    </button>
+  `;
+
+  return html`
+    <div>
+      <${PageHead} title="Stato rete" subtitle=${admin ? 'Stato di POP e AP: raggiungibilità, CPE offline e guasti Enel vicini.' : 'Stato dei POP e degli AP che ti sono assegnati.'} />
+      ${error ? html`<${Notice} kind="bad">${error}<//>` : null}
+      ${!data && !error ? html`<p class="muted">Caricamento…</p>` : null}
+      ${data
+        ? html`
+            <div class="ia-kpis">
+              ${kpi('aps', 'AP', s.aps, 'info', null)} ${kpi('down', 'Non raggiungibili', s.down, 'bad', 'down')} ${kpi('degraded', 'Con molte CPE offline', s.degraded, 'warn', 'degraded')}
+              ${kpi('power', 'Con guasto Enel vicino', s.powerOutage, s.powerOutage ? 'bad' : 'info', null)}
+            </div>
+            <p class="small muted ia-meta">Aggiornato ${fmtDate(data.generatedAt)} · si aggiorna ogni minuto${nms(' · dati da UISP', '')}.</p>
+            ${admin ? html`<${NetworkMap} data=${data} shown=${shown} q=${q} open=${open} setOpen=${setOpen} apiRef=${mapApi} tools=${filters} />` : null}
+            ${data.restricted && !data.assignedCount
+              ? html`<${Notice} kind="warn">Nessun POP/AP assegnato al tuo account: chiedi all’amministratore.<//>`
+              : html`<${Card}>
+                  <h2>${data.restricted ? 'I tuoi POP e AP' : 'POP e AP'}</h2>
+                  ${admin ? null : html`<div class="map-tools">${filters}</div>`}
+                  ${groups.length
+                    ? html`<div class="table-wrap">
+                        <table class="net-table">
+                          <thead><tr>${['Stato', 'AP', 'CPE online', 'Ultimo contatto', 'Note', ''].map((t, i) => html`<th key=${i}>${t}</th>`)}</tr></thead>
+                          <tbody>
+                            ${groups.map(({ p, aps }) => {
+                              const down = p.aps.filter((a) => a.state === 'down').length;
+                              const degraded = p.aps.filter((a) => a.state === 'degraded').length;
+                              return html`
+                                <${Fragment} key=${p.id ?? 'none'}>
+                                  <tr class="pop-row">
+                                    <td colspan="6">
+                                      <div class="pop-head">
+                                        <b>${p.id == null ? p.name : `POP ${p.name}`}</b>
+                                        ${p.state ? html`<${Badge} kind=${STATE[p.state][1]}>${STATE[p.state][0]}<//>` : null}
+                                        <span class="small muted">${[`${p.aps.length} AP`, down ? `${down} non raggiungibili` : null, degraded ? `${degraded} con molte CPE offline` : null].filter(Boolean).join(' · ')}</span>
+                                        ${p.powerOutage ? html`<${Badge} kind="bad">guasto Enel vicino<//>` : null}
+                                      </div>
+                                    </td>
+                                  </tr>
+                                  ${aps.map((a) => {
+                                    const id = `ap:${a.id}`;
+                                    return html`
+                                      <tr key=${id} class=${`ap-row state-${a.state}`}>
+                                        <td data-label="Stato"><${Badge} kind=${STATE[a.state][1]}>${STATE[a.state][0]}<//></td>
+                                        <td data-label="AP"><div class="ap-name"><b>${a.name}</b>${a.ssid && a.ssid !== a.name ? html`<span class="small muted">${a.ssid}</span>` : null}</div></td>
+                                        <td data-label="CPE online"><${CpeBar} a=${a} /></td>
+                                        <td data-label="Ultimo contatto">${a.lastSeen ? html`<span class="small">${fmtDate(a.lastSeen)}</span>` : html`<span class="muted">—</span>`}</td>
+                                        <td data-label="Note">${a.powerOutage ? html`<${Badge} kind="bad">guasto Enel vicino<//>` : a.model ? html`<span class="small muted">${a.model}</span>` : html`<span class="muted">—</span>`}</td>
+                                        <td class="ap-actions">
+                                          ${admin
+                                            ? a.lat != null && a.lon != null
+                                              ? html`<div class="btns">
+                                                  <button type="button" class="small-btn" onClick=${() => mapApi.current?.focus(id)}>Mappa</button>
+                                                  ${a.served?.servedM
+                                                    ? html`<button type="button" class=${`small-btn${open.has(id) ? ' on' : ''}`} onClick=${() => (open.has(id) ? mapApi.current?.toggle(id) : mapApi.current?.focus(id, true))}>${open.has(id) ? 'Chiudi fascio' : 'Fascio'}</button>`
+                                                    : null}
+                                                </div>`
+                                              : html`<span class="small muted">senza posizione</span>`
+                                            : null}
+                                        </td>
+                                      </tr>
+                                    `;
+                                  })}
+                                <//>
+                              `;
+                            })}
+                          </tbody>
+                        </table>
+                      </div>`
+                    : html`<p class="small muted">${data.pops.length || data.apsWithoutPop.length ? 'Nessun AP con questi filtri.' : 'Nessun POP o AP.'}</p>`}
+                  <p class="small muted">${total} AP mostrati. "Molte CPE offline": almeno il 30% delle CPE dell’AP non è raggiungibile (probabile problema di settore, non del singolo cliente).</p>
+                <//>`}
+          `
+        : null}
+    </div>
+  `;
 }
+
+export const networkView = ({ user }) => reactView(NetworkPage, { admin: user.role === 'admin' });

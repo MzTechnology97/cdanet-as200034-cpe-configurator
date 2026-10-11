@@ -89,6 +89,7 @@ Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). 
 ## Già rilasciato
 
 - v1.32.65: IA-AP: un avviso critico viene notificato al massimo una volta alla settimana (prima tornava a ogni ricomparsa), notifiche con link a IA-AP; ottimizzazioni in corso e programmate in evidenza in Panoramica e sulla riga dell'AP; problemi critici IA-AP in Panoramica.
+- v1.32.84: Stato rete in React: riepilogo in riquadri che fanno anche da filtro (Non raggiungibili, Con molte CPE offline), mappa ed elenco come prima (filtri per stato, ricerca, fasci dei clienti), vista degli installatori senza mappa invariata.
 - v1.32.82: console, primo passo verso React (senza build): React e htm nel server, base comune e IA-AP riscritta in React con lo stesso aspetto e le stesse funzioni (filtri, raggruppamenti, ottimizzazione, ignora); le altre pagine non cambiano.
 - v1.32.81: niente più mare bianco nelle ortofoto AGEA: le tessere che toccano il mare (dal modello del terreno) arrivano in PNG trasparente, le altre restano JPEG leggere; sotto si vede il mare della mappa di base, nella mappa normale e in 3D.
 - v1.32.80: app: l'aggiornamento non si blocca più con «SHA-256 dell'APK non valido» quando esce una versione nuova tra il controllo e il download (l'app richiede la versione al server e scarica quella; «Riprova» ricontrolla sempre); testi leggibili col tema scuro anche nelle schermate fuori dalla navigazione (aggiornamento obbligatorio, accesso, blocco, privacy, preparazione).
