@@ -171,3 +171,23 @@ describe('Copertura: collaudi e installazioni fallite', () => {
     assert.equal((await app.inject({ method: 'GET', url: '/api/coverage?lat=37.59&lon=14.11&limit=20', headers: H })).json().failuresNearby, 0);
   });
 });
+
+describe('Affidabilità: collegati ma dati per ostruiti', () => {
+  it('says what blocks the line, where, and how much higher the CPE should be', async () => {
+    const { explainBlocked } = await import('../src/services/coverage-accuracy.ts');
+    const cpe = { lat: 37.5, lon: 14.0 };
+    const ap = { lat: 37.5, lon: 14.05, gpsAltitude: null, siteHeight: null, frequency: 5600 };
+    // flat ground at 100 m with a 12 m bank 300 m from the CPE; buildings near the AP on another map
+    const lonOf = (m: number) => 14.0 + m / (111_320 * Math.cos((37.5 * Math.PI) / 180));
+    const hill = { ground: (_la: number, lo: number) => (lo > lonOf(250) && lo < lonOf(350) ? 120 : 100), cover: () => null, fine: true };
+    const r = explainBlocked(hill, cpe, 6, ap, 15, { buildingM: 8, treeM: 8 });
+    assert.equal(r.cause, 'terreno');
+    assert.equal(r.where, 'vicino alla CPE');
+    assert.ok(r.raiseCpeM !== null && r.raiseCpeM > 0 && r.raiseCpeM <= 30, JSON.stringify(r));
+    assert.equal(r.apAltitudeFrom, 'terreno');
+    const town = { ground: () => 100, cover: (_la: number, lo: number) => (lo > lonOf(2500) && lo < lonOf(3200) ? 50 : null), fine: true };
+    const b = explainBlocked(town, cpe, 2, { ...ap, gpsAltitude: 105 }, 15, { buildingM: 25, treeM: 8 });
+    assert.equal(b.cause, 'edifici', JSON.stringify(b));
+    assert.equal(b.where, 'a metà strada');
+  });
+});

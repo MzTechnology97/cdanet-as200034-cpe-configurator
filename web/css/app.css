@@ -242,6 +242,8 @@ button.link { background: none; border: none; color: var(--brand); padding: 4px 
 .los-line { fill: none; stroke: #2563eb; stroke-width: 2; }
 .los-fresnel { fill: none; stroke: #f59e0b; stroke-width: 1.5; stroke-dasharray: 5 4; }
 .los-worst { fill: #dc2626; }
+.los-building { fill: #78716c; opacity: .85; }
+.los-tree { fill: #4d7c0f; opacity: .7; }
 .los-axis { font-size: 11px; fill: var(--muted); }
 .sim-info { margin-top: 8px; }
 .more-aps { margin-top: 12px; }
