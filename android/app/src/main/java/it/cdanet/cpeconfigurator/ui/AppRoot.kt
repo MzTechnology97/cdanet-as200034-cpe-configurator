@@ -88,6 +88,7 @@ import it.cdanet.cpeconfigurator.ui.screens.HomeScreen
 import it.cdanet.cpeconfigurator.ui.screens.IpScannerScreen
 import it.cdanet.cpeconfigurator.ui.screens.NetDiagScreen
 import it.cdanet.cpeconfigurator.ui.screens.ArAimScreen
+import it.cdanet.cpeconfigurator.ui.screens.ArLiveScreen
 import it.cdanet.cpeconfigurator.ui.screens.NetworkStatusScreen
 import it.cdanet.cpeconfigurator.ui.screens.PointingScreen
 import it.cdanet.cpeconfigurator.ui.screens.OutagesScreen
@@ -122,6 +123,7 @@ enum class Screen(val title: String, val scroll: Boolean = true, val wide: Boole
     Compass("Bussola verso l'AP"),
     Pointing("Trova l'AP", scroll = false),
     ArAim("Realtà aumentata", scroll = false),
+    ArLive("Realtà aumentata", scroll = false),
     CpeHealth("Le mie CPE"),
     IpScanner("Scanner IP", scroll = false, wide = true),
     PortScanner("Port scanner"),
@@ -452,6 +454,7 @@ fun AppRoot(c: AppContainer) {
                         onCompass = { t -> c.compassTarget.value = t; go(Screen.Compass) },
                     )
                     Screen.ArAim -> ArAimScreen(c, liveSignal = arWithSignal)
+                    Screen.ArLive -> ArLiveScreen(c)
                     Screen.CpeHealth -> CpeHealthScreen(
                         c,
                         onRepoint = if (c.moduleOn("field_alignment")) ({ c.install.start(InstallMode.Repoint); go(Screen.Provision) }) else null,
@@ -487,7 +490,7 @@ fun AppRoot(c: AppContainer) {
             key(screen, stack.size) {
                 ScreenEnter(forward = stack.size >= lastDepth) {
                     // drag down to reload (not where the gesture belongs to the camera, the compass or a page)
-                    val pullable = screen !in setOf(Screen.ArAim, Screen.Compass, Screen.CpeWeb, Screen.Guide)
+                    val pullable = screen !in setOf(Screen.ArAim, Screen.ArLive, Screen.Compass, Screen.CpeWeb, Screen.Guide)
                     var refreshing by remember { mutableStateOf(false) }
                     androidx.compose.material3.pulltorefresh.PullToRefreshBox(
                         isRefreshing = refreshing,

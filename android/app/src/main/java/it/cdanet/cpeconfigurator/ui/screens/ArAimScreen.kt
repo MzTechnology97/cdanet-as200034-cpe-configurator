@@ -659,3 +659,43 @@ private fun CameraPreview(modifier: Modifier, view: androidx.compose.runtime.Mut
     }
     AndroidView(factory = { previewView }, modifier = modifier)
 }
+
+/**
+ * Augmented reality straight away, without an installation or a chosen AP: the GPS of the phone,
+ * the APs around from the server (the ones of this account for installers), the best one chosen.
+ */
+@Composable
+fun ArLiveScreen(c: AppContainer) {
+    val context = LocalContext.current
+    var ready by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var attempt by remember { mutableStateOf(0) }
+    LaunchedEffect(attempt) {
+        error = null
+        val here = runCatching { it.cdanet.cpeconfigurator.network.LocationHelper(context).current() }.getOrElse { error = "Posizione non disponibile: ${it.message}"; return@LaunchedEffect }
+        val d = runCatching { c.api.pointing(here.latitude, here.longitude, null) }.getOrElse { error = it.message; return@LaunchedEffect }
+        val best = d.aps.firstOrNull() ?: run { error = if (d.restricted && d.assignedCount == 0) "Nessun AP assegnato al tuo account" else "Nessun AP entro ${d.maxKm} km da qui"; return@LaunchedEffect }
+        c.compassTarget.value = it.cdanet.cpeconfigurator.field.CompassTarget(
+            name = best.name.ifBlank { best.id },
+            bearing = best.bearing,
+            distanceM = best.distanceM,
+            fromLatitude = d.from.lat,
+            fromLongitude = d.from.lon,
+            tiltDeg = best.tiltDeg,
+            altitude = best.altitude,
+            fromAltitude = d.from.altitude,
+            apId = best.id,
+            heightM = d.from.height,
+            beacons = d.aps.map { it.toBeacon() },
+        )
+        ready = true
+    }
+    if (ready) return ArAimScreen(c)
+    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        if (error == null) Text("Cerco la posizione e gli AP intorno…")
+        else {
+            Text(error!!, color = MaterialTheme.colorScheme.error)
+            FilledTonalButton(onClick = { attempt++ }) { Text("Riprova") }
+        }
+    }
+}
