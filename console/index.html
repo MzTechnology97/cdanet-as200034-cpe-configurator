@@ -8,21 +8,10 @@
     <title>CDA Net · CPE Admin</title>
     <link rel="icon" href="/assets/icon.svg" type="image/svg+xml" />
     <link rel="apple-touch-icon" href="/assets/icon.svg" />
-    <script type="module" src="./src/main.ts"></script>
+    <script type="module" src="./src/main.tsx"></script>
   </head>
   <body>
-    <header class="topbar">
-      <button class="icon-btn" id="navToggle" aria-label="Menu" aria-controls="sidebar" aria-expanded="false" hidden>☰</button>
-      <img class="logo" src="/assets/cda-net-logo.svg" alt="CDA Net" />
-      <span class="product">CPE Configurator</span>
-      <span class="spacer"></span>
-      <span class="session" id="session"></span>
-    </header>
-    <div class="layout">
-      <nav class="sidebar" id="sidebar" hidden></nav>
-      <div class="shade" id="shade" hidden></div>
-      <main id="view" class="view" aria-live="polite"></main>
-    </div>
+    <div id="root"></div>
     <div id="toast" class="toast" role="status" hidden></div>
   </body>
 </html>

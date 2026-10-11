@@ -1,0 +1,146 @@
+/*
+ * Design tokens of the console: one source for colours, spacing, radii, type and shadows, in the
+ * light and the dark theme. The pages of web/js read the same names (--brand, --bg, --surface,
+ * --ink, --muted, --line, --good/--warn/--bad…): they take the new values with no change of theirs.
+ * The Android app aligns to these values (its Theme.kt).
+ *
+ * Theme: as the system, or forced with <html data-theme="light|dark"> (the button in the top bar).
+ */
+:root {
+  /* brand */
+  --brand: #f15a2c;
+  --brand-ink: #c2441a;
+  --brand-soft: #fdeee8;
+
+  /* surfaces and text */
+  --bg: #f3f4f6;
+  --surface: #ffffff;
+  --surface-2: #f7f8fa;
+  --surface-3: #eef0f3;
+  --line: #e1e4e8;
+  --line-strong: #c9ced6;
+  --ink: #1b1f24;
+  --muted: #5f6873;
+
+  /* states: text on their soft background, AA in both themes */
+  --good: #18794a;
+  --good-bg: #e5f4ec;
+  --warn: #8f5b00;
+  --warn-bg: #fff3d6;
+  --bad: #b42318;
+  --bad-bg: #fdebe9;
+  --info: #1f5fbf;
+  --info-bg: #e8f0fc;
+
+  /* spacing: steps of 4 px */
+  --sp-1: 4px;
+  --sp-2: 8px;
+  --sp-3: 12px;
+  --sp-4: 16px;
+  --sp-5: 20px;
+  --sp-6: 24px;
+  --sp-8: 32px;
+
+  /* radii, shadows, motion */
+  --radius-sm: 8px;
+  --radius: 12px;
+  --radius-lg: 16px;
+  --radius-full: 999px;
+  --shadow: 0 1px 2px rgb(16 24 40 / 5%), 0 4px 16px rgb(16 24 40 / 6%);
+  --shadow-lg: 0 12px 40px rgb(16 24 40 / 18%);
+  --focus: 0 0 0 3px color-mix(in srgb, var(--brand) 35%, transparent);
+  --ease: cubic-bezier(.2, .7, .2, 1);
+
+  /* type */
+  --font: Inter, 'Segoe UI', system-ui, -apple-system, sans-serif;
+  --font-mono: ui-monospace, 'Cascadia Code', Consolas, monospace;
+  --fs-xs: .75rem;
+  --fs-sm: .86rem;
+  --fs: .95rem;
+  --fs-lg: 1.1rem;
+  --fs-xl: 1.45rem;
+  --fs-num: 1.6rem;
+
+  /* frame */
+  --topbar-h: 56px;
+  --nav-w: 248px;
+  --nav-w-narrow: 68px;
+  --bottombar-h: 64px;
+
+  color-scheme: light;
+  font-family: var(--font);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    --brand-ink: #ff8a5c;
+    --brand-soft: #3a2118;
+    --bg: #0f1114;
+    --surface: #171a1f;
+    --surface-2: #1d2127;
+    --surface-3: #252a31;
+    --line: #2a2f36;
+    --line-strong: #3a414a;
+    --ink: #e8eaed;
+    --muted: #9aa3ad;
+    --good: #5fd39a;
+    --good-bg: #12301f;
+    --warn: #f0b75a;
+    --warn-bg: #332611;
+    --bad: #ff8a80;
+    --bad-bg: #3a1714;
+    --info: #8db8ff;
+    --info-bg: #15243d;
+    --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 16px rgb(0 0 0 / 30%);
+    --shadow-lg: 0 12px 40px rgb(0 0 0 / 55%);
+    color-scheme: dark;
+  }
+}
+
+:root[data-theme='dark'] {
+  --brand-ink: #ff8a5c;
+  --brand-soft: #3a2118;
+  --bg: #0f1114;
+  --surface: #171a1f;
+  --surface-2: #1d2127;
+  --surface-3: #252a31;
+  --line: #2a2f36;
+  --line-strong: #3a414a;
+  --ink: #e8eaed;
+  --muted: #9aa3ad;
+  --good: #5fd39a;
+  --good-bg: #12301f;
+  --warn: #f0b75a;
+  --warn-bg: #332611;
+  --bad: #ff8a80;
+  --bad-bg: #3a1714;
+  --info: #8db8ff;
+  --info-bg: #15243d;
+  --shadow: 0 1px 2px rgb(0 0 0 / 40%), 0 4px 16px rgb(0 0 0 / 30%);
+  --shadow-lg: 0 12px 40px rgb(0 0 0 / 55%);
+  color-scheme: dark;
+}
+
+/* a forced light theme wins over the system's dark (the pages' own dark rules read the same tokens) */
+:root[data-theme='light'] {
+  color-scheme: light;
+}
+
+body {
+  background: var(--bg);
+  color: var(--ink);
+  font-size: var(--fs);
+  -webkit-font-smoothing: antialiased;
+}
+
+:focus-visible {
+  outline: none;
+  box-shadow: var(--focus);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 1ms !important;
+    transition-duration: 1ms !important;
+  }
+}
