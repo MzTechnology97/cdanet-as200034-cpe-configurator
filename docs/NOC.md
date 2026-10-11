@@ -49,6 +49,11 @@ Dati usati, tutti da UISP: stazioni collegate (segnale, rumore, modulazione attu
 
 **Canali proposti**: sempre interi dentro la banda di Impostazioni server → Assistente rete (predefinita 5120–5800 MHz), mai sovrapposti a un nostro AP vicino. Lo spettro considerato è la media di quello dell'AP e di quello mediano delle sue CPE. Il cambio di frequenza stima anche la **risposta in frequenza delle antenne** (guadagno migliore a centro banda, circa 1,5 dB in meno per antenna ai bordi) e la perdita di percorso: un canale che porterebbe il cliente più debole sotto il minimo del collaudo viene scartato.
 
+**Pagina (v1.32.60):**
+- in alto i contatori (Critici, Da guardare, Suggerimenti, AP coinvolti), che fanno anche da filtro;
+- sotto la barra con ricerca, gravità (predefinito *Problemi*: critici e da guardare), tipo e raggruppamento *Per AP* o *Per problema*;
+- su schermo largo, a sinistra l'elenco ordinato per gravità e a destra il dettaglio: gli avvisi dell'AP in schede e le CPE in una tabella, con *Cosa fare* scritto una volta per tipo.
+
 Ogni avviso dice cosa fare e, dove serve, i parametri (frequenza, ampiezza); per le CPE c'è il link alla scheda (nell'app: Gestisci CPE). *Ignora 7/90 giorni* nasconde un avviso (registrato nello storico eventi); *Aggiorna ora* rilegge UISP senza aspettare l'ora. I nuovi problemi critici arrivano come notifica a tutti gli admin (Notifiche → "Assistente rete").
 
 ### Ottimizzazione automatica (v1.32.57)
