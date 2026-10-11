@@ -61,7 +61,7 @@ const fresnelR = (d, D, freqMhz) => Math.sqrt(((299.79 / (freqMhz || 5600)) * d 
  * on it, the two antennas on their masts, the line of sight, the whole first Fresnel zone (ellipse)
  * and its 60% limit, distances along the bottom and the critical point.
  */
-function profileChart(p) {
+export function profileChart(p) {
   const W = 980;
   const H = 300;
   const pad = { l: 52, r: 16, t: 18, b: 34 };
@@ -126,7 +126,7 @@ const DIRS = ['N', 'NE', 'E', 'SE', 'S', 'SO', 'O', 'NO'];
 const dir = (deg) => `${Math.round(deg)}° ${DIRS[Math.round(deg / 45) % 8]}`;
 
 /** The figures of the link, as in the side panel of UISP Design. */
-function linkFacts(p, from, estimate) {
+export function linkFacts(p, from, estimate) {
   const first = p.chart[0];
   const last = p.chart[p.chart.length - 1];
   const tilt = (Math.atan2(last.los - first.los, p.distanceM) * 180) / Math.PI;
@@ -175,10 +175,10 @@ const MCS_SCALE = [
   [-64, '13x'],
 ];
 /** Magnetic declination in central Sicily (2026, east), to point with a compass. */
-const DECLINATION_DEG = 4;
+export const DECLINATION_DEG = 4;
 
 /** Expected signal on the modulation scale: the bar fills up to the signal, the reached MCS lit. */
-function signalBar(dbm) {
+export function signalBar(dbm) {
   const lo = -95;
   const hi = -50;
   const pct = dbm == null ? 0 : Math.max(0, Math.min(100, ((dbm - lo) / (hi - lo)) * 100));

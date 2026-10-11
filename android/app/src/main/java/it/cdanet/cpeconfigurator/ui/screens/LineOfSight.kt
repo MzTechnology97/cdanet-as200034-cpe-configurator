@@ -22,6 +22,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -64,6 +65,34 @@ fun fresnelFreePct(d: LosDto): Int {
 }
 
 /**
+ * What the coverage check adds to the link (Verifica copertura): the AP as the server shows it to
+ * this user, the CPE to install and its height, which the user can change from here.
+ */
+class LinkControls(
+    val frequencyMhz: Int?,
+    val stations: Int?,
+    val loadLevel: String?,
+    /** Admins only (installers do not get the numbers of the AP). */
+    val noiseDbm: Double?,
+    val cpeModels: List<it.cdanet.cpeconfigurator.data.CpeModelDto>,
+    val cpeId: String,
+    val cpeName: String?,
+    val onCpe: (String) -> Unit,
+    val heightM: Double?,
+    val onHeight: (Double) -> Unit,
+)
+
+/** Indicative airMAX ac sensitivity at 40 MHz (dBm) for MCS 0…9 and the airOS rate multiplier. */
+val MCS_SCALE = listOf(-91 to "1x", -89 to "2x", -86 to "3x", -83 to "4x", -79 to "6x", -75 to "8x", -73 to "9x", -71 to "10x", -66 to "12x", -64 to "13x")
+
+/** Index of the highest modulation reached by [dbm] (−1: none). */
+fun mcsReached(dbm: Int?): Int = if (dbm == null) -1 else MCS_SCALE.count { dbm >= it.first } - 1
+
+/** Magnetic declination at the point, degrees east (to point with a compass). */
+fun declinationDeg(lat: Double, lon: Double): Double =
+    android.hardware.GeomagneticField(lat.toFloat(), lon.toFloat(), 300f, System.currentTimeMillis()).declination.toDouble()
+
+/**
  * Line of sight towards an AP, as in UISP Design: the figures of the link (distance, pointing and
  * tilt from both ends, antenna heights, expected signal, free Fresnel zone) and the elevation
  * profile with the antennas on their masts, the line of sight and the whole first Fresnel zone.
@@ -80,11 +109,13 @@ fun LineOfSightDialog(
     bearing: Int? = null,
     estimate: SignalEstimateDto? = null,
     onLoaded: ((LosDto) -> Unit)? = null,
+    controls: LinkControls? = null,
     onClose: () -> Unit,
 ) {
     var data by remember { mutableStateOf<LosDto?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    LaunchedEffect(apId) {
+    // another height of the CPE: the profile again (the estimate comes with the new check)
+    LaunchedEffect(apId, height) {
         runCatching { c.api.lineOfSight(lat, lon, apId, height) }.onSuccess { data = it; onLoaded?.invoke(it) }.onFailure { error = it.message }
     }
     AlertDialog(
@@ -107,8 +138,23 @@ fun LineOfSightDialog(
                             },
                             when (d.verdict) { "clear" -> NoticeKind.Good; "fresnel" -> NoticeKind.Warn; else -> NoticeKind.Bad },
                         )
-                        LinkFacts(d, bearing, estimate)
+                        if (controls != null) ApFacts(controls)
+                        LinkFacts(d, bearing, estimate, lat, lon)
+                        if (controls != null) CpeControls(controls, d)
+                        SignalBar(estimate?.signalDbm)
                         ProfileChart(d)
+                        d.apAntenna?.let { a ->
+                            Text(
+                                "Antenna dell'AP a ${a.altitude} m s.l.m., ${a.aboveGroundM} m sopra il suolo (" + when (a.from) {
+                                    "sito" -> "altezza del sito in UISP"
+                                    "gps" -> "altitudine GPS"
+                                    "uisp" -> "altezza scritta in UISP"
+                                    else -> "altezza predefinita"
+                                } + ").",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            )
+                        }
                         if (d.foliageM > 0) Text("La linea di vista attraversa ${d.foliageM} m di vegetazione: il segnale cala per il fogliame.", style = MaterialTheme.typography.bodySmall)
                         Text(
                             (if (d.terrainSource == "tinitaly") "Terreno a 10 m con edifici (grigio) e alberi (verde) della mappa del suolo, ad altezze medie: verifica a vista."
@@ -127,15 +173,17 @@ fun LineOfSightDialog(
 
 /** The figures of the link, two per row. */
 @Composable
-private fun LinkFacts(d: LosDto, bearing: Int?, estimate: SignalEstimateDto?) {
+private fun LinkFacts(d: LosDto, bearing: Int?, estimate: SignalEstimateDto?, lat: Double, lon: Double) {
     val first = d.chart.firstOrNull()
     val last = d.chart.lastOrNull()
     val tilt = tiltDeg(d)
     val facts = buildList {
         add(Triple("Distanza", km(d.distanceM), "${d.frequencyMhz} MHz"))
         add(Triple("Fresnel libera", "${fresnelFreePct(d)}%", d.worst?.let { "punto critico a ${km(it.d)}" } ?: "su tutto il collegamento"))
+        estimate?.capacityMbps?.let { add(Triple("Capacità stimata", "$it Mbit/s", "collegamento radio")) }
         if (bearing != null) {
-            add(Triple("CPE → AP", "$bearing° ${dirOf(bearing)}", "inclinazione ${signed(tilt)}°"))
+            val magnetic = ((bearing - declinationDeg(lat, lon)).roundToInt() + 360) % 360
+            add(Triple("CPE → AP", "$bearing° ${dirOf(bearing)}", "magnetico $magnetic° · inclinazione ${signed(tilt)}°"))
             add(Triple("AP → CPE", "${(bearing + 180) % 360}° ${dirOf((bearing + 180) % 360)}", "inclinazione ${signed(-tilt)}°"))
         }
         if (first != null) add(Triple("Antenna CPE", "${fmt(first.los - first.ground)} m", "${first.los.roundToInt()} m s.l.m."))
@@ -155,6 +203,78 @@ private fun LinkFacts(d: LosDto, bearing: Int?, estimate: SignalEstimateDto?) {
                     }
                 }
                 if (row.size == 1) Spacer(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/** The AP as the server shows it to this user. */
+@Composable
+private fun ApFacts(k: LinkControls) {
+    val parts = listOfNotNull(
+        k.frequencyMhz?.let { "$it MHz" },
+        k.stations?.let { "$it client" },
+        k.loadLevel?.let { "sera: $it" },
+        k.noiseDbm?.let { "rumore ${it.roundToInt()} dBm" },
+    )
+    if (parts.isNotEmpty()) Text("AP · " + parts.joinToString(" · "), style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Medium)
+}
+
+/** The CPE to install (proposed or chosen) and its height, as in UISP Design. */
+@Composable
+private fun CpeControls(k: LinkControls, d: LosDto) {
+    val h = k.heightM ?: (d.chart.firstOrNull()?.let { it.los - it.ground } ?: 6.0)
+    Column(
+        Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(10.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Text("CPE DA INSTALLARE", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (k.cpeModels.isNotEmpty()) {
+            val options = listOf("auto") + k.cpeModels.map { it.id }
+            it.cdanet.cpeconfigurator.ui.Dropdown(
+                "Modello",
+                options,
+                k.cpeId,
+                { id -> if (id == "auto") "Consigliata" + (k.cpeName?.let { " ($it)" } ?: "") else k.cpeModels.first { it.id == id }.let { m -> "${m.name} · ${m.gainDbi} dBi" } },
+                k.onCpe,
+            )
+        }
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("Altezza", modifier = Modifier.weight(1f))
+            androidx.compose.material3.FilledTonalIconButton(onClick = { k.onHeight((h - 1).coerceAtLeast(1.0)) }) { Text("−", fontWeight = FontWeight.Bold) }
+            Text("${fmt(h)} m", fontWeight = FontWeight.Bold)
+            androidx.compose.material3.FilledTonalIconButton(onClick = { k.onHeight((h + 1).coerceAtMost(60.0)) }) { Text("+", fontWeight = FontWeight.Bold) }
+        }
+    }
+}
+
+/** Expected signal on the airMAX modulation scale: the bar fills up to it, the reached MCS lit. */
+@Composable
+private fun SignalBar(dbm: Int?) {
+    if (dbm == null) return
+    val reached = mcsReached(dbm)
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row {
+            Text("Segnale atteso", style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+            Text("$dbm dBm", style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.Bold)
+        }
+        androidx.compose.material3.LinearProgressIndicator(
+            progress = { ((dbm + 95) / 45f).coerceIn(0f, 1f) },
+            modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
+            color = if (reached >= 7) Color(0xFF22C55E) else if (reached >= 4) Color(0xFFFACC15) else Color(0xFFF97316),
+            trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+            drawStopIndicator = {},
+        )
+        Row {
+            MCS_SCALE.forEachIndexed { i, (_, label) ->
+                Text(
+                    label,
+                    modifier = Modifier.weight(1f),
+                    style = MaterialTheme.typography.labelSmall,
+                    textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+                    fontWeight = if (i <= reached) FontWeight.Bold else FontWeight.Normal,
+                    color = if (i <= reached) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.outline,
+                )
             }
         }
     }

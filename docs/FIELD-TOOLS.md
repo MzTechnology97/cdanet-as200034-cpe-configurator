@@ -148,7 +148,7 @@ La bussola serve per il puntamento grossolano; quello fine si fa con il segnale 
 
 ## Verifica copertura (area "Copertura")
 
-Quinta area della barra in basso (dopo Installa) e scorciatoia in Oggi, con il modulo Copertura attivo. Serve prima del sopralluogo: indirizzo, coordinate, GPS del telefono o tocco sulla mappa; per ogni AP segnale stimato, direzione, **Visibilità** con l'altezza della CPE indicata e **Bussola**.
+Quinta area della barra in basso (dopo Installa) e scorciatoia in Oggi, con il modulo Copertura attivo. Serve prima del sopralluogo: indirizzo, coordinate, GPS del telefono o tocco sulla mappa; per ogni AP segnale stimato, direzione, **Collegamento** (tocco sulla scheda o pulsante: puntamento vero e magnetico, inclinazione, Fresnel, capacità, segnale atteso sulla scala MCS, profilo; CPE da installare consigliata o scelta e altezza ± che ricalcolano la verifica; rumore dell'AP solo per gli admin) e **Bussola**. Lo stesso pannello è nella Copertura web degli installatori, senza posizione esatta dell'AP né dati di carico.
 - **Installatori**: solo gli AP assegnati (POP o AP), in posizione approssimativa, e al massimo il numero impostato in Impostazioni server; lo filtra il server (`/api/coverage`), non l'app.
 - **Admin**: tutti gli AP sulla mappa (da `/api/network/status`), ricerca per nome dell'AP, fino a 10 risultati e **Simula copertura** (`/api/admin/coverage/simulation`) con la stessa scala colori della console.
 
