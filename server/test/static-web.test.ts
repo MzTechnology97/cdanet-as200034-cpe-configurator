@@ -72,5 +72,10 @@ describe('Console web: file con la versione nell’indirizzo', () => {
     assert.equal(code.headers['cache-control'], 'public, max-age=31536000, immutable');
     assert.equal((await t.app.inject({ method: 'GET', url: '/vendor/lib/lib.js' })).headers['cache-control'], 'no-cache', 'vendor as before');
     assert.equal((await t.app.inject({ method: 'GET', url: '/wiki/' })).statusCode, 200, 'wiki as before');
+    // a script of an older build: 404 (the console reloads), never the page served as a script
+    const gone = await t.app.inject({ method: 'GET', url: '/app/assets/health-Old123.js' });
+    assert.equal(gone.statusCode, 404);
+    assert.doesNotMatch(gone.headers['content-type'] ?? '', /html/);
+    assert.equal((await t.app.inject({ method: 'GET', url: '/qualcosa/senza-estensione' })).statusCode, 200, 'a deep address still opens the console');
   });
 });

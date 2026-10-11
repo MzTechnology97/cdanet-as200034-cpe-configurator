@@ -38,6 +38,8 @@ export function Page({ route, user, query }: { route: Route; user: User; query: 
         }
       } catch (e) {
         const err = e as { body?: { error?: string }; message?: string };
+        // the console was updated while this page was open: its pieces have new names, reload once
+        if (staleBuild(err.message) && reloadOnce()) return;
         if (err.body?.error === 'mfa_setup_required' && route.id !== 'account') {
           location.hash = '#/account';
           return;
@@ -60,6 +62,22 @@ export function Page({ route, user, query }: { route: Route; user: User; query: 
       {Comp ? <Comp user={user} params={new URLSearchParams(query)} /> : <div ref={host} />}
     </>
   );
+}
+
+/** A piece of the console that is no longer on the server (Chrome, Firefox, Safari wording). */
+const staleBuild = (m?: string) => !!m && /dynamically imported module|Importing a module script failed|error loading dynamically imported module/i.test(m);
+
+/** Reloads the page, at most once a minute (a server really down must not reload forever). */
+function reloadOnce(): boolean {
+  try {
+    const last = Number(sessionStorage.getItem('cda-reloaded') ?? 0);
+    if (Date.now() - last < 60_000) return false;
+    sessionStorage.setItem('cda-reloaded', String(Date.now()));
+  } catch {
+    return false;
+  }
+  location.reload();
+  return true;
 }
 
 function PageSkeleton() {

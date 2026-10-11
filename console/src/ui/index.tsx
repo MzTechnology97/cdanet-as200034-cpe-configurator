@@ -1,4 +1,4 @@
-import { type ButtonHTMLAttributes, type ReactNode, useState } from 'react';
+import { type ButtonHTMLAttributes, type ReactNode, useEffect, useRef, useState } from 'react';
 import { Icon } from './Icon';
 
 /**
@@ -146,6 +146,38 @@ export function Skeleton({ lines = 3 }: { lines?: number }) {
       {Array.from({ length: lines }, (_, i) => (
         <span key={i} className="ui-sk" style={{ width: `${90 - i * 12}%` }} />
       ))}
+    </div>
+  );
+}
+
+/**
+ * A panel from the right (on phones: full screen) for a form or a detail, over the page: Escape or
+ * the shade close it, the focus moves in and comes back where it was.
+ */
+export function Drawer({ title, onClose, children, footer }: { title: string; onClose: () => void; children: ReactNode; footer?: ReactNode }) {
+  const box = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const before = document.activeElement as HTMLElement | null;
+    box.current?.querySelector<HTMLElement>('input, select, textarea, button')?.focus();
+    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('keydown', onKey);
+      before?.focus?.();
+    };
+  }, []);
+  return (
+    <div className="ui-drawer-shade" onMouseDown={onClose}>
+      <aside ref={box} className="ui-drawer" role="dialog" aria-modal="true" aria-label={title} onMouseDown={(e) => e.stopPropagation()}>
+        <header className="ui-drawer-head">
+          <h2>{title}</h2>
+          <button type="button" className="cx-icon-btn" onClick={onClose} aria-label="Chiudi">
+            <Icon name="close" />
+          </button>
+        </header>
+        <div className="ui-drawer-body">{children}</div>
+        {footer && <footer className="ui-drawer-foot">{footer}</footer>}
+      </aside>
     </div>
   );
 }
