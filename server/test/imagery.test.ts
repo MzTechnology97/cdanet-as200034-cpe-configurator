@@ -57,7 +57,7 @@ describe('Mappe admin: immagini satellitari da più fonti', () => {
     const get = (url: string, headers = H) => app.inject({ method: 'GET', url, headers });
 
     let info = (await get('/api/admin/map/satellite')).json();
-    assert.deepEqual(info, { available: false, layers: [] }, 'nothing configured: the usual basemap');
+    assert.deepEqual(info, { available: false, layers: [], terrain: { minZoom: 10, maxZoom: 14, fine: false } }, 'nothing configured: the usual basemap (and the 3D terrain from SRTM)');
     assert.equal((await get('/api/admin/map/imagery/mapbox/satellite/13/4419/3174')).statusCode, 503);
     assert.equal((await put('mapbox', { enabled: true, key: MAPBOX })).statusCode, 200);
     info = (await get('/api/admin/map/satellite')).json();
