@@ -83,7 +83,7 @@ export function imageryCard(v, reload) {
   const wms = section(
     'wms',
     'Ortofoto pubbliche (WMS)',
-    'Servizio WMS senza chiave, in EPSG:3857: predefinite le ortofoto AGEA 2012 del Geoportale Nazionale. Si può mettere un altro WMS (per esempio le ortofoto regionali). Si vedono da zoom 9 in su.',
+    'Servizio WMS senza chiave, in EPSG:3857: predefinite le ortofoto AGEA 2012 del Geoportale Nazionale. Si può mettere un altro WMS (per esempio le ortofoto regionali). Il servizio AGEA disegna da zoom 11: un livello più lontano la mappa usa le stesse foto rimpicciolite, oltre mostra la mappa di base.',
     [field('Indirizzo WMS', url), h('div', { class: 'row' }, field('Layer', layers), field('Nome sulla mappa', label)), field('Attribuzione', attribution)],
     () => ({ url: url.value.trim(), layers: layers.value.trim(), label: label.value.trim(), attribution: attribution.value.trim() }),
     w.configured,
