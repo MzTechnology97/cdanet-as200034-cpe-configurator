@@ -1,61 +1,82 @@
-import { useEffect, useRef, useState } from 'react';
+import { type MutableRefObject, useEffect, useRef, useState } from 'react';
 import { createMap, fit, legend, popup } from '../../../web/js/map.js';
 import { Dom } from '../ui';
 
 /**
  * The map of the console (one component for every page with a map): Leaflet with the local
  * basemap (or the public tiles), the admins' views (satellite, 3D) as on the other maps, loaded
- * only with the page that shows it. [draw] receives the map and Leaflet each time [deps] change
- * and returns the layers to fit; they are removed before the next draw and with the page.
+ * only with the page that shows it. [draw] receives a layer group, Leaflet and the map each time
+ * [deps] change and returns the layers to fit; the group is emptied before the next draw and the
+ * map removed with the page. [fitMode] 'once' keeps the view where the user put it on the next
+ * draws (a page refreshed every minute). [mapRef] and [onReady] give the page the map itself (to
+ * centre a point from a list, to listen to its events).
  */
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type L = any;
+export type Leaflet = any;
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-type LMap = any;
+export type LMap = any;
+
+export const leaflet = (): Leaflet => (window as unknown as { L: Leaflet }).L;
 
 export function MapView({
   draw,
   deps = [],
   zoom = 10,
+  center,
   tall = false,
   legendItems,
   fitMaxZoom,
+  fitMode = 'always',
+  mapRef,
+  onReady,
 }: {
-  draw: (map: LMap, L: L) => unknown[];
+  draw: (target: Leaflet, L: Leaflet, map: LMap) => unknown[];
   deps?: unknown[];
   zoom?: number;
+  center?: [number, number];
   tall?: boolean;
   legendItems?: Array<[string, string]>;
   fitMaxZoom?: number;
+  fitMode?: 'always' | 'once' | 'never';
+  mapRef?: MutableRefObject<LMap | null>;
+  onReady?: (map: LMap, L: Leaflet) => void;
 }) {
   const el = useRef<HTMLDivElement>(null);
   const [map, setMap] = useState<LMap | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const fitted = useRef(false);
 
   useEffect(() => {
     let gone = false;
     let made: LMap | null = null;
-    createMap(el.current, { zoom })
+    createMap(el.current, { zoom, ...(center ? { center } : {}) })
       .then((m: LMap) => {
         made = m;
         if (gone) m?.remove();
-        else setMap(m);
+        else {
+          if (mapRef) mapRef.current = m;
+          if (m) onReady?.(m, leaflet());
+          setMap(m);
+        }
       })
       .catch((e: Error) => !gone && setError(e.message));
     return () => {
       gone = true;
       made?.remove();
+      if (mapRef) mapRef.current = null;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   useEffect(() => {
     if (!map) return;
-    const W = (window as unknown as { L: L }).L;
-    const group = W.layerGroup().addTo(map);
-    const layers = draw(group, W).filter(Boolean);
-    if (layers.length) {
+    const L = leaflet();
+    const group = L.layerGroup().addTo(map);
+    const layers = draw(group, L, map).filter(Boolean);
+    if (layers.length && fitMode !== 'never' && (fitMode === 'always' || !fitted.current)) {
       fit(map, layers);
       if (fitMaxZoom && map.getZoom() > fitMaxZoom) map.setZoom(fitMaxZoom);
+      fitted.current = true;
     }
     // the size of a map just shown in a panel is known only now
     const t = setTimeout(() => map.invalidateSize(), 200);
@@ -70,7 +91,7 @@ export function MapView({
     <div className="mv">
       <div ref={el} className={`map${tall ? ' map-tall' : ''}`} />
       {error && <p className="ui-muted ui-small">Mappa non disponibile: {error}</p>}
-      {legendItems && <Dom make={() => legend(legendItems)} />}
+      {legendItems && <Dom make={() => legend(legendItems)} deps={[legendItems.map((i) => i.join()).join('|')]} />}
     </div>
   );
 }
