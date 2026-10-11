@@ -61,6 +61,17 @@ Il client non esegue comandi forniti dal server: lettura, scrittura e `cfgmtd` s
 
 `users`, `wireless_secrets` (cifrate), `provision_profiles` (template cifrati), `provisioning_jobs` (solo metadati: niente password, niente config), `events` (registro delle attività admin), `audits` (tabella v0.5 mantenuta in sola lettura e migrata nei job). La retention `GDPR_AUDIT_RETENTION_DAYS` si applica a job, eventi e audits.
 
+## Console web (`web/`)
+
+Moduli JavaScript serviti così come sono, senza build: `js/main.js` è il router (`#/pagina`), ogni pagina è una funzione in `js/views/` che restituisce l'elemento da mostrare. Le librerie stanno in `vendor/` (Leaflet, protomaps-leaflet, MapLibre GL, React, htm) e la CSP ammette solo script del server (`script-src 'self'`).
+
+**React, pagina per pagina.** Le pagine più complesse passano a React una alla volta, a partire da IA-AP; le altre restano com'erano.
+- `js/react.js` carica React e ReactDOM (build di produzione in `vendor/react`) solo la prima volta che si apre una pagina React.
+- I componenti si scrivono con htm: template `` html`…` `` al posto del JSX, sempre senza build.
+- `reactView(Componente)` trasforma il componente in una pagina del router e lo smonta quando si cambia pagina, fermando timer e richieste.
+- `js/ui.js` raccoglie i componenti comuni (intestazione, schede, etichette, pulsante con attesa, segmenti), con le stesse classi CSS delle pagine classiche.
+- Come in `dom.js`, il testo passa sempre da React, che lo protegge dall'inserimento di markup.
+
 ## App Android (`android/`)
 
 Kotlin 2.0 e Compose Material 3, minSdk 26, un solo modulo `:app`.
