@@ -3,6 +3,8 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { PmTilesReader } from '../domain/pmtiles.ts';
 import type { AppContext } from '../context.ts';
+import { HttpError } from '../auth.ts';
+import { PROVIDERS } from '../services/imagery.ts';
 
 /**
  * Basemap (Protomaps PMTiles, OpenStreetMap data) served from the data volume. The file is
@@ -122,5 +124,23 @@ export function mapRoutes(app: FastifyInstance, ctx: AppContext) {
     if (start >= i.size || end < start) return reply.code(416).header('Content-Range', `bytes */${i.size}`).send({ error: 'bad_range' });
     reply.code(206).header('Content-Type', 'application/octet-stream').header('Content-Range', `bytes ${start}-${end}/${i.size}`).header('Content-Length', end - start + 1);
     return reply.send(createReadStream(file, { start, end }));
+  });
+
+  // ---- Aerial imagery (admins only): providers of Connettori through this server, keys never leave it ----
+  app.get('/api/admin/map/satellite', { preHandler: ctx.auth.requireAdmin }, async () => {
+    const layers = ctx.imagery.layers();
+    return { available: layers.length > 0, layers };
+  });
+
+  app.get('/api/admin/map/imagery/:provider/:part/:z/:x/:y', { preHandler: ctx.auth.requireAdmin }, async (req, reply) => {
+    const p = z
+      .object({ provider: z.enum(PROVIDERS), part: z.string().max(20), z: z.coerce.number().int().min(0).max(21), x: z.coerce.number().int().min(0), y: z.coerce.number().int().min(0) })
+      .parse(req.params);
+    if (p.x >= 2 ** p.z || p.y >= 2 ** p.z) throw new HttpError(400, 'invalid_tile');
+    const t = await ctx.imagery.tile(p.provider, p.part, p.z, p.x, p.y);
+    // kept by the browser of this admin only (no shared cache, nothing stored on the server)
+    reply.header('Cache-Control', 'private, max-age=43200');
+    if (!t) return reply.code(204).send();
+    return reply.type(t.type).send(t.body);
   });
 }

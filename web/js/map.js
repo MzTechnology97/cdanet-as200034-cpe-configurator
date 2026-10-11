@@ -1,5 +1,6 @@
 import { api } from './api.js';
 import { h } from './dom.js';
+import { isAdminUser } from './terms.js';
 
 /**
  * Console maps: Leaflet + Protomaps basemap served by our server (OpenStreetMap data, no external
@@ -67,28 +68,34 @@ const attached = (el) =>
  * If the local basemap draws nothing within a few seconds (old browser engine, broken file) the
  * public OpenStreetMap tiles are added instead; [onStatus] receives what happened (diagnostics).
  */
-export async function createMap(el, { center = [37.57, 14.27], zoom = 9, onStatus = null } = {}) {
+export async function createMap(el, { center = [37.57, 14.27], zoom = 9, onStatus = null, imagery = true } = {}) {
   await Promise.all([loadVendor(), attached(el)]);
   if (!el.isConnected) return null;
   // read every time: the basemap may have been installed meanwhile
   const config = await api('/api/map/config');
   const L = window.L;
   const map = L.map(el, { center, zoom, scrollWheelZoom: false });
+  // the basemap lives in a group: the layer switch of the admins shows/hides it as one, even when
+  // the public tiles replace it
+  const base = L.layerGroup().addTo(map);
   // OpenStreetMap's tile policy requires a Referer (the console sends none by default)
-  const publicTiles = () => L.tileLayer(config.fallback.url, { maxZoom: 19, attribution: config.fallback.attribution, referrerPolicy: 'strict-origin-when-cross-origin' }).addTo(map);
+  const publicTiles = () => base.addLayer(L.tileLayer(config.fallback.url, { maxZoom: 19, attribution: config.fallback.attribution, referrerPolicy: 'strict-origin-when-cross-origin' }));
+  if (imagery && isAdminUser()) void addViews(map, base, config);
   if (config.basemap && window.protomapsL) {
     const dark = matchMedia('(prefers-color-scheme: dark)').matches;
-    const pm = window.protomapsL.leafletLayer({ url: config.basemap.tiles ?? config.basemap.url, flavor: dark ? 'dark' : 'light', lang: 'it', maxDataZoom: config.basemap.maxZoom }).addTo(map);
+    const pm = window.protomapsL.leafletLayer({ url: config.basemap.tiles ?? config.basemap.url, flavor: dark ? 'dark' : 'light', lang: 'it', maxDataZoom: config.basemap.maxZoom });
+    base.addLayer(pm);
     const start = reads.ok;
     setTimeout(() => {
-      if (!el.isConnected) return;
+      // an admin looking at the satellite: the basemap was not drawn, nothing to judge
+      if (!el.isConnected || !map.hasLayer(base)) return;
       const size = map.getSize();
       // no tile read: unreadable here, or outside the downloaded area
       const working = reads.ok - start > (config.basemap.tiles ? 0 : 3);
       const other = reads.other.size ? `, altre richieste fallite: ${[...reads.other].join(' ')}` : '';
       onStatus?.(working ? 'basemap_ok' : 'basemap_fallback', `letture ${reads.ok - start} ok, ${reads.fail} fallite${reads.error ? ` (${reads.error})` : ''}, mappa ${size.x}×${size.y}, zoom ${map.getZoom()}${other}`);
       if (!working) {
-        map.removeLayer(pm);
+        base.removeLayer(pm);
         publicTiles();
       }
     }, 8000);
@@ -100,6 +107,113 @@ export async function createMap(el, { center = [37.57, 14.27], zoom = 9, onStatu
   map.on('focus', () => map.scrollWheelZoom.enable());
   map.on('blur', () => map.scrollWheelZoom.disable());
   return map;
+}
+
+/**
+ * Tiles read with the session of the admin (the imagery goes through our server): fetched, then
+ * shown from a blob. An empty answer (no imagery there) leaves the tile blank.
+ */
+function authTileLayer(url, options) {
+  const L = window.L;
+  const Layer = L.TileLayer.extend({
+    createTile(coords, done) {
+      const img = document.createElement('img');
+      img.alt = '';
+      api(this.getTileUrl(coords), { raw: true })
+        .then(async (r) => {
+          if (!r.ok || r.status === 204) return done(null, img);
+          img.onload = () => (URL.revokeObjectURL(img.src), done(null, img));
+          img.onerror = () => done(new Error('tile'), img);
+          img.src = URL.createObjectURL(await r.blob());
+        })
+        .catch((e) => done(e, img));
+      return img;
+    },
+  });
+  return new Layer(url, options);
+}
+
+const BASE_KEY = 'cda.mapBase';
+const savedBase = () => {
+  try {
+    return localStorage.getItem(BASE_KEY);
+  } catch {
+    return null;
+  }
+};
+
+const OVERLAY_KEY = 'cda.mapOverlays';
+const savedOverlays = () => {
+  try {
+    return JSON.parse(localStorage.getItem(OVERLAY_KEY) ?? '[]');
+  } catch {
+    return [];
+  }
+};
+const remember = (key, value) => {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* private mode: not remembered */
+  }
+};
+
+/**
+ * Layers of the basemap that can be shown on their own, over any background (also the aerial
+ * imagery): the rules of the theme for those data layers only, on a transparent canvas.
+ */
+const OVERLAYS = [
+  ['Strade e vie', ['roads'], ['roads']],
+  ['Edifici', ['buildings'], []],
+  ['Località e nomi', [], ['places', 'pois']],
+  ['Acque', ['water'], ['water']],
+  ['Confini', ['boundaries'], []],
+];
+
+/**
+ * Admins: views of the map. Backgrounds: the basemap in its themes (light, dark, grey) and the
+ * aerial imagery of every provider switched on in Connettori → Immagini satellitari (through the
+ * server), one entry each to compare them on the same place. Layers to add on top: roads and
+ * streets, buildings, places, water, borders. The choices are remembered on this browser.
+ */
+async function addViews(map, base, config) {
+  const s = await api('/api/admin/map/satellite').catch(() => null);
+  if (!map.getContainer().isConnected) return;
+  const L = window.L;
+  const pm = config.basemap && window.protomapsL ? window.protomapsL : null;
+  const url = config.basemap ? (config.basemap.tiles ?? config.basemap.url) : null;
+  const vector = (opts) => pm.leafletLayer({ url, lang: 'it', maxDataZoom: config.basemap.maxZoom, ...opts });
+  const bases = { Mappa: base };
+  const overlays = {};
+  if (pm) {
+    bases['Mappa chiara'] = vector({ flavor: 'light' });
+    bases['Mappa scura'] = vector({ flavor: 'dark' });
+    bases['Mappa grigia'] = vector({ flavor: 'grayscale' });
+    // the rules of the light theme, split by data layer (a layer not added only lends its rules)
+    const theme = vector({ flavor: 'light' });
+    for (const [name, paint, labels] of OVERLAYS) {
+      const paintRules = theme.paintRules.filter((r) => paint.includes(r.dataLayer));
+      const labelRules = theme.labelRules.filter((r) => labels.includes(r.dataLayer));
+      if (paintRules.length || labelRules.length) overlays[name] = vector({ paintRules, labelRules, attribution: '' });
+    }
+  }
+  for (const v of s?.layers ?? []) {
+    const opts = { maxZoom: 20, maxNativeZoom: v.maxNativeZoom, minZoom: v.minZoom, tileSize: 256 };
+    const parts = v.parts.map(([provider, part], i) => authTileLayer(`/api/admin/map/imagery/${provider}/${part}/{z}/{x}/{y}`, { ...opts, ...(i === 0 ? { attribution: v.attribution } : {}) }));
+    bases[v.label] = parts.length === 1 ? parts[0] : L.layerGroup(parts);
+  }
+  if (Object.keys(bases).length === 1 && !Object.keys(overlays).length) return;
+  const chosen = bases[savedBase()];
+  if (chosen && chosen !== base) {
+    map.removeLayer(base);
+    chosen.addTo(map);
+  }
+  const on = new Set(savedOverlays());
+  for (const [name, layer] of Object.entries(overlays)) if (on.has(name)) layer.addTo(map);
+  L.control.layers(bases, overlays, { position: 'topright' }).addTo(map);
+  map.on('baselayerchange', (e) => remember(BASE_KEY, e.name));
+  const saveOverlays = () => remember(OVERLAY_KEY, JSON.stringify(Object.entries(overlays).filter(([, l]) => map.hasLayer(l)).map(([n]) => n)));
+  map.on('overlayadd overlayremove', saveOverlays);
 }
 
 /** Popup content as DOM (never HTML strings: names come from external systems). */

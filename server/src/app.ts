@@ -32,6 +32,7 @@ import { createTelegram } from './services/telegram.ts';
 import type { Uisp } from './services/uisp.ts';
 import { createConnectors } from './services/connectors.ts';
 import { createCrmSettings } from './services/crm.ts';
+import { createImagery } from './services/imagery.ts';
 import { createCrmSync, type CrmSync } from './services/crm-sync.ts';
 import { crmRoutes } from './routes/crm.ts';
 import { connectorRoutes } from './routes/connectors.ts';
@@ -60,7 +61,7 @@ const CSP = [
   "script-src 'self'",
   "style-src 'self'",
   // OpenStreetMap tiles: map fallback when the local Protomaps basemap is not installed yet.
-  "img-src 'self' data: https://tile.openstreetmap.org",
+  "img-src 'self' data: blob: https://tile.openstreetmap.org",
   "worker-src 'self' blob:",
   "connect-src 'self'",
   "object-src 'none'",
@@ -112,6 +113,7 @@ export async function buildApp(
     uispSettings: { autoBackup: uispCfg?.autoBackup ?? cfg.uispAutoBackup, coverageMaxKm: uispCfg?.coverageMaxKm ?? cfg.coverageMaxKm },
     connectors,
     crm: createCrmSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
+    imagery: createImagery(db, sealer, { fetchImpl: opts.fetchImpl }),
     crmSync: undefined as unknown as CrmSync,
     apLoad: undefined as unknown as ApLoadService,
     advisor: undefined as unknown as Advisor,

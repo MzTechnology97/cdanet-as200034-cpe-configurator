@@ -40,6 +40,24 @@ Finché la mappa non è installata, la console usa le tile pubbliche di OpenStre
 
 **Copertura**: il punto verificato, gli AP vicini con la linea di puntamento.
 
+## Immagini satellitari per gli admin (v1.32.59)
+
+Connettori → **Immagini satellitari**: una o più fonti di foto aeree per le mappe della console degli amministratori.
+
+| Fonte | Cosa serve | Viste |
+|---|---|---|
+| Mapbox | token (account.mapbox.com) | Satellite, Ibrida |
+| Esri (ArcGIS) | chiave API ArcGIS Location Platform con il privilegio Basemaps | Satellite, Ibrida (foto + strade + nomi) |
+| Google | chiave API con la Map Tiles API e un account di fatturazione | Satellite, Ibrida |
+| Ortofoto pubbliche (WMS) | niente: predefinite le ortofoto AGEA 2012 del Geoportale Nazionale, indirizzo e layer modificabili | Ortofoto (da zoom 9) |
+
+- **Visualizzazioni (admin):** nel selettore in alto a destra, come sfondo, la mappa base (tema del sistema, chiara, scura, grigia) e le foto aeree. Sopra si possono aggiungere i livelli **Strade e vie** (con i nomi), **Edifici**, **Località e nomi**, **Acque** e **Confini**, presi dalla mappa base: sulle foto aeree danno una vista ibrida anche con le ortofoto. Sfondo e livelli scelti restano su quel browser.
+- **Confronto:** ogni fonte attiva compare nel selettore in alto a destra delle mappe (per esempio «Satellite · Esri», «Ibrida · Mapbox»). Si attivano più fonti per confrontarle sullo stesso punto, poi si lascia accesa quella scelta; la vista scelta resta su quel browser.
+- **Chiavi e immagini:** le chiavi sono cifrate sul server e le immagini passano da lì (`/api/admin/map/imagery/...`, solo admin collegati). Nessuna chiave arriva ai browser.
+- **Cache:** il browser dell'admin tiene le immagini per 12 ore; sul server non viene salvato nulla.
+- **Installatori e app:** gli installatori, la mappa nell'app e quella incorporata vedono sempre la mappa base.
+- **Prossimo passo:** vista 3D con il terreno TINITALY a 10 m, i settori degli AP e la linea di vista.
+
 ## Riservatezza per gli installatori
 
 - POP e AP sono mostrati **solo come area approssimativa** (cerchio di 1,5 km): la posizione è quella della cella di circa 1 km che contiene il punto reale, spostata di un valore fisso calcolato con un segreto del server. Non cambia tra una richiesta e l'altra, quindi non si può ricavare il punto reale facendo la media di più richieste. Le coordinate reali non arrivano mai al browser o all'app dell'installatore.

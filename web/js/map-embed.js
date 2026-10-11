@@ -52,7 +52,7 @@ window.addEventListener('unhandledrejection', (e) => {
   showError(r?.message || String(r));
 });
 
-const ready = createMap(el, { zoom: 12, onStatus: (kind, msg) => report(kind, msg) }).then((map) => {
+const ready = createMap(el, { zoom: 12, imagery: false, onStatus: (kind, msg) => report(kind, msg) }).then((map) => {
   if (map) {
     map.scrollWheelZoom.enable();
     layer = window.L.layerGroup().addTo(map);
