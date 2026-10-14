@@ -149,6 +149,8 @@ enum class Screen(val title: String, val scroll: Boolean = true, val wide: Boole
     Search("Cerca"),
     // admins: one CPE managed as in the UISP app (opened from Salute CPE)
     CpeAdmin("Gestione CPE", scroll = false),
+    // debug builds: every component on one page (Impostazioni → Componenti dell'interfaccia)
+    Components("Componenti"),
 }
 
 /** The four areas of the bottom bar. */
@@ -479,7 +481,8 @@ fun AppRoot(c: AppContainer) {
                     Screen.Notifications -> NotificationsScreen(c, onUnread = { unread = it })
                     // the installer guide of the server (/wiki/): its links outside the guide open in the browser
                     Screen.Guide -> ServerPage(c, "/wiki/", "Guida", modifier = Modifier.fillMaxSize(), insidePrefix = "/wiki/", document = true)
-                    Screen.Settings -> SettingsScreen(c, update = update, onUpdate = { update = it }, onLogout = {
+                    Screen.Components -> ComponentsShowcase()
+                    Screen.Settings -> SettingsScreen(c, update = update, onUpdate = { update = it }, onComponents = { go(Screen.Components) }, onLogout = {
                         // "Esci" really signs out: the phone forgets its key, next time the password is needed
                         scope.launch { logoutPhone(c) }
                         offline = false

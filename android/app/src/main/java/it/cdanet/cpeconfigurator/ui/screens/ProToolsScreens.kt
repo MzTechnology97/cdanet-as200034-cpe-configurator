@@ -366,15 +366,7 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
             job != null -> Notice("Scansione in corso: l'elenco si completa a ogni subnet, poi parte da sola la topologia.", NoticeKind.Info)
             topoBusy != null -> Notice("Scansione completata. Costruzione della topologia in corso (SNMP, discovery, impronte): produttori, tipi e collegamenti si aggiornano al termine.", NoticeKind.Info)
         }
-        androidx.compose.material3.SingleChoiceSegmentedButtonRow(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-            listOf("Elenco", "Griglia IP", "Topologia").forEachIndexed { i, label ->
-                SegmentedButton(
-                    selected = view == i,
-                    onClick = { setView(i) },
-                    shape = androidx.compose.material3.SegmentedButtonDefaults.itemShape(i, 3),
-                ) { Text(label, maxLines = 1) }
-            }
-        }
+        it.cdanet.cpeconfigurator.ui.Segmented(listOf(0 to "Elenco", 1 to "Griglia IP", 2 to "Topologia"), view, { setView(it) }, Modifier.padding(vertical = 4.dp))
         when (view) {
             2 -> Column {
                 Panel { Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
