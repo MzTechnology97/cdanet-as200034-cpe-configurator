@@ -136,6 +136,10 @@ export interface Config {
   dem: { url: string; dir: string };
   /** Terrain (TINITALY) and land cover (WorldCover) tiles imported by the admin. */
   terrainDir: string;
+  /** Aerial photos of the public WMS kept on disk (next to the database). */
+  imageryDir: string;
+  /** The last device and site lists of UISP, used when UISP is slow or down (next to the database). */
+  uispCacheDir: string | undefined;
   staticDir: string;
   masterKey: Buffer;
   jwtSecret: Uint8Array;
@@ -230,6 +234,9 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     ouiDir: e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-oui-${process.pid}`) : join(dirname(e.DB_PATH), 'oui'),
     dem: { url: e.DEM_URL, dir: e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-dem-${process.pid}`) : join(dirname(e.DB_PATH), 'dem') },
     terrainDir: e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-terrain-${process.pid}`) : join(dirname(e.DB_PATH), 'terrain'),
+    imageryDir: e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-imagery-${process.pid}`) : join(dirname(e.DB_PATH), 'imagery'),
+    // tests (database in memory) never keep a copy
+    uispCacheDir: e.DB_PATH === ':memory:' ? undefined : join(dirname(e.DB_PATH), 'uisp-cache'),
     mapFile: e.MAP_FILE || (e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-map-${process.pid}.pmtiles`) : join(dirname(e.DB_PATH), 'maps', 'basemap.pmtiles')),
     infraDir: e.INFRA_DIR || (e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-infra-${process.pid}`) : join(dirname(e.DB_PATH), 'infra')),
     firmwareDir: e.FIRMWARE_DIR || (e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-firmware-${process.pid}`) : join(dirname(e.DB_PATH), 'firmware')),
