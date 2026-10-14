@@ -98,6 +98,15 @@ describe('IA-AP ottimizzazione: configurazione e confronto', () => {
     assert.equal(compareLinks(before, linkSamples(weaker)).verdict, 'peggiore');
   });
 
+  it('a lower SNR does not count while it stays high (≥ 30 dB): the modulation is already the highest', () => {
+    // SNR 37 dB before (signal -55, noise -92)
+    const strong = linkSamples([station(1, 100, -55), station(2, 100, -55), station(3, 100, -66)]);
+    // 2.5 dB less but still 34.5 dB, with much more capacity: better
+    assert.equal(compareLinks(strong, linkSamples([station(1, 300, -57.5), station(2, 300, -57.5), station(3, 300, -66)])).verdict, 'migliore');
+    // down to 28 dB: the SNR rule applies again, not better
+    assert.equal(compareLinks(strong, linkSamples([station(1, 300, -64), station(2, 300, -64), station(3, 300, -66)])).verdict, 'uguale');
+  });
+
   it('the night window is 03:00 in Italy', () => {
     const t = nextNightWindow(new Date('2026-10-10T20:00:00Z'));
     assert.equal(t, '2026-10-11T01:00:00.000Z', 'CEST: UTC+2');

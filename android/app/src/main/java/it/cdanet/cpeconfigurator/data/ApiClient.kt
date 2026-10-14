@@ -326,6 +326,10 @@ class ApiClient(
 
     suspend fun workOrders(): WorkOrdersDto = AppJson.decodeFromString(WorkOrdersDto.serializer(), request("GET", "/api/work-orders"))
 
+    /** Calendario: the orders from [from] to [to] (YYYY-MM-DD, up to 62 days); [user] = one installer (NOC). */
+    suspend fun workOrderCalendar(from: String, to: String, user: Long? = null): CalendarDto =
+        AppJson.decodeFromString(CalendarDto.serializer(), request("GET", "/api/work-orders/calendar?from=$from&to=$to" + (user?.let { "&user=$it" } ?: "")))
+
     suspend fun setWorkOrderStatus(id: Long, status: String, note: String = "") {
         request("POST", "/api/work-orders/$id/status", buildJsonObject { put("status", status); put("note", note) })
     }

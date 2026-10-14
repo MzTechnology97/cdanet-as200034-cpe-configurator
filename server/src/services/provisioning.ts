@@ -15,7 +15,8 @@ import { isDeviceMac,
 } from '../domain/policy.ts';
 import { renderSystemCfg, type PlaceholderName } from '../domain/systemcfg.ts';
 import type { Templates, Viewer } from './templates.ts';
-import { sweepPhotos } from './photos.ts';
+import { photoDir, sweepPhotos } from './photos.ts';
+import { rmSync } from 'node:fs';
 
 /** MAC of the CPE, as AA:BB:CC:DD:EE:FF. */
 export const cpeMacSchema = z
@@ -442,6 +443,32 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
     return now;
   }
 
-  return { readiness, plan, createJob, recordResult, listJobs, housekeeping, jobValues, enforcedKeys };
+  /**
+   * Removes an installation attempt that never installed a CPE (prepared, failed or expired): the NOC
+   * cleans up tests and mistakes. A written installation (success) is the record of a customer's CPE
+   * and is never deleted. Its acceptance test, photos, KOs and notifications go with it.
+   */
+  function deleteAttempt(jobId: string) {
+    const job = db.prepare('SELECT id, status, mac, pppoe_user pppoeUser, device_name deviceName FROM provisioning_jobs WHERE id = ?').get(jobId) as
+      | { id: string; status: string; mac: string; pppoeUser: string; deviceName: string }
+      | undefined;
+    if (!job) throw new HttpError(404, 'job_not_found');
+    if (job.status === 'success') throw new HttpError(409, 'job_installed');
+    db.exec('BEGIN');
+    try {
+      db.prepare('UPDATE provisioning_jobs SET superseded_by = NULL WHERE superseded_by = ?').run(jobId);
+      db.prepare('UPDATE provisioning_jobs SET replaces_job_id = NULL WHERE replaces_job_id = ?').run(jobId);
+      db.prepare('DELETE FROM notifications WHERE job_id = ?').run(jobId);
+      db.prepare('DELETE FROM provisioning_jobs WHERE id = ?').run(jobId);
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
+    rmSync(photoDir(cfg.photosDir, jobId), { recursive: true, force: true });
+    return job;
+  }
+
+  return { readiness, plan, createJob, recordResult, listJobs, housekeeping, jobValues, enforcedKeys, deleteAttempt };
 }
 export type Provisioning = ReturnType<typeof createProvisioning>;

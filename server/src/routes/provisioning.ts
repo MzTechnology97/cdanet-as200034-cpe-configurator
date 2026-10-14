@@ -42,6 +42,14 @@ export function provisioningRoutes(app: FastifyInstance, ctx: AppContext) {
     return reply.code(201).send(pkg);
   });
 
+  /** The NOC deletes an installation attempt that never installed a CPE (tests, mistakes). */
+  app.delete('/api/admin/provisioning/jobs/:id', { preHandler: [ctx.auth.requireUser, ctx.auth.requireAdmin] }, async (req) => {
+    const id = z.string().uuid().parse((req.params as { id: string }).id);
+    const job = ctx.provisioning.deleteAttempt(id);
+    recordEvent(ctx.db, req.user!.id, 'job.delete', id, `${job.deviceName || job.pppoeUser} · ${job.mac || 'senza MAC'} · era ${job.status}`);
+    return { ok: true };
+  });
+
   app.post('/api/provisioning/jobs/:id/result', user, async (req) => {
     const id = z.string().uuid().parse((req.params as { id: string }).id);
     const body = provisionResultSchema.parse(req.body);

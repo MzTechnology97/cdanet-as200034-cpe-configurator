@@ -168,8 +168,13 @@ export function summarize(m: Map<string, LinkSample>, only?: Set<string>): LinkS
 export const OPTIMIZER_RULES = {
   /** Total capacity of the CPEs at least this much higher to call a channel better (+5%). */
   betterCapacity: 1.05,
-  /** …and the median SNR not lower than this (dB). */
+  /** …and the median SNR not lower than this (dB)… */
   snrTolerance: 1,
+  /**
+   * …unless it stays at or above this (dB): there the modulation is already the highest, a couple
+   * of dB less change nothing (N26-D06, 12/10: +239% capacity refused for 35 → 33.3 dB).
+   */
+  snrHigh: 30,
   /** The weakest customer may not lose more than this (dB). */
   weakestTolerance: 3,
   /** Below this capacity ratio the channel is worse (−3%). */
@@ -199,7 +204,7 @@ export function compareLinks(before: Map<string, LinkSample>, after: Map<string,
   const a = summarize(after, common);
   const ratio = b.capacityMbps > 0 ? Math.round((a.capacityMbps / b.capacityMbps) * 1000) / 1000 : null;
   const R = OPTIMIZER_RULES;
-  const snrOk = b.medianSnrDb === null || a.medianSnrDb === null || a.medianSnrDb >= b.medianSnrDb - R.snrTolerance;
+  const snrOk = b.medianSnrDb === null || a.medianSnrDb === null || a.medianSnrDb >= b.medianSnrDb - R.snrTolerance || a.medianSnrDb >= R.snrHigh;
   const weakOk = b.weakestDbm === null || a.weakestDbm === null || a.weakestDbm >= b.weakestDbm - R.weakestTolerance;
   let verdict: Verdict;
   if (missing.length) verdict = 'cpe_mancanti';
