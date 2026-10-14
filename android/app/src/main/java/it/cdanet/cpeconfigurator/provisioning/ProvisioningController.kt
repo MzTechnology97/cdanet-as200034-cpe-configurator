@@ -1,5 +1,9 @@
 package it.cdanet.cpeconfigurator.provisioning
 
+import java.io.IOException
+import it.cdanet.cpeconfigurator.ssh.SshConnection
+import it.cdanet.cpeconfigurator.firmware.FirmwareStore
+import it.cdanet.cpeconfigurator.firmware.CpeFirmwareFlasher
 import it.cdanet.cpeconfigurator.data.ApiClient
 import it.cdanet.cpeconfigurator.data.DetectedDto
 import it.cdanet.cpeconfigurator.data.PendingResult
@@ -64,6 +68,8 @@ data class ProvisioningState(
     /** Job written successfully (kept after the package and its secrets are dropped). */
     val doneJobId: String? = null,
     val doneSummary: it.cdanet.cpeconfigurator.data.JobSummaryDto? = null,
+    /** The write stopped on the firmware: the version the CPE must have (it can be flashed right here). */
+    val firmwareTarget: String? = null,
 )
 
 /**
@@ -150,11 +156,13 @@ class ProvisioningController(
         queue.enqueue(PendingResult(pkg.jobId, result, "${pkg.summary.deviceName} · ${pkg.summary.mac}"))
         queue.syncInBackground()
         val ok = result.result == "success"
+        val firmware = result.detected.firmware
         _state.update {
             it.copy(
                 phase = Phase.Done,
                 busy = false,
                 success = ok,
+                firmwareTarget = pkg.checks.firmware.takeIf { !ok && firmware != null && !DeviceCheck.firmwareMatches(firmware, it) },
                 error = if (ok) null else result.error,
                 // Secrets are dropped after a successful write; a failed attempt may be retried.
                 pkg = if (ok) null else pkg,
@@ -165,7 +173,37 @@ class ProvisioningController(
     }
 
     fun retry() {
-        _state.update { if (it.pkg != null) it.copy(phase = Phase.Prepared, stages = emptyList(), success = null, error = null) else it }
+        _state.update { if (it.pkg != null) it.copy(phase = Phase.Prepared, stages = emptyList(), success = null, error = null, firmwareTarget = null) else it }
+    }
+
+    /**
+     * Flashes the CPE of the prepared package with the required firmware (already on the phone),
+     * with the package's own address and credentials, and waits for it to come back. Returns the
+     * builds before and after; throws with an Italian message when it cannot or did not work.
+     */
+    suspend fun updateFirmware(store: FirmwareStore, onStage: (String) -> Unit): Pair<String, String> = withContext(Dispatchers.IO) {
+        val pkg = _state.value.pkg ?: throw IllegalStateException("Configurazione non più disponibile: preparala di nuovo")
+        val list = store.savedList() ?: throw IOException("Elenco dei firmware non sul telefono: apri CPE collegata → Firmware con Internet")
+        val open: suspend () -> SshConnection = {
+            network.onWifi { SshConnection.connect(pkg.target.host, pkg.target.sshPort, pkg.credentials.username, pkg.credentials.password) }
+        }
+        val flasher = CpeFirmwareFlasher(onStage)
+        onStage("Lettura della versione della CPE")
+        val before = open().use { flasher.readVersion(it) } ?: throw IOException("Versione della CPE non leggibile")
+        val img = list.items.firstOrNull { it.platform == before.platform }
+            ?: throw IOException("Nessun firmware ${list.target} per la piattaforma ${before.platform}: chiedi all'amministratore di caricarlo")
+        if (!store.has(img)) {
+            throw IOException("Il firmware ${img.platform} ${img.version} non è sul telefono: torna su Internet, aprilo da CPE collegata → Firmware e scaricalo, poi riprova")
+        }
+        try {
+            open().use { flasher.start(it, store.fileOf(img), img) }
+        } catch (e: CpeFirmwareFlasher.AlreadyUpToDate) {
+            return@withContext before.build to e.build.build
+        }
+        val after = flasher.waitBack(open)
+            ?: throw IOException("La CPE non è tornata raggiungibile entro 9 minuti: non toglierle alimentazione, ricollegati alla sua Wi-Fi e riprova la scrittura")
+        if (after.version != img.version) throw IOException("La CPE è ripartita con ${after.version} invece di ${img.version}: aggiornamento non applicato")
+        before.build to after.build
     }
 
     /** Starts the replacement of the CPE of a completed job (History → Sostituisci CPE). */

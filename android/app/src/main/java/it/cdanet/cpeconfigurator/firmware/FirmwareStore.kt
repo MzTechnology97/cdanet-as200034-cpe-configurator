@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.firmware
 
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.Mutex
 import android.content.Context
 import it.cdanet.cpeconfigurator.data.ApiClient
 import it.cdanet.cpeconfigurator.data.AppJson
@@ -16,6 +18,7 @@ import java.security.MessageDigest
  * (no Internet there). Each file is checked against the server's SHA-256 before it is kept.
  */
 class FirmwareStore(context: Context) {
+    private val lock = Mutex()
     private val dir = File(context.filesDir, "firmware")
     private val listFile = File(dir, "list.json")
 
@@ -34,7 +37,22 @@ class FirmwareStore(context: Context) {
         dir.listFiles()?.filter { it.name.endsWith(".bin") && it.name !in keep }?.forEach { it.delete() }
     }
 
+    /**
+     * The images of the required version on the phone before going on the roof, where there is no
+     * Internet: called when an installation starts, quietly (a failure only means "not yet").
+     */
+    suspend fun prefetch(api: ApiClient) {
+        val l = runCatching { api.firmwareList() }.getOrNull() ?: return
+        saveList(l)
+        l.items.filterNot { has(it) }.forEach { img -> runCatching { download(api, img) {} } }
+    }
+
     suspend fun download(api: ApiClient, img: FirmwareImageDto, onProgress: (Float) -> Unit) = withContext(Dispatchers.IO) {
+        // one download at a time: the screen and the prefetch must not write the same file
+        lock.withLock { if (!has(img)) fetch(api, img, onProgress) }
+    }
+
+    private suspend fun fetch(api: ApiClient, img: FirmwareImageDto, onProgress: (Float) -> Unit) {
         dir.mkdirs()
         val tmp = File(dir, "${img.sha256}.part")
         try {
