@@ -103,7 +103,8 @@ export const SERVER_SETTINGS: Def[] = [
   netInt('sshPort', 'CPE_SSH_PORT', 'Porta SSH della CPE', 1, 65535),
   netInt('discoveryPort', 'CPE_DISCOVERY_PORT', 'Porta discovery Ubiquiti', 1, 65535),
   {
-    key: 'jobTtlMinutes', env: 'PROVISION_JOB_TTL_MINUTES', group: 'Provisioning e app', label: 'Validità di un provisioning (minuti)', kind: 'int', min: 5, max: 240,
+    key: 'jobTtlMinutes', env: 'PROVISION_JOB_TTL_MINUTES', group: 'Provisioning e app', label: 'Validità di un provisioning (minuti)', kind: 'int', min: 5, max: 2880,
+    help: 'Per quanto tempo la configurazione preparata resta valida sul telefono: anche 48 ore (2880) per salire sul tetto senza Internet.',
     get: (c) => c.jobTtlMinutes, set: (c, v) => (c.jobTtlMinutes = v as number),
   },
   {
