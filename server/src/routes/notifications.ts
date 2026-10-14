@@ -112,6 +112,22 @@ export function notificationRoutes(app: FastifyInstance, ctx: AppContext) {
     return { ok: true, marked, unread: inbox().unread(req.user!.id) };
   });
 
+  /**
+   * The app saw a screenshot or screen recording by an account that may not take them (Android 14+
+   * tells it; the image is black): the NOC is told, the activity log keeps it.
+   */
+  app.post('/api/security/screenshot-attempt', user, async (req) => {
+    const b = z.object({ screen: z.string().trim().max(80).default(''), at: z.string().datetime().optional() }).strict().parse(req.body);
+    if (req.user!.role === 'admin' || ctx.modules.stateFor(req.user!.id).screenshots) return { ok: true, notified: false };
+    recordEvent(ctx.db, req.user!.id, 'security.screenshot', req.user!.username, b.screen || 'app');
+    inbox().push('noc', {
+      kind: 'screenshot_attempt',
+      title: `Tentativo di screenshot: ${req.user!.username}`,
+      lines: [`${req.user!.username} ha provato a fare uno screenshot o a registrare lo schermo nell'app${b.screen ? ` (schermata «${b.screen}»)` : ''}.`, "L'immagine è uscita nera: il suo account non può farne."],
+    });
+    return { ok: true, notified: true };
+  });
+
   app.get('/api/notifications/prefs', user, async (req) => {
     const on = new Set(inbox().telegramKinds(req.user!.id));
     const chat = (ctx.db.prepare('SELECT telegram_chat_id chat FROM users WHERE id = ?').get(req.user!.id) as { chat: string }).chat;
