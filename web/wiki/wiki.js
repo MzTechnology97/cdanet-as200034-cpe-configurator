@@ -84,3 +84,83 @@
     startX = null;
   });
 })();
+
+// Guida da telefono: indice a pannello (tasto «Indice» nella barra in alto), capitolo corrente
+// evidenziato, tasto per tornare su e tabelle che scorrono di lato invece di uscire dallo schermo.
+(() => {
+  const toc = document.querySelector('nav.toc');
+  const header = document.querySelector('header.top');
+  if (!toc || !header) return;
+
+  // tables: their own horizontal scroll on a narrow screen
+  for (const t of document.querySelectorAll('main table')) {
+    if (t.parentElement?.classList.contains('table-wrap')) continue;
+    const wrap = document.createElement('div');
+    wrap.className = 'table-wrap';
+    t.replaceWith(wrap);
+    wrap.append(t);
+  }
+
+  // the index as a panel on the phone
+  const btn = document.createElement('button');
+  btn.type = 'button';
+  btn.className = 'toc-toggle';
+  btn.setAttribute('aria-expanded', 'false');
+  btn.setAttribute('aria-controls', 'toc');
+  btn.textContent = 'Indice';
+  toc.id = 'toc';
+  header.insertBefore(btn, header.querySelector('a.back'));
+  const filter = document.createElement('input');
+  filter.type = 'search';
+  filter.className = 'toc-filter';
+  filter.placeholder = 'Cerca nell’indice…';
+  filter.setAttribute('aria-label', 'Cerca nell’indice');
+  toc.prepend(filter);
+  const setOpen = (open) => {
+    // the panel starts right under the header, whatever its height on this phone
+    document.documentElement.style.setProperty('--header-h', `${Math.round(header.getBoundingClientRect().height)}px`);
+    document.body.classList.toggle('toc-open', open);
+    btn.setAttribute('aria-expanded', String(open));
+    if (open) filter.focus({ preventScroll: true });
+  };
+  btn.addEventListener('click', () => setOpen(!document.body.classList.contains('toc-open')));
+  toc.addEventListener('click', (e) => {
+    if (e.target.closest('a')) setOpen(false);
+  });
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && document.body.classList.contains('toc-open')) setOpen(false);
+  });
+  filter.addEventListener('input', () => {
+    const q = filter.value.trim().toLowerCase();
+    for (const li of toc.querySelectorAll('li')) {
+      const hit = !q || li.textContent.toLowerCase().includes(q);
+      li.hidden = !hit;
+    }
+  });
+
+  // the chapter on screen, highlighted in the index
+  const links = new Map([...toc.querySelectorAll('a[href^="#"]')].map((a) => [a.getAttribute('href').slice(1), a]));
+  const heads = [...document.querySelectorAll('main h2[id], main h3[id]')].filter((h) => links.has(h.id));
+  if ('IntersectionObserver' in window && heads.length) {
+    let current = null;
+    const io = new IntersectionObserver(
+      (entries) => {
+        for (const e of entries) if (e.isIntersecting) current = e.target.id;
+        for (const [id, a] of links) a.classList.toggle('here', id === current);
+      },
+      { rootMargin: '-70px 0px -70% 0px' },
+    );
+    heads.forEach((h) => io.observe(h));
+  }
+
+  // back to the top
+  const up = document.createElement('a');
+  up.href = '#inizio';
+  up.className = 'to-top';
+  up.setAttribute('aria-label', 'Torna all’inizio');
+  up.textContent = '↑';
+  document.body.append(up);
+  const onScroll = () => up.classList.toggle('show', window.scrollY > 900);
+  window.addEventListener('scroll', onScroll, { passive: true });
+  onScroll();
+})();
