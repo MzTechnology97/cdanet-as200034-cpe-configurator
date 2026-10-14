@@ -313,3 +313,25 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .fw-file { position: relative; overflow: hidden; max-width: 100%; }
 .fw-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
 .ev-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Statistiche */
+.st-chart { width: 100%; height: auto; display: block; }
+.st-ok { fill: var(--good); }
+.st-ko { fill: var(--bad); }
+.st-val { font-size: 11px; fill: var(--ink); }
+.st-axis { font-size: 10px; fill: var(--muted); }
+.st-p { margin: 0; }
+.st-note, .pv-note { margin: 0; padding: var(--sp-3) var(--sp-4) 0; }
+.ui-page-head .ui-field select { min-height: 38px; }
+
+/* MikroTik */
+.ro-term { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: flex-end; }
+.ro-term .ui-field { flex: 1 1 320px; }
+.ro-cmd { margin: 0; }
+.ro-out { margin: 0; padding: var(--sp-3); border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--line); font-family: var(--font-mono); font-size: var(--fs-xs); overflow-x: auto; white-space: pre; max-height: 60vh; }
+
+/* Informativa privacy */
+.pv-p { margin: 0; }
+.pv-text h3 { margin: var(--sp-3) 0 var(--sp-2); }
+.pv-text h4 { margin: var(--sp-3) 0 var(--sp-1); }
+.pv-text p { margin: 0 0 var(--sp-2); }
