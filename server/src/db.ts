@@ -457,6 +457,10 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE provisioning_jobs ADD COLUMN superseded_by TEXT;
   `,
+  // 27: the UISP CRM service made for the job's subscriber (a retry reuses it, never a second subscriber)
+  `
+  ALTER TABLE provisioning_jobs ADD COLUMN uisp_crm_service_id INTEGER;
+  `,
 ];
 
 export function openDatabase(path: string): Db {

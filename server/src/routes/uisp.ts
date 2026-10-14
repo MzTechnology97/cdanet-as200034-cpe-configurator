@@ -1,4 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
+import { subscriberName } from '../services/uisp-crm.ts';
 import { Readable } from 'node:stream';
 import { eveningShare, expectedModulation } from '../domain/ap-load.ts';
 import { apModels } from '../services/model-inputs.ts';
@@ -32,7 +33,15 @@ interface JobRow {
   uisp_device_id: string;
   uisp_site: string;
   uisp_authorized_at: string | null;
+  model: string;
+  pppoe_user: string;
+  device_name: string;
+  work_order_id: number | null;
+  uisp_crm_service_id: number | null;
 }
+
+/** Wait between the checks of the subscriber's endpoint site (shorter in the tests). */
+export const subscriberTiming = { pollMs: 1500 };
 
 export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
   const user = { preHandler: ctx.auth.requireUser };
@@ -517,6 +526,98 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   app.get('/api/admin/uisp/sites', admin, async () => (await uisp().sites()).filter((s) => s.type !== 'endpoint').map((s) => ({ id: s.id, name: s.name })));
+
+  // ---- New subscriber at acceptance (UISP CRM) -------------------------------------------------
+  const crm = () => {
+    const c = ctx.connectors.crm();
+    if (!c) throw new HttpError(409, 'uisp_crm_not_configured');
+    return c;
+  };
+
+  /** The service plans of UISP: the NOC picks the customer's one when accepting the CPE. */
+  app.get('/api/admin/uisp/service-plans', admin, async () => (await crm().servicePlans()).filter((p) => p.periodId !== null));
+
+  /** What the "Crea subscriber" form starts from: name from the PPPoE user, address and position of the installation. */
+  app.get('/api/admin/provisioning/jobs/:id/uisp/subscriber', admin, async (req) => {
+    const job = loadJob(req);
+    const order = job.work_order_id
+      ? (db.prepare('SELECT address, lat, lon FROM work_orders WHERE id = ?').get(job.work_order_id) as { address: string; lat: number | null; lon: number | null } | undefined)
+      : undefined;
+    return {
+      ...subscriberName(job.pppoe_user, job.device_name),
+      street: order?.address ?? '',
+      lat: job.latitude ?? order?.lat ?? null,
+      lon: job.longitude ?? order?.lon ?? null,
+      crm: !!ctx.connectors.crm(),
+    };
+  });
+
+  /**
+   * Accepts the CPE as a new subscriber: CRM client and service of the chosen plan, then the CPE
+   * authorized in the endpoint site UISP makes for that service (instead of the AP's site).
+   */
+  app.post('/api/admin/provisioning/jobs/:id/uisp/subscriber', admin, async (req) => {
+    const job = loadJob(req);
+    // a new subscriber, or (retry after "site pending") only { serviceId } of the one already made
+    const b = z
+      .union([
+        z.object({ serviceId: z.number().int().positive() }).strict(),
+        z
+          .object({
+            firstName: z.string().trim().max(100).default(''),
+            lastName: z.string().trim().min(1).max(100),
+            street: z.string().trim().max(200).default(''),
+            servicePlanPeriodId: z.number().int().positive(),
+          })
+          .strict(),
+      ])
+      .parse(req.body);
+    const u = uisp();
+    const c = crm();
+    const device = await deviceOf(job);
+    if (!device) throw new HttpError(409, 'uisp_device_not_found');
+    if (device.authorized) throw new HttpError(409, 'uisp_already_authorized', { site: device.siteName });
+    // the service already made for this job is reused: a retry never creates a second subscriber
+    const known = 'serviceId' in b ? b.serviceId : job.uisp_crm_service_id;
+    let serviceId: number;
+    let clientId: number | null = null;
+    let siteId: string | null = null;
+    if (known) {
+      serviceId = known;
+    } else {
+      if ('serviceId' in b) throw new HttpError(400, 'invalid_request');
+      const sub = await c.createSubscriber({ ...b, lat: job.latitude, lon: job.longitude, note: `CPE ${job.model} ${job.mac} · ${job.ssid}` });
+      ({ serviceId, clientId, siteId } = sub);
+      db.prepare('UPDATE provisioning_jobs SET uisp_crm_service_id = ? WHERE id = ?').run(serviceId, job.id);
+      recordEvent(db, req.user!.id, 'uisp.subscriber', `${b.lastName} ${b.firstName}`.trim(), `${job.id} · cliente ${sub.clientId} · servizio ${serviceId}`);
+    }
+    // UISP makes the endpoint site of the service a moment later
+    if (!siteId) siteId = await c.serviceSite(serviceId).catch(() => null);
+    for (let i = 0; !siteId && i < 10; i++) {
+      await new Promise((ok) => setTimeout(ok, subscriberTiming.pollMs));
+      siteId = await c.serviceSite(serviceId).catch(() => null);
+    }
+    if (!siteId) throw new HttpError(504, 'uisp_subscriber_site_pending', { clientId, serviceId });
+    const siteName = 'lastName' in b ? `${b.lastName} ${b.firstName}`.trim() : ((await u.sites()).find((s) => s.id === siteId)?.name ?? siteId);
+    await u.authorize(device.id, siteId);
+    db.prepare('UPDATE provisioning_jobs SET uisp_device_id = ?, uisp_site = ?, uisp_authorized_at = ?, uisp_authorized_by = ? WHERE id = ?').run(
+      device.id,
+      siteName,
+      nowIso(),
+      req.user!.id,
+      job.id,
+    );
+    recordEvent(db, req.user!.id, 'uisp.authorize', `${device.name || device.mac} → ${siteName} (nuovo subscriber)`, job.id);
+    ctx.notify.installActivated(job.id, req.user!.username);
+    let backup: 'created' | 'failed' | 'disabled' = 'disabled';
+    if (ctx.uispSettings.autoBackup) {
+      backup = await u
+        .createBackup(device.id)
+        .then(() => 'created' as const)
+        .catch(() => 'failed' as const);
+    }
+    return { ok: true, deviceId: device.id, site: siteName, clientId, serviceId, backup };
+  });
 
   app.post('/api/admin/provisioning/jobs/:id/uisp/authorize', admin, async (req) => {
     const job = loadJob(req);
