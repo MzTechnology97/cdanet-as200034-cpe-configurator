@@ -63,6 +63,8 @@ private val ERRORS = mapOf(
     "ap_not_found" to "AP non trovato tra quelli vicini",
     "work_order_not_found" to "Intervento non trovato",
     "work_order_closed" to "Intervento già chiuso o annullato",
+    "cpe_not_in_stock" to "Questa CPE non risulta nel tuo magazzino: usa una CPE del tuo magazzino o chiedi all'ufficio",
+    "template_needs_mac" to "Questo template ha bisogno del MAC già in preparazione: prepara la configurazione sul posto",
     "work_order_password_missing" to "L'intervento non ha la password PPPoE: chiedila all'ufficio",
     "too_many_zones" to "Hai già 20 zone: eliminane una",
     "zone_not_found" to "Zona non trovata",
@@ -269,6 +271,12 @@ class ApiClient(
         request("POST", "/api/notifications/read", body)
     }
 
+    /** Deletes the user's own notifications: [ids], or all the read ones ([which] = "read"), or all ("all"). */
+    suspend fun deleteNotifications(ids: List<Long>? = null, which: String = "all") {
+        val body = if (ids != null) buildJsonObject { put("ids", kotlinx.serialization.json.JsonArray(ids.map { kotlinx.serialization.json.JsonPrimitive(it) })) } else buildJsonObject { put(which, true) }
+        request("POST", "/api/notifications/delete", body)
+    }
+
     suspend fun putAcceptance(jobId: String, report: it.cdanet.cpeconfigurator.field.AcceptanceReport) {
         request("PUT", "/api/provisioning/jobs/$jobId/acceptance", AppJson.encodeToJsonElement(it.cdanet.cpeconfigurator.field.AcceptanceReport.serializer(), report))
     }
@@ -324,6 +332,9 @@ class ApiClient(
     }
 
     suspend fun workOrders(): WorkOrdersDto = AppJson.decodeFromString(WorkOrdersDto.serializer(), request("GET", "/api/work-orders"))
+
+    /** The CPEs in the installer's own warehouse. */
+    suspend fun myStock(): MyStockDto = AppJson.decodeFromString(MyStockDto.serializer(), request("GET", "/api/warehouse/mine"))
 
     /** Calendario: the orders from [from] to [to] (YYYY-MM-DD, up to 62 days); [user] = one installer (NOC). */
     suspend fun workOrderCalendar(from: String, to: String, user: Long? = null): CalendarDto =

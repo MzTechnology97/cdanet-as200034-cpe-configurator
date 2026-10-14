@@ -465,6 +465,40 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE provisioning_jobs ADD COLUMN ssid_options TEXT;
   `,
+  // 29: the warehouse of ISP Billing (stock copied every hour) and the one of each installer/partner account
+  `
+  CREATE TABLE crm_stock(
+    stock_id INTEGER PRIMARY KEY,
+    site_id INTEGER,
+    site TEXT NOT NULL DEFAULT '',
+    article TEXT NOT NULL DEFAULT '',
+    code TEXT NOT NULL DEFAULT '',
+    serial TEXT NOT NULL DEFAULT '',
+    mac TEXT NOT NULL DEFAULT '',
+    model TEXT NOT NULL DEFAULT '',
+    status TEXT NOT NULL DEFAULT '',
+    intended TEXT NOT NULL DEFAULT '',
+    since TEXT NOT NULL DEFAULT ''
+  );
+  CREATE INDEX crm_stock_mac ON crm_stock(mac);
+  CREATE INDEX crm_stock_site ON crm_stock(site_id);
+  ALTER TABLE users ADD COLUMN warehouse_site_id INTEGER;
+  ALTER TABLE users ADD COLUMN warehouse_site TEXT NOT NULL DEFAULT '';
+  ALTER TABLE users ADD COLUMN stock_bypass INTEGER NOT NULL DEFAULT 0;
+  CREATE TABLE cpe_movements(
+    id INTEGER PRIMARY KEY,
+    at TEXT NOT NULL,
+    mac TEXT NOT NULL,
+    model TEXT NOT NULL DEFAULT '',
+    kind TEXT NOT NULL CHECK(kind IN('entrata','uscita','trasferimento','installata','collaudo')),
+    from_site TEXT NOT NULL DEFAULT '',
+    to_site TEXT NOT NULL DEFAULT '',
+    detail TEXT NOT NULL DEFAULT '',
+    job_id TEXT
+  );
+  CREATE INDEX cpe_movements_mac ON cpe_movements(mac, at);
+  CREATE INDEX cpe_movements_at ON cpe_movements(at);
+  `,
 ];
 
 export function openDatabase(path: string): Db {

@@ -44,6 +44,7 @@ fun NotificationsScreen(c: AppContainer, onUnread: (Int) -> Unit) {
     var unread by remember { mutableStateOf(0) }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
+    var askAll by remember { mutableStateOf(false) }
 
     suspend fun load() {
         busy = true
@@ -54,8 +55,14 @@ fun NotificationsScreen(c: AppContainer, onUnread: (Int) -> Unit) {
         busy = false
     }
     LaunchedEffect(c.refresh.collectAsState().value) { load() }
+    val delete: (List<Long>?, String) -> Unit = { ids, which ->
+        scope.launch {
+            runCatching { c.api.deleteNotifications(ids, which) }.onFailure { error = it.message }
+            load()
+        }
+    }
 
-    // a lazy list: 90 days of notifications are composed only when they come on screen
+    // a lazy list: 14 days of notifications are composed only when they come on screen
     LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         item {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -68,6 +75,12 @@ fun NotificationsScreen(c: AppContainer, onUnread: (Int) -> Unit) {
                             runCatching { c.api.markNotificationsRead() }
                             load()
                         }
+                    }
+                }
+                if (items.isNotEmpty()) {
+                    androidx.compose.foundation.layout.Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        if (items.any { it.readAt != null }) androidx.compose.material3.TextButton(onClick = { delete(null, "read") }, enabled = !busy) { Text("Elimina le lette") }
+                        androidx.compose.material3.TextButton(onClick = { askAll = true }, enabled = !busy) { Text("Elimina tutte") }
                     }
                 }
             }
@@ -86,16 +99,31 @@ fun NotificationsScreen(c: AppContainer, onUnread: (Int) -> Unit) {
                     Text(title, fontWeight = if (n.readAt == null) FontWeight.Bold else FontWeight.Normal)
                     Text(n.createdAt.replace('T', ' ').take(16), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (n.body.isNotBlank()) Text(n.body, style = MaterialTheme.typography.bodySmall)
-                    if (n.readAt == null) Text("Tocca per segnarla come letta", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary)
+                    androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
+                        if (n.readAt == null) Text("Tocca per segnarla come letta", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
+                        else androidx.compose.foundation.layout.Spacer(Modifier.weight(1f))
+                        androidx.compose.material3.IconButton(onClick = { delete(listOf(n.id), "") }) {
+                            androidx.compose.material3.Icon(androidx.compose.ui.res.painterResource(R.drawable.ic_delete), contentDescription = "Elimina la notifica", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        }
+                    }
                 }
             }
         }
         item {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                if (items.isEmpty() && !busy) EmptyState(R.drawable.ic_notifications, "Nessuna notifica", "Qui arrivano gli esiti delle tue installazioni: approvazioni e attivazioni del NOC (ultimi 90 giorni).")
+                if (items.isEmpty() && !busy) EmptyState(R.drawable.ic_notifications, "Nessuna notifica", "Qui arrivano gli esiti delle tue installazioni: approvazioni e attivazioni del NOC (ultimi 14 giorni, poi si cancellano da sole).")
                 // the outcome of your installations also reaches Telegram once linked (choices: console web → Notifiche)
                 Text("Le notifiche su Telegram si collegano in Impostazioni.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
+    }
+    if (askAll) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { askAll = false },
+            title = { Text("Eliminare tutte le notifiche?") },
+            text = { Text("Spariscono da questo telefono e dalla console per il tuo account. Le notifiche degli altri non cambiano.") },
+            confirmButton = { androidx.compose.material3.TextButton(onClick = { askAll = false; delete(null, "all") }) { Text("Elimina tutte") } },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { askAll = false }) { Text("Annulla") } },
+        )
     }
 }

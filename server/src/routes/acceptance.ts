@@ -8,6 +8,7 @@ import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { distanceM } from '../domain/geo.ts';
 import { photoDir } from '../services/photos.ts';
+import { acceptanceReportPdf } from '../services/acceptance-report.ts';
 import { FIELD_THRESHOLDS } from './field.ts';
 import { resolveKoByAcceptance } from './ko.ts';
 
@@ -165,10 +166,94 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
     recordEvent(db, req.user!.id, 'job.acceptance', job.id, `esito ${v}${a.radio.signal != null ? ` · ${a.radio.signal} dBm` : ''}${reason ? ' · da approvare dal NOC' : ''}`);
     if (reason) ctx.notify.reviewPending(job.id);
     // a passed test: the CPE is connected and online, the NOC may accept it in UISP
-    if (v !== 'bad' && !reason) ctx.notify.readyForUisp(job.id);
+    if (v !== 'bad' && !reason) {
+      ctx.notify.readyForUisp(job.id);
+      ctx.warehouse.record('collaudo', job.mac, `collaudo superato (${req.user!.username})`, job.id);
+    }
     // a passed test after a postponed or KO attempt closes those reports (with poor radio: once approved)
     const resolved = v === 'bad' || reason ? 0 : resolveKoByAcceptance(db, job, req.user!.id);
     return { ok: true, review: reason ? 'pending' : null, reviewReason: reason, resolvedKo: resolved };
+  });
+
+  /** The CDA Net logo for the reports (the console's own file), read once. */
+  let logo: string | null | undefined;
+  const logoSvg = () => {
+    if (logo === undefined) {
+      try {
+        logo = readFileSync(join(ctx.cfg.staticDir, 'assets', 'cda-net-logo.svg'), 'utf8');
+      } catch {
+        logo = null;
+      }
+    }
+    return logo;
+  };
+
+  /** «Rapporto di collaudo» as a PDF for the NOC: outcome, customer, CPE, radio, network, checks, notes, decision and photos. */
+  app.get('/api/admin/provisioning/jobs/:id/acceptance.pdf', { preHandler: [ctx.auth.requireAdmin, ctx.modules.require('acceptance')] }, async (req, reply) => {
+    const job = loadJob(req);
+    const j = db
+      .prepare(
+        `SELECT j.id, j.device_name, j.pppoe_user, j.model, j.mac, j.serial, j.ssid, j.template_name, j.completed_at, j.latitude, j.longitude, j.uisp_site,
+                u.username installer, w.customer, w.address
+           FROM provisioning_jobs j LEFT JOIN users u ON u.id = j.user_id LEFT JOIN work_orders w ON w.id = j.work_order_id WHERE j.id = ?`,
+      )
+      .get(job.id) as {
+      id: string; device_name: string; pppoe_user: string; model: string; mac: string; serial: string; ssid: string; template_name: string; completed_at: string | null;
+      latitude: number | null; longitude: number | null; uisp_site: string | null; installer: string | null; customer: string | null; address: string | null;
+    };
+    const row = db
+      .prepare(
+        `SELECT a.created_at, a.verdict, a.data, u.username, a.review, a.review_reason, a.review_at, a.review_note, r.username reviewer
+           FROM job_acceptance a JOIN users u ON u.id = a.user_id LEFT JOIN users r ON r.id = a.review_by WHERE a.job_id = ?`,
+      )
+      .get(job.id) as
+      | { created_at: string; verdict: 'ok' | 'warn' | 'bad'; data: string; username: string; review: string | null; review_reason: string; review_at: string | null; review_note: string; reviewer: string | null }
+      | undefined;
+    if (!row) throw new HttpError(404, 'acceptance_not_found');
+    const list = db.prepare('SELECT id, created_at createdAt, caption FROM job_photos WHERE job_id = ? ORDER BY id').all(job.id) as Array<{ id: number; createdAt: string; caption: string }>;
+    const pdf = acceptanceReportPdf({
+      job: {
+        id: j.id,
+        customer: j.customer || j.device_name,
+        pppoeUser: j.pppoe_user,
+        address: j.address ?? '',
+        model: j.model,
+        mac: j.mac,
+        serial: j.serial,
+        ssid: j.ssid,
+        template: j.template_name,
+        installer: j.installer ?? '',
+        installedAt: j.completed_at,
+        latitude: j.latitude,
+        longitude: j.longitude,
+        uispSite: j.uisp_site,
+      },
+      acceptance: {
+        createdAt: row.created_at,
+        by: row.username,
+        verdict: row.verdict,
+        data: JSON.parse(row.data) as Record<string, unknown>,
+        review: row.review ? { state: row.review, reason: row.review_reason, at: row.review_at, by: row.reviewer, note: row.review_note } : null,
+      },
+      photos: list.map((p) => {
+        let data: Buffer | null = null;
+        try {
+          data = readFileSync(join(photoDir(root, job.id), `${p.id}.jpg`));
+        } catch {
+          data = null;
+        }
+        return { caption: p.caption, createdAt: p.createdAt, data };
+      }),
+      logoSvg: logoSvg(),
+      generatedAt: new Date(),
+    });
+    recordEvent(db, req.user!.id, 'job.acceptance_pdf', job.id, j.customer || j.device_name);
+    const name = `collaudo-${(j.customer || j.device_name || 'cpe').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'cpe'}-${row.created_at.slice(0, 10)}.pdf`;
+    return reply
+      .header('Content-Type', 'application/pdf')
+      .header('Content-Disposition', `attachment; filename="${name}"`)
+      .header('Cache-Control', 'no-store')
+      .send(pdf);
   });
 
   /** Decision of the NOC on an acceptance test with poor radio; the installer is told. */
@@ -185,6 +270,7 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
     if (b.decision === 'approved') {
       resolveKoByAcceptance(db, job, req.user!.id);
       ctx.notify.readyForUisp(job.id);
+      ctx.warehouse.record('collaudo', job.mac, `collaudo approvato dal NOC (${req.user!.username})`, job.id);
     }
     ctx.notify.reviewDecision(job.id, req.user!.username);
     return { ok: true };

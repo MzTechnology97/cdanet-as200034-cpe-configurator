@@ -521,6 +521,14 @@ data class WorkOrderDto(
 @Serializable
 data class WorkOrdersDto(val day: String = "", val items: List<WorkOrderDto> = emptyList())
 
+/** A CPE in the installer's own warehouse. */
+@Serializable
+data class StockItemDto(val model: String, val article: String = "", val mac: String, val serial: String = "", val status: String = "", val since: String = "")
+
+/** The installer's own warehouse: [bypass] = they may also install CPEs that are not in it. */
+@Serializable
+data class MyStockDto(val linked: Boolean = false, val site: String = "", val bypass: Boolean = true, val syncedAt: String? = null, val items: List<StockItemDto> = emptyList())
+
 /** An installer the NOC can plan on (calendar filter). */
 @Serializable
 data class InstallerDto(val id: Long, val username: String)

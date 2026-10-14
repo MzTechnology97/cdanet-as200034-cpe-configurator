@@ -32,6 +32,9 @@ export interface Notice {
 
 const prefsKey = (userId: number) => `notify.telegram.${userId}`;
 
+/** Days a notification is kept before it is deleted automatically. */
+export const RETENTION_DAYS = 14;
+
 export function createInbox(
   db: Db,
   /** Personal Telegram message (HTML), when the bot and the user's chat are there. */
@@ -99,11 +102,19 @@ export function createInbox(
     return ids.reduce((n, id) => n + Number(mark.run(now, id, userId).changes), 0);
   }
 
-  /** Old notifications go after 90 days. */
-  function sweep() {
-    db.prepare('DELETE FROM notifications WHERE created_at < ?').run(new Date(Date.now() - 90 * 86400_000).toISOString());
+  /** The user deletes their own notifications: some, the read ones, or all. Returns how many went. */
+  function remove(userId: number, which: number[] | 'all' | 'read') {
+    if (which === 'all') return Number(db.prepare('DELETE FROM notifications WHERE user_id = ?').run(userId).changes);
+    if (which === 'read') return Number(db.prepare('DELETE FROM notifications WHERE user_id = ? AND read_at IS NOT NULL').run(userId).changes);
+    const del = db.prepare('DELETE FROM notifications WHERE id = ? AND user_id = ?');
+    return which.reduce((n, id) => n + Number(del.run(id, userId).changes), 0);
   }
 
-  return { push, list, unread, markRead, telegramKinds, setTelegramKinds, sweep };
+  /** Notifications go by themselves after 14 days (owner's choice, 14/10/2026). */
+  function sweep(now = Date.now()) {
+    return Number(db.prepare('DELETE FROM notifications WHERE created_at < ?').run(new Date(now - RETENTION_DAYS * 86400_000).toISOString()).changes);
+  }
+
+  return { push, list, unread, markRead, remove, telegramKinds, setTelegramKinds, sweep };
 }
 export type Inbox = ReturnType<typeof createInbox>;
