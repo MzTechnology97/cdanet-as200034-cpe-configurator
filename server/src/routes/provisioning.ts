@@ -37,7 +37,7 @@ export function provisioningRoutes(app: FastifyInstance, ctx: AppContext) {
     }
     const x = provisionRequestSchema.parse(req.body);
     const pkg = ctx.provisioning.createJob(x, req.user!, `${client.platform}/${client.version}`);
-    recordEvent(ctx.db, req.user!.id, 'job.create', pkg.jobId, `${x.model} ${x.mac}`);
+    recordEvent(ctx.db, req.user!.id, 'job.create', pkg.jobId, `${x.model} ${x.mac ?? 'MAC sul posto'}`);
     reply.header('Cache-Control', 'no-store');
     return reply.code(201).send(pkg);
   });

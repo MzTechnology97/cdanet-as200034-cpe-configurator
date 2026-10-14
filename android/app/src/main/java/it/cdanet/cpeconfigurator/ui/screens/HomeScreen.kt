@@ -414,7 +414,10 @@ private fun WorkOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
                 .map { Triple(it.customer, it.lat!!, it.lon!!) }
             c.scope.launch { c.pointingCache.prefetch(c.api, user, places) }
         }
+        // the configuration of each new installation goes on the phone now, ready for a roof without Internet
+        orders?.let { list -> c.scope.launch { runCatching { c.provisioning.prepareForField(list) } } }
     }
+    val ready by c.provisioning.field.ready.collectAsState()
     LaunchedEffect(c.refresh.collectAsState().value) { load() }
     val list = orders?.filter { it.status != "done" && it.status != "cancelled" } ?: return
     val done = orders?.count { it.status == "done" } ?: 0
@@ -443,6 +446,7 @@ private fun WorkOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
                             o.overdue -> it.cdanet.cpeconfigurator.ui.StatusChip("in ritardo", it.cdanet.cpeconfigurator.ui.NoticeKind.Bad)
                             o.status == "started" -> it.cdanet.cpeconfigurator.ui.StatusChip("in corso", it.cdanet.cpeconfigurator.ui.NoticeKind.Warn)
                             o.status == "postponed" -> it.cdanet.cpeconfigurator.ui.StatusChip("rimandato", it.cdanet.cpeconfigurator.ui.NoticeKind.Warn)
+                            o.id in ready -> it.cdanet.cpeconfigurator.ui.StatusChip("pronto offline", it.cdanet.cpeconfigurator.ui.NoticeKind.Good)
                         }
                     }
                     if (o.address.isNotBlank()) Text(o.address, style = MaterialTheme.typography.bodyMedium)

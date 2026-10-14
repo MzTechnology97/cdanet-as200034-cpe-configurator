@@ -197,4 +197,14 @@ class DiscoveryModelTest {
         org.junit.Assert.assertEquals("NanoStation 5AC", v.modelFromDiscovery("NS-5AC", null))
         org.junit.Assert.assertNull(v.modelFromDiscovery("UAP-AC-Lite", "UniFi AP"))
     }
+
+    @Test
+    fun `CPE scanned on site for a configuration prepared before the visit`() {
+        val v = Validation
+        assertTrue(v.siteCpeErrors("24A43C112233", "24A43C112233").isEmpty())
+        assertTrue(v.siteCpeErrors("81:78:00:00:00:01", "S1").single().contains("non è il MAC"))
+        assertTrue(v.siteCpeErrors("24A43C112233", " ").single().contains("Seriale"))
+        assertTrue(v.siteCpeErrors("24A43C112233", "24:A4:3C:11:22:33").single().contains("c'è un MAC"))
+        assertTrue(ChecksDto("8.7.4", "board", "").let { it.mac.isBlank() })
+    }
 }

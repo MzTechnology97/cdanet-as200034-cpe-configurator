@@ -475,8 +475,9 @@ data class StaleCpesDto(val months: Int = 12, val count: Int = 0, val shown: Boo
 @Serializable
 data class ProvisionRequest(
     val model: String,
-    val mac: String,
-    val serial: String,
+    /** null (with the serial) for a work order prepared before the visit: scanned on site, sent with the result. */
+    val mac: String? = null,
+    val serial: String? = null,
     val ssid: String,
     val pppoeUser: String,
     /** null when the job starts from a work order: the server uses the office's sealed password. */
@@ -487,6 +488,8 @@ data class ProvisionRequest(
     val workOrderId: Long? = null,
     /** A failed or never written installation this one redoes (it leaves "Da completare"). */
     val supersedes: String? = null,
+    /** Other APs the CPE may point to: a configuration for each comes with the package (chosen on site). */
+    val alternativeSsids: List<String>? = null,
 )
 
 /** A work order of the office (agenda): never the PPPoE password, only whether it is set. */
@@ -717,8 +720,15 @@ data class ProvisionPackage(
     val config: ConfigDto,
     val summary: JobSummaryDto,
     val afterApply: AfterApplyDto,
+    /** On the phone only: MAC and serial were scanned on site (prepared without them), they go with the result. */
+    val scannedOnSite: Boolean = false,
+    /** The same configuration for other APs the CPE may point to: the installer picks the AP on site. */
+    val alternatives: List<AltConfigDto> = emptyList(),
 ) {
     override fun toString(): String = "ProvisionPackage(jobId=$jobId, model=${summary.model})"
+
+    /** Prepared before the visit and the CPE not scanned yet: the write waits for its MAC and serial. */
+    val needsCpe: Boolean get() = checks.mac.isBlank()
 }
 
 @Serializable
@@ -731,7 +741,20 @@ data class ProvisionResult(
     val error: String = "",
     val detected: DetectedDto = DetectedDto(),
     val completedAt: String? = null,
+    /** MAC and serial scanned on site, for a configuration prepared without them. */
+    val cpe: CpeIdDto? = null,
+    /** The AP chosen on site among the ones the package was prepared for. */
+    val ssid: String? = null,
 )
+
+/** The configuration of a package for another AP (whole system.cfg, with that AP's Wi-Fi key: never shown). */
+@Serializable
+data class AltConfigDto(val ssid: String, val config: ConfigDto) {
+    override fun toString(): String = "AltConfigDto(ssid=$ssid)"
+}
+
+@Serializable
+data class CpeIdDto(val mac: String, val serial: String)
 
 @Serializable
 data class PendingResult(val jobId: String, val result: ProvisionResult, val label: String)

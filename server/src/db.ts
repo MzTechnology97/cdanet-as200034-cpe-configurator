@@ -461,6 +461,10 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE provisioning_jobs ADD COLUMN uisp_crm_service_id INTEGER;
   `,
+  // 28: the other APs a job was prepared for ({ssid: sha256 of its config}): chosen on site, offline
+  `
+  ALTER TABLE provisioning_jobs ADD COLUMN ssid_options TEXT;
+  `,
 ];
 
 export function openDatabase(path: string): Db {

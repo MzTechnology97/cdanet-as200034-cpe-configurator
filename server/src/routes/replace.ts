@@ -4,7 +4,7 @@ import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
 import { TARGET_FIRMWARE, parseClientHeader, parseMac, versionAtLeast, type CpeModel } from '../domain/policy.ts';
-import { provisionRequestSchema } from '../services/provisioning.ts';
+import { cpeMacSchema, cpeSerialSchema, provisionRequestSchema } from '../services/provisioning.ts';
 
 interface OldJob {
   id: string;
@@ -77,8 +77,8 @@ export function replaceRoutes(app: FastifyInstance, ctx: AppContext) {
     const b = z
       .object({
         model: provisionRequestSchema.shape.model.optional(),
-        mac: provisionRequestSchema.shape.mac,
-        serial: provisionRequestSchema.shape.serial,
+        mac: cpeMacSchema,
+        serial: cpeSerialSchema,
         pppoePassword: z.string().min(1).max(200).optional(),
         templateId: z.number().int().positive().optional(),
         location: provisionRequestSchema.shape.location,

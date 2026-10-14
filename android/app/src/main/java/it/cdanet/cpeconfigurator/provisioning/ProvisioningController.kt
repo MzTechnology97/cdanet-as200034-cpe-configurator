@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import it.cdanet.cpeconfigurator.data.AppJson
+import it.cdanet.cpeconfigurator.data.CpeIdDto
 import it.cdanet.cpeconfigurator.security.SecureStore
 import it.cdanet.cpeconfigurator.firmware.AirosBuild
 import java.io.IOException
@@ -101,6 +102,8 @@ class ProvisioningController(
     private val queue: ResultQueue,
     private val scope: CoroutineScope,
     private val store: SecureStore? = null,
+    /** Configurations prepared before the visit, one per work order. */
+    val field: FieldPackages = FieldPackages(store),
 ) {
     private val _state = MutableStateFlow(ProvisioningState())
     val state: StateFlow<ProvisioningState> = _state.asStateFlow()
@@ -155,7 +158,7 @@ class ProvisioningController(
         val old = _form.value.replaces
         busy {
             if (old == null) api.createJob(req)
-            else api.replaceJob(old, ReplaceRequest(req.model, req.mac, req.serial, req.pppoePassword, req.templateId, req.location))
+            else api.replaceJob(old, ReplaceRequest(req.model, req.mac.orEmpty(), req.serial.orEmpty(), req.pppoePassword, req.templateId, req.location))
         }?.let { pkg ->
             _form.update { it.copy(pppoePassword = "") }
             _state.update { it.copy(phase = Phase.Prepared, pkg = pkg, stages = emptyList(), success = null, probe = null) }
@@ -176,8 +179,75 @@ class ProvisioningController(
         }?.let { msg -> _state.update { it.copy(probe = msg) } }
     }
 
+    /**
+     * MAC and serial of the CPE, scanned on site, for a configuration prepared before the visit
+     * (they can be corrected until the write succeeds). Null when accepted, else what is wrong.
+     */
+    fun setSiteCpe(mac: String, serial: String): String? {
+        val pkg = _state.value.pkg ?: return "Configurazione non più disponibile"
+        if (!pkg.needsCpe && !pkg.scannedOnSite) return "La CPE di questa configurazione è già indicata"
+        Validation.siteCpeErrors(mac, serial).firstOrNull()?.let { return it }
+        val m = Validation.normalizeMac(mac)
+        val s = serial.trim()
+        _state.update {
+            it.copy(pkg = pkg.copy(checks = pkg.checks.copy(mac = m), summary = pkg.summary.copy(mac = m, serial = s), scannedOnSite = true), error = null)
+        }
+        return null
+    }
+
+    /** The APs this package can be written for: its own first, then the alternatives. */
+    fun ssidOptions(): List<String> = _state.value.pkg?.let { listOf(it.summary.ssid) + it.alternatives.map { a -> a.ssid } }.orEmpty()
+
+    /** The AP the CPE points to, among the ones the package was prepared for: its configuration is the one written. */
+    fun chooseSsid(ssid: String) {
+        val pkg = _state.value.pkg ?: return
+        if (ssid == pkg.summary.ssid) return
+        val all = listOf(it.cdanet.cpeconfigurator.data.AltConfigDto(pkg.summary.ssid, pkg.config)) + pkg.alternatives
+        val pick = all.firstOrNull { it.ssid == ssid } ?: return
+        _state.update { it.copy(pkg = pkg.copy(config = pick.config, summary = pkg.summary.copy(ssid = pick.ssid), alternatives = all - pick)) }
+    }
+
+    /**
+     * Prepares, while there is Internet, the configuration of every new installation assigned for
+     * today: model, customer and PPPoE of the order, the best AP for its position and the next ones
+     * (up to 5 in all, only those with a Wi-Fi key). MAC and serial are scanned on site. Best effort:
+     * an order that cannot be prepared is simply done on site as before. Returns how many are ready.
+     */
+    suspend fun prepareForField(orders: List<it.cdanet.cpeconfigurator.data.WorkOrderDto>): Int {
+        field.prune()
+        val todo = orders.filter { o ->
+            o.kind == "new" && o.status in setOf("open", "postponed") && o.jobId == null && o.hasPassword &&
+                o.pppoeUser.isNotBlank() && o.model in ProvisionForm.MODELS && o.lat != null && o.lon != null && !field.fresh(o.id)
+        }
+        if (todo.isEmpty()) return field.ready.value.size
+        val configured = runCatching { api.wirelessNetworks() }.getOrNull() ?: return field.ready.value.size
+        for (o in todo) {
+            runCatching {
+                val aps = api.pointing(o.lat!!, o.lon!!, null).aps
+                val ssids = it.cdanet.cpeconfigurator.install.ApAdvisor.beforeInstall(aps, configured).filter { it.usable }.map { it.ssid }.distinct().take(5)
+                if (ssids.isEmpty()) return@runCatching
+                val pkg = api.createJob(
+                    ProvisionRequest(
+                        model = o.model,
+                        ssid = ssids.first(),
+                        pppoeUser = o.pppoeUser,
+                        location = it.cdanet.cpeconfigurator.data.CpeLocation(o.lat, o.lon, null, "address"),
+                        workOrderId = o.id,
+                        alternativeSsids = ssids.drop(1).ifEmpty { null },
+                    ),
+                )
+                field.put(o.id, pkg)
+            }
+        }
+        return field.ready.value.size
+    }
+
     suspend fun apply(prior: List<String> = emptyList()) {
         val pkg = _state.value.pkg ?: return
+        if (pkg.needsCpe) {
+            _state.update { it.copy(phase = Phase.Prepared, error = "Scansiona prima MAC e seriale della CPE") }
+            return
+        }
         _state.update { it.copy(phase = Phase.Applying, busy = true, error = null, stages = prior) }
         val stages = prior.toMutableList()
         val result = withContext(Dispatchers.IO) {
@@ -193,7 +263,8 @@ class ProvisioningController(
                 ProvisionResult("failed", stages.toList(), error = e.message ?: "", detected = e.detected ?: DetectedDto(), completedAt = Instant.now().toString())
             } catch (e: Exception) {
                 ProvisionResult("failed", stages.toList(), error = e.message ?: e.toString(), completedAt = Instant.now().toString())
-            }
+            }.let { r -> if (pkg.scannedOnSite) r.copy(cpe = CpeIdDto(pkg.summary.mac, pkg.summary.serial)) else r }
+                .let { r -> if (pkg.alternatives.isNotEmpty()) r.copy(ssid = pkg.summary.ssid) else r }
         }
         queue.enqueue(PendingResult(pkg.jobId, result, "${pkg.summary.deviceName} · ${pkg.summary.mac}"))
         queue.syncInBackground()
@@ -264,6 +335,10 @@ class ProvisioningController(
      */
     suspend fun install(store: FirmwareStore) {
         val pkg = _state.value.pkg ?: return
+        if (pkg.needsCpe) {
+            _state.update { it.copy(error = "Scansiona prima MAC e seriale della CPE") }
+            return
+        }
         _state.update { it.copy(phase = Phase.Applying, busy = true, error = null, stages = emptyList(), firmwareTarget = null) }
         val stages = mutableListOf<String>()
         val stage: (String) -> Unit = { s ->
@@ -370,7 +445,11 @@ class ProvisioningController(
      * model are filled in; the password stays on the server.
      */
     fun startWorkOrder(o: it.cdanet.cpeconfigurator.data.WorkOrderDto) {
-        _state.value = ProvisioningState()
+        // prepared before the visit: straight to the write, even without Internet
+        _state.value = field.get(o.id)?.let { pkg ->
+            field.remove(o.id)
+            ProvisioningState(phase = Phase.Prepared, pkg = pkg)
+        } ?: ProvisioningState()
         _form.value = ProvisionForm(
             model = o.model.takeIf { it in ProvisionForm.MODELS } ?: ProvisionForm.MODELS.first(),
             pppoeUser = o.pppoeUser,
