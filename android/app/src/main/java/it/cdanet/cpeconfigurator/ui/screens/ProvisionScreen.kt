@@ -77,6 +77,17 @@ fun ProvisionFormStep(c: AppContainer) {
             )
         }
     }
+    if (form.supersedes != null) {
+        SectionCard("Modifica e riprova") {
+            Text("Rifai: ${form.supersedesLabel}", fontWeight = FontWeight.SemiBold)
+            Text(
+                "I dati sono quelli dell'installazione non riuscita: correggi quello che serve (per esempio il MAC) e reinserisci la password PPPoE. " +
+                    "Quando prepari, quella vecchia esce da «Da completare».",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            SecondaryButton(onClick = { c.provisioning.reset() }) { Text("Annulla") }
+        }
+    }
     if (form.replaces != null) {
         SectionCard("Sostituzione CPE") {
             Text("CPE sostituita: ${form.replacesLabel}", fontWeight = FontWeight.SemiBold)

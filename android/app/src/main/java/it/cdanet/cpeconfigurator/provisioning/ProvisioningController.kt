@@ -52,10 +52,13 @@ data class ProvisionForm(
     /** Work order of the office this installation comes from (PPPoE password from the server). */
     val workOrderId: Long? = null,
     val workOrderLabel: String = "",
+    /** "Modifica e riprova": the failed or never written installation this one redoes. */
+    val supersedes: String? = null,
+    val supersedesLabel: String = "",
 ) {
     val ssid: String get() = "CDA-NET-N$node-D${district.toString().padStart(2, '0')}" + (relay?.let { "-R$it" } ?: "")
     val customerName: String get() = Validation.customerName(pppoeUser)
-    fun toRequest() = ProvisionRequest(model, Validation.normalizeMac(mac), serial.trim(), ssid, pppoeUser.trim(), pppoePassword.ifEmpty { null }, templateId, location, workOrderId)
+    fun toRequest() = ProvisionRequest(model, Validation.normalizeMac(mac), serial.trim(), ssid, pppoeUser.trim(), pppoePassword.ifEmpty { null }, templateId, location, workOrderId, supersedes)
     fun errors(): List<String> = Validation.formErrors(this)
 
     companion object {
@@ -324,6 +327,27 @@ class ProvisioningController(
         // activity log on the server, best effort: on the CPE's Wi-Fi there is often no Internet
         runCatching { api.firmwareReport(pkg.summary.mac, before.build, img.version, true, null) }
         return before.build to after.build
+    }
+
+    /**
+     * "Modifica e riprova" of a failed or never written installation: a new one with all its data
+     * (MAC and serial can be corrected); the PPPoE password is typed again unless it comes from a
+     * work order. The old one is closed by the server when the new one is prepared.
+     */
+    fun startRedo(j: it.cdanet.cpeconfigurator.data.JobDto) {
+        val m = SSID_PARTS.find(j.ssid)
+        _state.value = ProvisioningState()
+        _form.value = ProvisionForm(
+            model = j.model,
+            mac = j.mac,
+            serial = j.serial,
+            node = m?.groupValues?.get(1)?.toIntOrNull() ?: 2,
+            district = m?.groupValues?.get(2)?.toIntOrNull() ?: 1,
+            relay = m?.groupValues?.get(3)?.toIntOrNull(),
+            pppoeUser = j.pppoeUser,
+            supersedes = j.id,
+            supersedesLabel = "${j.deviceName.ifBlank { j.pppoeUser }} · ${j.mac}",
+        )
     }
 
     /** Starts the replacement of the CPE of a completed job (History → Sostituisci CPE). */

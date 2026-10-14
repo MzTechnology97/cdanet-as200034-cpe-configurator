@@ -443,6 +443,10 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE users ADD COLUMN home_shortcuts TEXT;
   `,
+  // 25: "Modifica e riprova": the new installation that redoes a failed or never written one
+  `
+  ALTER TABLE provisioning_jobs ADD COLUMN superseded_by TEXT;
+  `,
 ];
 
 export function openDatabase(path: string): Db {
