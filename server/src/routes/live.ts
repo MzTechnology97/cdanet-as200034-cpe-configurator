@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AppContext } from '../context.ts';
 import type { LiveTopic } from '../services/live.ts';
 
@@ -14,7 +14,18 @@ const HEARTBEAT_MS = 25_000;
  * would put the token in the address).
  */
 export function liveRoutes(app: FastifyInstance, ctx: AppContext) {
-  app.get('/api/events', { preHandler: ctx.auth.requireUser }, async (req, reply) => {
+  // the console's session, or the read-only token of the app's background service (notifications
+  // on the phone without Firebase): same stream, same format
+  const streamUser = async (req: FastifyRequest, reply: FastifyReply) => {
+    try {
+      await ctx.auth.requireUser(req, reply);
+    } catch (e) {
+      const feed = await ctx.auth.verifyFeedToken(req, ['feed']).catch(() => null);
+      if (!feed) throw e;
+      req.user = feed;
+    }
+  };
+  app.get('/api/events', { preHandler: streamUser }, async (req, reply) => {
     const u = req.user!;
     reply.hijack();
     const res = reply.raw;

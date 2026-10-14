@@ -62,6 +62,14 @@ object PhoneAlerts {
 
     fun isEnabled(c: Context) = prefs(c).getString("token", null) != null
 
+    /** Server address and read-only token of the background checks (null when not enabled). */
+    fun feed(c: Context): Pair<String, String>? {
+        val p = prefs(c)
+        val token = p.getString("token", null) ?: return null
+        val backend = p.getString("backend", null) ?: return null
+        return backend to token
+    }
+
     fun canNotify(c: Context) =
         Build.VERSION.SDK_INT < 33 || ContextCompat.checkSelfPermission(c, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
 
