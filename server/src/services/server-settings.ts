@@ -131,6 +131,11 @@ export const SERVER_SETTINGS: Def[] = [
     get: (c) => c.publicUrl, set: (c, v) => (c.publicUrl = (v as string | undefined)?.replace(/\/+$/, '')),
   },
   {
+    key: 'firmwareBypass', env: 'FIRMWARE_BYPASS', group: 'Provisioning e app', label: 'Provisioning con firmware diverso dopo 2 aggiornamenti non riusciti', kind: 'bool',
+    help: 'Se l’app non riesce ad aggiornare il firmware della CPE per 2 volte, l’installatore può scrivere comunque la configurazione con il firmware che ha la CPE; resta annotato nell’esito.',
+    get: (c) => c.firmwareBypass, set: (c, v) => (c.firmwareBypass = v === undefined ? true : !!v),
+  },
+  {
     key: 'routerOsAllowPublic', env: 'ROUTEROS_ALLOW_PUBLIC', group: 'Provisioning e app', label: 'RouterOS: consenti indirizzi pubblici', kind: 'bool',
     get: (c) => c.routerOsAllowPublic, set: (c, v) => (c.routerOsAllowPublic = !!v),
   },

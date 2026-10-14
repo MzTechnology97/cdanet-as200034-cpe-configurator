@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.provisioning.FIRMWARE_TRIES
 import it.cdanet.cpeconfigurator.provisioning.ProvisioningController
 import androidx.compose.runtime.mutableStateListOf
 import it.cdanet.cpeconfigurator.ui.SecondaryButton
@@ -409,6 +410,7 @@ private fun FirmwareFix(c: AppContainer, target: String) {
                             c.provisioning.retry()
                             c.provisioning.reportNote(it.message.orEmpty())
                         } else {
+                            c.provisioning.firmwareFailed()
                             error = it.message ?: it.toString()
                         }
                     }
@@ -416,6 +418,16 @@ private fun FirmwareFix(c: AppContainer, target: String) {
             }
         }
         SecondaryButton(onClick = { c.provisioning.retry() }, modifier = Modifier.fillMaxWidth(), enabled = !busy) { Text("Riprova la scrittura senza aggiornare") }
+        // the update failed more than once: the configuration may go on the firmware the CPE has
+        val prov by c.provisioning.state.collectAsState()
+        val keep = prov.detectedFirmware
+        // only when the server allows it (Impostazioni server → Provisioning e app)
+        if (keep != null && prov.firmwareFailures >= FIRMWARE_TRIES && prov.pkg?.checks?.firmwareBypass == true) {
+            Notice("L'aggiornamento non è riuscito ${prov.firmwareFailures} volte: puoi scrivere la configurazione con il firmware che ha la CPE. Resta annotato nell'esito, da aggiornare in seguito.", NoticeKind.Info)
+            SecondaryButton(onClick = { c.scope.launch { c.provisioning.applyKeepingFirmware() } }, modifier = Modifier.fillMaxWidth(), enabled = !busy) {
+                Text("Configura comunque con il firmware ${Regex("""(\d+\.\d+\.\d+)""").find(keep)?.value ?: keep}")
+            }
+        }
     }
 }
 

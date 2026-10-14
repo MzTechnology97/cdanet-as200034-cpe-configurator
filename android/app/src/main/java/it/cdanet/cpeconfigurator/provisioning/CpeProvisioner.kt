@@ -24,7 +24,7 @@ class CpeProvisioner(private val onStage: (String) -> Unit) {
         }
     }
 
-    fun provision(pkg: ProvisionPackage): DetectedDto {
+    fun provision(pkg: ProvisionPackage, allowFirmware: String? = null): DetectedDto {
         if (Instant.parse(pkg.expiresAt).isBefore(Instant.now())) {
             throw ProvisioningFailure("Pacchetto scaduto: torna online e preparalo di nuovo", null)
         }
@@ -42,8 +42,13 @@ class CpeProvisioner(private val onStage: (String) -> Unit) {
                 onStage("Lettura firmware, board e MAC")
                 val rb = DeviceCheck.parse(ssh.exec(DeviceCheck.READBACK_COMMAND, 8_000).stdout)
                 detected = rb.detected()
-                DeviceCheck.verify(rb, pkg.checks)
-                onStage("Verificati firmware ${pkg.checks.firmware}, board e MAC ${pkg.summary.mac}")
+                DeviceCheck.verify(rb, pkg.checks, allowFirmware)
+                if (DeviceCheck.firmwareMatches(rb.firmware, pkg.checks.firmware)) {
+                    onStage("Verificati firmware ${pkg.checks.firmware}, board e MAC ${pkg.summary.mac}")
+                } else {
+                    // kept on purpose after the update failed: written in the result, so the history shows it
+                    onStage("Firmware ${rb.firmware} diverso dal richiesto ${pkg.checks.firmware}: configurazione scritta comunque (aggiornamento non riuscito); verificati board e MAC ${pkg.summary.mac}")
+                }
 
                 onStage("Trasferimento system.cfg (${bytes.size} byte)")
                 val write = ssh.exec("umask 077; cat > /tmp/system.cfg", 15_000, stdin = bytes)
