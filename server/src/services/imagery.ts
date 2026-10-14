@@ -122,6 +122,42 @@ export const BLANK_JPEG_BYTES = 1500;
 const BLANK_RETRY_MS = 6 * 3_600_000;
 /** At most this many tiles asked to the WMS at once: more only makes the public service slower. */
 const WMS_PARALLEL = 6;
+/**
+ * The orthophotos start at this zoom: further out a view needs tens of tiles, each one 1-3 s from
+ * the public service the first time, for a picture where the base map says more. Below it the maps
+ * show the base map, at once.
+ */
+export const PHOTO_MIN_ZOOM = 12;
+
+/**
+ * The tiles around [points] ([km] each side) from [zMin] to [zMax], the far zooms first, each once:
+ * what the server downloads ahead for the area of the network.
+ */
+export function tilesAround(points: Array<{ lat: number; lon: number }>, km: number, zMin: number, zMax: number): Array<[number, number, number]> {
+  const out: Array<[number, number, number]> = [];
+  const seen = new Set<string>();
+  const col = (lon: number, n: number) => Math.min(n - 1, Math.max(0, Math.floor(((lon + 180) / 360) * n)));
+  const row = (lat: number, n: number) => {
+    const r = (Math.max(-85, Math.min(85, lat)) * Math.PI) / 180;
+    return Math.min(n - 1, Math.max(0, Math.floor(((1 - Math.asinh(Math.tan(r)) / Math.PI) / 2) * n)));
+  };
+  for (let z = zMin; z <= zMax; z++) {
+    const n = 2 ** z;
+    for (const p of points) {
+      const dLat = km / 111.32;
+      const dLon = km / (111.32 * Math.max(0.1, Math.cos((p.lat * Math.PI) / 180)));
+      for (let x = col(p.lon - dLon, n); x <= col(p.lon + dLon, n); x++) {
+        for (let y = row(p.lat + dLat, n); y <= row(p.lat - dLat, n); y++) {
+          const k = `${z}/${x}/${y}`;
+          if (seen.has(k)) continue;
+          seen.add(k);
+          out.push([z, x, y]);
+        }
+      }
+    }
+  }
+  return out;
+}
 
 /**
  * [touchesSea]: whether a box ([south, west, north, east]) reaches the sea, from the terrain model;
@@ -255,8 +291,8 @@ export function createImagery(db: Db, sealer: Sealer, opts: { fetchImpl?: typeof
     if (provider === 'wms') {
       const w = override?.wms ?? read().stored.wms;
       if (!w?.url) throw new HttpError(503, 'imagery_not_configured');
-      // orthophotos are heavy to render far out: nothing below zoom 9
-      if (z < 9) return null;
+      // far out the base map instead (PHOTO_MIN_ZOOM): nothing asked to the public service
+      if (z < PHOTO_MIN_ZOOM) return null;
       // the saved service from the disk (a test of other settings never goes there)
       return wmsTile(w, z, x, y, !override?.wms);
     } else {
@@ -286,6 +322,32 @@ export function createImagery(db: Db, sealer: Sealer, opts: { fetchImpl?: typeof
 
   return {
     tile,
+    /** Whether the orthophotos of a WMS are on (and kept on disk): what [prefetch] needs. */
+    wmsReady: () => !!opts.dir && enabled('wms'),
+    /**
+     * Downloads [tiles] of the saved WMS into the disk cache, [parallel] at a time (through the same
+     * limit as the maps: the people looking at a map keep most of it). Tiles already on disk, or
+     * blank a short while ago, are skipped. Stops when [signal] is aborted.
+     */
+    async prefetch(tiles: Array<[number, number, number]>, o: { parallel?: number; signal?: AbortSignal } = {}) {
+      const w = read().stored.wms;
+      const done = { asked: 0, photos: 0, skipped: 0 };
+      if (!opts.dir || !w?.url || !enabled('wms')) return done;
+      let next = 0;
+      const worker = async () => {
+        while (next < tiles.length && !o.signal?.aborted) {
+          const [z, x, y] = tiles[next++]!;
+          if (z < PHOTO_MIN_ZOOM || fromDisk(tileFile(w, z, x, y)) !== undefined) {
+            done.skipped++;
+            continue;
+          }
+          done.asked++;
+          if (await wmsTile(w, z, x, y, true).catch(() => null)) done.photos++;
+        }
+      };
+      await Promise.all(Array.from({ length: Math.max(1, o.parallel ?? 2) }, worker));
+      return done;
+    },
     /** Views the admins' maps offer, one per enabled provider (satellite, and hybrid when there is one). */
     layers(): ImageryLayer[] {
       const out: ImageryLayer[] = [];
@@ -293,8 +355,8 @@ export function createImagery(db: Db, sealer: Sealer, opts: { fetchImpl?: typeof
         if (!enabled(p)) continue;
         if (p === 'wms') {
           const w = read().stored.wms!;
-          // the AGEA WMS draws nothing (white tiles) under zoom 11: the base map shows there instead
-          out.push({ id: 'wms', label: w.label || WMS_DEFAULT.label, parts: [['wms', 'ortofoto']], attribution: w.attribution || WMS_DEFAULT.attribution, maxNativeZoom: 18, minZoom: 11 });
+          // from PHOTO_MIN_ZOOM: further out the base map shows instead (fast, and more useful there)
+          out.push({ id: 'wms', label: w.label || WMS_DEFAULT.label, parts: [['wms', 'ortofoto']], attribution: w.attribution || WMS_DEFAULT.attribution, maxNativeZoom: 18, minZoom: PHOTO_MIN_ZOOM });
           continue;
         }
         const native = p === 'google' ? 20 : 19;
