@@ -78,10 +78,29 @@ describe('Telegram notifications', () => {
     await call('POST', `/api/provisioning/jobs/${j2}/result`, { result: 'success', stages: [], detected: {} });
     await call('POST', `/api/provisioning/jobs/${j2}/result`, { result: 'success', stages: [], detected: {} }); // duplicate: no second message
     await ctx.telegram.idle();
-    assert.equal(f.sent.length, 2, JSON.stringify(f.sent));
+    // written but not yet tested on the roof: nothing to accept in UISP yet
+    assert.equal(f.sent.length, 1, JSON.stringify(f.sent));
     assert.match(f.sent[0]!.text, /Provisioning fallito[\s\S]*AA:BB:CC:DD:EE:01[\s\S]*Timeout connessione SSH/);
     assert.match(f.sent[0]!.text, /href="https:\/\/cpe\.cda-net\.it\/#\/jobs\?q=AA%3ABB%3ACC%3ADD%3AEE%3A01"/);
-    assert.match(f.sent[1]!.text, /pronta da accettare in UISP/);
+    // the acceptance test passes: the CPE is connected and online, ready for UISP (told once)
+    const acceptance = {
+      verdict: 'ok',
+      measuredAt: new Date().toISOString(),
+      samples: 10,
+      cpe: { hostname: 'ROSSI MARIO', model: 'LiteBeam 5AC', firmware: 'XC.qca956x.v8.7.4', apName: 'AP-N2-Monte', essid: 'CDA-NET-N2-D01', distanceM: 2300 },
+      radio: { signal: -58, signalMin: -60, signalMax: -57, noise: -95, chains: [-58, -59], remoteSignal: -60, expectedSignal: -61, cinrRx: 32, dlCapacityMbps: 280, ulCapacityMbps: 250 },
+      lan: { plugged: true, speedMbps: 1000, fullDuplex: true, cableLenM: 12 },
+      pppoe: { enabled: true, ip: '93.41.10.20' },
+      internet: { tested: true, pingMs: 18, jitterMs: 2, downloadMbps: 95.2, uploadMbps: 19.8 },
+      checks: [{ title: 'Segnale ricevuto', verdict: 'ok', detail: '-58 dBm: ottimo' }],
+      notes: '',
+      cpeHeightM: 7.5,
+    };
+    assert.equal((await call('PUT', `/api/provisioning/jobs/${j2}/acceptance`, acceptance)).statusCode, 200);
+    await call('PUT', `/api/provisioning/jobs/${j2}/acceptance`, acceptance); // a new test: no second message
+    await ctx.telegram.idle();
+    assert.equal(f.sent.length, 2, JSON.stringify(f.sent));
+    assert.match(f.sent[1]!.text, /pronta da accettare in UISP[\s\S]*Collaudo superato/);
     assert.ok(f.sent.every((m) => !/rossi|ROSSI|Secret-Pppoe/.test(m.text)), 'no customer data or secrets');
     f.sent.length = 0;
 
