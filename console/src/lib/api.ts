@@ -71,6 +71,8 @@ const MESSAGES: Record<string, string> = {
   advisor_data_missing: 'Dati dell’analisi non ancora pronti: premi Aggiorna ora e riprova tra due minuti',
   no_candidates: 'Nessun canale candidato dentro la banda consentita',
   not_cancellable: 'Questa ottimizzazione non si può più annullare',
+  warehouse_not_found: 'Magazzino non trovato nell’ultima lettura: aggiornalo in Magazzino e riprova',
+  cpe_not_in_stock: 'La CPE non risulta nel magazzino del tecnico',
 };
 
 export interface StoredSession {
@@ -121,7 +123,9 @@ export class ApiError extends Error {
     const code = body?.error ?? `HTTP ${status}`;
     const detail = body?.issues?.map((i) => `${i.path}: ${i.message}`).join('; ');
     const installer = !isAdminUser() && INSTALLER_MESSAGES[code];
-    super(installer || (MESSAGES[code] ?? code) + (detail ? ` (${detail})` : ''));
+    // the CPE is in a warehouse, but not the installer's one
+    const elsewhere = code === 'cpe_not_in_stock' && body?.result === 'other_warehouse' ? 'La CPE è in un altro magazzino, non in quello del tecnico' : '';
+    super(elsewhere || installer || (MESSAGES[code] ?? code) + (detail ? ` (${detail})` : ''));
     this.status = status;
     this.body = body;
   }

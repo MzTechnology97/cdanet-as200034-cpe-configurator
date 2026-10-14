@@ -50,6 +50,7 @@ export const ROUTES: Array<Route | Group> = [
   { id: 'health', icon: 'monitor_heart', label: 'Salute CPE', installerLabel: 'Le mie CPE', module: 'cpe_health', bottom: true, react: () => import('../pages/Health').then((m) => m.Health) },
   // one CPE managed as in the UISP app (opened from Salute CPE, not in the menu)
   { id: 'cpe', icon: 'monitor_heart', label: 'Gestione CPE', module: 'cpe_health', admin: true, hidden: true, parent: 'health', react: () => import('../pages/CpeAdmin').then((m) => m.CpeAdmin) },
+  { id: 'warehouse', icon: 'inventory', label: 'Magazzino', installerLabel: 'Il mio magazzino', react: () => import('../pages/Warehouse').then((m) => m.Warehouse) },
   { id: 'customers', icon: 'my_location', label: 'Clienti', admin: true, react: () => import('../pages/Customers').then((m) => m.Customers) },
   { id: 'stats', icon: 'query_stats', label: 'Statistiche', admin: true, module: 'stats', react: () => import('../pages/Stats').then((m) => m.Stats) },
   { id: 'outages', icon: 'power_off', label: 'Guasti Enel', module: 'power_outages', react: () => import('../pages/Outages').then((m) => m.Outages) },

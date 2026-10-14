@@ -540,3 +540,9 @@ button.ui-stat:hover { border-color: var(--line-strong); }
   .cal-cell .cal-ev.done { opacity: .4; }
   .cal-cell .cal-ev.late { box-shadow: 0 0 0 1px var(--bad); }
 }
+
+/* Magazzino (pages/Warehouse.tsx) e campi del magazzino in Account */
+.wh-p { margin: 0; }
+.wh-search { align-items: flex-end; }
+.wh-search .ui-field { flex: 1 1 260px; }
+.us-warehouse { display: grid; gap: var(--sp-2); }
