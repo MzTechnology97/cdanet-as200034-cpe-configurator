@@ -31,6 +31,8 @@ interface Uisp {
   url: string;
   tokenSet: boolean;
   tokenHint?: string;
+  /** The app key of the UISP CRM is set (never returned): new subscribers at acceptance. */
+  crmKeySet?: boolean;
   ignoreTls: boolean;
   autoBackup: boolean;
   coverageMaxKm: number;
@@ -103,6 +105,7 @@ function UispCard({ u, onSaved }: { u: Uisp; onSaved: () => Promise<void> }) {
     enabled: u.source === 'none' ? true : u.enabled,
     url: u.url,
     token: '',
+    crmKey: '',
     ignoreTls: u.ignoreTls,
     autoBackup: u.autoBackup,
     radius: String(u.coverageMaxKm),
@@ -113,6 +116,7 @@ function UispCard({ u, onSaved }: { u: Uisp; onSaved: () => Promise<void> }) {
     enabled: f.enabled,
     url: f.url.trim(),
     ...(f.token.trim() ? { token: f.token.trim() } : {}),
+    ...(f.crmKey.trim() ? { crmKey: f.crmKey.trim() } : {}),
     ignoreTls: f.ignoreTls,
     autoBackup: f.autoBackup,
     coverageMaxKm: Number(f.radius) || 15,
@@ -149,10 +153,11 @@ function UispCard({ u, onSaved }: { u: Uisp; onSaved: () => Promise<void> }) {
         <>
           <Badge tone={u.active ? 'good' : 'neutral'}>{u.active ? 'attivo' : 'non attivo'}</Badge>
           <Badge tone={u.source === 'none' ? 'warn' : 'neutral'}>{SOURCE[u.source]}</Badge>
+          <Badge tone={u.crmKeySet ? 'good' : 'neutral'}>{u.crmKeySet ? 'chiave CRM impostata' : 'chiave CRM non impostata'}</Badge>
         </>
       }
     >
-      <p className="ui-muted ui-small cn-p">AP vicini e copertura, stato delle CPE, accettazione dallo storico e backup.</p>
+      <p className="ui-muted ui-small cn-p">AP vicini e copertura, stato delle CPE, accettazione dallo storico (con la chiave del CRM anche come nuovo subscriber) e backup.</p>
       {u.updatedAt && (
         <p className="ui-muted ui-small cn-p">
           Ultima modifica {date(u.updatedAt)}
@@ -170,6 +175,9 @@ function UispCard({ u, onSaved }: { u: Uisp; onSaved: () => Promise<void> }) {
         </Field>
         <Field label="Token API" hint="Da UISP → Settings → Users → API tokens (lettura/scrittura).">
           <input type="password" autoComplete="off" value={f.token} onChange={(e) => setF({ ...f, token: e.target.value })} placeholder={u.tokenSet ? `Impostato (${u.tokenHint}): lascia vuoto per non cambiarlo` : 'Token API di UISP'} />
+        </Field>
+        <Field label="Chiave app CRM di UISP" hint="UISP → Impostazioni → Sicurezza → App keys, lettura e scrittura. Serve per creare il subscriber quando si accetta una CPE.">
+          <input type="password" autoComplete="off" value={f.crmKey} onChange={(e) => setF({ ...f, crmKey: e.target.value })} placeholder={u.crmKeySet ? 'Impostata: lascia vuoto per non cambiarla' : 'Non impostata'} />
         </Field>
         <Field label="Raggio copertura (km)">
           <input type="number" min={1} max={100} value={f.radius} onChange={(e) => setF({ ...f, radius: e.target.value })} />
