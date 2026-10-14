@@ -16,6 +16,7 @@ import { koRoutes } from './routes/ko.ts';
 import { notificationRoutes } from './routes/notifications.ts';
 import { liveRoutes } from './routes/live.ts';
 import { createLive } from './services/live.ts';
+import { createPush } from './services/push.ts';
 import { fieldRoutes } from './routes/field.ts';
 import { provisioningRoutes } from './routes/provisioning.ts';
 import { replaceRoutes } from './routes/replace.ts';
@@ -110,6 +111,7 @@ export async function buildApp(
   const ctx: AppContext = {
     cfg,
     live: createLive(),
+    push: createPush(db, sealer, { fetchImpl: opts.fetchImpl }),
     db,
     sealer,
     auth: createAuth(db, cfg.jwtSecret, cfg.jwtTtlHours),
@@ -164,7 +166,11 @@ export async function buildApp(
     userOn: (id) => modules.stateFor(id).power_outages,
     onChange: () => ctx.live.publish('outages', 'all'),
   });
-  ctx.notify = createNotifier(db, cfg, telegram, () => ctx.uisp, version, () => modules.enabled('telegram'), undefined, (ids) => ctx.live.publish('notifications', ids));
+  ctx.notify = createNotifier(db, cfg, telegram, () => ctx.uisp, version, () => modules.enabled('telegram'), undefined, (ids, n) => {
+    ctx.live.publish('notifications', ids);
+    // to the phones at once (Firebase); the reminders of the work orders are scheduled by the app itself
+    if (n.kind !== 'work_order_reminder') void ctx.push.send(ids, { title: n.title, body: n.lines.join('\n'), kind: n.kind });
+  });
 
   const app = Fastify({
     logger:
