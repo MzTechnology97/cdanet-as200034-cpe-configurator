@@ -57,7 +57,70 @@ class NetworkHelper(context: Context) {
 
     val wifiEnabled: Boolean get() = runCatching { wifi.isWifiEnabled }.getOrDefault(false)
 
-    fun wifiNetwork(): Network? = cm.allNetworksCompat().firstOrNull {
+    /** The CPE's management Wi-Fi joined from the app: only this app uses it, the phone keeps its Internet. */
+    enum class CpeWifi { Idle, Searching, Connected, NotFound, Lost }
+
+    private val _cpeWifi = kotlinx.coroutines.flow.MutableStateFlow(CpeWifi.Idle)
+    val cpeWifi: kotlinx.coroutines.flow.StateFlow<CpeWifi> = _cpeWifi
+
+    @Volatile private var cpeNet: Network? = null
+    private var cpeCallback: ConnectivityManager.NetworkCallback? = null
+
+    /** Android 10+: the system lists the CPE Wi-Fi networks nearby and the installer picks one. */
+    val canJoinCpe: Boolean get() = android.os.Build.VERSION.SDK_INT >= 29
+
+    /**
+     * Joins the management Wi-Fi of a CPE (open, named like «LBE-5AC-Gen2:A1B2C3») without leaving
+     * the phone's settings: Android shows the nearby ones, the installer taps it. The network is the
+     * app's own: sockets of the CPE steps go there, the server is still reached on mobile data.
+     */
+    fun joinCpeWifi() {
+        if (android.os.Build.VERSION.SDK_INT < 29) return
+        leaveCpeWifi()
+        val spec = android.net.wifi.WifiNetworkSpecifier.Builder()
+            // airOS management networks are "<model>:<end of the MAC>"; a home Wi-Fi rarely has a colon
+            .setSsidPattern(android.os.PatternMatcher(".*:.*", android.os.PatternMatcher.PATTERN_SIMPLE_GLOB))
+            .build()
+        val request = android.net.NetworkRequest.Builder()
+            .addTransportType(NetworkCapabilities.TRANSPORT_WIFI)
+            .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .setNetworkSpecifier(spec)
+            .build()
+        val cb = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                cpeNet = network
+                _cpeWifi.value = CpeWifi.Connected
+                _wifiConnected.value = true
+            }
+            override fun onUnavailable() {
+                cpeCallback = null
+                _cpeWifi.value = CpeWifi.NotFound
+            }
+            override fun onLost(network: Network) {
+                if (network == cpeNet) cpeNet = null
+                _cpeWifi.value = CpeWifi.Lost
+                _wifiConnected.value = wifiNetwork() != null
+            }
+        }
+        cpeCallback = cb
+        _cpeWifi.value = CpeWifi.Searching
+        runCatching { cm.requestNetwork(request, cb) }.onFailure {
+            cpeCallback = null
+            _cpeWifi.value = CpeWifi.NotFound
+        }
+    }
+
+    /** Leaves the CPE's Wi-Fi joined from the app (and stops asking for it). */
+    fun leaveCpeWifi() {
+        cpeCallback?.let { runCatching { cm.unregisterNetworkCallback(it) } }
+        cpeCallback = null
+        cpeNet = null
+        if (_cpeWifi.value != CpeWifi.Idle) _cpeWifi.value = CpeWifi.Idle
+        _wifiConnected.value = wifiNetwork() != null
+    }
+
+    /** The Wi-Fi the CPE steps use: the CPE's one joined from the app first, else the phone's Wi-Fi. */
+    fun wifiNetwork(): Network? = cpeNet?.takeIf { cm.getNetworkCapabilities(it) != null } ?: cm.allNetworksCompat().firstOrNull {
         cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
     }
 
