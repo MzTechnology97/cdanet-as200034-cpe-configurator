@@ -134,8 +134,8 @@ enum class Screen(val title: String, val scroll: Boolean = true, val wide: Boole
     Camera("TVCC / IP camera"),
     Remote("Accesso remoto"),
     RouterOs("MikroTik · RouterOS"),
-    History("Storico"),
-    Notifications("Notifiche"),
+    History("Storico", scroll = false),
+    Notifications("Notifiche", scroll = false),
     Settings("Impostazioni"),
     Guide("Guida installatore", scroll = false),
     // areas of the bottom bar and their tabbed sections

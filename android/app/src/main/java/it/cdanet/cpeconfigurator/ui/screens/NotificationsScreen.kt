@@ -1,5 +1,9 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.collectAsState
 import it.cdanet.cpeconfigurator.R
 import it.cdanet.cpeconfigurator.ui.EmptyState
@@ -51,19 +55,24 @@ fun NotificationsScreen(c: AppContainer, onUnread: (Int) -> Unit) {
     }
     LaunchedEffect(c.refresh.collectAsState().value) { load() }
 
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        ErrorBanner(error) { error = null }
-        if (items.isEmpty() && busy) it.cdanet.cpeconfigurator.ui.SkeletonRows(3)
-        ListHeader(if (unread > 0) "$unread da leggere" else "Nessuna notifica da leggere", busy) { scope.launch { load() } }
-        if (unread > 0) {
-            BusyButton("Segna tutte come lette", busy, Modifier.fillMaxWidth(), primary = false) {
-                scope.launch {
-                    runCatching { c.api.markNotificationsRead() }
-                    load()
+    // a lazy list: 90 days of notifications are composed only when they come on screen
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                ErrorBanner(error) { error = null }
+                if (items.isEmpty() && busy) it.cdanet.cpeconfigurator.ui.SkeletonRows(3)
+                ListHeader(if (unread > 0) "$unread da leggere" else "Nessuna notifica da leggere", busy) { scope.launch { load() } }
+                if (unread > 0) {
+                    BusyButton("Segna tutte come lette", busy, Modifier.fillMaxWidth(), primary = false) {
+                        scope.launch {
+                            runCatching { c.api.markNotificationsRead() }
+                            load()
+                        }
+                    }
                 }
             }
         }
-        items.forEach { n ->
+        items(items, key = { it.id }) { n ->
             val title = if (n.title.startsWith("✅") || n.title.startsWith("❌")) n.title else "${ICONS[n.kind] ?: "🔔"} ${n.title}"
             SectionCard {
                 Column(
@@ -81,8 +90,12 @@ fun NotificationsScreen(c: AppContainer, onUnread: (Int) -> Unit) {
                 }
             }
         }
-        if (items.isEmpty() && !busy) EmptyState(R.drawable.ic_notifications, "Nessuna notifica", "Qui arrivano gli esiti delle tue installazioni: approvazioni e attivazioni del NOC (ultimi 90 giorni).")
-        // the outcome of your installations also reaches Telegram once linked (choices: console web → Notifiche)
-        Text("Le notifiche su Telegram si collegano in Impostazioni.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                if (items.isEmpty() && !busy) EmptyState(R.drawable.ic_notifications, "Nessuna notifica", "Qui arrivano gli esiti delle tue installazioni: approvazioni e attivazioni del NOC (ultimi 90 giorni).")
+                // the outcome of your installations also reaches Telegram once linked (choices: console web → Notifiche)
+                Text("Le notifiche su Telegram si collegano in Impostazioni.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            }
+        }
     }
 }

@@ -144,7 +144,7 @@ fun InstallationsHub(
     val tabs = installTabTitles(modules, c.session.isAdmin).map { t ->
         when (t) {
             "Da completare" -> HubTab(t, R.drawable.ic_pending_actions) { ToDoPanel(c, onResume, onAcceptance) }
-            "Storico" -> HubTab(t, R.drawable.ic_history) { HistoryScreen(c, onAcceptance = onAcceptance, onReplace = onReplace) }
+            "Storico" -> HubTab(t, R.drawable.ic_history, scroll = false) { HistoryScreen(c, onAcceptance = onAcceptance, onReplace = onReplace) }
             else -> HubTab(t, R.drawable.ic_monitor_heart) { CpeHealthScreen(c, onRepoint) }
         }
     }

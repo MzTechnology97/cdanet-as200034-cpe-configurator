@@ -89,6 +89,7 @@ Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). 
 ## Già rilasciato
 
 - v1.32.65: IA-AP: un avviso critico viene notificato al massimo una volta alla settimana (prima tornava a ogni ricomparsa), notifiche con link a IA-AP; ottimizzazioni in corso e programmate in evidenza in Panoramica e sulla riga dell'AP; problemi critici IA-AP in Panoramica.
+- v1.33.1: app più scattante: build di rilascio ottimizzata con R8 (codice ridotto e più veloce, APK da circa 15 a 10 MB), Notifiche e Storico come elenchi che compongono solo le righe visibili, profilo del collegamento con la vista «Zona di Fresnel» come nella console.
 - v1.32.86: Stato rete in React: riepilogo in riquadri che fanno anche da filtro (Non raggiungibili, Con molte CPE offline), mappa ed elenco come prima (filtri per stato, ricerca, fasci dei clienti), vista degli installatori senza mappa invariata.
 - v1.32.85: Guasti Enel in React: riepilogo in riquadri colorati, mappa, guasti in corso e ripristinati, zone (condivise, personali, le mie) e selezione dei POP/AP da UISP come prima.
 - v1.32.83: Copertura (admin) in React: stesse funzioni, esito della verifica in evidenza con il migliore AP e le azioni rapide (Collegamento, Simula), cifre della simulazione in riquadri, «Visibilità» diventa «Collegamento», Affidabilità della stima, Terreno e ostacoli e Antenne degli AP in linguette sotto la mappa; la verifica degli installatori non cambia.
