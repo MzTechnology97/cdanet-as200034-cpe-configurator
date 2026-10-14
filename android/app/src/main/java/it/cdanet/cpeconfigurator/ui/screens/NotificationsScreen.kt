@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.collectAsState
 import it.cdanet.cpeconfigurator.R
+import it.cdanet.cpeconfigurator.ui.localTime
 import it.cdanet.cpeconfigurator.ui.EmptyState
 import it.cdanet.cpeconfigurator.ui.ListHeader
 import androidx.compose.foundation.clickable
@@ -97,7 +98,7 @@ fun NotificationsScreen(c: AppContainer, onUnread: (Int) -> Unit) {
                     },
                 ) {
                     Text(title, fontWeight = if (n.readAt == null) FontWeight.Bold else FontWeight.Normal)
-                    Text(n.createdAt.replace('T', ' ').take(16), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(localTime(n.createdAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (n.body.isNotBlank()) Text(n.body, style = MaterialTheme.typography.bodySmall)
                     androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                         if (n.readAt == null) Text("Tocca per segnarla come letta", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))
