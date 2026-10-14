@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.DataColors
 import androidx.compose.material3.FilterChip
 import kotlin.math.ceil
 import androidx.compose.foundation.Canvas
@@ -268,7 +269,7 @@ private fun SignalBar(e: SignalEstimateDto?) {
         androidx.compose.material3.LinearProgressIndicator(
             progress = { (snr / 35f).coerceIn(0f, 1f) },
             modifier = Modifier.fillMaxWidth().height(6.dp).clip(RoundedCornerShape(3.dp)),
-            color = if (reached >= 7) Color(0xFF22C55E) else if (reached >= 4) Color(0xFFFACC15) else Color(0xFFF97316),
+            color = if (reached >= 7) DataColors.Good else if (reached >= 4) DataColors.Weak else DataColors.Poor,
             trackColor = MaterialTheme.colorScheme.surfaceContainerHighest,
             drawStopIndicator = {},
         )
@@ -295,8 +296,8 @@ private fun ProfileChart(d: LosDto) {
     val groundFill = MaterialTheme.colorScheme.surfaceContainerHighest
     val ink = MaterialTheme.colorScheme.onSurface
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
-    val fresnel = Color(0xFF38BDF8)
-    val sight = Color(0xFF2563EB)
+    val fresnel = DataColors.Fresnel
+    val sight = DataColors.LineOfSight
     val pts = d.chart
     if (pts.size < 2) return
     val total = pts.last().d.toDouble().coerceAtLeast(1.0)
@@ -354,7 +355,7 @@ private fun ProfileChart(d: LosDto) {
         val barW = (w / pts.size).coerceAtLeast(2f)
         pts.forEach { p ->
             val top = p.top ?: return@forEach
-            val color = if (p.obstacle == "edificio") ground.copy(alpha = 0.6f) else Color(0xFF2E7D32).copy(alpha = 0.5f)
+            val color = if (p.obstacle == "edificio") ground.copy(alpha = 0.6f) else DataColors.Vegetation.copy(alpha = 0.5f)
             drawRect(color, Offset(x(p.d) - barW / 2, y(p, top)), androidx.compose.ui.geometry.Size(barW, y(p, p.ground) - y(p, top)))
         }
         val terrain = Path().apply {
@@ -370,7 +371,7 @@ private fun ProfileChart(d: LosDto) {
         val label = android.graphics.Paint().apply { isAntiAlias = true; textSize = 11.dp.toPx(); isFakeBoldText = true; color = ink.toArgb() }
         listOf(pts.first() to "CPE", pts.last() to "AP").forEachIndexed { i, (p, name) ->
             drawLine(ink, Offset(x(p.d), y(p, p.ground)), Offset(x(p.d), y(p, p.los)), strokeWidth = 2.dp.toPx())
-            drawCircle(Color(0xFFF97316), 5.dp.toPx(), Offset(x(p.d), y(p, p.los)))
+            drawCircle(DataColors.CpeEnd, 5.dp.toPx(), Offset(x(p.d), y(p, p.los)))
             label.textAlign = if (i == 0) android.graphics.Paint.Align.LEFT else android.graphics.Paint.Align.RIGHT
             drawContext.canvas.nativeCanvas.drawText("$name ${fmt(p.los - p.ground)} m", x(p.d) + if (i == 0) 6.dp.toPx() else -6.dp.toPx(), y(p, p.los) - 8.dp.toPx(), label)
         }
