@@ -57,7 +57,7 @@ export const ROUTES: Array<Route | Group> = [
   { id: 'customers', icon: 'my_location', label: 'Clienti', admin: true, react: () => import('../pages/Customers').then((m) => m.Customers) },
   { id: 'stats', icon: 'query_stats', label: 'Statistiche', admin: true, module: 'stats', legacy: () => import('../../../web/js/views/stats.js').then((m) => m.statsView) },
   { id: 'outages', icon: 'power_off', label: 'Guasti Enel', module: 'power_outages', legacy: () => import('../../../web/js/views/outages.js').then((m) => m.outagesView) },
-  { id: 'network', icon: 'hub', label: 'Stato rete', module: 'network_status', legacy: () => import('../../../web/js/views/network.js').then((m) => m.networkView) },
+  { id: 'network', icon: 'hub', label: 'Stato rete', module: 'network_status', react: () => import('../pages/Network').then((m) => m.Network) },
   { id: 'ia-ap', icon: 'troubleshoot', label: 'IA-AP', admin: true, legacy: () => import('../../../web/js/views/advisor.js').then((m) => m.advisorView) },
   { id: 'mytemplates', icon: 'memory', label: 'Template disponibili', installer: true, legacy: () => import('../../../web/js/views/mytemplates.js').then((m) => m.myTemplatesView) },
   { id: 'coverage', icon: 'explore', label: 'Copertura', module: 'coverage', bottom: true, legacy: () => import('../../../web/js/views/coverage.js').then((m) => m.coverageView) },
