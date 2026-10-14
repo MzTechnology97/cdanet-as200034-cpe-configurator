@@ -158,7 +158,7 @@ export function FollowUp({ admin, onOpenJob }: { admin: boolean; onOpenJob: (j: 
                   </div>
                 ),
               },
-              { label: 'CPE', render: (j) => <span className="ui-mono ui-small">{`${j.mac} · ${j.ssid}`}</span> },
+              { label: 'CPE', render: (j) => <span className="ui-mono ui-small">{[j.mac, j.ssid].filter(Boolean).join(' · ') || '—'}</span> },
               ...(admin ? [{ label: 'Installatore', render: (j: Job) => j.installer ?? '—' }] : []),
               { label: '', end: true, render: () => (admin ? <span className="ui-small">Apri per decidere →</span> : <ReviewBadge state="pending" />) },
             ]}
