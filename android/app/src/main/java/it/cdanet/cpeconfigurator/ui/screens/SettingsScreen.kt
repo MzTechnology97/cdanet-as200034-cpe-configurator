@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
 import it.cdanet.cpeconfigurator.ui.QuickLoginCard
 import android.content.Intent
 import android.net.Uri
@@ -55,11 +56,11 @@ fun UpdateBanner(c: AppContainer, state: UpdateState, onState: (UpdateState) -> 
         is UpdateState.Downloading -> Banner("Download ${state.info.versionName} e verifica SHA-256…", WarnAmber)
         is UpdateState.ReadyToInstall -> SectionCard("Aggiornamento pronto", icon = it.cdanet.cpeconfigurator.R.drawable.ic_rocket_launch) {
             Text("Conferma l'installazione nella schermata di Android.")
-            OutlinedButton(onClick = { install(state.info) }) { Text("Riprova") }
+            SecondaryButton(onClick = { install(state.info) }) { Text("Riprova") }
         }
         is UpdateState.PermissionRequired -> SectionCard("Autorizzazione richiesta", icon = it.cdanet.cpeconfigurator.R.drawable.ic_lock) {
             Text("Consenti a CDA Net di installare app (\"Installa app sconosciute\"), poi torna qui.")
-            OutlinedButton(onClick = { scope.launch { onState(runCatching { c.updater.check() }.getOrNull()?.let { UpdateState.Available(it) } ?: UpdateState.UpToDate) } }) {
+            SecondaryButton(onClick = { scope.launch { onState(runCatching { c.updater.check() }.getOrNull()?.let { UpdateState.Available(it) } ?: UpdateState.UpToDate) } }) {
                 Text("Ho autorizzato, riprova")
             }
         }
@@ -125,7 +126,7 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
             KeyValue("Utente", session?.user?.let { "${it.username} (${if (it.role == "admin") "amministratore" else "installatore"})" } ?: "non connesso")
             // with the persistent login the session renews by itself: its expiry is in "Accesso su questo telefono"
             if (c.quickLogin.saved() == null) KeyValue("Sessione fino a", session?.expiresAt?.replace('T', ' ')?.take(16) ?: "—")
-            OutlinedButton(onClick = onLogout) { Text(if (session != null) "Esci" else "Torna al login") }
+            SecondaryButton(onClick = onLogout) { Text(if (session != null) "Esci" else "Torna al login") }
         }
 
         if (session != null) {
@@ -134,7 +135,7 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
             PersonalTelegramCard(c)
             SectionCard("Sessioni", icon = it.cdanet.cpeconfigurator.R.drawable.ic_logout) {
                 Text("Telefono perso o accesso da un dispositivo condiviso? Chiudi tutte le sessioni dell'account, anche questa.", style = MaterialTheme.typography.bodySmall)
-                OutlinedButton(onClick = {
+                SecondaryButton(onClick = {
                     scope.launch {
                         runCatching { c.api.logoutAll() }.onFailure { error = it.message }.onSuccess { onLogout() }
                     }
@@ -202,7 +203,7 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
 
         SectionCard("App", icon = it.cdanet.cpeconfigurator.R.drawable.ic_info) {
             KeyValue("Versione", "${BuildConfig.VERSION_NAME} (${BuildConfig.VERSION_CODE})")
-            OutlinedButton(onClick = {
+            SecondaryButton(onClick = {
                 scope.launch {
                     onUpdate(UpdateState.Checking)
                     val next = runCatching { c.updater.check() }.fold(
@@ -213,10 +214,10 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
                     if (next is UpdateState.UpToDate) msg = "L'app è aggiornata"
                 }
             }) { Text("Verifica aggiornamenti") }
-            OutlinedButton(onClick = {
+            SecondaryButton(onClick = {
                 context.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
             }) { Text("Permessi dell'app") }
-            if (BuildConfig.DEBUG) OutlinedButton(onClick = onComponents) { Text("Componenti dell'interfaccia") }
+            if (BuildConfig.DEBUG) SecondaryButton(onClick = onComponents) { Text("Componenti dell'interfaccia") }
         }
     }
 }

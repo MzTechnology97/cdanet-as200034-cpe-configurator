@@ -86,11 +86,11 @@ fun MandatoryUpdateScreen(c: AppContainer, info: UpdateInfo?, minVersion: String
             }
             is UpdateState.ReadyToInstall -> {
                 Text("Conferma l'installazione nella schermata di Android. Al termine riapri l'app.")
-                OutlinedButton(onClick = { scope.launch { startUpdate(c, state.info, onState) } }, modifier = Modifier.fillMaxWidth()) { Text("Installa di nuovo") }
+                SecondaryButton(onClick = { scope.launch { startUpdate(c, state.info, onState) } }, modifier = Modifier.fillMaxWidth()) { Text("Installa di nuovo") }
             }
             is UpdateState.PermissionRequired -> {
                 Text("Consenti a CDA Net di installare app (\"Installa app sconosciute\"), poi torna qui.")
-                OutlinedButton(onClick = { c.updater.openInstallPermissionSettings() }, modifier = Modifier.fillMaxWidth()) { Text("Apri l'autorizzazione") }
+                SecondaryButton(onClick = { c.updater.openInstallPermissionSettings() }, modifier = Modifier.fillMaxWidth()) { Text("Apri l'autorizzazione") }
                 BusyButton("Ho autorizzato, installa", false, Modifier.fillMaxWidth()) { info?.let { i -> scope.launch { startUpdate(c, i, onState) } } ?: onRecheck() }
             }
             is UpdateState.Failed -> {
