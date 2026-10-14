@@ -66,6 +66,7 @@ private val CAPTIONS = listOf("Antenna", "Staffa / palo", "Cablaggio", "Router c
  * Final acceptance test of an installation: 10 CPE readings (signal averaged), Internet
  * through the customer Wi-Fi, photos and notes, saved in the job (printable report on the web).
  */
+@OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
 @Composable
 fun AcceptanceScreen(c: AppContainer) {
     val job by c.selectedJob.collectAsState()
@@ -194,11 +195,9 @@ fun AcceptanceScreen(c: AppContainer) {
         }
 
         SectionCard("3 · Foto (${photos.size}/8)") {
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                CAPTIONS.take(3).forEach { cap -> SecondaryButton(onClick = { val (f, u) = PhotoCapture.newTarget(context); shot = f to cap; camera.launch(u) }, enabled = photos.size < 8) { Text(cap) } }
-            }
-            Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                CAPTIONS.drop(3).forEach { cap -> SecondaryButton(onClick = { val (f, u) = PhotoCapture.newTarget(context); shot = f to cap; camera.launch(u) }, enabled = photos.size < 8) { Text(cap) } }
+            // as many per row as fit: a caption never breaks mid-word on a narrow phone
+            androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                CAPTIONS.forEach { cap -> SecondaryButton(onClick = { val (f, u) = PhotoCapture.newTarget(context); shot = f to cap; camera.launch(u) }, enabled = photos.size < 8) { Text(cap, maxLines = 1, softWrap = false) } }
             }
             photos.toList().forEach { p ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
