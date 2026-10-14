@@ -608,7 +608,8 @@ function LinkDock({
           </div>
           {e?.signalDbm != null && noise != null && <div className="ui-muted ui-small">SNR atteso {e.signalDbm - noise} dB</div>}
           <div className="dock-chart">
-            <Dom make={() => profileChart(p)} deps={[p]} />
+            <span className="ui-muted ui-small">Zona di Fresnel, altezze dalla linea di vista</span>
+            <Dom make={() => profileChart(p, { view: 'fresnel', height: 190 })} deps={[p]} />
           </div>
           {p.ap.lat != null && (
             <Button variant="ghost" className="dock-3d" onClick={on3d}>
@@ -692,25 +693,44 @@ function LinkDetails({ link, point, on3d }: { link: { p: Profile; a: Ap }; point
         </p>
       )}
       {p.ap.lat != null && <p className="ui-muted ui-small">Sulla mappa: il collegamento e la sua prima zona di Fresnel (allargata per essere visibile, la forma è quella reale), verde dove è libera, arancione dove terreno o ostacoli entrano nel 60% della zona, rosso dove coprono la linea di vista.</p>}
-      <Dom make={() => profileChart(p)} deps={[p]} />
-      <Dom
-        make={() =>
-          legend([
-            ['#a8a29e', 'terreno (con la curvatura terrestre)'],
-            ['#78716c', 'edifici'],
-            ['#4d7c0f', 'alberi'],
-            ['#2563eb', 'linea di vista'],
-            ['#38bdf8', 'prima zona di Fresnel'],
-            ['#f59e0b', 'limite del 60%'],
-          ])
-        }
-      />
+      <LinkCharts p={p} />
       <p className="ui-muted ui-small">
         {p.terrainSource === 'tinitaly'
           ? 'Terreno TINITALY (10 m); edifici dalle sagome di OpenStreetMap e alberi con la loro altezza dove importati (Terreno e ostacoli), altrimenti dalla mappa ESA con le altezze medie. Cambia l’altezza della CPE e il collegamento si aggiorna.'
           : 'Modello del terreno SRTM (circa 30 m): qui non sono scaricati terreno a 10 m, edifici e alberi. Cambia l’altezza della CPE e il collegamento si aggiorna.'}
       </p>
     </Card>
+  );
+}
+
+/**
+ * The two drawings of a link: the terrain along it (hills, buildings, trees) and the Fresnel zone,
+ * measured from the line of sight on its own scale (on the terrain's scale it is a thin line).
+ */
+export function LinkCharts({ p }: { p: Profile }) {
+  return (
+    <div className="lk-charts">
+      <figure>
+        <figcaption>Profilo del terreno</figcaption>
+        <Dom make={() => profileChart(p, { view: 'full', height: 260 })} deps={[p]} />
+      </figure>
+      <figure>
+        <figcaption>Zona di Fresnel: altezze misurate dalla linea di vista (0 m)</figcaption>
+        <Dom make={() => profileChart(p, { view: 'fresnel', height: 220 })} deps={[p]} />
+      </figure>
+        <Dom
+          make={() =>
+            legend([
+              ['#a8a29e', 'terreno (con la curvatura terrestre)'],
+              ['#78716c', 'edifici'],
+              ['#4d7c0f', 'alberi'],
+              ['#2563eb', 'linea di vista'],
+              ['#38bdf8', 'prima zona di Fresnel'],
+              ['#f59e0b', 'limite del 60%'],
+            ])
+          }
+        />
+    </div>
   );
 }
 

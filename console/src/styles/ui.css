@@ -272,3 +272,10 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .cva-popup-btn { margin-top: var(--sp-2); min-height: 32px; }
 .link-dock .dock-close { position: absolute; top: 6px; right: 8px; }
 .link-dock .ui-field select { min-height: 32px; }
+
+/* the drawings of a link (Copertura) */
+.lk-charts { display: grid; gap: var(--sp-3); }
+.lk-charts figure { margin: 0; display: grid; gap: var(--sp-1); }
+.lk-charts figcaption { font-size: var(--fs-sm); font-weight: 600; }
+.link-dock .dock-chart { display: grid; gap: 2px; }
+.link-dock .dock-chart svg { max-height: none; }
