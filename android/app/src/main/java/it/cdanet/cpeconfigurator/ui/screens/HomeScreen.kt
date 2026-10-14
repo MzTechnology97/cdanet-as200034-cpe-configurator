@@ -70,7 +70,7 @@ fun screenIcon(s: Screen): Int? = when (s) {
     Screen.Acceptance -> R.drawable.ic_check_circle
     Screen.Compass, Screen.Pointing -> R.drawable.ic_explore
     Screen.ArAim, Screen.ArLive -> R.drawable.ic_my_location
-    Screen.Settings -> R.drawable.ic_settings
+    Screen.Settings, Screen.Components -> R.drawable.ic_settings
     Screen.History -> R.drawable.ic_history
     Screen.Notifications -> R.drawable.ic_notifications
     Screen.CpeHealth, Screen.CpeAdmin -> R.drawable.ic_monitor_heart

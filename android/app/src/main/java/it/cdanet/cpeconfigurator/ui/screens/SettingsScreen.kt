@@ -104,7 +104,7 @@ private fun PasswordCard(c: AppContainer, onDone: (String) -> Unit, onError: (St
 }
 
 @Composable
-fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) -> Unit, onLogout: () -> Unit) {
+fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) -> Unit, onLogout: () -> Unit, onComponents: () -> Unit = {}) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val session by c.session.state.collectAsState()
@@ -216,6 +216,7 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
             OutlinedButton(onClick = {
                 context.startActivity(Intent(AndroidSettings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${context.packageName}")))
             }) { Text("Permessi dell'app") }
+            if (BuildConfig.DEBUG) OutlinedButton(onClick = onComponents) { Text("Componenti dell'interfaccia") }
         }
     }
 }
