@@ -85,6 +85,7 @@ import it.cdanet.cpeconfigurator.ui.screens.DiagnosisScreen
 import it.cdanet.cpeconfigurator.ui.screens.DiscoveryScreen
 import it.cdanet.cpeconfigurator.ui.screens.HistoryScreen
 import it.cdanet.cpeconfigurator.ui.screens.HomeScreen
+import it.cdanet.cpeconfigurator.ui.screens.CalendarScreen
 import it.cdanet.cpeconfigurator.ui.screens.IpScannerScreen
 import it.cdanet.cpeconfigurator.ui.screens.NetDiagScreen
 import it.cdanet.cpeconfigurator.ui.screens.ArAimScreen
@@ -135,6 +136,7 @@ enum class Screen(val title: String, val scroll: Boolean = true, val wide: Boole
     Remote("Accesso remoto"),
     RouterOs("MikroTik · RouterOS"),
     History("Storico", scroll = false),
+    Calendar("Calendario"),
     Notifications("Notifiche", scroll = false),
     Settings("Impostazioni"),
     Guide("Guida installatore", scroll = false),
@@ -413,6 +415,7 @@ fun AppRoot(c: AppContainer) {
             val body: @Composable () -> Unit = {
                 when (screen) {
                     Screen.Home -> HomeScreen(c, offline = session == null, unread = unread, onOpen = ::open, onLogin = { offline = false })
+                    Screen.Calendar -> CalendarScreen(c, onOpen = ::open)
                     Screen.Installations -> InstallationsHub(
                         c,
                         hubTabs[screen.name],

@@ -79,6 +79,7 @@ fun screenIcon(s: Screen): Int? = when (s) {
     Screen.ArAim, Screen.ArLive -> R.drawable.ic_my_location
     Screen.Settings, Screen.Components -> R.drawable.ic_settings
     Screen.History -> R.drawable.ic_history
+    Screen.Calendar -> R.drawable.ic_calendar_month
     Screen.Notifications -> R.drawable.ic_notifications
     Screen.CpeHealth, Screen.CpeAdmin -> R.drawable.ic_monitor_heart
     Screen.NetStatus, Screen.NetHub -> R.drawable.ic_hub
@@ -423,7 +424,10 @@ private fun WorkOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
     val done = orders?.count { it.status == "done" } ?: 0
     if (list.isEmpty() && done == 0) return
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        GroupHeader(if (list.isEmpty()) "Interventi di oggi · tutti fatti" else "Interventi di oggi · ${list.size} da fare" + if (done > 0) ", $done fatti" else "", Area.Work)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Box(Modifier.weight(1f)) { GroupHeader(if (list.isEmpty()) "Interventi di oggi · tutti fatti" else "Interventi di oggi · ${list.size} da fare" + if (done > 0) ", $done fatti" else "", Area.Work) }
+            androidx.compose.material3.TextButton(onClick = { onOpen(Dest(Screen.Calendar)) }) { Text("Calendario") }
+        }
         list.forEach { o ->
             Card(
                 shape = MaterialTheme.shapes.large,
@@ -454,32 +458,13 @@ private fun WorkOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
                     if (o.notes.isNotBlank()) Text(o.notes, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (o.statusNote.isNotBlank()) Text("Nota: ${o.statusNote}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        PrimaryButton(onClick = {
-                            // the acceptance test will check the GPS against this order's position
-                            c.activeWorkOrder.value = o
-                            when (o.kind) {
-                                "new" -> {
-                                    c.provisioning.startWorkOrder(o)
-                                    c.install.start(InstallMode.New)
-                                    onOpen(Dest(Screen.Provision))
-                                }
-                                "survey" -> onOpen(Dest(Screen.NetHub, "AP vicini"))
-                                else -> {
-                                    c.install.start(InstallMode.Repoint)
-                                    onOpen(Dest(Screen.Provision))
-                                }
-                            }
-                            scope.launch { runCatching { c.api.setWorkOrderStatus(o.id, "started") } }
-                        }) {
+                        PrimaryButton(onClick = { startOrder(c, o, onOpen) }) {
                             Icon(painterResource(R.drawable.ic_arrow_forward), contentDescription = null, modifier = Modifier.size(18.dp))
                             Spacer(Modifier.width(8.dp))
                             Text("Inizia")
                         }
                         if (o.address.isNotBlank() || o.lat != null) {
-                            SecondaryButton(onClick = {
-                                val uri = if (o.lat != null && o.lon != null) "geo:${o.lat},${o.lon}?q=${o.lat},${o.lon}(${android.net.Uri.encode(o.customer)})" else "geo:0,0?q=${android.net.Uri.encode(o.address)}"
-                                runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(uri))) }
-                            }) { Text("Naviga") }
+                            SecondaryButton(onClick = { navigateTo(context, o) }) { Text("Naviga") }
                         }
                         Spacer(Modifier.weight(1f))
                         androidx.compose.material3.TextButton(onClick = { note = ""; postpone = o }) { Text("Rimanda") }
@@ -512,7 +497,35 @@ private fun WorkOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
     }
 }
 
-/** The brand gradient of the hero card (and of the login): brand, brand ink and a deeper ink. */
+/**
+ * The brand gradient of the hero card (and of the login): from a brand already close to brand ink,
+ * then brand ink and a deeper ink. White text on the pure brand orange is 3.4:1, too little for the
+ * small lines of the card in the sun; from 80% towards brand ink it is 4.7:1 everywhere.
+ */
 internal val HeroBrush = Brush.linearGradient(
-    listOf(ConsoleTokens.Light.brand, ConsoleTokens.Light.brandInk, lerp(ConsoleTokens.Light.brandInk, Color.Black, 0.3f)),
+    listOf(lerp(ConsoleTokens.Light.brand, ConsoleTokens.Light.brandInk, 0.8f), ConsoleTokens.Light.brandInk, lerp(ConsoleTokens.Light.brandInk, Color.Black, 0.3f)),
 )
+
+/** «Inizia» of a work order (Oggi and Calendario): the acceptance test will check the GPS against its position. */
+internal fun startOrder(c: AppContainer, o: it.cdanet.cpeconfigurator.data.WorkOrderDto, onOpen: (Dest) -> Unit) {
+    c.activeWorkOrder.value = o
+    when (o.kind) {
+        "new" -> {
+            c.provisioning.startWorkOrder(o)
+            c.install.start(InstallMode.New)
+            onOpen(Dest(Screen.Provision))
+        }
+        "survey" -> onOpen(Dest(Screen.NetHub, "AP vicini"))
+        else -> {
+            c.install.start(InstallMode.Repoint)
+            onOpen(Dest(Screen.Provision))
+        }
+    }
+    c.scope.launch { runCatching { c.api.setWorkOrderStatus(o.id, "started") } }
+}
+
+/** «Naviga» of a work order: the maps app on its position, or on its address. */
+internal fun navigateTo(context: android.content.Context, o: it.cdanet.cpeconfigurator.data.WorkOrderDto) {
+    val uri = if (o.lat != null && o.lon != null) "geo:${o.lat},${o.lon}?q=${o.lat},${o.lon}(${android.net.Uri.encode(o.customer)})" else "geo:0,0?q=${android.net.Uri.encode(o.address)}"
+    runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(uri))) }
+}
