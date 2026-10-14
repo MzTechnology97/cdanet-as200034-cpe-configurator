@@ -152,28 +152,18 @@ fun BusyButton(text: String, busy: Boolean, modifier: Modifier = Modifier, enabl
         }
         Text(text)
     }
-    // the corners of the console's buttons (8), at the height of a finger (48)
-    val shape = MaterialTheme.shapes.small
     if (primary) {
-        Button(onClick = onClick, enabled = enabled && !busy, modifier = modifier.heightIn(min = 48.dp), shape = shape) { content() }
+        PrimaryButton(onClick, modifier, enabled && !busy) { content() }
     } else if (tonal) {
         androidx.compose.material3.FilledTonalButton(
             onClick = onClick,
             enabled = enabled && !busy,
             modifier = modifier.heightIn(min = 48.dp),
-            shape = shape,
+            shape = MaterialTheme.shapes.small,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
         ) { content() }
     } else {
-        // the secondary button of the console: ink on the card, a stronger line around
-        OutlinedButton(
-            onClick = onClick,
-            enabled = enabled && !busy,
-            modifier = modifier.heightIn(min = 48.dp),
-            shape = shape,
-            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
-            border = androidx.compose.foundation.BorderStroke(1.dp, if (enabled && !busy) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.outlineVariant),
-        ) { content() }
+        SecondaryButton(onClick, modifier, enabled && !busy) { content() }
     }
 }
 

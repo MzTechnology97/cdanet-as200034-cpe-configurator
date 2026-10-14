@@ -85,7 +85,7 @@ fun LoginScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) ->
                 .fillMaxWidth()
                 .height(330.dp)
                 .clip(RoundedCornerShape(bottomStart = 40.dp, bottomEnd = 40.dp))
-                .background(Brush.linearGradient(listOf(CdaOrange, Color(0xFFD9431A), Color(0xFF8E2A0C)))),
+                .background(HeroBrush),
         ) {
             Icon(
                 painterResource(R.drawable.ic_launcher_foreground),
