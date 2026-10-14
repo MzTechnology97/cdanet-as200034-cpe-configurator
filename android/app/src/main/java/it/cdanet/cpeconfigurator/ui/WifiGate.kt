@@ -84,7 +84,8 @@ fun WifiRequired(c: AppContainer, target: String, why: String, cpe: Boolean = ta
 fun CpeWifiJoin(c: AppContainer, state: S, compact: Boolean = false) {
     val message = when (state) {
         S.Searching -> "Scegli la Wi-Fi della CPE nella finestra di Android (es. «LBE-5AC-Gen2:…»)."
-        S.NotFound -> "Nessuna Wi-Fi di CPE scelta o trovata: accendi la CPE, avvicinati e riprova, oppure usa «Altre reti Wi-Fi»."
+        S.NotFound -> if (!c.network.wifiEnabled) "Il Wi-Fi del telefono è spento: accendilo e tocca di nuovo «Collegati alla Wi-Fi della CPE»."
+            else "Nessuna Wi-Fi di CPE scelta o trovata: accendi la CPE, avvicinati e riprova, oppure usa «Altre reti Wi-Fi»."
         S.Lost -> "Wi-Fi della CPE persa (la CPE si sta riavviando?): ricollegati quando è di nuovo accesa."
         S.Connected -> "Collegato alla Wi-Fi della CPE dall'app: Internet resta sulla rete mobile."
         S.Idle -> null
