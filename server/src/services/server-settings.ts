@@ -103,7 +103,8 @@ export const SERVER_SETTINGS: Def[] = [
   netInt('sshPort', 'CPE_SSH_PORT', 'Porta SSH della CPE', 1, 65535),
   netInt('discoveryPort', 'CPE_DISCOVERY_PORT', 'Porta discovery Ubiquiti', 1, 65535),
   {
-    key: 'jobTtlMinutes', env: 'PROVISION_JOB_TTL_MINUTES', group: 'Provisioning e app', label: 'Validità di un provisioning (minuti)', kind: 'int', min: 5, max: 240,
+    key: 'jobTtlMinutes', env: 'PROVISION_JOB_TTL_MINUTES', group: 'Provisioning e app', label: 'Validità di un provisioning (minuti)', kind: 'int', min: 5, max: 2880,
+    help: 'Per quanto tempo la configurazione preparata resta valida sul telefono: anche 48 ore (2880) per salire sul tetto senza Internet.',
     get: (c) => c.jobTtlMinutes, set: (c, v) => (c.jobTtlMinutes = v as number),
   },
   {
@@ -128,6 +129,11 @@ export const SERVER_SETTINGS: Def[] = [
     key: 'publicUrl', env: 'PUBLIC_URL', group: 'Provisioning e app', label: 'Indirizzo pubblico della console', kind: 'url',
     help: 'Es. https://cpe.cda-net.it: usato per i link nei messaggi Telegram.',
     get: (c) => c.publicUrl, set: (c, v) => (c.publicUrl = (v as string | undefined)?.replace(/\/+$/, '')),
+  },
+  {
+    key: 'firmwareBypass', env: 'FIRMWARE_BYPASS', group: 'Provisioning e app', label: 'Provisioning con firmware diverso dopo 2 aggiornamenti non riusciti', kind: 'bool',
+    help: 'Se l’app non riesce ad aggiornare il firmware della CPE per 2 volte, l’installatore può scrivere comunque la configurazione con il firmware che ha la CPE; resta annotato nell’esito.',
+    get: (c) => c.firmwareBypass, set: (c, v) => (c.firmwareBypass = v === undefined ? true : !!v),
   },
   {
     key: 'routerOsAllowPublic', env: 'ROUTEROS_ALLOW_PUBLIC', group: 'Provisioning e app', label: 'RouterOS: consenti indirizzi pubblici', kind: 'bool',

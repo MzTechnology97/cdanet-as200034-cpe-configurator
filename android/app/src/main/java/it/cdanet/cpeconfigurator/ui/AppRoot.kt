@@ -232,6 +232,8 @@ fun AppRoot(c: AppContainer) {
             launch { runCatching { c.api.meta() }.onSuccess { c.modules.value = it.modules } }
             c.resultQueue.syncInBackground()
             c.acceptanceQueue.syncInBackground()
+            // the firmware the CPEs need stays on the phone, ready for the roof without Internet
+            c.scope.launch { c.firmware.prefetch(c.api) }
             scope.launch { c.routerOs.refreshCatalog() }
             // Field work often starts offline: retry the queues every 2 minutes while logged in
             // (child of this effect: cancelled on logout or when the session changes).
@@ -252,6 +254,10 @@ fun AppRoot(c: AppContainer) {
     }
 
     if (session == null && !offline) {
+        // on the roof without Internet, with an installation saved on the phone: straight to it,
+        // the login (which needs the server) can wait until the phone is back online
+        val saved = c.provisioning.state.collectAsState().value.pkg != null
+        LaunchedEffect(saved) { if (saved && c.network.noInternet()) offline = true }
         LoginScreen(c, update = update, onUpdate = { update = it }, onOffline = { offline = true })
         return
     }

@@ -292,7 +292,12 @@ private fun Hero(
                     )
                 }
             }
-            if (offline) {
+            if (offline && resume) {
+                // the installation saved on the phone goes on without Internet
+                Text("Installazione salvata sul telefono: puoi continuarla senza Internet.", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                HeroButton("Riprendi l'intervento", R.drawable.ic_arrow_forward, onResume, primary = true, modifier = Modifier.fillMaxWidth())
+                HeroButton("Accedi al server", R.drawable.ic_person, onLogin, primary = false, modifier = Modifier.fillMaxWidth())
+            } else if (offline) {
                 HeroButton("Accedi al server", R.drawable.ic_person, onLogin, primary = true, modifier = Modifier.fillMaxWidth())
             } else if (resume) {
                 Text("Hai un intervento in corso.", style = MaterialTheme.typography.bodyMedium, color = Color.White)

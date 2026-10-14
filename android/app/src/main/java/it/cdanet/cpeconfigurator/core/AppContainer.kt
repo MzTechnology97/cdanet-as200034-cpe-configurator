@@ -25,13 +25,15 @@ class AppContainer(context: Context) {
 
     val settings = Settings(appContext)
     val session = Session()
-    val api = ApiClient(settings, session, clientHeader = "android/${BuildConfig.VERSION_NAME.removeSuffix("-debug")}")
     val network = NetworkHelper(appContext)
+    val api = ApiClient(settings, session, clientHeader = "android/${BuildConfig.VERSION_NAME.removeSuffix("-debug")}", network = network)
     val resultQueue = ResultQueue(appContext, api, session, scope)
-    val provisioning = ProvisioningController(api, network, resultQueue, scope)
+    /** Secrets for field work without Internet (prepared configuration, CPE credentials), encrypted. */
+    val secure = it.cdanet.cpeconfigurator.security.SecureStore(appContext)
+    val provisioning = ProvisioningController(api, network, resultQueue, scope, secure)
     val routerOs = RouterOsClient(api, network)
     val tools = LocalTools(network, api, session)
-    val field = FieldController(api, network, scope)
+    val field = FieldController(api, network, scope, secure)
     val firmware = it.cdanet.cpeconfigurator.firmware.FirmwareStore(appContext)
     val pointingCache = it.cdanet.cpeconfigurator.data.PointingCache(appContext)
     val install = it.cdanet.cpeconfigurator.install.InstallController(api, field, pointingCache, session)

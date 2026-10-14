@@ -1,17 +1,18 @@
 package it.cdanet.cpeconfigurator.firmware
 
-/** "XC.qca956x.v8.7.4.45112.210415.1103": hardware platform, version and the whole build string. */
+/** "XC.qca956x.v8.7.4.45112.210415.1103" (or "WA.v8.7.11"): hardware platform, version and the whole build string. */
 data class AirosBuild(val platform: String, val version: String, val build: String)
 
 /** Pure checks on airOS images and on what the CPE reports (unit-tested on the JVM). */
 object AirosImage {
-    private val BUILD = Regex("""^([A-Z0-9]{1,8})\.([A-Za-z0-9_-]{1,32})\.v(\d+\.\d+\.\d+)(?:[.-][A-Za-z0-9._-]*)?$""")
+    // the chip part is missing on some CPEs ("WA.v8.7.11" in /etc/version): platform and version are enough
+    private val BUILD = Regex("""^([A-Z0-9]{1,8})\.(?:[A-Za-z0-9_-]{1,32}\.)?v(\d+\.\d+\.\d+)(?:[.-][A-Za-z0-9._-]*)?$""")
 
     /** First line of /etc/version on the CPE, or the build string in an image header. */
     fun parseBuild(text: String): AirosBuild? {
         val s = text.trim().split(Regex("\\s+")).firstOrNull().orEmpty()
         val m = BUILD.matchEntire(s) ?: return null
-        return AirosBuild(m.groupValues[1], m.groupValues[3], s)
+        return AirosBuild(m.groupValues[1], m.groupValues[2], s)
     }
 
     /** Header of a firmware file: "UBNT" and the build string (null = not an airOS image). */

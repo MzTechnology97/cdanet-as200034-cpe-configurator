@@ -1,5 +1,11 @@
 package it.cdanet.cpeconfigurator.provisioning
 
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import it.cdanet.cpeconfigurator.data.AppJson
+import it.cdanet.cpeconfigurator.security.SecureStore
 import java.io.IOException
 import it.cdanet.cpeconfigurator.ssh.SshConnection
 import it.cdanet.cpeconfigurator.firmware.FirmwareStore
@@ -70,7 +76,16 @@ data class ProvisioningState(
     val doneSummary: it.cdanet.cpeconfigurator.data.JobSummaryDto? = null,
     /** The write stopped on the firmware: the version the CPE must have (it can be flashed right here). */
     val firmwareTarget: String? = null,
+    /** The firmware read on the CPE when the write stopped on it. */
+    val detectedFirmware: String? = null,
+    /** Updates of the firmware that failed for this package: after [FIRMWARE_TRIES] it may be kept. */
+    val firmwareFailures: Int = 0,
+    /** The firmware the installer chose to keep: the write goes on with it. */
+    val allowedFirmware: String? = null,
 )
+
+/** Failed firmware updates after which the configuration may be written on the firmware the CPE has. */
+const val FIRMWARE_TRIES = 2
 
 /**
  * Field workflow: prepare online -> join CPE Wi-Fi -> apply offline -> queue result.
@@ -80,10 +95,33 @@ class ProvisioningController(
     private val api: ApiClient,
     private val network: NetworkHelper,
     private val queue: ResultQueue,
-    @Suppress("unused") private val scope: CoroutineScope,
+    private val scope: CoroutineScope,
+    private val store: SecureStore? = null,
 ) {
     private val _state = MutableStateFlow(ProvisioningState())
     val state: StateFlow<ProvisioningState> = _state.asStateFlow()
+
+    init {
+        restore()
+        // the prepared configuration stays on the phone, encrypted, until it is written or expires:
+        // on the roof without Internet the installation can be reopened even after Android closed the app
+        scope.launch { _state.map { it.pkg }.distinctUntilChanged().drop(1).collect { save(it) } }
+    }
+
+    private fun save(pkg: ProvisionPackage?) {
+        val s = store ?: return
+        runCatching { if (pkg == null) s.remove(SAVED) else s.put(SAVED, AppJson.encodeToString(ProvisionPackage.serializer(), pkg)) }
+    }
+
+    private fun restore() {
+        val s = store ?: return
+        val pkg = runCatching { AppJson.decodeFromString(ProvisionPackage.serializer(), s.get(SAVED) ?: return) }.getOrNull()
+        if (pkg == null || runCatching { Instant.parse(pkg.expiresAt).isBefore(Instant.now()) }.getOrDefault(true)) {
+            s.remove(SAVED)
+            return
+        }
+        _state.value = ProvisioningState(phase = Phase.Prepared, pkg = pkg)
+    }
 
     private val _form = MutableStateFlow(ProvisionForm())
     val form: StateFlow<ProvisionForm> = _form.asStateFlow()
@@ -144,7 +182,7 @@ class ProvisioningController(
                     CpeProvisioner { s ->
                         stages += s
                         _state.update { it.copy(stages = stages.toList()) }
-                    }.provision(pkg)
+                    }.provision(pkg, _state.value.allowedFirmware)
                 }
                 ProvisionResult("success", stages.toList(), detected = detected, completedAt = Instant.now().toString())
             } catch (e: ProvisioningFailure) {
@@ -163,6 +201,7 @@ class ProvisioningController(
                 busy = false,
                 success = ok,
                 firmwareTarget = pkg.checks.firmware.takeIf { !ok && firmware != null && !DeviceCheck.firmwareMatches(firmware, it) },
+                detectedFirmware = firmware,
                 error = if (ok) null else result.error,
                 // Secrets are dropped after a successful write; a failed attempt may be retried.
                 pkg = if (ok) null else pkg,
@@ -175,6 +214,21 @@ class ProvisioningController(
     /** A message for the write step (shown as its probe line), e.g. after a firmware update. */
     fun reportNote(text: String) {
         _state.update { it.copy(probe = text) }
+    }
+
+    /** An update of the firmware did not work (counted towards [FIRMWARE_TRIES]). */
+    fun firmwareFailed() {
+        _state.update { it.copy(firmwareFailures = it.firmwareFailures + 1) }
+    }
+
+    /** After [FIRMWARE_TRIES] failed updates: writes the configuration on the firmware the CPE has. */
+    suspend fun applyKeepingFirmware() {
+        val s = _state.value
+        val keep = s.detectedFirmware ?: return
+        if (s.firmwareFailures < FIRMWARE_TRIES || s.pkg?.checks?.firmwareBypass != true) return
+        _state.update { it.copy(allowedFirmware = keep) }
+        retry()
+        apply()
     }
 
     fun retry() {
@@ -258,6 +312,8 @@ class ProvisioningController(
     }
 
     companion object {
+        private const val SAVED = "provisioning-package"
+
         /** CDA-NET-N{node}-D{district}, -R{n} for a relay ("rilancio") AP: node, district, relay. */
         val SSID_PARTS = Regex("""^CDA-NET-N(\d+)-D(\d+)(?:-R(\d+))?$""", RegexOption.IGNORE_CASE)
     }

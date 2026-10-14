@@ -133,6 +133,8 @@ describe('API', () => {
     assert.equal(p.target.host, '192.168.172.1');
     assert.equal(p.checks.firmware, '8.7.4');
     assert.equal(p.checks.mac, 'AA:BB:CC:DD:EE:FF');
+    // the bypass of the firmware check after failed updates is on by default (Impostazioni server)
+    assert.equal(p.checks.firmwareBypass, true);
     assert.equal(p.credentials.password, 'Cpe-Admin-Secret-1');
     const text: string = p.config.text;
     assert.equal(createHash('sha256').update(text).digest('hex'), p.config.sha256);
