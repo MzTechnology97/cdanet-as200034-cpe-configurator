@@ -2,12 +2,11 @@ import type { ComponentType } from 'react';
 
 /**
  * The pages of the console, in menu order, with who sees them. The same list and the same rules as
- * the console before (web/js/main.js): `admin` pages only for admins, `installer` pages only for
+ * the console before: `admin` pages only for admins, `installer` pages only for
  * installers, `module` pages only while that module is on. The server enforces the same rules: the
  * menu only hides.
  *
- * A page is either a page of web/js (`legacy`: a function returning DOM, loaded when opened) or a
- * converted page (`react`: a component, loaded when opened).
+ * Each page is a component, loaded when opened (`react`); a link outside the console has `href`.
  */
 export interface User {
   id: number;
@@ -19,8 +18,6 @@ export interface PageContext {
   user: User;
   params: URLSearchParams;
 }
-
-type LegacyView = (ctx: PageContext & Record<string, unknown>) => Node | Promise<Node>;
 
 export interface Route {
   id: string;
@@ -34,7 +31,6 @@ export interface Route {
   parent?: string;
   /** Opens outside the console (the installers' guide). */
   href?: string;
-  legacy?: () => Promise<LegacyView>;
   react?: () => Promise<ComponentType<PageContext>>;
   /** Shown in the bottom bar on phones (at most four). */
   bottom?: boolean;
