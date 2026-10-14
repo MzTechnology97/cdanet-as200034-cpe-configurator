@@ -353,3 +353,23 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .jb-sec h3 { margin: 0 0 var(--sp-2); font-size: 1rem; }
 .jb-sec p { margin: 0; }
 .jb-stages { margin: 0; padding-left: 1.2em; font-size: var(--fs-sm); }
+
+/* Account, Il mio account, Connettori */
+.us-p, .ac-p, .cn-p { margin: 0; }
+.us-head { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); align-items: center; padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line); }
+.us-head .hl-search { flex: 1 1 240px; }
+.us-sec { display: grid; gap: var(--sp-2); }
+.us-sec h3 { margin: 0; font-size: 1rem; }
+.us-inline, .ac-inline { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: flex-end; }
+.us-inline .ui-field, .ac-inline .ui-field { flex: 1 1 220px; }
+.us-link { justify-self: start; text-decoration: none; }
+.us-modules { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.us-modules li { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; justify-content: space-between; padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); }
+.us-modules li:last-child { border-bottom: 0; }
+.us-area { display: block; }
+.ac-form { display: grid; gap: var(--sp-3); }
+.ac-date { font-size: var(--fs-lg); }
+.ac-codes { margin: var(--sp-2) 0; padding: var(--sp-3); border-radius: var(--radius-sm); background: var(--surface); font-family: var(--font-mono); }
+.ac-qr { width: 200px; max-width: 100%; background: #fff; padding: var(--sp-2); border-radius: var(--radius-sm); }
+.ac-qr svg { width: 100%; height: auto; display: block; }
+.ac-pad { padding: var(--sp-3) var(--sp-4) 0; }

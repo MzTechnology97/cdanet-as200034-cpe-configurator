@@ -7,6 +7,16 @@ import { h, pageHead } from '../dom.js';
  * is parsed as HTML; images arrive with the session token and are shown as data: URLs.
  */
 export async function adminGuideView() {
+  return h(
+    'div',
+    {},
+    pageHead('Guida amministratore', 'Come preparare il sistema, gestire installatori e rete. Visibile solo agli amministratori.', h('a', { class: 'button-link', href: '/wiki/', target: '_blank', rel: 'noopener' }, 'Guida installatore')),
+    await adminGuideBody(),
+  );
+}
+
+/** The guide itself (with its photo viewer), for the console's page. */
+export async function adminGuideBody() {
   const { html } = await api('/api/admin/guide');
   const doc = new DOMParser().parseFromString(html, 'text/html');
   for (const el of doc.querySelectorAll('script, iframe, object, embed')) el.remove();
@@ -19,13 +29,7 @@ export async function adminGuideView() {
     e.preventDefault();
     body.querySelector(a.getAttribute('href'))?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   });
-  return h(
-    'div',
-    {},
-    lightbox(body),
-    pageHead('Guida amministratore', 'Come preparare il sistema, gestire installatori e rete. Visibile solo agli amministratori.', h('a', { class: 'button-link', href: '/wiki/', target: '_blank', rel: 'noopener' }, 'Guida installatore')),
-    body,
-  );
+  return h('div', {}, lightbox(body), body);
 }
 
 async function loadImage(img) {
