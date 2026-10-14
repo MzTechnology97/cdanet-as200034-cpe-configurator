@@ -54,6 +54,8 @@ data class InstallState(
     val jobLooked: Boolean = false,
     /** SSID the CPE must be on (provisioned or chosen in the "Aggancio" step). */
     val expectedSsid: String? = null,
+    /** The acceptance test was opened by itself at the last step (only once: back from it, the summary stays). */
+    val acceptanceOpened: Boolean = false,
 )
 
 /**
@@ -88,6 +90,8 @@ class InstallController(
     fun provisioned(job: JobDto) = _state.update { it.copy(job = job, jobLooked = true, expectedSsid = job.ssid) }
 
     fun expectSsid(ssid: String?) = _state.update { it.copy(expectedSsid = ssid) }
+
+    fun acceptanceOpened() = _state.update { it.copy(acceptanceOpened = true) }
 
     /** Nearby APs from the phone position (module "compass": UISP, DEM tilt, expected signal). */
     suspend fun locate(location: CpeLocation) {
