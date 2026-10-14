@@ -1,7 +1,7 @@
 import type { Config } from '../config.ts';
 import { nowIso, type Db } from '../db.ts';
 import { KO_KINDS, KO_REASONS, KO_STEPS } from '../routes/ko.ts';
-import { createInbox } from './inbox.ts';
+import { createInbox, type Notice } from './inbox.ts';
 import { dueAlerts, inWords, orderStart } from '../domain/work-order-time.ts';
 import { escapeHtml as e, type Telegram } from './telegram.ts';
 import type { Uisp } from './uisp.ts';
@@ -18,8 +18,8 @@ export function createNotifier(
   version: string,
   isOn: () => boolean = () => true,
   log: (m: string) => void = () => {},
-  /** Told who got a notification on the Notifiche page (live updates of the console). */
-  onNotice?: (userIds: number[]) => void,
+  /** Told who got a notification on the Notifiche page (live updates of the console, push to the phones). */
+  onNotice?: (userIds: number[], n: Notice) => void,
 ) {
   // Module "Notifiche Telegram" off: every notification is dropped here.
   const telegram = { ...rawTelegram, notify: (...a: Parameters<Telegram['notify']>) => (isOn() ? rawTelegram.notify(...a) : Promise.resolve()), summaryHour: () => (isOn() ? rawTelegram.summaryHour() : null) };

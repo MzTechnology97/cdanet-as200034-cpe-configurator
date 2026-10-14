@@ -108,6 +108,8 @@ dependencies {
     implementation(libs.camera.lifecycle)
     implementation(libs.camera.view)
     implementation(libs.kotlinx.coroutines.play.services)
+    // push notifications when the server has Firebase (options from the server, no google-services.json)
+    implementation(libs.firebase.messaging)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)

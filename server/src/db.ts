@@ -443,7 +443,17 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE users ADD COLUMN home_shortcuts TEXT;
   `,
-  // 25: "Modifica e riprova": the new installation that redoes a failed or never written one
+  // 25: phones registered for push notifications (Firebase Cloud Messaging tokens)
+  `
+  CREATE TABLE push_tokens(
+    token TEXT PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    created_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL
+  );
+  CREATE INDEX push_tokens_user ON push_tokens(user_id);
+  `,
+  // 26: "Modifica e riprova": the new installation that redoes a failed or never written one
   `
   ALTER TABLE provisioning_jobs ADD COLUMN superseded_by TEXT;
   `,

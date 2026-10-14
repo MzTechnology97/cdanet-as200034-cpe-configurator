@@ -293,6 +293,8 @@ fun AppRoot(c: AppContainer) {
                 it.cdanet.cpeconfigurator.alerts.PhoneAlerts.enable(ctx, c.api.base().trimEnd('/'), token)
             }
         }
+        // notifications at once, also with the app closed: Firebase when the server has it, else the app's own connection
+        c.scope.launch { it.cdanet.cpeconfigurator.push.Push.start(ctx) }
         if (s.user.role == "admin") readinessDone = true
     }
     privacy?.let { p ->

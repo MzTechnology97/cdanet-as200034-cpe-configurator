@@ -1,4 +1,4 @@
-import type { FastifyInstance } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
@@ -28,6 +28,43 @@ export function notificationRoutes(app: FastifyInstance, ctx: AppContext) {
     const u = ctx.db.prepare('SELECT id, username, token_version FROM users WHERE id = ?').get(req.user!.id) as { id: number; username: string; token_version: number };
     recordEvent(ctx.db, u.id, 'notifications.device', u.username, 'notifiche sul telefono attivate');
     return { token: await ctx.auth.issueFeedToken(u, 'feed') };
+  });
+
+  /** The session of the app, or the read-only token of its background service (FCM token renewed with the app closed). */
+  const phoneUser = async (req: FastifyRequest) => {
+    if (/^Bearer\s/i.test(req.headers.authorization ?? '')) {
+      try {
+        await ctx.auth.requireUser(req, undefined as unknown as FastifyReply);
+        if (req.user) return req.user;
+      } catch {
+        // not a session: the feed token below
+      }
+    }
+    return ctx.auth.verifyFeedToken(req, ['feed']);
+  };
+
+  /** Push notifications: how the app starts Firebase (null: not configured, the app stays connected to /api/events). */
+  app.get('/api/mobile/push-config', async (req, reply) => {
+    await phoneUser(req);
+    const { package: pkg } = z.object({ package: z.string().max(120).default('it.cdanet.cpeconfigurator') }).parse(req.query);
+    reply.header('Cache-Control', 'no-store');
+    return { firebase: ctx.push.client(pkg) };
+  });
+
+  /** The FCM token of this phone: the notifications of the user reach it at once. */
+  app.post('/api/notifications/push-token', async (req) => {
+    const u = await phoneUser(req);
+    const { token } = z.object({ token: z.string().min(20).max(4096) }).parse(req.body);
+    ctx.push.register(u.id, token);
+    return { ok: true };
+  });
+
+  /** Logout on the phone: no more push notifications to it. */
+  app.delete('/api/notifications/push-token', async (req) => {
+    await phoneUser(req);
+    const { token } = z.object({ token: z.string().min(20).max(4096) }).parse(req.body);
+    ctx.push.unregister(token);
+    return { ok: true };
   });
 
   /** Feed of the background worker: unread notifications after [after] and the next work orders. */

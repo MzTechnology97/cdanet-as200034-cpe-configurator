@@ -47,7 +47,38 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
     telegram: ctx.modules.enabled('telegram') ? { ...ctx.telegram.view(), publicUrl: ctx.cfg.publicUrl ?? '' } : null,
     crm: ctx.crm.view(),
     imagery: ctx.imagery.view(),
+    firebase: ctx.push.view(),
   }));
+
+  // Firebase Cloud Messaging: the push notifications of the app. The two files of the Firebase
+  // project are pasted as text; the service account's private key is sealed, never returned.
+  const firebaseBody = z
+    .object({
+      enabled: z.boolean(),
+      serviceAccount: z.string().trim().max(8000).optional(),
+      googleServices: z.string().trim().max(20000).optional(),
+    })
+    .strict();
+
+  app.put('/api/admin/connectors/firebase', admin, async (req) => {
+    const b = firebaseBody.parse(req.body);
+    const v = ctx.push.save({ enabled: b.enabled, serviceAccount: b.serviceAccount || undefined, googleServices: b.googleServices || undefined }, req.user!.id);
+    recordEvent(ctx.db, req.user!.id, 'connector.firebase.update', v.projectId || '—', `${v.enabled ? 'attivo' : 'disattivato'}${b.serviceAccount ? ' · nuovo service account' : ''}`);
+    return v;
+  });
+
+  app.delete('/api/admin/connectors/firebase', admin, async (req) => {
+    ctx.push.remove();
+    recordEvent(ctx.db, req.user!.id, 'connector.firebase.delete', '—', 'Firebase rimosso');
+    return ctx.push.view();
+  });
+
+  /** A test notification to the phones of the admin who asks (they must have opened the app once). */
+  app.post('/api/admin/connectors/firebase/test', admin, async (req) => {
+    if (!ctx.push.enabled()) throw new HttpError(409, 'firebase_not_configured');
+    const sent = await ctx.push.send([req.user!.id], { title: 'Prova notifiche CDA Net', body: 'Se leggi questo messaggio, le notifiche push funzionano.', kind: 'test' });
+    return { sent };
+  });
 
   app.put('/api/admin/connectors/uisp', admin, async (req) => {
     const b = uispBody.parse(req.body);

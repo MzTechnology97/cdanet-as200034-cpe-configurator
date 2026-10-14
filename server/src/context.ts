@@ -23,12 +23,15 @@ import type { ApLoadService } from './services/ap-load.ts';
 import type { Advisor } from './services/ap-advisor.ts';
 import type { Optimizer } from './services/ap-optimizer.ts';
 import type { Live } from './services/live.ts';
+import type { Push } from './services/push.ts';
 import type { ServerSettings } from './services/server-settings.ts';
 
 export interface AppContext {
   cfg: Config;
   /** Live updates of the consoles (/api/events). */
   live: Live;
+  /** Push notifications to the phones (Connettori → Firebase). */
+  push: Push;
   db: Db;
   sealer: Sealer;
   auth: Auth;
