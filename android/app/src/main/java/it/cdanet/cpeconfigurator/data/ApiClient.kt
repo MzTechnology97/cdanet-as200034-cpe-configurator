@@ -269,6 +269,12 @@ class ApiClient(
         request("POST", "/api/notifications/read", body)
     }
 
+    /** Deletes the user's own notifications: [ids], or all the read ones ([which] = "read"), or all ("all"). */
+    suspend fun deleteNotifications(ids: List<Long>? = null, which: String = "all") {
+        val body = if (ids != null) buildJsonObject { put("ids", kotlinx.serialization.json.JsonArray(ids.map { kotlinx.serialization.json.JsonPrimitive(it) })) } else buildJsonObject { put(which, true) }
+        request("POST", "/api/notifications/delete", body)
+    }
+
     suspend fun putAcceptance(jobId: String, report: it.cdanet.cpeconfigurator.field.AcceptanceReport) {
         request("PUT", "/api/provisioning/jobs/$jobId/acceptance", AppJson.encodeToJsonElement(it.cdanet.cpeconfigurator.field.AcceptanceReport.serializer(), report))
     }
