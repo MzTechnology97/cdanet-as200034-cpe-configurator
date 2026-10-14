@@ -112,6 +112,20 @@ export function notificationRoutes(app: FastifyInstance, ctx: AppContext) {
     return { ok: true, marked, unread: inbox().unread(req.user!.id) };
   });
 
+  /** Deletes the user's own notifications: { ids }, { read: true } or { all: true }. */
+  app.post('/api/notifications/delete', user, async (req) => {
+    const b = z
+      .union([
+        z.object({ all: z.literal(true) }).strict(),
+        z.object({ read: z.literal(true) }).strict(),
+        z.object({ ids: z.array(z.number().int().positive()).min(1).max(500) }).strict(),
+      ])
+      .parse(req.body);
+    const deleted = inbox().remove(req.user!.id, 'all' in b ? 'all' : 'read' in b ? 'read' : b.ids);
+    if (deleted) ctx.live.publish('notifications', [req.user!.id]);
+    return { ok: true, deleted, unread: inbox().unread(req.user!.id) };
+  });
+
   app.get('/api/notifications/prefs', user, async (req) => {
     const on = new Set(inbox().telegramKinds(req.user!.id));
     const chat = (ctx.db.prepare('SELECT telegram_chat_id chat FROM users WHERE id = ?').get(req.user!.id) as { chat: string }).chat;

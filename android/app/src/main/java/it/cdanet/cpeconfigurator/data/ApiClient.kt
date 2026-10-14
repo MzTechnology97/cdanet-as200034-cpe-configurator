@@ -271,6 +271,12 @@ class ApiClient(
         request("POST", "/api/notifications/read", body)
     }
 
+    /** Deletes the user's own notifications: [ids], or all the read ones ([which] = "read"), or all ("all"). */
+    suspend fun deleteNotifications(ids: List<Long>? = null, which: String = "all") {
+        val body = if (ids != null) buildJsonObject { put("ids", kotlinx.serialization.json.JsonArray(ids.map { kotlinx.serialization.json.JsonPrimitive(it) })) } else buildJsonObject { put(which, true) }
+        request("POST", "/api/notifications/delete", body)
+    }
+
     suspend fun putAcceptance(jobId: String, report: it.cdanet.cpeconfigurator.field.AcceptanceReport) {
         request("PUT", "/api/provisioning/jobs/$jobId/acceptance", AppJson.encodeToJsonElement(it.cdanet.cpeconfigurator.field.AcceptanceReport.serializer(), report))
     }
@@ -324,6 +330,10 @@ class ApiClient(
 
     /** The CPEs in the installer's own warehouse. */
     suspend fun myStock(): MyStockDto = AppJson.decodeFromString(MyStockDto.serializer(), request("GET", "/api/warehouse/mine"))
+
+    /** Calendario: the orders from [from] to [to] (YYYY-MM-DD, up to 62 days); [user] = one installer (NOC). */
+    suspend fun workOrderCalendar(from: String, to: String, user: Long? = null): CalendarDto =
+        AppJson.decodeFromString(CalendarDto.serializer(), request("GET", "/api/work-orders/calendar?from=$from&to=$to" + (user?.let { "&user=$it" } ?: "")))
 
     suspend fun setWorkOrderStatus(id: Long, status: String, note: String = "") {
         request("POST", "/api/work-orders/$id/status", buildJsonObject { put("status", status); put("note", note) })

@@ -206,6 +206,27 @@ export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
    * The installer's GPS against the order's position (typed by the office or found from the
    * address): beyond POSITION_MAX_M the acceptance test is blocked and the NOC is told once.
    */
+  /**
+   * The calendar: the orders of a range of days (up to 62) exactly as planned, done ones included,
+   * cancelled ones left out. An installer sees their own; the NOC every installer's, or one with
+   * ?user=, plus the installers to plan on.
+   */
+  app.get('/api/work-orders/calendar', user, async (req) => {
+    const q = z.object({ from: DAY, to: DAY, user: z.coerce.number().int().positive().optional() }).parse(req.query);
+    const days = (Date.parse(`${q.to}T00:00:00Z`) - Date.parse(`${q.from}T00:00:00Z`)) / 86_400_000;
+    if (!(days >= 0 && days <= 62)) throw new HttpError(400, 'invalid_range');
+    const isAdmin = req.user!.role === 'admin';
+    const who = isAdmin ? (q.user ?? null) : req.user!.id;
+    const rows = db
+      .prepare(`${SELECT} WHERE w.day BETWEEN ? AND ? AND w.status <> 'cancelled'${who !== null ? ' AND w.assigned_to = ?' : ''} ORDER BY w.day, w.slot, w.id`)
+      .all(q.from, q.to, ...(who !== null ? [who] : [])) as unknown as Row[];
+    const today = todayRome();
+    const installers = isAdmin
+      ? (db.prepare("SELECT id, username FROM users WHERE active = 1 AND role = 'installer' ORDER BY username").all() as Array<{ id: number; username: string }>)
+      : undefined;
+    return { from: q.from, to: q.to, today, items: rows.map((r) => view(r, today)), ...(installers ? { installers } : {}) };
+  });
+
   app.post('/api/work-orders/:id/position', user, async (req) => {
     const id = z.coerce.number().int().positive().parse((req.params as { id: string }).id);
     const b = z.object({ lat: z.number(), lon: z.number(), accuracyM: z.number().min(0).max(100_000).optional() }).strict().parse(req.body);

@@ -20,6 +20,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import it.cdanet.cpeconfigurator.core.AppContainer
+import it.cdanet.cpeconfigurator.network.NetworkHelper.CpeWifi as S
 
 /** Android's Wi-Fi popup (quick panel, API 29+) or the Wi-Fi settings on older versions. */
 fun wifiPanelIntent(): Intent =
@@ -31,14 +32,17 @@ fun wifiPanelIntent(): Intent =
  * then with the button). [target] says where to connect, e.g. "alla Wi-Fi di management della CPE".
  */
 @Composable
-fun WifiRequired(c: AppContainer, target: String, why: String, content: @Composable () -> Unit) {
+fun WifiRequired(c: AppContainer, target: String, why: String, cpe: Boolean = target.contains("CPE"), content: @Composable () -> Unit) {
     val connected by c.network.wifiConnected.collectAsState()
+    val cpeWifi by c.network.cpeWifi.collectAsState()
     var asked by rememberSaveable { mutableStateOf(false) }
     var info by remember { mutableStateOf(c.network.wifiLink()) }
     val panel = rememberLauncherForActivityResult(ActivityResultContracts.StartActivityForResult()) { info = c.network.wifiLink() }
-    LaunchedEffect(connected) {
+    // the CPE's Wi-Fi is joined from the app (Android 10+): no automatic trip to the settings
+    val joinHere = cpe && c.network.canJoinCpe
+    LaunchedEffect(connected, cpeWifi) {
         info = c.network.wifiLink()
-        if (!connected && !asked) {
+        if (!connected && !asked && !joinHere) {
             asked = true
             runCatching { panel.launch(wifiPanelIntent()) }
         }
@@ -47,7 +51,12 @@ fun WifiRequired(c: AppContainer, target: String, why: String, content: @Composa
         SectionCard("Serve il Wi-Fi") {
             Text("Il telefono non è collegato a una rete Wi-Fi${if (c.network.wifiEnabled) "" else " (Wi-Fi spento)"}: in questo momento usa la rete mobile.", color = WarnAmber, fontWeight = FontWeight.SemiBold)
             Text("Collegati $target. $why", style = MaterialTheme.typography.bodyMedium)
-            BusyButton("Collegati al Wi-Fi", false, Modifier.fillMaxWidth()) { runCatching { panel.launch(wifiPanelIntent()) } }
+            if (joinHere) {
+                CpeWifiJoin(c, cpeWifi)
+                SecondaryButton(onClick = { runCatching { panel.launch(wifiPanelIntent()) } }, modifier = Modifier.fillMaxWidth()) { Text("Altre reti Wi-Fi") }
+            } else {
+                BusyButton("Collegati al Wi-Fi", false, Modifier.fillMaxWidth()) { runCatching { panel.launch(wifiPanelIntent()) } }
+            }
             Text("La schermata si sblocca da sola appena il telefono è sul Wi-Fi.", style = MaterialTheme.typography.bodySmall)
         }
         return
@@ -61,6 +70,29 @@ fun WifiRequired(c: AppContainer, target: String, why: String, content: @Composa
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+        if (joinHere) CpeWifiJoin(c, cpeWifi, compact = true)
         content()
+    }
+}
+
+/**
+ * «Collegati alla Wi-Fi della CPE»: Android lists the CPE management networks nearby, the installer
+ * taps one, and the app uses it for the CPE while the phone stays on Internet with mobile data.
+ * [compact]: already on a Wi-Fi, a one-line reminder with the button (or «Scollega»).
+ */
+@Composable
+fun CpeWifiJoin(c: AppContainer, state: S, compact: Boolean = false) {
+    val message = when (state) {
+        S.Searching -> "Scegli la Wi-Fi della CPE nella finestra di Android (es. «LBE-5AC-Gen2:…»)."
+        S.NotFound -> "Nessuna Wi-Fi di CPE scelta o trovata: accendi la CPE, avvicinati e riprova, oppure usa «Altre reti Wi-Fi»."
+        S.Lost -> "Wi-Fi della CPE persa (la CPE si sta riavviando?): ricollegati quando è di nuovo accesa."
+        S.Connected -> "Collegato alla Wi-Fi della CPE dall'app: Internet resta sulla rete mobile."
+        S.Idle -> null
+    }
+    message?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = if (state == S.Connected) GoodGreen else MaterialTheme.colorScheme.onSurfaceVariant) }
+    when {
+        state == S.Connected -> androidx.compose.material3.TextButton(onClick = { c.network.leaveCpeWifi() }) { Text("Scollega dalla Wi-Fi della CPE") }
+        compact -> androidx.compose.material3.TextButton(onClick = { c.network.joinCpeWifi() }, enabled = state != S.Searching) { Text("Collegati alla Wi-Fi della CPE dall'app") }
+        else -> BusyButton("Collegati alla Wi-Fi della CPE", state == S.Searching, Modifier.fillMaxWidth()) { c.network.joinCpeWifi() }
     }
 }

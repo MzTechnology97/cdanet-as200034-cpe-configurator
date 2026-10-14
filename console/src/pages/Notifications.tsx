@@ -37,6 +37,7 @@ const KIND: Record<string, { icon: string; tone: string }> = {
   work_order_reminder: { icon: 'pending_actions', tone: 'info' },
   work_order_late: { icon: 'warning_filled', tone: 'warn' },
   work_order_noc: { icon: 'warning_filled', tone: 'warn' },
+  screenshot_attempt: { icon: 'lock', tone: 'bad' },
 };
 /** Notifications of IA-AP open its page, those of work orders Interventi, the others the history of the installation. */
 const IA_AP = new Set(['network_advice', 'network_optimizer']);
@@ -67,6 +68,17 @@ export function Notifications({ user }: PageContext) {
     mutationFn: (body: { ids: number[] } | { all: true }) => api('/api/notifications/read', { method: 'POST', body }),
     onSettled: () => qc.invalidateQueries({ queryKey: keys.notifications }),
   });
+  // each user deletes only their own notifications: one, the read ones or all of them
+  const remove = useMutation({
+    mutationFn: (body: { ids: number[] } | { read: true } | { all: true }) => api<{ ok: boolean; deleted: number; unread: number }>('/api/notifications/delete', { method: 'POST', body }),
+    onSuccess: (r, body) => {
+      qc.setQueryData(keys.unread, r.unread);
+      if (!('ids' in body)) toast(r.deleted === 1 ? '1 notifica eliminata' : `${r.deleted} notifiche eliminate`);
+    },
+    onError: (e) => toast((e as Error).message, 'bad'),
+    onSettled: () => qc.invalidateQueries({ queryKey: keys.notifications }),
+  });
+  const anyRead = (list.data?.items ?? []).some((n) => n.readAt);
 
   const items = list.data?.items ?? [];
   const groups: Array<[string, Item[]]> = [];
@@ -96,6 +108,16 @@ export function Notifications({ user }: PageContext) {
             <Button icon="check_circle" disabled={!list.data?.unread} busy={read.isPending && !('ids' in (read.variables ?? {}))} onClick={() => read.mutate({ all: true })}>
               Segna tutte come lette
             </Button>
+            <Button disabled={!anyRead || remove.isPending} onClick={() => remove.mutate({ read: true })}>
+              Elimina le lette
+            </Button>
+            <Button
+              variant="danger"
+              disabled={!items.length || remove.isPending}
+              onClick={() => confirm('Eliminare tutte le tue notifiche, anche quelle da leggere?') && remove.mutate({ all: true })}
+            >
+              Elimina tutte
+            </Button>
           </>
         }
       >
@@ -104,7 +126,7 @@ export function Notifications({ user }: PageContext) {
         ) : list.error ? (
           <Notice tone="bad">{(list.error as Error).message}</Notice>
         ) : !items.length ? (
-          <EmptyState title={view === 'unread' ? 'Niente da leggere' : 'Nessuna notifica'}>{view === 'unread' ? 'Le notifiche nuove compaiono qui da sole.' : 'Negli ultimi 90 giorni non è arrivato niente.'}</EmptyState>
+          <EmptyState title={view === 'unread' ? 'Niente da leggere' : 'Nessuna notifica'}>{view === 'unread' ? 'Le notifiche nuove compaiono qui da sole.' : 'Negli ultimi 14 giorni non è arrivato niente: le notifiche si cancellano da sole dopo 14 giorni.'}</EmptyState>
         ) : (
           groups.map(([day, ns]) => (
             <section key={day} className="nt-day">
@@ -112,7 +134,7 @@ export function Notifications({ user }: PageContext) {
               <ul className="nt-list">
                 {ns.map((n) => {
                   const k = KIND[n.kind] ?? { icon: 'notifications', tone: 'neutral' };
-                  const href = IA_AP.has(n.kind) ? '#/ia-ap' : n.kind.startsWith('work_order') ? '#/work-orders' : n.mac ? `#/jobs?q=${encodeURIComponent(n.mac)}` : '#/jobs';
+                  const href = n.kind === 'screenshot_attempt' ? '#/events' : IA_AP.has(n.kind) ? '#/ia-ap' : n.kind.startsWith('work_order') ? '#/work-orders' : n.mac ? `#/jobs?q=${encodeURIComponent(n.mac)}` : '#/jobs';
                   return (
                     <li key={n.id} className={`nt-item ui-tone-${k.tone}${n.readAt ? '' : ' unread'}`}>
                       <span className="nt-icon">
@@ -126,13 +148,16 @@ export function Notifications({ user }: PageContext) {
                         {n.body && <p className="nt-body">{n.body}</p>}
                         <div className="ui-row">
                           <a className="ui-btn ui-btn-ghost nt-open" href={href} onClick={() => !n.readAt && read.mutate({ ids: [n.id] })}>
-                            {IA_AP.has(n.kind) ? 'Apri IA-AP' : n.kind.startsWith('work_order') ? 'Apri gli interventi' : 'Apri nello storico'}
+                            {n.kind === 'screenshot_attempt' ? 'Apri il registro attività' : IA_AP.has(n.kind) ? 'Apri IA-AP' : n.kind.startsWith('work_order') ? 'Apri gli interventi' : 'Apri nello storico'}
                           </a>
                           {!n.readAt && (
                             <Button variant="ghost" onClick={() => read.mutate({ ids: [n.id] })}>
                               Segna come letta
                             </Button>
                           )}
+                          <button type="button" className="cx-icon-btn nt-delete" aria-label="Elimina notifica" title="Elimina notifica" disabled={remove.isPending} onClick={() => remove.mutate({ ids: [n.id] })}>
+                            <Icon name="delete" />
+                          </button>
                         </div>
                       </div>
                       {!n.readAt && <span className="nt-dot" aria-label="da leggere" />}

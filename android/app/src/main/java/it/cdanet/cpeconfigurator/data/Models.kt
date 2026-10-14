@@ -513,6 +513,9 @@ data class WorkOrderDto(
     val statusNote: String = "",
     val overdue: Boolean = false,
     val jobId: String? = null,
+    /** The installer it is assigned to (the NOC's calendar shows everyone's). */
+    val assignedTo: Long? = null,
+    val assignee: String? = null,
 )
 
 @Serializable
@@ -525,6 +528,20 @@ data class StockItemDto(val model: String, val article: String = "", val mac: St
 /** The installer's own warehouse: [bypass] = they may also install CPEs that are not in it. */
 @Serializable
 data class MyStockDto(val linked: Boolean = false, val site: String = "", val bypass: Boolean = true, val syncedAt: String? = null, val items: List<StockItemDto> = emptyList())
+
+/** An installer the NOC can plan on (calendar filter). */
+@Serializable
+data class InstallerDto(val id: Long, val username: String)
+
+/** The orders of a range of days (Calendario): an installer's own, or everyone's for the NOC. */
+@Serializable
+data class CalendarDto(
+    val from: String,
+    val to: String,
+    val today: String = "",
+    val items: List<WorkOrderDto> = emptyList(),
+    val installers: List<InstallerDto>? = null,
+)
 
 /** CPE position: phone GPS, geocoded address or manual entry. */
 @Serializable

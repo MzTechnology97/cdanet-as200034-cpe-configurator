@@ -190,13 +190,37 @@ export function Jobs({ user, params }: PageContext) {
           )}
         </Card>
       )}
-      {open && <JobDrawer j={open} admin={admin} onClose={() => setOpen(null)} onChange={changed} />}
+      {open && (
+        <JobDrawer
+          j={open}
+          admin={admin}
+          onClose={() => setOpen(null)}
+          onChange={changed}
+          onDeleted={async () => {
+            setOpen(null);
+            await qc.invalidateQueries({ queryKey: ['jobs'] });
+          }}
+        />
+      )}
     </div>
   );
 }
 
 /** One job: the facts, where the CPE is, the acceptance test, KO, network state, stages, error. */
-function JobDrawer({ j, admin, onClose, onChange }: { j: Job; admin: boolean; onClose: () => void; onChange: () => Promise<void> }) {
+function JobDrawer({ j, admin, onClose, onChange, onDeleted }: { j: Job; admin: boolean; onClose: () => void; onChange: () => Promise<void>; onDeleted: () => Promise<void> }) {
+  // admins delete an attempt that never installed a CPE (tests, mistakes); an installed CPE never
+  const remove = async () => {
+    const who = j.deviceName || j.pppoeUser || j.mac || `job ${j.id.slice(0, 8)}`;
+    if (!confirm(`Eliminare il tentativo di installazione «${who}» (${tone(STATUS, j.status)[0].toLowerCase()})? Vanno via anche collaudo, foto, KO e notifiche collegati; resta solo la voce nel registro. Non si può annullare.`)) return;
+    try {
+      await api(`/api/admin/provisioning/jobs/${j.id}`, { method: 'DELETE' });
+    } catch (e) {
+      const code = (e as { body?: { error?: string } }).body?.error;
+      throw new Error(code === 'job_installed' ? 'CPE installata: questo job non si può eliminare.' : code === 'job_not_found' ? 'Il job non esiste più.' : (e as Error).message);
+    }
+    toast('Tentativo eliminato');
+    await onDeleted();
+  };
   const fact = (k: string, v: ReactNode) => (
     <div key={k}>
       <dt>{k}</dt>
@@ -204,7 +228,17 @@ function JobDrawer({ j, admin, onClose, onChange }: { j: Job; admin: boolean; on
     </div>
   );
   return (
-    <Drawer title={j.deviceName || `Job ${j.id.slice(0, 8)}`} onClose={onClose}>
+    <Drawer
+      title={j.deviceName || `Job ${j.id.slice(0, 8)}`}
+      onClose={onClose}
+      footer={
+        admin && j.status !== 'success' ? (
+          <AsyncButton variant="danger" onClick={remove} onError={(e) => toast((e as Error).message, 'bad')}>
+            Elimina tentativo
+          </AsyncButton>
+        ) : undefined
+      }
+    >
       <div className="ui-row">
         <JobBadges j={j} />
       </div>
@@ -241,6 +275,13 @@ function JobDrawer({ j, admin, onClose, onChange }: { j: Job; admin: boolean; on
         <section className="jb-sec">
           <h3>Collaudo</h3>
           <AcceptancePanel j={j} />
+          {admin && j.acceptance && (
+            <div className="ui-row">
+              <AsyncButton icon="arrow_forward" onClick={() => download(`/api/admin/provisioning/jobs/${j.id}/acceptance.pdf`, `collaudo-${j.id.slice(0, 8)}.pdf`)} onError={(e) => toast((e as Error).message, 'bad')}>
+                Scarica il rapporto PDF
+              </AsyncButton>
+            </div>
+          )}
           <ReviewPanel job={j} admin={admin} onChange={() => void onChange()} />
         </section>
       )}
