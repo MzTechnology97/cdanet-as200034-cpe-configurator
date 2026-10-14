@@ -61,7 +61,7 @@ const envSchema = z.object({
   CPE_SSH_PORT: int(22, 1, 65535),
   CPE_DISCOVERY_PORT: int(10001, 1, 65535),
 
-  PROVISION_JOB_TTL_MINUTES: int(30, 5, 240),
+  PROVISION_JOB_TTL_MINUTES: int(30, 5, 2880),
   // thresholds of the acceptance test, the field diagnosis and Salute CPE (Impostazioni server)
   SIGNAL_GOOD_DBM: int(-65, -90, -40),
   SIGNAL_MIN_DBM: int(-75, -95, -45),
@@ -87,6 +87,7 @@ const envSchema = z.object({
   MIN_ANDROID_VERSION: z.string().regex(/^\d+\.\d+\.\d+$/).default('1.0.0'),
   // the Android app must be on the latest published release (older ones cannot log in)
   APP_FORCE_LATEST: z.enum(['0', '1']).default('1'),
+  FIRMWARE_BYPASS: z.enum(['0', '1']).default('1'),
   GDPR_AUDIT_RETENTION_DAYS: int(365, 1, 3650),
 
   ANDROID_RELEASE_DIR: z.string().default('/opt/cdanet/releases'),
@@ -196,6 +197,8 @@ export interface Config {
   routerOsAllowPublic: boolean;
   /** Android app always on the latest release: older apps get 426 on every call. */
   appForceLatest: boolean;
+  /** After failed firmware updates, the app may write the configuration on the firmware the CPE has. */
+  firmwareBypass: boolean;
   uisp: { url: string; token: string; cacheSeconds: number } | null;
   uispAutoBackup: boolean;
   uispIgnoreTls: boolean;
@@ -297,6 +300,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     },
     routerOsAllowPublic: e.ROUTEROS_ALLOW_PUBLIC === '1',
     appForceLatest: e.APP_FORCE_LATEST === '1',
+    firmwareBypass: e.FIRMWARE_BYPASS === '1',
     uisp:
       e.UISP_API_URL && e.UISP_API_TOKEN
         ? { url: e.UISP_API_URL, token: e.UISP_API_TOKEN, cacheSeconds: e.UISP_CACHE_SECONDS }

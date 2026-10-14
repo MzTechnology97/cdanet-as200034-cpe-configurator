@@ -70,7 +70,16 @@ data class ProvisioningState(
     val doneSummary: it.cdanet.cpeconfigurator.data.JobSummaryDto? = null,
     /** The write stopped on the firmware: the version the CPE must have (it can be flashed right here). */
     val firmwareTarget: String? = null,
+    /** The firmware read on the CPE when the write stopped on it. */
+    val detectedFirmware: String? = null,
+    /** Updates of the firmware that failed for this package: after [FIRMWARE_TRIES] it may be kept. */
+    val firmwareFailures: Int = 0,
+    /** The firmware the installer chose to keep: the write goes on with it. */
+    val allowedFirmware: String? = null,
 )
+
+/** Failed firmware updates after which the configuration may be written on the firmware the CPE has. */
+const val FIRMWARE_TRIES = 2
 
 /**
  * Field workflow: prepare online -> join CPE Wi-Fi -> apply offline -> queue result.
@@ -144,7 +153,7 @@ class ProvisioningController(
                     CpeProvisioner { s ->
                         stages += s
                         _state.update { it.copy(stages = stages.toList()) }
-                    }.provision(pkg)
+                    }.provision(pkg, _state.value.allowedFirmware)
                 }
                 ProvisionResult("success", stages.toList(), detected = detected, completedAt = Instant.now().toString())
             } catch (e: ProvisioningFailure) {
@@ -163,6 +172,7 @@ class ProvisioningController(
                 busy = false,
                 success = ok,
                 firmwareTarget = pkg.checks.firmware.takeIf { !ok && firmware != null && !DeviceCheck.firmwareMatches(firmware, it) },
+                detectedFirmware = firmware,
                 error = if (ok) null else result.error,
                 // Secrets are dropped after a successful write; a failed attempt may be retried.
                 pkg = if (ok) null else pkg,
@@ -175,6 +185,21 @@ class ProvisioningController(
     /** A message for the write step (shown as its probe line), e.g. after a firmware update. */
     fun reportNote(text: String) {
         _state.update { it.copy(probe = text) }
+    }
+
+    /** An update of the firmware did not work (counted towards [FIRMWARE_TRIES]). */
+    fun firmwareFailed() {
+        _state.update { it.copy(firmwareFailures = it.firmwareFailures + 1) }
+    }
+
+    /** After [FIRMWARE_TRIES] failed updates: writes the configuration on the firmware the CPE has. */
+    suspend fun applyKeepingFirmware() {
+        val s = _state.value
+        val keep = s.detectedFirmware ?: return
+        if (s.firmwareFailures < FIRMWARE_TRIES || s.pkg?.checks?.firmwareBypass != true) return
+        _state.update { it.copy(allowedFirmware = keep) }
+        retry()
+        apply()
     }
 
     fun retry() {

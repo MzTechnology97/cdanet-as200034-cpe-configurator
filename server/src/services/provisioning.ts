@@ -264,7 +264,7 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
       expiresAt,
       target: { host: n.factoryIp, sshPort: 22 },
       credentials: { username: s.adminUsername, password: s.adminPassword as string },
-      checks: { firmware: TARGET_FIRMWARE, boardMatch: profile.boardMatch, mac: x.mac },
+      checks: { firmware: TARGET_FIRMWARE, boardMatch: profile.boardMatch, mac: x.mac, firmwareBypass: cfg.firmwareBypass },
       config: { path: '/tmp/system.cfg', text, sha256: configSha256 },
       summary: { model: x.model, template: profile.name, ssid: x.ssid, pppoeUser: x.pppoeUser, deviceName: name, mac: x.mac, serial: x.serial },
       afterApply: { lanIp: n.lanIp, httpPort: MANAGEMENT_PORTS.http, httpsPort: MANAGEMENT_PORTS.https },

@@ -679,7 +679,13 @@ data class TargetDto(val host: String, val sshPort: Int = 22)
 data class CredentialsDto(val username: String, val password: String)
 
 @Serializable
-data class ChecksDto(val firmware: String, val boardMatch: String, val mac: String)
+data class ChecksDto(
+    val firmware: String,
+    val boardMatch: String,
+    val mac: String,
+    /** Server setting: after failed firmware updates the configuration may go on the firmware the CPE has. */
+    val firmwareBypass: Boolean = false,
+)
 
 @Serializable
 data class ConfigDto(val path: String = "/tmp/system.cfg", val text: String, val sha256: String)

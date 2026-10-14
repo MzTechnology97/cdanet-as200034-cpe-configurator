@@ -52,9 +52,12 @@ object DeviceCheck {
         return rx.containsMatchIn(version)
     }
 
-    /** Throws an Italian, user-facing message when the CPE is not the expected one. */
-    fun verify(rb: Readback, checks: ChecksDto) {
-        if (!firmwareMatches(rb.firmware, checks.firmware)) {
+    /**
+     * Throws an Italian, user-facing message when the CPE is not the expected one. [allowFirmware]:
+     * the firmware the installer chose to keep after the update failed (exact string read back).
+     */
+    fun verify(rb: Readback, checks: ChecksDto, allowFirmware: String? = null) {
+        if (!firmwareMatches(rb.firmware, checks.firmware) && (allowFirmware == null || rb.firmware != allowFirmware)) {
             throw IllegalStateException(
                 "Firmware rilevato ${rb.firmware ?: "sconosciuto"}: è richiesto ${checks.firmware}. Scrittura bloccata finché la CPE non ha il firmware ${checks.firmware}.",
             )
