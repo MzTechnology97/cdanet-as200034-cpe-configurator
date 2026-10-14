@@ -252,7 +252,9 @@ fun AcceptanceScreen(c: AppContainer) {
         if (report != null && cpeHeight == null) {
             it.cdanet.cpeconfigurator.ui.Notice("Inserisci l'altezza della CPE dal suolo (in alto, Installazione) per salvare il collaudo.", it.cdanet.cpeconfigurator.ui.NoticeKind.Warn)
         }
-        BusyButton("Salva e invia collaudo", sending, Modifier.fillMaxWidth(), enabled = (report != null && cpeHeight != null) || (report == null && photos.isNotEmpty())) {
+        // sent: said here too (the banner at the top is out of sight) and no second copy by mistake
+        done?.let { Banner(it, GoodGreen) }
+        BusyButton(if (done != null) "Collaudo inviato" else "Salva e invia collaudo", sending, Modifier.fillMaxWidth(), enabled = done == null && ((report != null && cpeHeight != null) || (report == null && photos.isNotEmpty()))) {
             scope.launch {
                 sending = true
                 error = null
