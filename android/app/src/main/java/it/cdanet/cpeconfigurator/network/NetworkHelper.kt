@@ -82,6 +82,24 @@ class NetworkHelper(context: Context) {
         cm.bindProcessToNetwork(null)
     }
 
+    private fun reachesInternet(n: Network?): Boolean =
+        n != null && cm.getNetworkCapabilities(n)?.let {
+            it.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) && it.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
+        } == true
+
+    /**
+     * The network to reach our server through when the default one would not: the process bound
+     * to the CPE's Wi-Fi, or the phone on a Wi-Fi without Internet, while mobile data (or another
+     * network) has it. Null when the default network already reaches Internet, or none does.
+     */
+    fun internetNetwork(): Network? {
+        if (cm.boundNetworkForProcess == null && reachesInternet(cm.activeNetwork)) return null
+        return cm.allNetworksCompat().firstOrNull { reachesInternet(it) }
+    }
+
+    /** True when no network of the phone reaches Internet (e.g. only the CPE's Wi-Fi, mobile data off). */
+    fun noInternet(): Boolean = cm.allNetworksCompat().none { reachesInternet(it) }
+
     fun isOnline(): Boolean {
         val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
