@@ -87,9 +87,13 @@ private val ERRORS = mapOf(
     "wrong_current_password" to "Password attuale non corretta",
     "password_unchanged" to "La nuova password è uguale a quella attuale",
     "password_contains_username" to "La password non può contenere il nome utente",
+    "uisp_device_not_found" to "CPE non ancora vista dalla rete: i dati compaiono dopo che il NOC l'ha accettata",
 )
 
-fun apiMessage(code: String): String = ERRORS[code] ?: code
+/** Codes that name a data source (uisp_…, crm_…): never shown as they are. */
+private val SOURCE_CODE = Regex("^(uisp|crm|ispbilling|edistribuzione)_")
+
+fun apiMessage(code: String): String = ERRORS[code] ?: if (SOURCE_CODE.containsMatchIn(code)) "Servizio di rete non disponibile in questo momento, riprova più tardi" else code
 
 /** Thin JSON client for the CDA Net server. */
 class ApiClient(
