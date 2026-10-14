@@ -1,5 +1,11 @@
 package it.cdanet.cpeconfigurator.provisioning
 
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.drop
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
+import it.cdanet.cpeconfigurator.data.AppJson
+import it.cdanet.cpeconfigurator.security.SecureStore
 import java.io.IOException
 import it.cdanet.cpeconfigurator.ssh.SshConnection
 import it.cdanet.cpeconfigurator.firmware.FirmwareStore
@@ -89,10 +95,33 @@ class ProvisioningController(
     private val api: ApiClient,
     private val network: NetworkHelper,
     private val queue: ResultQueue,
-    @Suppress("unused") private val scope: CoroutineScope,
+    private val scope: CoroutineScope,
+    private val store: SecureStore? = null,
 ) {
     private val _state = MutableStateFlow(ProvisioningState())
     val state: StateFlow<ProvisioningState> = _state.asStateFlow()
+
+    init {
+        restore()
+        // the prepared configuration stays on the phone, encrypted, until it is written or expires:
+        // on the roof without Internet the installation can be reopened even after Android closed the app
+        scope.launch { _state.map { it.pkg }.distinctUntilChanged().drop(1).collect { save(it) } }
+    }
+
+    private fun save(pkg: ProvisionPackage?) {
+        val s = store ?: return
+        runCatching { if (pkg == null) s.remove(SAVED) else s.put(SAVED, AppJson.encodeToString(ProvisionPackage.serializer(), pkg)) }
+    }
+
+    private fun restore() {
+        val s = store ?: return
+        val pkg = runCatching { AppJson.decodeFromString(ProvisionPackage.serializer(), s.get(SAVED) ?: return) }.getOrNull()
+        if (pkg == null || runCatching { Instant.parse(pkg.expiresAt).isBefore(Instant.now()) }.getOrDefault(true)) {
+            s.remove(SAVED)
+            return
+        }
+        _state.value = ProvisioningState(phase = Phase.Prepared, pkg = pkg)
+    }
 
     private val _form = MutableStateFlow(ProvisionForm())
     val form: StateFlow<ProvisionForm> = _form.asStateFlow()
@@ -283,6 +312,8 @@ class ProvisioningController(
     }
 
     companion object {
+        private const val SAVED = "provisioning-package"
+
         /** CDA-NET-N{node}-D{district}, -R{n} for a relay ("rilancio") AP: node, district, relay. */
         val SSID_PARTS = Regex("""^CDA-NET-N(\d+)-D(\d+)(?:-R(\d+))?$""", RegexOption.IGNORE_CASE)
     }
