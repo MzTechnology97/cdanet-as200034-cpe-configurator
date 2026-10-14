@@ -1,5 +1,6 @@
 <!-- Guida amministratore: served only by GET /api/admin/guide (admins). Demo data in every image. -->
-<p class="notice">Le schermate vengono dalla console vera con <b>dati dimostrativi</b> (POP Demo Monte, CLIENTE DEMO…, account tecnico.demo). Per il lavoro in campo degli installatori c'è la <a href="/wiki/" target="_blank" rel="noopener">Guida installatore</a>: leggila anche tu, è quello che vedono loro. Clicca una schermata per ingrandirla.</p>
+<p>Questa è la guida che ho scritto per chi gestisce CDA Net dalla console: come preparo il sistema, come seguo gli installatori e come tengo d'occhio la rete. È organizzata nell'ordine in cui la uso io: prima la messa a punto, poi il lavoro di tutti i giorni.</p>
+<p class="notice">Le schermate le ho fatte con la console vera e <b>dati inventati</b> (POP Demo Monte, clienti demo, account tecnico.demo). Per il lavoro in campo c'è la <a href="/wiki/" target="_blank" rel="noopener">Guida installatore</a>: leggila anche tu, è quello che vedono loro. Clicca una schermata per ingrandirla.</p>
 
 <nav class="card">
   <strong>Indice</strong>
@@ -12,11 +13,13 @@
     <li><a href="#g-wifi">Reti Wi-Fi (WPA2)</a></li>
     <li><a href="#g-profili">Profili airOS e template</a></li>
     <li><a href="#g-funzionalita">Funzionalità</a>
-      <ol><li><a href="#g-interventi">Agenda interventi</a></li><li><a href="#g-firmware">Firmware airOS</a></li></ol>
+      <ol><li><a href="#g-interventi">Agenda e calendario degli interventi</a></li><li><a href="#g-firmware">Firmware airOS</a></li></ol>
     </li>
     <li><a href="#g-account">Account e POP/AP assegnati</a></li>
     <li><a href="#g-nuovo-installatore">Un nuovo installatore, dall'account al primo intervento</a></li>
-    <li><a href="#g-storico">Storico, accettazione in UISP e verbali</a></li>
+    <li><a href="#g-storico">Storico, accettazione in UISP e rapporti PDF</a></li>
+    <li><a href="#g-magazzino">Magazzino delle CPE</a></li>
+    <li><a href="#g-notifiche">Notifiche</a></li>
     <li><a href="#g-salute">Salute CPE e Statistiche</a></li>
     <li><a href="#g-guasti">Guasti Enel e Stato rete</a>
       <ol><li><a href="#g-ia-ap">IA-AP, assistente della rete</a></li></ol></li>
@@ -59,6 +62,7 @@
   <li><b>Backup automatico della CPE</b> dopo <i>Accetta in UISP</i> dallo storico.</li>
   <li><b>Raggio copertura</b>: fino a che distanza un AP compare come vicino (Copertura, AP consigliati).</li>
   <li><b>Cache dati UISP</b>: ogni quanti secondi rileggere UISP.</li>
+  <li><b>Chiave del CRM di UISP</b> (facoltativa): una chiave app del CRM di UISP con permesso di scrittura. Con questa, quando accetto una CPE posso creare il <b>nuovo subscriber</b> direttamente da qui (vedi <a href="#g-storico">Storico</a>). <i>Testa connessione</i> controlla anche questa chiave e dice quanti piani di servizio legge.</li>
 </ul>
 <p>Se la configurazione viene ancora dal file <code>.env</code>, salvando qui quella della console prende il sopravvento.</p>
 <h3>Telegram</h3>
@@ -68,18 +72,20 @@
   <li><b>Gruppo del NOC</b> (facoltativo): chat ID del gruppo (pulsante <i>Trova chat ID</i>) ed eventi da inviare: provisioning fallito, CPE da accettare in UISP, UISP giù/su, sicurezza, guasti Enel, riepilogo serale all'ora scelta.</li>
 </ul>
 <p>Nei messaggi non compaiono mai nome, indirizzo o posizione del cliente. Per avere il link allo storico imposta l'<b>indirizzo pubblico della console</b> in Impostazioni server. <i>Invia messaggio di prova</i> e <i>Anteprima riepilogo</i> verificano la configurazione.</p>
+<h3>Firebase (notifiche push)</h3>
+<p>Facoltativo. Se carico il <i>service account</i> e il <code>google-services.json</code> di un progetto Firebase, l'app riceve le notifiche con Firebase. Senza Firebase l'app resta collegata al server da sola, con una notifica fissa e silenziosa: le notifiche arrivano comunque, anche ad app chiusa.</p>
 <h3>CRM · ISP Billing</h3>
-<p>Indirizzo, <b>API ID</b> e <b>API key</b> di una chiave creata in ISP Billing (Dashboard → API) con i soli permessi di lettura che servono; <i>Testa connessione</i> prova un modulo alla volta. La chiave resta cifrata sul server. Con il connettore attivo il server copia ogni 10 minuti lo <b>stato RADIUS</b>: account PPPoE, profilo, cliente, sospensioni e sessione in corso (online, IP, MAC della CPE). <i>Sincronizza stato RADIUS</i> lo aggiorna subito (circa un minuto). Gli installatori non vedono mai questa fonte.</p>
+<p>Indirizzo, <b>API ID</b> e <b>API key</b> di una chiave creata in ISP Billing (Dashboard → API) con i permessi che servono (anche il modulo Magazzino); <i>Testa connessione</i> prova un modulo alla volta. La chiave resta cifrata sul server. Con il connettore attivo il server copia ogni 10 minuti lo <b>stato RADIUS</b>: account PPPoE, profilo, cliente, sospensioni e sessione in corso (online, IP, MAC della CPE). <i>Sincronizza stato RADIUS</i> lo aggiorna subito (circa un minuto). Ogni ora copia anche le <b>giacenze del magazzino</b> (vedi <a href="#g-magazzino">Magazzino</a>). Gli installatori non vedono mai questa fonte.</p>
 <h3>OpenStreetMap (ricerca indirizzi)</h3>
 <p>Converte gli indirizzi in coordinate per Copertura e provisioning. Con il servizio locale (Nominatim nello stesso server) gli indirizzi cercati non escono dalla rete; la regione si sceglie in Impostazioni server → Infrastruttura.</p>
-<figure><img data-guide="admin-connectors.jpg" alt="Connettori"><figcaption>Connettori: UISP (token impostato, mai mostrato) e Telegram.</figcaption></figure>
+<figure><img data-guide="admin-connectors.jpg" alt="Connettori"><figcaption>Connettori: UISP con la chiave del CRM, Telegram, Firebase, ISP Billing.</figcaption></figure>
 
 <h2 id="g-server">5. Impostazioni server</h2>
 <p>Parametri modificabili senza entrare nel server; hanno la precedenza sul file <code>.env</code>. Le password non vengono mai mostrate: scrivi solo per cambiarle.</p>
 <ul>
   <li><b>Credenziali delle CPE</b>: utente e password amministratore scritti in ogni CPE e usati dagli strumenti di campo; <b>chiave di adozione UISP</b> (la "UISP key" <code>wss://…</code>); community e contatto SNMP. Una password nuova vale per le CPE configurate da quel momento.</li>
   <li><b>Rete standard delle CPE</b>: IP di fabbrica, IP e netmask LAN, DHCP, MTU/MRU PPPoE, watchdog, NTP, porte SSH e discovery.</li>
-  <li><b>Provisioning e app</b>: validità di un provisioning (minuti), versione minima dell'app, <b>app sempre all'ultima versione</b> (aggiornamento obbligatorio), durata delle sessioni, conservazione di storico e registro, indirizzo pubblico della console, RouterOS su indirizzi pubblici.</li>
+  <li><b>Provisioning e app</b>: validità di un provisioning (in minuti, fino a 48 ore: io la tengo a 48 ore, così le configurazioni preparate in anticipo durano tutto il giorno dopo), <b>firmware: configura comunque dopo 2 tentativi falliti</b> (se l'aggiornamento del firmware non riesce due volte, l'installatore può scrivere la configurazione con il firmware che ha la CPE), versione minima dell'app, <b>app sempre all'ultima versione</b> (aggiornamento obbligatorio), durata delle sessioni, conservazione di storico e registro, indirizzo pubblico della console, RouterOS su indirizzi pubblici.</li>
   <li><b>Nascondi le CPE offline da più di (mesi)</b> (in <i>Soglie di collaudo e salute CPE</i>, predefinito 12, 0 = mai): le CPE di clienti spariti da tempo ma ancora in UISP non compaiono in Salute CPE (web e app: una riga dice quante sono, con il pulsante <i>Mostrale</i>) e non contano tra le CPE offline degli AP in Stato rete, così un AP non risulta "con molte CPE offline" per vecchi clienti. In UISP non viene cancellato nulla.</li>
   <li><b>Arrotondamento delle distanze mostrate agli installatori</b> (in <i>Copertura per gli installatori</i>, predefinito 50 m): gli installatori non vedono le coordinate di POP e AP, solo un'area approssimativa. Per puntare ricevono però la direzione esatta dalla loro posizione, e con la distanza potrebbero ricavare dove si trova l'AP. Con 50 m l'AP si individua entro circa 50 m; con 500 m resta incerto di qualche centinaio di metri. Vale per Copertura, AP vicini, Visibilità e Guasti Enel. Puntamento, tilt e visibilità restano precisi, perché li calcola il server con i dati esatti; gli amministratori vedono sempre le distanze esatte.</li>
   <li><b>Soglie di collaudo e salute CPE</b>: segnale buono (−65 dBm) e minimo accettato (−75 dBm), CINR minimo, differenza massima tra le catene, capacità airMAX minima, velocità minima della porta LAN e calo di segnale rispetto al collaudo. Valgono subito ovunque: esito del collaudo e approvazione del NOC, diagnosi nell'app, Salute CPE, valutazione degli AP in Copertura e linee dei grafici dello storico segnale.</li>
@@ -108,9 +114,11 @@
 <figure><img data-guide="admin-profiles.jpg" alt="Profili airOS"><figcaption>Profili airOS: solo LiteBeam 5AC ha un template (Standard CDA Net, per tutti).</figcaption></figure>
 
 <h2 id="g-funzionalita">8. Funzionalità</h2>
-<p>I moduli facoltativi, ognuno con l'indicazione <i>web</i>, <i>app</i> o <i>web + app</i>. Se disattivi un modulo sparisce dalla console e dall'app e il server ne rifiuta le richieste. Esempi: Copertura AP, Puntamento antenna, Diagnosi CPE, Trova l'AP, Collaudo e verbale, Sostituzione CPE, Storico segnale, Confronto con il template, Salute CPE, Guasti Enel, Stato rete, Statistiche, Strumenti di rete, RouterOS, Agenda interventi, Aggiornamento firmware.</p>
-<h3 id="g-interventi">Agenda interventi</h3>
-<p>In <b>Interventi</b> l'ufficio pianifica la giornata di ogni installatore: giorno, fascia oraria, tipo (nuova installazione, ripuntamento, guasto, sopralluogo), cliente, indirizzo o coordinate, contatto, modello, note e i dati PPPoE del cliente. La password PPPoE viene cifrata sul server e non arriva mai al telefono: l'installatore tocca <b>Inizia</b> e il provisioning la usa da solo. Lo stato si aggiorna dal campo (<i>in corso</i>, <i>rimandato</i> con il motivo, <i>fatto</i> quando il provisioning riesce); gli interventi non chiusi dei giorni passati risultano <i>in ritardo</i>.</p>
+<p>I moduli facoltativi, ognuno con l'indicazione <i>web</i>, <i>app</i> o <i>web + app</i>. Se disattivi un modulo sparisce dalla console e dall'app e il server ne rifiuta le richieste. Esempi: Copertura AP, Puntamento antenna, Diagnosi CPE, Trova l'AP, Collaudo e verbale, Sostituzione CPE, Storico segnale, Confronto con il template, Salute CPE, Guasti Enel, Stato rete, Statistiche, Strumenti di rete, RouterOS, Agenda interventi, Aggiornamento firmware, Screenshot nell'app.</p>
+<p>Ogni modulo lo posso anche accendere o spegnere <b>per un singolo account</b> (Account → Funzionalità). Un caso tipico è <b>Screenshot nell'app</b>: è spento di default, quindi installatori e partner non possono fare screenshot né registrare lo schermo nell'app (gli amministratori sì). Lo accendo solo a chi ne ha bisogno. Se qualcuno senza permesso ci prova, mi arriva la notifica <i>Tentativo di screenshot</i> (dai telefoni con Android 14 o successivo) e il tentativo resta nel registro.</p>
+<h3 id="g-interventi">Agenda e calendario degli interventi</h3>
+<p>In <b>Interventi</b> pianifico la giornata di ogni installatore, in elenco o in <b>Calendario</b>. Il calendario ha le viste settimana, mese e giorno; nella vista giorno c'è una colonna per installatore più <i>Da assegnare</i>, così vedo a colpo d'occhio chi è impegnato e quando. Un clic su un orario libero apre <i>Nuovo intervento</i> con giorno, fascia e installatore già compilati; trascinando un intervento lo sposto di giorno, di orario o da un installatore all'altro. I colori sono gli stessi dell'app: arancio nuova installazione, blu ripuntamento, giallo riparazione, verde sopralluogo.</p>
+<p>Per ogni intervento indico giorno, fascia oraria, giorno, fascia oraria, tipo (nuova installazione, ripuntamento, guasto, sopralluogo), cliente, indirizzo o coordinate, contatto, modello, note e i dati PPPoE del cliente. Con il modello compilato, l'app dell'installatore prepara da sola la configurazione quando è online e lui può lavorare sul tetto <b>senza rete</b>. La password PPPoE viene cifrata sul server e non arriva mai al telefono: l'installatore tocca <b>Inizia</b> e il provisioning la usa da solo. Lo stato si aggiorna dal campo (<i>in corso</i>, <i>rimandato</i> con il motivo, <i>fatto</i> quando il provisioning riesce); gli interventi non chiusi dei giorni passati risultano <i>in ritardo</i>.</p>
 <p><b>Avvisi.</b> L'installatore riceve una notifica (app, anche chiusa, e Telegram se collegato) quando gli assegni un intervento o ne cambi giorno, orario o assegnatario, e i promemoria 24 h, 2 h, 1 h e 30 minuti prima dell'orario. L'orario è il primo indicato nella fascia (es. <i>09:00-11:00</i>); senza orario vale le 08:00. Se 30 minuti dopo l'intervento non risulta iniziato, l'installatore e il NOC ricevono <i>in ritardo</i>; se il giorno passa senza esito, <i>intervento mancato</i>. Un intervento rimandato con il motivo non genera avvisi.</p>
 <p><b>Posizione.</b> Se inserisci un indirizzo senza coordinate, il server lo geocodifica. Al collaudo di un intervento avviato dall'app, l'installatore deve essere entro <b>500 m</b>: altrimenti il collaudo è bloccato e il NOC riceve <i>Posizione non corrispondente</i> con la distanza. Il controllo lo fa anche il server con la posizione inviata insieme al collaudo, quindi vale pure per i collaudi spediti più tardi dalla coda senza rete o dopo un riavvio dell'app.</p>
 <h3 id="g-firmware">Firmware airOS</h3>
@@ -118,29 +126,47 @@
 <div class="notice warn">Prova l'aggiornamento su una CPE di laboratorio per ogni piattaforma prima di attivare il modulo per gli installatori.</div>
 <p>Gli installatori non vedono i nomi dei moduli né le fonti dei dati: se una funzione è spenta, semplicemente non c'è.</p>
 <figure><img data-guide="admin-modules.jpg" alt="Funzionalità"><figcaption>Funzionalità: moduli con ambito web, app o entrambi.</figcaption></figure>
+<figure><img data-guide="admin-calendar.jpg" alt="Calendario degli interventi"><figcaption>Calendario, vista giorno: una colonna per installatore.</figcaption></figure>
 
 <h2 id="g-account">9. Account e POP/AP assegnati</h2>
 <p><b>Nuovo account</b>: username, password iniziale (comunicala a voce o di persona) e ruolo (<i>Installatore</i> o <i>Admin</i>). Nella tabella vedi stato, verifica in due passaggi, ultimo accesso e numero di provisioning; da ogni riga puoi disabilitare l'account o reimpostarne la password.</p>
+<p><b>Magazzino dell'account</b>: per installatori e partner scelgo il loro <b>magazzino ISP Billing</b> e decido se possono installare anche CPE che non ci sono (<i>Può installare CPE non presenti nel suo magazzino</i>). Si cambia anche sugli account esistenti, senza dover rifare l'accesso. Senza l'opzione, nelle nuove installazioni l'app non mostra nemmeno i campi MAC e seriale: la CPE si sceglie solo dal suo magazzino, e il server rifiuta comunque una CPE che non c'è.</p>
 <p><b>POP/AP assegnati agli installatori</b>: gli amministratori vedono tutto; ogni installatore, in Copertura, nei Guasti Enel, in Stato rete e nelle notifiche, vede solo i POP e gli AP assegnati qui (le sue zone personali dei guasti restano sue). Con <i>Modifica</i> scegli POP interi o singoli AP. L'opzione in fondo decide se mostrare agli installatori il numero di clienti dei loro POP/AP.</p>
-<figure><img data-guide="admin-users.jpg" alt="Account"><figcaption>Account: tecnico.demo è assegnato al POP Demo Monte.</figcaption></figure>
+<figure><img data-guide="admin-users.jpg" alt="Account"><figcaption>Account: tecnico.demo con il suo magazzino e il POP Demo Monte.</figcaption></figure>
 
 <h2 id="g-nuovo-installatore">10. Un nuovo installatore, dall'account al primo intervento</h2>
 <ol>
-  <li>Crea l'account con ruolo <i>Installatore</i> e assegnagli i POP/AP della sua zona.</li>
+  <li>Crea l'account con ruolo <i>Installatore</i>, scegli il suo magazzino e assegnagli i POP/AP della sua zona.</li>
   <li>Se usa template personali, in Profili airOS rendili visibili anche a lui.</li>
   <li>Fagli installare l'app: l'APK dell'ultima versione si scarica dall'indirizzo del server seguito da <code>/api/mobile/apk</code>. Dopo, l'app si aggiorna da sola.</li>
   <li>Indicagli la <a href="/wiki/" target="_blank" rel="noopener">Guida installatore</a> (dall'app: riquadro <i>Guida</i>; dalla console: voce <i>Guida installatore</i>).</li>
   <li>Dopo il primo intervento controlla lo <b>Storico provisioning</b>: esito, collaudo, accettazione in UISP.</li>
 </ol>
 
-<h2 id="g-storico">11. Storico, accettazione in UISP e verbali</h2>
+<h2 id="g-storico">11. Storico, accettazione in UISP e rapporti PDF</h2>
 <p>Lo storico di tutti gli installatori (solo metadati, nessuna password): cerca per MAC, seriale, utente PPPoE, SSID o cliente, filtra per esito (<i>completati, falliti, preparati/in corso, scaduti</i>) e date, esporta in CSV.</p>
 <ul>
-  <li><b>Collaudo</b>: <i>superato</i>, <i>con riserva</i> o <i>non superato</i>, con misure, <b>altezza della CPE dal suolo</b> (obbligatoria nell'app) e foto; <b>Stampa / salva PDF</b> produce il verbale.</li>
-  <li><b>Rete · da accettare</b>: la CPE è apparsa in UISP e aspetta l'adozione. <b>Accetta in UISP</b> la autorizza (e, se attivo, ne fa il backup).</li>
+  <li><b>Collaudo</b>: <i>superato</i>, <i>con riserva</i> o <i>non superato</i>, con misure, <b>altezza della CPE dal suolo</b> e foto. <b>Scarica il rapporto PDF</b> produce il rapportino di intervento: logo CDA Net, esito, cliente e installazione, CPE, collegamento radio, rete e Internet, verifiche, note, la mia approvazione e le foto dell'installatore, con la firma dell'installatore e il visto del NOC.</li>
+  <li><b>Rete · da accettare</b>: la CPE è apparsa in UISP e aspetta l'adozione. L'avviso «CPE pronta da accettare» arriva solo a collaudo superato. <b>Accetta in UISP</b> la autorizza nel sito dell'AP; con la chiave del CRM di UISP posso invece fare <b>Nuovo subscriber</b>: nome dall'utente PPPoE, indirizzo e posizione dall'installazione e il <b>piano già scelto dal profilo PPPoE</b> di ISP Billing (lo cambio se serve). La CPE viene autorizzata nel sito del nuovo cliente.</li>
+  <li><b>Elimina tentativo</b>: un tentativo preparato, fallito o scaduto (prove, errori) lo cancello dal dettaglio, con collaudo, foto e KO. Un'installazione riuscita non si cancella mai, e ogni cancellazione resta nel registro.</li>
   <li><b>Fallito</b>: fase ed errore (es. autenticazione SSH rifiutata), utile per aiutare chi è sul tetto.</li>
 </ul>
 <figure><img data-guide="admin-jobs.jpg" alt="Storico provisioning"><figcaption>Storico provisioning di tutti gli installatori.</figcaption></figure>
+<figure><img data-guide="admin-report.jpg" alt="Rapporto di collaudo in PDF"><figcaption>Il rapporto di collaudo in PDF, con le foto dell'installatore.</figcaption></figure>
+
+<h2 id="g-magazzino">Magazzino delle CPE</h2>
+<p>Con il connettore ISP Billing il server legge ogni ora le giacenze di tutti i magazzini (azienda, nodi, installatori e partner) e riconosce da solo i modelli di CPE e il MAC nel seriale. È tutto in sola lettura: in ISP Billing non scrivo niente. La pagina <b>Magazzino</b> mi mostra:</p>
+<ul>
+  <li>le <b>giacenze per magazzino e modello</b> di CPE;</li>
+  <li>chi ha <b>meno di 2 CPE</b>, per rifornirlo in tempo;</li>
+  <li><b>Da scaricare in ISP Billing</b>: le CPE già installate che risultano ancora a magazzino, prima quelle con il collaudo accettato. Lo scarico per ora lo faccio a mano in ISP Billing: la loro API non permette ancora lo scarico al cliente, e appena lo farà verrà automatico all'approvazione del collaudo;</li>
+  <li>il <b>registro dei movimenti</b> di ogni CPE: entrate, uscite e trasferimenti tra magazzini (dal confronto delle letture), installazione e collaudo. Cerco per MAC per vedere tutta la storia di una CPE.</li>
+</ul>
+<p><b>Aggiorna ora</b> rilegge subito le giacenze. Installatori e partner vedono le loro CPE in <b>Il mio magazzino</b> e nell'app, senza il nome della fonte.</p>
+<figure><img data-guide="admin-warehouse.jpg" alt="Magazzino"><figcaption>Magazzino: giacenze per modello, CPE da scaricare e movimenti.</figcaption></figure>
+
+<h2 id="g-notifiche">Notifiche</h2>
+<p>La campanella raccoglie gli avvisi del NOC: provisioning falliti, KO, collaudi da approvare, interventi in ritardo, IA-AP, tentativi di screenshot. In <b>Notifiche</b> scelgo quali ricevere anche su Telegram. Ogni utente può eliminarle una per una, le lette o tutte; dopo <b>14 giorni</b> si cancellano da sole.</p>
 
 <h2 id="g-salute">12. Salute CPE e Statistiche</h2>
 <p><b>Salute CPE</b> mostra tutte le CPE dei clienti presenti in UISP: offline, non trovate, segnale debole, <b>segnale calato</b> (almeno 6 dB sotto il collaudo, solo CPE installate con l'app), porta LAN lenta, da accettare, capacità bassa, firmware da aggiornare. Filtri per origine (installate con l'app, solo UISP, assegnate o no) e ricerca.</p>
@@ -222,5 +248,8 @@
   <li><b>App bloccata su "Aggiornamento obbligatorio"</b> e il download non parte: controlla in Panoramica che la release sia pubblicata e in Impostazioni server il repository dei rilasci.</li>
   <li><b>Mappe vuote</b>: in Impostazioni server → Infrastruttura scegli la regione o le mappe pubbliche e usa <i>Aggiorna la mappa ora</i>.</li>
   <li><b>CPE "da accettare" da giorni</b>: premi Accetta in UISP dallo storico; se manca la chiave di adozione UISP, impostala in Impostazioni server.</li>
+  <li><b>L'installatore vede «Questa CPE non risulta nel tuo magazzino»</b>: la CPE non è nel suo magazzino ISP Billing. Caricala lì, oppure attiva sul suo account <i>Può installare CPE non presenti nel suo magazzino</i>. Se l'hai appena caricata, usa <i>Aggiorna ora</i> nella pagina Magazzino.</li>
+  <li><b>«Nuovo subscriber» non disponibile</b>: manca la chiave del CRM di UISP in Connettori → UISP, oppure non ha il permesso di scrittura (<i>Testa connessione</i> lo dice).</li>
+  <li><b>Un installatore mi chiede di fare screenshot</b>: Account → Funzionalità del suo account → accendi <i>Screenshot nell'app</i>.</li>
   <li><b>Provisioning fallito con autenticazione SSH rifiutata</b>: l'installatore non ha completato il primo avvio airOS; con le credenziali CPE cambiate di recente, le CPE vecchie mantengono quelle precedenti.</li>
 </ul>
