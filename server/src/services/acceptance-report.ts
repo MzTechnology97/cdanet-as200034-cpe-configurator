@@ -259,14 +259,15 @@ export function acceptanceReportPdf(r: ReportData): Buffer {
       if (col === 1 || i === photos.length - 1) y += ph + 26;
     });
   }
-  // ---- signatures, at the end of the report -------------------------------------------------------
+  // ---- signature and NOC's mark, at the end of the report -------------------------------------------------------
   need(70);
   y += 18;
   const sw = (CW - 30) / 2;
-  for (const [i, who] of [`Installatore (${r.acceptance.by})`, 'Cliente'].entries()) {
+  // the installer and the NOC (no customer signature: the owner's choice in the plan of October)
+  for (const [i, who] of [`Firma installatore (${r.acceptance.by})`, 'Visto del NOC'].entries()) {
     const x = M + i * (sw + 30);
     doc.line(x, y + 36, x + sw, y + 36, MUTED, 0.6);
-    doc.text(x, y + 41, `Firma ${who}`, { size: 8, color: MUTED });
+    doc.text(x, y + 41, who, { size: 8, color: MUTED });
   }
   footer();
   return doc.build();
