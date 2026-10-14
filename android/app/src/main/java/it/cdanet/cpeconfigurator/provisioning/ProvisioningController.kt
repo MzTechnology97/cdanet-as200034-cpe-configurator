@@ -5,6 +5,7 @@ import kotlinx.coroutines.flow.drop
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import it.cdanet.cpeconfigurator.data.AppJson
+import it.cdanet.cpeconfigurator.data.CpeIdDto
 import it.cdanet.cpeconfigurator.security.SecureStore
 import it.cdanet.cpeconfigurator.firmware.AirosBuild
 import java.io.IOException
@@ -155,7 +156,7 @@ class ProvisioningController(
         val old = _form.value.replaces
         busy {
             if (old == null) api.createJob(req)
-            else api.replaceJob(old, ReplaceRequest(req.model, req.mac, req.serial, req.pppoePassword, req.templateId, req.location))
+            else api.replaceJob(old, ReplaceRequest(req.model, req.mac.orEmpty(), req.serial.orEmpty(), req.pppoePassword, req.templateId, req.location))
         }?.let { pkg ->
             _form.update { it.copy(pppoePassword = "") }
             _state.update { it.copy(phase = Phase.Prepared, pkg = pkg, stages = emptyList(), success = null, probe = null) }
@@ -176,8 +177,28 @@ class ProvisioningController(
         }?.let { msg -> _state.update { it.copy(probe = msg) } }
     }
 
+    /**
+     * MAC and serial of the CPE, scanned on site, for a configuration prepared before the visit
+     * (they can be corrected until the write succeeds). Null when accepted, else what is wrong.
+     */
+    fun setSiteCpe(mac: String, serial: String): String? {
+        val pkg = _state.value.pkg ?: return "Configurazione non più disponibile"
+        if (!pkg.needsCpe && !pkg.scannedOnSite) return "La CPE di questa configurazione è già indicata"
+        Validation.siteCpeErrors(mac, serial).firstOrNull()?.let { return it }
+        val m = Validation.normalizeMac(mac)
+        val s = serial.trim()
+        _state.update {
+            it.copy(pkg = pkg.copy(checks = pkg.checks.copy(mac = m), summary = pkg.summary.copy(mac = m, serial = s), scannedOnSite = true), error = null)
+        }
+        return null
+    }
+
     suspend fun apply(prior: List<String> = emptyList()) {
         val pkg = _state.value.pkg ?: return
+        if (pkg.needsCpe) {
+            _state.update { it.copy(phase = Phase.Prepared, error = "Scansiona prima MAC e seriale della CPE") }
+            return
+        }
         _state.update { it.copy(phase = Phase.Applying, busy = true, error = null, stages = prior) }
         val stages = prior.toMutableList()
         val result = withContext(Dispatchers.IO) {
@@ -193,7 +214,7 @@ class ProvisioningController(
                 ProvisionResult("failed", stages.toList(), error = e.message ?: "", detected = e.detected ?: DetectedDto(), completedAt = Instant.now().toString())
             } catch (e: Exception) {
                 ProvisionResult("failed", stages.toList(), error = e.message ?: e.toString(), completedAt = Instant.now().toString())
-            }
+            }.let { r -> if (pkg.scannedOnSite) r.copy(cpe = CpeIdDto(pkg.summary.mac, pkg.summary.serial)) else r }
         }
         queue.enqueue(PendingResult(pkg.jobId, result, "${pkg.summary.deviceName} · ${pkg.summary.mac}"))
         queue.syncInBackground()
@@ -264,6 +285,10 @@ class ProvisioningController(
      */
     suspend fun install(store: FirmwareStore) {
         val pkg = _state.value.pkg ?: return
+        if (pkg.needsCpe) {
+            _state.update { it.copy(error = "Scansiona prima MAC e seriale della CPE") }
+            return
+        }
         _state.update { it.copy(phase = Phase.Applying, busy = true, error = null, stages = emptyList(), firmwareTarget = null) }
         val stages = mutableListOf<String>()
         val stage: (String) -> Unit = { s ->

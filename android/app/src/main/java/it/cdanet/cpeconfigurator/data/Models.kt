@@ -475,8 +475,9 @@ data class StaleCpesDto(val months: Int = 12, val count: Int = 0, val shown: Boo
 @Serializable
 data class ProvisionRequest(
     val model: String,
-    val mac: String,
-    val serial: String,
+    /** null (with the serial) for a work order prepared before the visit: scanned on site, sent with the result. */
+    val mac: String? = null,
+    val serial: String? = null,
     val ssid: String,
     val pppoeUser: String,
     /** null when the job starts from a work order: the server uses the office's sealed password. */
@@ -717,8 +718,13 @@ data class ProvisionPackage(
     val config: ConfigDto,
     val summary: JobSummaryDto,
     val afterApply: AfterApplyDto,
+    /** On the phone only: MAC and serial were scanned on site (prepared without them), they go with the result. */
+    val scannedOnSite: Boolean = false,
 ) {
     override fun toString(): String = "ProvisionPackage(jobId=$jobId, model=${summary.model})"
+
+    /** Prepared before the visit and the CPE not scanned yet: the write waits for its MAC and serial. */
+    val needsCpe: Boolean get() = checks.mac.isBlank()
 }
 
 @Serializable
@@ -731,7 +737,12 @@ data class ProvisionResult(
     val error: String = "",
     val detected: DetectedDto = DetectedDto(),
     val completedAt: String? = null,
+    /** MAC and serial scanned on site, for a configuration prepared without them. */
+    val cpe: CpeIdDto? = null,
 )
+
+@Serializable
+data class CpeIdDto(val mac: String, val serial: String)
 
 @Serializable
 data class PendingResult(val jobId: String, val result: ProvisionResult, val label: String)

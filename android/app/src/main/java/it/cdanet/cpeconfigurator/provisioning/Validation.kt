@@ -42,6 +42,14 @@ object Validation {
         if (f.pppoePassword.isEmpty() && f.replaces == null && f.workOrderId == null) add("Password PPPoE obbligatoria")
     }
 
+    /** MAC and serial scanned on site for a configuration prepared before the visit. */
+    fun siteCpeErrors(mac: String, serial: String): List<String> = buildList {
+        if (!isMac(mac)) add("MAC non valido: 12 cifre esadecimali, con o senza separatori")
+        else if (!isDeviceMac(mac)) add("Questo non è il MAC di un apparato: scansiona il codice «MAC» dell'etichetta della CPE")
+        if (serial.isBlank()) add("Seriale obbligatorio")
+        else if (serialLooksLikeMac(serial)) add("Nel campo Seriale c'è un MAC: va nel campo MAC, nel Seriale il numero di serie (S/N) dell'etichetta")
+    }
+
     /**
      * Model of the configurator from what the CPE announces (Ubiquiti discovery: "LBE-5AC-Gen2",
      * "LiteBeam 5AC Gen2", "Loco5AC"…); null when it is not one of the supported models. Pure.

@@ -294,13 +294,16 @@ fun ProvisionApplyStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
 
     SectionCard("Provisioning preparato") {
         KeyValue("Cliente", pkg.summary.deviceName)
-        KeyValue("CPE", "${pkg.summary.model} · ${pkg.summary.mac}")
+        KeyValue("CPE", "${pkg.summary.model} · ${pkg.summary.mac.ifBlank { "da scansionare sul posto" }}")
         if (pkg.summary.template.isNotBlank()) KeyValue("Template", pkg.summary.template)
         c.provisioning.form.collectAsState().value.location?.let { KeyValue("Posizione", "%.5f, %.5f".format(it.latitude, it.longitude)) }
         KeyValue("SSID", pkg.summary.ssid)
         KeyValue("Valido ancora", when { left.isNegative -> "SCADUTO"; left.toHours() >= 1 -> "${left.toHours()} h ${left.toMinutes() % 60} min"; else -> "${left.toMinutes()} min ${left.seconds % 60} s" })
         if (left.isNegative) Banner("Pacchetto scaduto: torna online e preparalo di nuovo.", MaterialTheme.colorScheme.error)
     }
+
+    // prepared before the visit: the CPE is scanned here, even without Internet
+    if (pkg.needsCpe || pkg.scannedOnSite) SiteCpeCard(c, pkg, enabled = !applying)
 
     SectionCard("1 · Collegati alla CPE") {
         Text("Collega il telefono alla Wi-Fi di management della CPE (IP ${pkg.target.host}). Se Android avvisa che la rete non ha Internet, scegli di restare connesso.",
@@ -321,7 +324,8 @@ fun ProvisionApplyStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
             "Un solo tocco: l'app entra nella CPE (anche nuova o resettata, con le credenziali di fabbrica), la porta al firmware ${pkg.checks.firmware} se ne ha un altro, verifica board e MAC, scrive la configurazione e la riavvia.",
             style = MaterialTheme.typography.bodySmall,
         )
-        BusyButton("Installa sulla CPE", applying, Modifier.fillMaxWidth(), enabled = !left.isNegative && !state.busy) {
+        if (pkg.needsCpe) Text("Prima scansiona MAC e seriale della CPE qui sopra.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+        BusyButton("Installa sulla CPE", applying, Modifier.fillMaxWidth(), enabled = !left.isNegative && !state.busy && !pkg.needsCpe) {
             // the app's scope: a firmware update must not stop when the screen changes
             c.scope.launch { c.provisioning.install(c.firmware) }
         }
@@ -335,4 +339,58 @@ fun ProvisionApplyStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
     }
 
     TextButton(onClick = { c.provisioning.reset() }, enabled = !applying) { Text("Annulla e cancella il pacchetto") }
+}
+
+/**
+ * MAC and serial of the CPE for a configuration prepared before the visit: scanned (or typed) on
+ * site, even without Internet. The write then checks that the CPE has this MAC, and both go to the
+ * server with the result.
+ */
+@Composable
+private fun SiteCpeCard(c: AppContainer, pkg: it.cdanet.cpeconfigurator.data.ProvisionPackage, enabled: Boolean) {
+    val context = LocalContext.current
+    var mac by remember(pkg.jobId) { mutableStateOf(pkg.summary.mac) }
+    var serial by remember(pkg.jobId) { mutableStateOf(pkg.summary.serial) }
+    var message by remember { mutableStateOf<String?>(null) }
+    val scan: (onCode: (String) -> Unit) -> Unit = { onCode ->
+        GmsBarcodeScanning.getClient(context).startScan().addOnSuccessListener { b -> b.rawValue?.let(onCode) }
+    }
+    val scanIcon: @Composable (String, () -> Unit) -> Unit = { what, onClick ->
+        androidx.compose.material3.IconButton(onClick = onClick, enabled = enabled) {
+            androidx.compose.material3.Icon(painterResource(R.drawable.ic_qr_code_scanner), contentDescription = "Scansiona $what")
+        }
+    }
+    val saved = pkg.scannedOnSite && Validation.normalizeMac(mac) == pkg.summary.mac && serial.trim() == pkg.summary.serial
+    SectionCard("CPE di questo intervento") {
+        Text(
+            "La configurazione è stata preparata prima del sopralluogo: scansiona MAC e seriale dall'etichetta della CPE. Internet non serve; prima di scrivere l'app controlla che la CPE collegata abbia questo MAC.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Field("MAC", mac, { mac = it }, placeholder = "24A43C112233 o 24:A4:3C:11:22:33", trailing = {
+            scanIcon("il MAC") {
+                scan { raw ->
+                    val (m, problem) = Validation.scanMac(raw)
+                    message = problem
+                    if (m != null) mac = m
+                }
+            }
+        })
+        Field("Seriale", serial, { serial = it }, trailing = {
+            scanIcon("il seriale") {
+                scan { raw ->
+                    val (v, warning) = Validation.scanSerial(raw)
+                    message = warning
+                    serial = v
+                }
+            }
+        })
+        message?.let { Notice(it, NoticeKind.Warn) }
+        if (saved) {
+            Text("✓ CPE ${pkg.summary.mac} indicata per questa configurazione", style = MaterialTheme.typography.bodyMedium)
+        } else {
+            BusyButton("Conferma la CPE", false, Modifier.fillMaxWidth(), enabled = enabled) {
+                message = c.provisioning.setSiteCpe(mac, serial)
+            }
+        }
+    }
 }
