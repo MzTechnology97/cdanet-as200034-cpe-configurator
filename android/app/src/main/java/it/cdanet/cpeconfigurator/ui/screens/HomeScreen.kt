@@ -1,5 +1,12 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import androidx.compose.ui.graphics.lerp
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
+import it.cdanet.cpeconfigurator.ui.PrimaryButton
+import it.cdanet.cpeconfigurator.ui.cardBorder
+import it.cdanet.cpeconfigurator.ui.ConsoleTokens
+import it.cdanet.cpeconfigurator.ui.Tone
+import it.cdanet.cpeconfigurator.ui.StatTile
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -158,10 +165,10 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
         if (!offline) {
             Enter(order++) { GroupHeader("Oggi", Area.Work) }
             val counters = buildList {
-                add(Counter(today.todo, "da completare", R.drawable.ic_pending_actions, Area.Work, Dest(Screen.Installations, "Da completare")))
-                add(Counter(unread, "notifiche da leggere", R.drawable.ic_notifications, Area.Work, Dest(Screen.Notifications)))
-                if (modules["power_outages"] != false) add(Counter(today.outages, if (admin) "guasti Enel attivi" else "guasti nelle tue zone", R.drawable.ic_power_off, Area.Network, Dest(Screen.NetHub, "Guasti")))
-                if (modules["cpe_health"] != false) add(Counter(today.cpeIssues, "CPE con problemi", R.drawable.ic_monitor_heart, Area.Network, Dest(Screen.Installations, if (admin) "Salute CPE" else "Stato CPE")))
+                add(Counter(today.todo, "da completare", R.drawable.ic_pending_actions, Tone.Brand, Dest(Screen.Installations, "Da completare")))
+                add(Counter(unread, "notifiche da leggere", R.drawable.ic_notifications, Tone.Brand, Dest(Screen.Notifications)))
+                if (modules["power_outages"] != false) add(Counter(today.outages, if (admin) "guasti Enel attivi" else "guasti nelle tue zone", R.drawable.ic_power_off, Tone.Warn, Dest(Screen.NetHub, "Guasti")))
+                if (modules["cpe_health"] != false) add(Counter(today.cpeIssues, "CPE con problemi", R.drawable.ic_monitor_heart, Tone.Warn, Dest(Screen.Installations, if (admin) "Salute CPE" else "Stato CPE")))
             }
             counters.chunked(2).forEach { pair ->
                 Enter(order++) {
@@ -221,35 +228,12 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
 
 private class SavedShortcuts(val ids: List<String>?)
 
-private class Counter(val value: Int?, val label: String, @DrawableRes val icon: Int, val area: Area, val dest: Dest)
+private class Counter(val value: Int?, val label: String, @DrawableRes val icon: Int, val tone: Tone, val dest: Dest)
 
-/** A big number of the day: tap to open where it comes from. */
+/** A big number of the day: tap to open where it comes from (in its tone only when there is something). */
 @Composable
 private fun CounterTile(k: Counter, modifier: Modifier, onClick: () -> Unit) {
-    val accent = k.area.accent
-    Card(
-        onClick = onClick,
-        modifier = modifier,
-        shape = MaterialTheme.shapes.large,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-    ) {
-        Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    k.value?.toString() ?: "–",
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = androidx.compose.ui.text.font.FontWeight.Bold,
-                    color = if ((k.value ?: 0) > 0) accent.content else MaterialTheme.colorScheme.onSurfaceVariant,
-                    modifier = Modifier.weight(1f),
-                )
-                Box(Modifier.size(36.dp).clip(RoundedCornerShape(12.dp)).background(accent.container), contentAlignment = Alignment.Center) {
-                    Icon(painterResource(k.icon), contentDescription = null, tint = accent.content, modifier = Modifier.size(20.dp))
-                }
-            }
-            Text(k.label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 2, overflow = TextOverflow.Ellipsis)
-        }
-    }
+    StatTile(k.label, k.value?.toString(), modifier, tone = if ((k.value ?: 0) > 0) k.tone else Tone.Neutral, icon = k.icon, onClick = onClick)
 }
 
 /** Brand card on top: greeting and the main actions of the day. */
@@ -264,12 +248,12 @@ private fun Hero(
     onResume: () -> Unit,
     onLogin: () -> Unit,
 ) {
-    val shape = RoundedCornerShape(28.dp)
+    val shape = MaterialTheme.shapes.large
     Box(
         Modifier
             .fillMaxWidth()
             .clip(shape)
-            .background(Brush.linearGradient(listOf(CdaOrange, Color(0xFFD9431A), Color(0xFF8E2A0C)))),
+            .background(HeroBrush),
     ) {
         // the CDA Net symbol, large and faint, as a watermark (does not size the card)
         Box(Modifier.matchParentSize()) {
@@ -335,12 +319,14 @@ private fun HeroButton(text: String, @DrawableRes icon: Int, onClick: () -> Unit
         Button(
             onClick = onClick,
             modifier = modifier.height(48.dp),
-            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = Color(0xFFB83A14)),
+            shape = MaterialTheme.shapes.small,
+            colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = ConsoleTokens.Light.brandInk),
         ) { content() }
     } else {
         OutlinedButton(
             onClick = onClick,
             modifier = modifier.height(48.dp),
+            shape = MaterialTheme.shapes.small,
             border = androidx.compose.foundation.BorderStroke(1.dp, Color.White.copy(alpha = 0.7f)),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
         ) { content() }
@@ -365,9 +351,10 @@ private fun FeatureTile(title: String, subtitle: String, @DrawableRes icon: Int,
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp, pressedElevation = 4.dp),
+        border = cardBorder(),
     ) {
         val badge: @Composable () -> Unit = {
-            Box(Modifier.size(44.dp).clip(RoundedCornerShape(14.dp)).background(accent.container), contentAlignment = Alignment.Center) {
+            Box(Modifier.size(44.dp).clip(MaterialTheme.shapes.medium).background(accent.container), contentAlignment = Alignment.Center) {
                 Icon(painterResource(icon), contentDescription = null, tint = accent.content, modifier = Modifier.size(24.dp))
             }
         }
@@ -434,6 +421,7 @@ private fun WorkOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
                 shape = MaterialTheme.shapes.large,
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
                 elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+                border = cardBorder(),
                 modifier = Modifier.fillMaxWidth(),
             ) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -457,7 +445,7 @@ private fun WorkOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
                     if (o.notes.isNotBlank()) Text(o.notes, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (o.statusNote.isNotBlank()) Text("Nota: ${o.statusNote}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
-                        Button(onClick = {
+                        PrimaryButton(onClick = {
                             // the acceptance test will check the GPS against this order's position
                             c.activeWorkOrder.value = o
                             when (o.kind) {
@@ -479,7 +467,7 @@ private fun WorkOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
                             Text("Inizia")
                         }
                         if (o.address.isNotBlank() || o.lat != null) {
-                            OutlinedButton(onClick = {
+                            SecondaryButton(onClick = {
                                 val uri = if (o.lat != null && o.lon != null) "geo:${o.lat},${o.lon}?q=${o.lat},${o.lon}(${android.net.Uri.encode(o.customer)})" else "geo:0,0?q=${android.net.Uri.encode(o.address)}"
                                 runCatching { context.startActivity(android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(uri))) }
                             }) { Text("Naviga") }
@@ -514,3 +502,8 @@ private fun WorkOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
         )
     }
 }
+
+/** The brand gradient of the hero card (and of the login): brand, brand ink and a deeper ink. */
+internal val HeroBrush = Brush.linearGradient(
+    listOf(ConsoleTokens.Light.brand, ConsoleTokens.Light.brandInk, lerp(ConsoleTokens.Light.brandInk, Color.Black, 0.3f)),
+)

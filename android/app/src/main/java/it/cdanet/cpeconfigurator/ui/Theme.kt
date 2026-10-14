@@ -55,19 +55,19 @@ val BadRed: Color @Composable @ReadOnlyComposable get() = LocalStatusColors.curr
 
 /**
  * Accent per area of the app (home tiles, section headers): a strong tone for the icon and a soft
- * container behind it. Light and dark variants keep the contrast.
+ * container behind it, from the tones of the console so the app has no colours of its own.
  */
 @Immutable
 data class Accent(val content: Color, val container: Color)
 
-enum class Area(private val light: Accent, private val dark: Accent) {
-    Work(Accent(Color(0xFFB83A14), Color(0xFFFFDBCF)), Accent(Color(0xFFFFB59C), Color(0xFF5C2210))),
-    Network(Accent(Color(0xFF1F5FBF), Color(0xFFD8E2FF)), Accent(Color(0xFFADC6FF), Color(0xFF0E3470))),
-    Field(Accent(Color(0xFF006B5F), Color(0xFFB8F0E3)), Accent(Color(0xFF7DD8C6), Color(0xFF00433B))),
-    Tools(Accent(Color(0xFF6A4FA3), Color(0xFFEADDFF)), Accent(Color(0xFFD3BBFF), Color(0xFF452B78))),
-    Help(Accent(Color(0xFF52606D), Color(0xFFDDE3EA)), Accent(Color(0xFFBEC8D2), Color(0xFF34404B)));
+enum class Area(private val tone: Tone) {
+    Work(Tone.Brand),
+    Network(Tone.Info),
+    Field(Tone.Good),
+    Tools(Tone.Neutral),
+    Help(Tone.Neutral);
 
-    val accent: Accent @Composable @ReadOnlyComposable get() = if (LocalDarkTheme.current) dark else light
+    val accent: Accent @Composable @ReadOnlyComposable get() = tone.colors.let { Accent(it.content, it.container) }
 }
 
 val LocalDarkTheme = staticCompositionLocalOf { false }
