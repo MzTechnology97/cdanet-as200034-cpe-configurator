@@ -9,8 +9,8 @@ import { h } from './dom.js';
  */
 
 let vendor = null;
-/** Transparent tile for an imagery request with no picture (204). */
-const EMPTY = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII='), (c) => c.charCodeAt(0));
+/** An imagery request with no picture (204): MapLibre then draws the photo of the zoom below. */
+const NO_PHOTO = 'no-photo';
 
 function loadMapLibre() {
   vendor ??= new Promise((res, rej) => {
@@ -25,7 +25,9 @@ function loadMapLibre() {
       window.maplibregl.addProtocol('cda', async (params, ctrl) => {
         const token = session.get()?.token;
         const r = await fetch(params.url.replace('cda://', '/'), { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: ctrl.signal });
-        if (r.status === 204 && params.url.includes('/imagery/')) return { data: EMPTY.slice().buffer };
+        // no photo there (the public service often answers blank): an error, so the map keeps
+        // the photo of the zoom below, enlarged, instead of a hole
+        if (r.status === 204 && params.url.includes('/imagery/')) throw new Error(NO_PHOTO);
         if (!r.ok || r.status === 204) throw new Error(`HTTP ${r.status}`);
         return { data: await r.arrayBuffer() };
       });
@@ -232,7 +234,7 @@ async function openScene({ title, ariaLabel, legendItems, center, bearing, onLoa
     attributionControl: { compact: true },
   });
   map.addControl(new gl.NavigationControl({ visualizePitch: true }), 'top-right');
-  map.on('error', (e) => console.warn('3D', e?.error?.message ?? e));
+  map.on('error', (e) => e?.error?.message !== NO_PHOTO && console.warn('3D', e?.error?.message ?? e));
   const tag = (lat, lon, text, cls) => new gl.Marker({ element: h('div', { class: `map3d-tag ${cls}` }, text), anchor: 'bottom' }).setLngLat([lon, lat]).addTo(map);
   /** Camera on a box of [lat, lon] points, from [b] degrees and [pitch]. */
   const fit = (pts, b, pitch, zoomUp = 0.1) => {
