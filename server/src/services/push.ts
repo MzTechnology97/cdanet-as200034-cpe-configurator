@@ -184,9 +184,9 @@ export function createPush(db: Db, sealer: Sealer, opts: { fetchImpl?: typeof fe
           body: JSON.stringify({
             message: {
               token,
-              notification: { title: n.title, body: n.body.slice(0, 900) },
-              data: { kind: n.kind },
-              android: { priority: 'HIGH', notification: { channel_id: 'work_orders' } },
+              // data only: the app always shows it itself (no duplicate with its own feed check)
+              data: { kind: n.kind, title: n.title, body: n.body.slice(0, 900) },
+              android: { priority: 'HIGH' },
             },
           }),
         });

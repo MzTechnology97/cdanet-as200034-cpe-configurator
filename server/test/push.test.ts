@@ -39,9 +39,9 @@ describe('Notifiche push (Firebase)', () => {
       const u = String(url);
       calls.push(u);
       if (u.startsWith('https://oauth2.googleapis.com/token')) return new Response(JSON.stringify({ access_token: 'ya29.demo', expires_in: 3600 }), { status: 200 });
-      const body = JSON.parse(String(init?.body)) as { message: { token: string; notification: { title: string } } };
+      const body = JSON.parse(String(init?.body)) as { message: { token: string; data: { title: string } } };
       assert.equal(new Headers(init?.headers).get('authorization'), 'Bearer ya29.demo');
-      assert.equal(body.message.notification.title, 'Intervento assegnato');
+      assert.equal(body.message.data.title, 'Intervento assegnato');
       return body.message.token.startsWith('gone') ? new Response('{"error":{"status":"NOT_FOUND"}}', { status: 404 }) : new Response('{}', { status: 200 });
     }) as typeof fetch;
     const push = createPush(db, createSealer(randomBytes(32)), { fetchImpl: fake });
