@@ -1,4 +1,5 @@
 import { Agent, fetch as undiciFetch } from 'undici';
+import { createUispCrm, type UispCrm } from './uisp-crm.ts';
 import { HttpError } from '../auth.ts';
 import type { Config } from '../config.ts';
 import type { Sealer } from '../crypto.ts';
@@ -18,6 +19,8 @@ export interface UispSettings {
   cacheSeconds: number;
   autoBackup: boolean;
   coverageMaxKm: number;
+  /** App key of the UISP CRM (new subscribers at acceptance); null when not set. */
+  crmKey?: string | null;
 }
 
 export interface UispView {
@@ -30,6 +33,8 @@ export interface UispView {
   cacheSeconds: number;
   autoBackup: boolean;
   coverageMaxKm: number;
+  /** The CRM app key is set (never returned): "Crea subscriber" is available. */
+  crmKeySet: boolean;
   updatedAt: string | null;
   updatedBy: string | null;
 }
@@ -42,6 +47,7 @@ interface Stored {
   cacheSeconds: number;
   autoBackup: boolean;
   coverageMaxKm: number;
+  crmKeySealed?: string;
 }
 
 /** fetch that skips certificate verification (self-signed UISP). Only used when explicitly enabled. */
@@ -74,6 +80,7 @@ export function createConnectors(db: Db, sealer: Sealer, cfg: Config, opts: { fe
         cacheSeconds: c.stored.cacheSeconds,
         autoBackup: c.stored.autoBackup,
         coverageMaxKm: c.stored.coverageMaxKm,
+        crmKey: c.stored.crmKeySealed ? sealer.open(c.stored.crmKeySealed) : null,
       };
     }
     if (cfg.uisp) {
@@ -105,6 +112,7 @@ export function createConnectors(db: Db, sealer: Sealer, cfg: Config, opts: { fe
           cacheSeconds: c.stored.cacheSeconds,
           autoBackup: c.stored.autoBackup,
           coverageMaxKm: c.stored.coverageMaxKm,
+          crmKeySet: !!c.stored.crmKeySealed,
           updatedAt: c.updatedAt,
           updatedBy: c.updatedBy,
         };
@@ -119,12 +127,13 @@ export function createConnectors(db: Db, sealer: Sealer, cfg: Config, opts: { fe
         cacheSeconds: cfg.uisp?.cacheSeconds ?? 60,
         autoBackup: cfg.uispAutoBackup,
         coverageMaxKm: cfg.coverageMaxKm,
+        crmKeySet: false,
         updatedAt: null,
         updatedBy: null,
       };
     },
 
-    saveUisp(input: Omit<Stored, 'tokenSealed'> & { token?: string | undefined }, userId: number | null) {
+    saveUisp(input: Omit<Stored, 'tokenSealed' | 'crmKeySealed'> & { token?: string | undefined; crmKey?: string | undefined }, userId: number | null) {
       const prev = read()?.stored;
       // Keep the existing token when the form leaves it empty (it is never sent to the browser).
       const tokenSealed = input.token ? sealer.seal(input.token) : (prev?.tokenSealed ?? (cfg.uisp?.token ? sealer.seal(cfg.uisp.token) : ''));
@@ -138,10 +147,20 @@ export function createConnectors(db: Db, sealer: Sealer, cfg: Config, opts: { fe
         autoBackup: input.autoBackup,
         coverageMaxKm: input.coverageMaxKm,
       };
+      // the CRM app key: a new one replaces it, an empty field keeps the saved one
+      const crmKeySealed = input.crmKey ? sealer.seal(input.crmKey) : prev?.crmKeySealed;
+      if (crmKeySealed) stored.crmKeySealed = crmKeySealed;
       db.prepare(
         `INSERT INTO settings(key, value, updated_at, updated_by) VALUES('connector.uisp', ?, ?, ?)
          ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at, updated_by = excluded.updated_by`,
       ).run(JSON.stringify(stored), nowIso(), userId);
+    },
+
+    /** The UISP CRM (new subscribers), when its app key is set. */
+    crm(): UispCrm | null {
+      const s = uispSettings();
+      if (!s?.crmKey) return null;
+      return createUispCrm({ url: s.url, appKey: s.crmKey, fetchImpl: s.ignoreTls ? insecureFetch() : opts.fetchImpl });
     },
 
     resetUisp() {

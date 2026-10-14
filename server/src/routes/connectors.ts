@@ -22,6 +22,8 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
       enabled: z.boolean(),
       url,
       token: z.string().trim().max(400).optional(),
+      /** App key of the UISP CRM (new subscribers); empty = keep the saved one. */
+      crmKey: z.string().trim().max(400).optional(),
       ignoreTls: z.boolean().default(false),
       autoBackup: z.boolean().default(true),
       coverageMaxKm: z.number().int().min(1).max(100).default(15),
@@ -82,7 +84,7 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.put('/api/admin/connectors/uisp', admin, async (req) => {
     const b = uispBody.parse(req.body);
-    ctx.connectors.saveUisp({ ...b, token: b.token || undefined }, req.user!.id);
+    ctx.connectors.saveUisp({ ...b, token: b.token || undefined, crmKey: b.crmKey || undefined }, req.user!.id);
     reload();
     recordEvent(ctx.db, req.user!.id, 'connector.uisp.update', b.url || '—', `${b.enabled ? 'attivo' : 'disattivato'}${b.ignoreTls ? ' · TLS non verificato' : ''}${b.token ? ' · nuovo token' : ''}`);
     return { ...ctx.connectors.uispView(), active: !!ctx.uisp };
