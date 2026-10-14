@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
-import { toast } from '../../../web/js/dom.js';
+import { toast } from '../lib/toast';
 import { api } from '../lib/api';
 import type { PageContext } from '../shell/routes';
 import { AsyncButton, Badge, Button, Card, Field, Notice, PageHeader, Skeleton, Table } from '../ui';

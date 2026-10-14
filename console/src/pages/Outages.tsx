@@ -1,14 +1,14 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ChangeEvent, useMemo, useRef, useState } from 'react';
-import { toast } from '../../../web/js/dom.js';
-import { drawOutages as drawOutagesJs, MAP_COLORS as C } from '../../../web/js/map.js';
+import { toast } from '../lib/toast';
+import { drawOutages, MAP_COLORS as C } from '../map/leaflet';
 import { MyTelegram } from '../account/MyTelegram';
 import { type Infra, itemLabel, itemNames, Picker } from '../infra/Picker';
 import { api } from '../lib/api';
 import { keys } from '../lib/query';
 import { type LMap, MapView } from '../map/MapView';
 import type { PageContext } from '../shell/routes';
-import { AsyncButton, Badge, Button, Card, Dom, EmptyState, Field, Notice, PageHeader, Skeleton, Stat } from '../ui';
+import { AsyncButton, Badge, Button, Card, EmptyState, Field, Notice, PageHeader, Skeleton, Stat } from '../ui';
 
 /**
  * Guasti Enel: outages and planned works of the power network in the areas of interest (admins:
@@ -24,9 +24,6 @@ const dist = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} m
 const coords = (z: { lat: number; lon: number }) => `${z.lat.toFixed(4)}, ${z.lon.toFixed(4)}`;
 const date = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 const fail = (e: unknown) => toast((e as Error).message, 'bad');
-// the helper of web/js, typed loosely (its default parameters would type as null)
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const drawOutages = drawOutagesJs as (target: unknown, d: unknown, onOutage?: (o: { id: string }, marker: unknown) => void) => any[];
 
 interface Impact {
   type: 'pop' | 'ap';
@@ -248,7 +245,7 @@ function OutagesMap({ admin, apiRef }: { admin: boolean; apiRef: { current: MapA
         draw={(target) => {
           markers.current.clear();
           if (!q.data) return [];
-          const layers = drawOutages(target, q.data, (o, marker) => void markers.current.set(o.id, marker));
+          const layers = drawOutages(target, q.data, (o, marker) => void markers.current.set(String(o.id), marker));
           for (const [i, z] of ((q.data.zones ?? []) as Array<{ id: string }>).entries()) markers.current.set(z.id, layers[i]);
           return layers;
         }}

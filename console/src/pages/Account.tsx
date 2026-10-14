@@ -1,6 +1,6 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useState } from 'react';
-import { toast } from '../../../web/js/dom.js';
+import { toast } from '../lib/toast';
 import { MyTelegram } from '../account/MyTelegram';
 import { api, session } from '../lib/api';
 import { AsyncButton, Badge, Button, Card, Field, Notice, PageHeader, Skeleton, Stat } from '../ui';

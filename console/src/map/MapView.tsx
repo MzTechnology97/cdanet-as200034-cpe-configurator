@@ -1,6 +1,8 @@
 import { type MutableRefObject, useEffect, useRef, useState } from 'react';
-import { createMap, fit, legend, popup } from '../../../web/js/map.js';
-import { Dom } from '../ui';
+import { createMap, fit, type Leaflet, leaflet, type LMap, popup } from './leaflet';
+
+export type { Leaflet, LMap };
+export { leaflet };
 
 /**
  * The map of the console (one component for every page with a map): Leaflet with the local
@@ -11,13 +13,6 @@ import { Dom } from '../ui';
  * draws (a page refreshed every minute). [mapRef] and [onReady] give the page the map itself (to
  * centre a point from a list, to listen to its events).
  */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type Leaflet = any;
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type LMap = any;
-
-export const leaflet = (): Leaflet => (window as unknown as { L: Leaflet }).L;
-
 export function MapView({
   draw,
   deps = [],
@@ -49,7 +44,7 @@ export function MapView({
   useEffect(() => {
     let gone = false;
     let made: LMap | null = null;
-    createMap(el.current, { zoom, ...(center ? { center } : {}) })
+    createMap(el.current!, { zoom, ...(center ? { center } : {}) })
       .then((m: LMap) => {
         made = m;
         if (gone) m?.remove();
@@ -91,10 +86,24 @@ export function MapView({
     <div className="mv">
       <div ref={el} className={`map${tall ? ' map-tall' : ''}`} />
       {error && <p className="ui-muted ui-small">Mappa non disponibile: {error}</p>}
-      {legendItems && <Dom make={() => legend(legendItems)} deps={[legendItems.map((i) => i.join()).join('|')]} />}
+      {legendItems && <Legend items={legendItems} />}
     </div>
   );
 }
 
 /** The popup of a marker: a title and a few lines (escaped: no markup from the data). */
 export const mapPopup = (title: string, ...lines: Array<string | null | undefined | false>): HTMLElement => popup(title, ...lines);
+
+/** The legend under a map: [colour, text] of each kind of mark. */
+export function Legend({ items }: { items: Array<[color: string, text: string]> }) {
+  return (
+    <div className="map-legend small">
+      {items.map(([color, text]) => (
+        <span key={text}>
+          <i className="dot" style={{ background: color }} />
+          {text}
+        </span>
+      ))}
+    </div>
+  );
+}

@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { isOn } from '../../../web/js/modules.js';
+import { isOn } from '../lib/modules';
 import { api } from '../lib/api';
 import { keys } from '../lib/query';
 import { Badge, Card, Notice, PageHeader, Skeleton, Stat } from '../ui';

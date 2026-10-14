@@ -45,8 +45,6 @@ jobs:
       - name: Web console (typecheck and build)
         working-directory: console
         run: npm ci --ignore-scripts && npm run build
-      - name: Web console syntax
-        run: for f in $(find web/js -name '*.js'); do node --check "$f"; done
       - name: Shell scripts
         run: for f in deploy/*.sh deploy/updater/*.sh deploy/cdanet-cpe; do bash -n "$f"; done
       - name: Secret scan

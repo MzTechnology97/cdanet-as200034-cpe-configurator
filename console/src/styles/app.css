@@ -567,7 +567,6 @@ tr:hover > td { background: color-mix(in srgb, var(--brand) 4%, transparent); }
 }
 
 /* ---- Copertura (React) ---------------------------------------------------------------------- */
-.dom-host { display: contents; }
 .dom-inline { display: inline; }
 /* the answer for the point, in evidence: verdict, best AP and the two quick actions */
 .cov-verdict { display: flex; align-items: center; justify-content: space-between; gap: 14px; flex-wrap: wrap; padding: 14px 16px; margin: 10px 0 14px; border-radius: 12px; border: 1px solid var(--line); border-left-width: 5px; background: var(--surface-2); }

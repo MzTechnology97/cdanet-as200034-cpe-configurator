@@ -4,9 +4,9 @@ import { api, session } from '../lib/api';
 import { useLiveEvents } from '../lib/live';
 import { UispBanner } from './UispBanner';
 import { keys, queryClient } from '../lib/query';
-import { isOn, loadModules, modulesLoaded, resetModules } from '../../../web/js/modules.js';
-import { toast } from '../../../web/js/dom.js';
-import { setAdmin } from '../../../web/js/terms.js';
+import { isOn, loadModules, modulesLoaded, resetModules } from '../lib/modules';
+import { toast } from '../lib/toast';
+import { setAdmin } from '../lib/terms';
 import { Icon } from '../ui/Icon';
 import { CommandPalette } from './CommandPalette';
 import { Login } from './Login';
@@ -62,22 +62,18 @@ export function App() {
       toast('Sessione scaduta: accedi di nuovo', 'bad');
       setS(null);
     };
-    // the Notifiche page tells the new count after marking read
-    const onUnread = (e: Event) => queryClient.setQueryData(keys.unread, Number((e as CustomEvent).detail) || 0);
     const onModules = () => setModulesRev((n) => n + 1);
     window.addEventListener('hashchange', onHash);
     window.addEventListener('cda:logout', onLogout);
-    window.addEventListener('cda:unread', onUnread);
     window.addEventListener('cda:modules', onModules);
     return () => {
       window.removeEventListener('hashchange', onHash);
       window.removeEventListener('cda:logout', onLogout);
-      window.removeEventListener('cda:unread', onUnread);
       window.removeEventListener('cda:modules', onModules);
     };
   }, []);
 
-  // after login: role words for the pages of web/js, the modules on
+  // after login: the role words (terms.ts: no data sources for installers), the modules on
   useEffect(() => {
     if (!user) return;
     setAdmin(user.role === 'admin');

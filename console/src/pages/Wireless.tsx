@@ -1,8 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useMemo, useRef, useState } from 'react';
-import { ApiError } from '../../../web/js/api.js';
-import { toast } from '../../../web/js/dom.js';
-import { api } from '../lib/api';
+import { toast } from '../lib/toast';
+import { api, ApiError } from '../lib/api';
 import { AsyncButton, Badge, Button, Card, Field, Icon, Notice, PageHeader, Skeleton, Table } from '../ui';
 
 /**

@@ -1,11 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { toast } from '../../../web/js/dom.js';
+import { toast } from '../lib/toast';
 import { MyTelegram } from '../account/MyTelegram';
 import { api } from '../lib/api';
 import { keys } from '../lib/query';
 import type { PageContext } from '../shell/routes';
-import { AsyncButton, Badge, Button, Card, Dom, EmptyState, Icon, Notice, PageHeader, Segmented, Skeleton } from '../ui';
+import { AsyncButton, Badge, Button, Card, EmptyState, Icon, Notice, PageHeader, Segmented, Skeleton } from '../ui';
 
 /** Notifiche: the NOC's notices (admins) and the outcome of one's installations, live. */
 
