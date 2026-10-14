@@ -21,6 +21,8 @@ const ERRORS: Record<string, string> = {
   uisp_tls_error: 'Certificato TLS non valido o autofirmato: attiva «Ignora verifica TLS» solo se la rete è fidata.',
   uisp_error: 'UISP ha risposto con un errore.',
   connector_incomplete: 'Servono indirizzo UISP e token.',
+  uisp_crm_unauthorized: 'UISP ha rifiutato la chiave del CRM.',
+  uisp_crm_error: 'Errore del CRM di UISP.',
 };
 const SOURCE: Record<string, string> = { console: 'configurato dalla console', env: 'da file .env del server', none: 'non configurato' };
 
@@ -68,6 +70,8 @@ interface TestResult {
   error?: string;
   status?: number;
   detail?: string;
+  /** The CRM app key (typed or saved): the service plans it can read; null without a key. */
+  crm?: { ok: boolean; plans?: number; error?: string } | null;
 }
 
 const date = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '—');
@@ -226,6 +230,12 @@ function UispCard({ u, onSaved }: { u: Uisp; onSaved: () => Promise<void> }) {
               <Stat label="in attesa di accettazione" value={r.pending} />
               <Stat label="site" value={r.sites} />
             </section>
+            {r.crm && (
+              <Notice tone={r.crm.ok ? 'good' : 'bad'}>
+                CRM di UISP:{' '}
+                {r.crm.ok ? `chiave valida, ${r.crm.plans} ${r.crm.plans === 1 ? 'piano di servizio' : 'piani di servizio'}${r.crm.plans ? '' : ' (creane uno in UISP per i nuovi subscriber)'}` : (ERRORS[r.crm.error ?? ''] ?? r.crm.error)}
+              </Notice>
+            )}
             {(r.aps ?? 0) > (r.apsWithLocation ?? 0) && <p className="ui-muted ui-small cn-p">{(r.aps ?? 0) - (r.apsWithLocation ?? 0)} AP senza coordinate (né sul dispositivo né sul site): non compariranno nella Copertura.</p>}
           </>
         ) : (
