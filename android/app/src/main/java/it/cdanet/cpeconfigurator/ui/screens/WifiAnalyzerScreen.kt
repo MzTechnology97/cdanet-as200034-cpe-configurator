@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.DataColors
 import it.cdanet.cpeconfigurator.ui.SecondaryButton
 import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import android.Manifest
@@ -70,10 +71,7 @@ import kotlinx.coroutines.delay
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
-private val PALETTE = listOf(
-    Color(0xFF0EA5E9), Color(0xFFF59E0B), Color(0xFF22C55E), Color(0xFFEF4444), Color(0xFFA855F7), Color(0xFF14B8A6),
-    Color(0xFFEC4899), Color(0xFF84CC16), Color(0xFF6366F1), Color(0xFFF97316), Color(0xFF06B6D4), Color(0xFFE11D48),
-)
+private val PALETTE = DataColors.Series
 
 private fun colorOf(ssid: String) = PALETTE[abs(ssid.hashCode()) % PALETTE.size]
 

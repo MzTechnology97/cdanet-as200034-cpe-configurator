@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.Tone
+import it.cdanet.cpeconfigurator.ui.Badge
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
@@ -255,16 +257,7 @@ private fun DiscoveredRow(d: Discovered, kindOf: (Found) -> String, expanded: Bo
                 }
             }
             FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(start = 56.dp)) {
-                d.protocols.forEach { p ->
-                    Text(
-                        p,
-                        fontFamily = FontFamily.Monospace,
-                        fontWeight = FontWeight.Bold,
-                        fontSize = 11.sp,
-                        color = Color(0xFF0D9488),
-                        modifier = Modifier.clip(RoundedCornerShape(6.dp)).background(Color(0xFF0D9488).copy(alpha = 0.12f)).padding(horizontal = 6.dp, vertical = 2.dp),
-                    )
-                }
+                d.protocols.forEach { p -> Badge(p, Tone.Info) }
             }
             AnimatedVisibility(expanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp)) {
