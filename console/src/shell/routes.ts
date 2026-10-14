@@ -58,7 +58,7 @@ export const ROUTES: Array<Route | Group> = [
   { id: 'stats', icon: 'query_stats', label: 'Statistiche', admin: true, module: 'stats', react: () => import('../pages/Stats').then((m) => m.Stats) },
   { id: 'outages', icon: 'power_off', label: 'Guasti Enel', module: 'power_outages', react: () => import('../pages/Outages').then((m) => m.Outages) },
   { id: 'network', icon: 'hub', label: 'Stato rete', module: 'network_status', react: () => import('../pages/Network').then((m) => m.Network) },
-  { id: 'ia-ap', icon: 'troubleshoot', label: 'IA-AP', admin: true, legacy: () => import('../../../web/js/views/advisor.js').then((m) => m.advisorView) },
+  { id: 'ia-ap', icon: 'troubleshoot', label: 'IA-AP', admin: true, react: () => import('../pages/Advisor').then((m) => m.Advisor) },
   { id: 'mytemplates', icon: 'memory', label: 'Template disponibili', installer: true, react: () => import('../pages/MyTemplates').then((m) => m.MyTemplates) },
   { id: 'coverage', icon: 'explore', label: 'Copertura', module: 'coverage', bottom: true, react: () => import('../pages/Coverage').then((m) => m.Coverage) },
   { id: 'routeros', icon: 'router', label: 'MikroTik · RouterOS', module: 'routeros', react: () => import('../pages/RouterOs').then((m) => m.RouterOs) },

@@ -415,3 +415,8 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .wf-ssid input { margin: 0; accent-color: var(--brand); }
 .wf-export { display: grid; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line); }
 .wf-selectall { padding: var(--sp-2) var(--sp-4); border-bottom: 1px solid var(--line); }
+
+/* IA-AP (the layout of the page stays in its own classes, ia-*) */
+.ia-p { margin: 0; }
+.ia-toolbar .hl-search { flex: 1 1 220px; }
+.ia-btn { min-height: 32px; padding: 0 var(--sp-3); font-size: var(--fs-sm); }
