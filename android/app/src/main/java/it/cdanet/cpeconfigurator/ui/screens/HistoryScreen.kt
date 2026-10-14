@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.localTime
 import it.cdanet.cpeconfigurator.ui.SecondaryButton
 import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import it.cdanet.cpeconfigurator.ui.EmptyState
@@ -96,7 +97,7 @@ fun HistoryScreen(c: AppContainer, onAcceptance: (JobDto) -> Unit, onReplace: (J
                 Row(verticalAlignment = Alignment.Top) {
                     Column(Modifier.weight(1f)) {
                         Text(j.deviceName.ifBlank { j.pppoeUser }, style = MaterialTheme.typography.titleMedium)
-                        Text(j.createdAt.replace('T', ' ').take(16), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Text(localTime(j.createdAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
                     StatusChip(label, kind)
                 }

@@ -1,6 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
 import it.cdanet.cpeconfigurator.data.MyZonesDto
+import it.cdanet.cpeconfigurator.ui.localTime
 import it.cdanet.cpeconfigurator.ui.NoticeKind
 import it.cdanet.cpeconfigurator.ui.StatusChip
 import kotlinx.serialization.json.JsonObject
@@ -124,8 +125,8 @@ fun OutagesScreen(c: AppContainer, section: OutageSection = OutageSection.List) 
             Text(
                 when {
                     at == null -> "In attesa del primo aggiornamento"
-                    admin -> "Ultimo controllo del server: ${at.replace('T', ' ').take(16)} · fonte e-distribuzione"
-                    else -> "Aggiornato: ${at.replace('T', ' ').take(16)}"
+                    admin -> "Ultimo controllo del server: ${localTime(at)} · fonte e-distribuzione"
+                    else -> "Aggiornato: ${localTime(at)}"
                 },
                 style = MaterialTheme.typography.bodySmall,
             )
