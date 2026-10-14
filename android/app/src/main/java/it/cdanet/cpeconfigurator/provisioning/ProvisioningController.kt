@@ -220,7 +220,9 @@ class ProvisioningController(
         field.prune()
         val todo = orders.filter { o ->
             o.kind == "new" && o.status in setOf("open", "postponed") && o.jobId == null && o.hasPassword &&
-                o.pppoeUser.isNotBlank() && o.model in ProvisionForm.MODELS && o.lat != null && o.lon != null && !field.fresh(o.id)
+                o.pppoeUser.isNotBlank() && o.model in ProvisionForm.MODELS && o.lat != null && o.lon != null && !field.fresh(o.id) &&
+                // started from its package (taken out of the store): not prepared a second time
+                !(o.id == _form.value.workOrderId && _state.value.pkg != null)
         }
         if (todo.isEmpty()) return field.ready.value.size
         val configured = runCatching { api.wirelessNetworks() }.getOrNull() ?: return field.ready.value.size
