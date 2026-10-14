@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
 import { buildApp } from './app.ts';
 import { loadConfig } from './config.ts';
+import { createImageryPrefetch } from './services/imagery-prefetch.ts';
 import { startReleaseSync } from './services/releases.ts';
+import { isPtp } from './services/uisp.ts';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')) as { version: string };
 const cfg = loadConfig();
@@ -26,6 +28,13 @@ ctx.outages.start();
 ctx.crmSync.start();
 ctx.apLoad.start();
 ctx.optimizer.start();
+// the orthophotos of the area of the network kept ready on disk (UISP read at each run: it may be set later)
+const imageryPrefetch = createImageryPrefetch({
+  imagery: ctx.imagery,
+  aps: async () => ((await ctx.uisp?.apsWithLocation()) ?? []).filter((d) => !isPtp(d)).map((d) => d.location),
+  log: (m) => app.log.info(m),
+});
+imageryPrefetch.start();
 
 const shutdown = async (signal: string) => {
   app.log.info({ signal }, 'shutting down');
@@ -34,6 +43,7 @@ const shutdown = async (signal: string) => {
   ctx.crmSync.stop();
   ctx.apLoad.stop();
   ctx.optimizer.stop();
+  imageryPrefetch.stop();
   stopSync();
   clearInterval(housekeeping);
   await app.close();

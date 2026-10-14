@@ -254,15 +254,16 @@ async function addViews(map, base, config) {
   }
   const photos = [];
   for (const v of s?.layers ?? []) {
-    // a service that draws nothing far out (the AGEA orthophotos from zoom 11): one level further
-    // its own tiles scaled down, further still the basemap, never an empty or white map. The
-    // basemap stays under the photos: where they are clear (the sea of the coast tiles) it shows
+    // a service that starts at a zoom (the AGEA orthophotos from 12, see the server): further out
+    // the basemap, never an empty map and no photo tiles scaled down (tens of slow requests for a
+    // regional view). Where the photos are clear (the sea of the coast tiles) the map colour shows
     const min = v.minZoom ?? 0;
-    const opts = { maxZoom: 20, maxNativeZoom: v.maxNativeZoom, minZoom: Math.max(0, min - 1), minNativeZoom: min, tileSize: 256 };
+    const opts = { maxZoom: 20, maxNativeZoom: v.maxNativeZoom, minZoom: min, minNativeZoom: min, tileSize: 256 };
     const parts = v.parts.map(([provider, part], i) => authTileLayer(`/api/admin/map/imagery/${provider}/${part}/{z}/{x}/{y}`, { ...opts, ...(i === 0 ? { attribution: v.attribution } : {}) }));
-    // the basemap only where the photos are not drawn at all (far out): drawing both everywhere
-    // doubled the work of the map. The sea of the coast tiles (clear) shows the colour of the map.
-    if (min > 1) parts.unshift(pm ? vector({ flavor: 'light', maxZoom: min - 2, attribution: '' }) : L.tileLayer(config.fallback.url, { maxZoom: min - 2, attribution: config.fallback.attribution, referrerPolicy: 'strict-origin-when-cross-origin' }));
+    // the basemap under the photos at every zoom: far out it is the map, closer it shows wherever
+    // the service has no photo (the public orthophotos come back blank for many tiles) instead of
+    // an empty square, and the sea of the coast tiles (clear) shows the sea of the map
+    if (min > 1) parts.unshift(pm ? vector({ flavor: 'light', attribution: '' }) : L.tileLayer(config.fallback.url, { maxZoom: 19, attribution: config.fallback.attribution, referrerPolicy: 'strict-origin-when-cross-origin' }));
     bases[v.label] = parts.length === 1 ? parts[0] : L.layerGroup(parts);
     photos.push(bases[v.label]);
   }
