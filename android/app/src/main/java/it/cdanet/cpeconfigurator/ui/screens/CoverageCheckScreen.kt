@@ -1,5 +1,8 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.colors
+import it.cdanet.cpeconfigurator.ui.Tone
+import it.cdanet.cpeconfigurator.ui.DataColors
 import it.cdanet.cpeconfigurator.ui.SecondaryButton
 import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import androidx.compose.foundation.relocation.bringIntoViewRequester
@@ -68,24 +71,9 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 import kotlinx.serialization.json.doubleOrNull
 
-/** Same scale as the console simulation, from excellent to unusable. */
-private val SIM_SCALE = listOf(
-    Color(0xFF15803D) to "oltre −60 dBm",
-    Color(0xFF22C55E) to "−60…−65",
-    Color(0xFFA3E635) to "−65…−70",
-    Color(0xFFFACC15) to "−70…−75",
-    Color(0xFFF97316) to "−75…−80 (sotto il minimo)",
-)
-
-/** Capacity scale (downlink of the radio link), as in the console. */
-private val CAP_SCALE = listOf(
-    Color(0xFF15803D) to "oltre 150 Mbit/s",
-    Color(0xFF22C55E) to "100–150",
-    Color(0xFFA3E635) to "50–100",
-    Color(0xFFFACC15) to "25–50",
-    Color(0xFFF97316) to "10–25",
-    Color(0xFFDC2626) to "sotto 10",
-)
+/** Same scales as the console simulation, from excellent to unusable. */
+private val SIM_SCALE = DataColors.SignalScale
+private val CAP_SCALE = DataColors.CapacityScale
 
 /** "37.56, 14.27", "37,56 14,27", "37.56;14.27" → lat/lon; null when it is not a pair of coordinates. */
 fun parseCoords(text: String): Pair<Double, Double>? {
@@ -394,12 +382,14 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
         if (p != null && d != null) {
             SectionCard("AP per ${p.label}") {
                 d.aps.firstOrNull()?.let { best ->
-                    val (title, color) = when (best.rating) {
-                        "buono" -> "Copertura probabile" to Color(0xFF16A34A)
-                        "possibile" -> "Copertura da verificare" to Color(0xFFD97706)
-                        else -> "Copertura improbabile" to MaterialTheme.colorScheme.error
+                    // the verdict in the state colours of the console
+                    val (title, tone) = when (best.rating) {
+                        "buono" -> "Copertura probabile" to Tone.Good
+                        "possibile" -> "Copertura da verificare" to Tone.Warn
+                        else -> "Copertura improbabile" to Tone.Bad
                     }
-                    Column(Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(color.copy(alpha = 0.12f)).padding(10.dp)) {
+                    val color = tone.colors.content
+                    Column(Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).background(tone.colors.container).padding(12.dp)) {
                         Text(title, color = color, fontWeight = FontWeight.Bold)
                         Text(
                             "Il migliore è ${best.name.ifBlank { best.id }}, a ${km(best.distanceM)}" + (best.estimate?.signalDbm?.let { ", segnale stimato $it dBm" } ?: "") +
