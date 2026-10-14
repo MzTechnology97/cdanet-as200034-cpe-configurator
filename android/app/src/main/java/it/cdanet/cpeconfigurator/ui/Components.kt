@@ -204,7 +204,7 @@ fun Field(
 fun <T> Dropdown(label: String, options: List<T>, selected: T, display: (T) -> String, onSelect: (T) -> Unit, modifier: Modifier = Modifier) {
     var open by remember { mutableStateOf(false) }
     Box(modifier) {
-        OutlinedButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) {
+        SecondaryButton(onClick = { open = true }, modifier = Modifier.fillMaxWidth()) {
             Column(Modifier.weight(1f)) {
                 Text(label, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 Text(display(selected), style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onSurface)

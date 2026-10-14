@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
+import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
@@ -288,13 +290,13 @@ fun TopologyGraphView(
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                     FilterChip(selected = infraOnly, onClick = { infraOnly = !infraOnly }, label = { Text("Solo apparati di rete") })
                     FilterChip(selected = ports, onClick = { ports = !ports }, label = { Text("Porte") })
-                    OutlinedButton(onClick = { zoomBy(1 / 1.4f) }) { Text("−") }
-                    OutlinedButton(onClick = { zoomBy(1.4f) }) { Text("+") }
-                    OutlinedButton(onClick = { scale = fit; offset = fitted() }) { Text("Adatta") }
-                    if (fullScreen) OutlinedButton(onClick = onClose) { Text("Chiudi") }
-                    else OutlinedButton(onClick = { full = true }) { Text("Schermo intero") }
-                    OutlinedButton(onClick = { export("PNG") }, enabled = exporting == null) { Text(if (exporting == "PNG") "PNG…" else "PNG") }
-                    OutlinedButton(onClick = { export("PDF") }, enabled = exporting == null) { Text(if (exporting == "PDF") "PDF…" else "PDF") }
+                    SecondaryButton(onClick = { zoomBy(1 / 1.4f) }) { Text("−") }
+                    SecondaryButton(onClick = { zoomBy(1.4f) }) { Text("+") }
+                    SecondaryButton(onClick = { scale = fit; offset = fitted() }) { Text("Adatta") }
+                    if (fullScreen) SecondaryButton(onClick = onClose) { Text("Chiudi") }
+                    else SecondaryButton(onClick = { full = true }) { Text("Schermo intero") }
+                    SecondaryButton(onClick = { export("PNG") }, enabled = exporting == null) { Text(if (exporting == "PNG") "PNG…" else "PNG") }
+                    SecondaryButton(onClick = { export("PDF") }, enabled = exporting == null) { Text(if (exporting == "PDF") "PDF…" else "PDF") }
                 }
                 saved?.let { (f, uri, mime) ->
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -488,7 +490,7 @@ fun TopologyNodeCard(graph: Graph, id: String, onOpenHost: (() -> Unit)?, onClos
         val links = graph.linksOf(id).filter { it.kind != LinkKind.Uplink }.sortedBy { it.kind.ordinal }
         Text("Collegamenti (${links.size})", fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(top = 4.dp))
         for (l in links) LinkLine(graph, l, id)
-        onOpenHost?.let { OutlinedButton(onClick = it) { Text("Apri nell'elenco host") } }
+        onOpenHost?.let { SecondaryButton(onClick = it) { Text("Apri nell'elenco host") } }
     }
 }
 

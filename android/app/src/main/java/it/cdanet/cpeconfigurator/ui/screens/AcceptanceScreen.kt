@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
+import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import it.cdanet.cpeconfigurator.ui.CheckRow
 import it.cdanet.cpeconfigurator.ui.WifiRequired
 import android.graphics.Bitmap
@@ -193,10 +195,10 @@ fun AcceptanceScreen(c: AppContainer) {
 
         SectionCard("3 · Foto (${photos.size}/8)") {
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                CAPTIONS.take(3).forEach { cap -> OutlinedButton(onClick = { val (f, u) = PhotoCapture.newTarget(context); shot = f to cap; camera.launch(u) }, enabled = photos.size < 8) { Text(cap) } }
+                CAPTIONS.take(3).forEach { cap -> SecondaryButton(onClick = { val (f, u) = PhotoCapture.newTarget(context); shot = f to cap; camera.launch(u) }, enabled = photos.size < 8) { Text(cap) } }
             }
             Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                CAPTIONS.drop(3).forEach { cap -> OutlinedButton(onClick = { val (f, u) = PhotoCapture.newTarget(context); shot = f to cap; camera.launch(u) }, enabled = photos.size < 8) { Text(cap) } }
+                CAPTIONS.drop(3).forEach { cap -> SecondaryButton(onClick = { val (f, u) = PhotoCapture.newTarget(context); shot = f to cap; camera.launch(u) }, enabled = photos.size < 8) { Text(cap) } }
             }
             photos.toList().forEach { p ->
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -219,7 +221,7 @@ fun AcceptanceScreen(c: AppContainer) {
                 val noc = nocApprovalReason(r.radio.signal, c.field.thresholds.signalMin, r.checks.filter { it.verdict == "bad" }.map { it.title })
                 if (noc != null) Banner("Approvazione NOC necessaria: $noc. $NOC_APPROVAL_TEXT", WarnAmber)
                 if (noc != null || r.verdict == "bad") {
-                    OutlinedButton(onClick = { ko = true }, modifier = Modifier.fillMaxWidth()) { Text("Segnala KO o rimanda l'installazione", color = BadRed) }
+                    SecondaryButton(onClick = { ko = true }, modifier = Modifier.fillMaxWidth()) { Text("Segnala KO o rimanda l'installazione", color = BadRed) }
                 }
             }
             if (ko) {

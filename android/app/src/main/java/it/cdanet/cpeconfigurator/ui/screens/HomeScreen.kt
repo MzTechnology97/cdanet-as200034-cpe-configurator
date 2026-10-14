@@ -321,14 +321,14 @@ private fun HeroButton(text: String, @DrawableRes icon: Int, onClick: () -> Unit
         Text(text, maxLines = 1, overflow = TextOverflow.Ellipsis)
     }
     if (primary) {
-        Button(
+        androidx.compose.material3.Button(
             onClick = onClick,
             modifier = modifier.height(48.dp),
             shape = MaterialTheme.shapes.small,
             colors = ButtonDefaults.buttonColors(containerColor = Color.White, contentColor = ConsoleTokens.Light.brandInk),
         ) { content() }
     } else {
-        OutlinedButton(
+        androidx.compose.material3.OutlinedButton(
             onClick = onClick,
             modifier = modifier.height(48.dp),
             shape = MaterialTheme.shapes.small,

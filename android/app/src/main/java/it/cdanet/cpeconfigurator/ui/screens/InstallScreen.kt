@@ -1,9 +1,10 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
+import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import it.cdanet.cpeconfigurator.provisioning.FIRMWARE_TRIES
 import it.cdanet.cpeconfigurator.provisioning.ProvisioningController
 import androidx.compose.runtime.mutableStateListOf
-import it.cdanet.cpeconfigurator.ui.SecondaryButton
 import it.cdanet.cpeconfigurator.ui.NoticeKind
 import it.cdanet.cpeconfigurator.ui.Notice
 import it.cdanet.cpeconfigurator.ui.CheckRow
@@ -273,7 +274,7 @@ private fun ConfigStep(c: AppContainer, onLogin: () -> Unit) {
     ErrorBanner(prov.error) { c.provisioning.clearError() }
     if (session == null) {
         Banner("Per preparare la configurazione accedi al server mentre sei online.", WarnAmber)
-        OutlinedButton(onClick = onLogin) { Text("Accedi") }
+        SecondaryButton(onClick = onLogin) { Text("Accedi") }
         return
     }
     ProvisionFormStep(c)
@@ -318,7 +319,7 @@ fun BestApsBeforeInstall(c: AppContainer, location: CpeLocation, selectedSsid: S
                 a.ap?.estimate?.describe()?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
             }
             if (a.ssid.equals(selectedSsid, ignoreCase = true)) Text("scelto", color = GoodGreen, fontWeight = FontWeight.SemiBold)
-            else OutlinedButton(onClick = { onPick(a) }, enabled = a.usable) { Text("Usa") }
+            else SecondaryButton(onClick = { onPick(a) }, enabled = a.usable) { Text("Usa") }
         }
     }
 }
@@ -644,7 +645,7 @@ private fun LinkStep(c: AppContainer, withNext: Boolean = true) {
                         Text(a.ssid, style = MaterialTheme.typography.bodySmall)
                         Text(a.describe(), style = MaterialTheme.typography.bodySmall)
                     }
-                    if (!a.current) OutlinedButton(onClick = { confirm = a }, enabled = a.usable && r?.running != true) { Text("Aggancia") }
+                    if (!a.current) SecondaryButton(onClick = { confirm = a }, enabled = a.usable && r?.running != true) { Text("Aggancia") }
                 }
             }
             val others = survey.filter { !ApAdvisor.isCdaNet(it.essid) }
@@ -712,7 +713,7 @@ private fun AimStep(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: 
             target.distanceM?.let { KeyValue("Distanza", FieldDiagnosis.formatDistance(it)) }
             st.pointing?.aps?.firstOrNull { it.ssid.equals(ssid, ignoreCase = true) }?.estimate?.describe()?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
             BusyButton("Mirino in realtà aumentata (con segnale)", false, Modifier.fillMaxWidth()) { onAim(target) }
-            OutlinedButton(onClick = { onCompass(target) }, modifier = Modifier.fillMaxWidth()) { Text("Bussola verso l'AP") }
+            SecondaryButton(onClick = { onCompass(target) }, modifier = Modifier.fillMaxWidth()) { Text("Bussola verso l'AP") }
         } else {
             Text(
                 when {
@@ -733,7 +734,7 @@ private fun AimStep(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: 
         if (c.moduleOn("compass")) TextButton(onClick = onPointing) { Text("Mappa e lista degli AP (Trova l'AP)") }
         if (c.moduleOn("field_alignment")) TextButton(onClick = onAlignment) { Text("Puntamento a schermo intero") }
     }
-    OutlinedButton(onClick = { c.field.resetPeak() }) { Text("Azzera picco e grafico") }
+    SecondaryButton(onClick = { c.field.resetPeak() }) { Text("Azzera picco e grafico") }
     NextButton(c, "Avanti: verifica finale")
 }
 
@@ -788,7 +789,7 @@ private fun FinalStep(c: AppContainer, onAcceptance: () -> Unit) {
                     style = MaterialTheme.typography.bodySmall,
                 )
             }
-            OutlinedButton(onClick = {
+            SecondaryButton(onClick = {
                 val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, FieldDiagnosis.report(s, checks))
                 context.startActivity(Intent.createChooser(send, "Invia rapporto"))
             }, modifier = Modifier.fillMaxWidth()) { Text("Condividi rapporto") }

@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
+import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import android.os.Handler
 import android.os.Looper
@@ -445,11 +447,11 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                         }
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(start = 34.dp)) {
                             TextButton(onClick = { page?.evaluateJavascript("window.cdaFocus(${JsonPrimitive(ap.id)})", null) }) { Text("Mappa") }
-                            if (modules["compass"] != false) OutlinedButton(onClick = { los = ap.id }) { Text("Collegamento") }
-                            if (admin) OutlinedButton(onClick = { simulate(ap.id) }) { Text("Simula") }
-                            if (onCompass != null) OutlinedButton(onClick = { onCompass(CompassTarget(ap.name.ifBlank { ap.id }, ap.bearing, ap.distanceM, p.lat, p.lon)) }) { Text("Bussola") }
+                            if (modules["compass"] != false) SecondaryButton(onClick = { los = ap.id }) { Text("Collegamento") }
+                            if (admin) SecondaryButton(onClick = { simulate(ap.id) }) { Text("Simula") }
+                            if (onCompass != null) SecondaryButton(onClick = { onCompass(CompassTarget(ap.name.ifBlank { ap.id }, ap.bearing, ap.distanceM, p.lat, p.lon)) }) { Text("Bussola") }
                             // on site: the APs over the camera, the skyline of the terrain and the Fresnel tunnel
-                            if (onAim != null) OutlinedButton(onClick = {
+                            if (onAim != null) SecondaryButton(onClick = {
                                 onAim(
                                     CompassTarget(
                                         ap.name.ifBlank { ap.id }, ap.bearing, ap.distanceM, p.lat, p.lon,

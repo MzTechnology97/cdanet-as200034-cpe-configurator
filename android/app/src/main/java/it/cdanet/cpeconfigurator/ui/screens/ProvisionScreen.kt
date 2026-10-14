@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
+import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import it.cdanet.cpeconfigurator.ui.WifiRequired
 import android.content.Intent
 import android.os.Build
@@ -81,7 +83,7 @@ fun ProvisionFormStep(c: AppContainer) {
                     "La password PPPoE si può lasciare vuota: il server la recupera dall'ultimo backup della CPE sostituita.",
                 style = MaterialTheme.typography.bodySmall,
             )
-            OutlinedButton(onClick = { c.provisioning.reset() }) { Text("Annulla sostituzione") }
+            SecondaryButton(onClick = { c.provisioning.reset() }) { Text("Annulla sostituzione") }
         }
     }
 
@@ -120,7 +122,7 @@ fun ProvisionFormStep(c: AppContainer) {
             },
         )
         Field("Seriale", form.serial, { v -> c.provisioning.updateForm { it.copy(serial = v) } })
-        OutlinedButton(onClick = {
+        SecondaryButton(onClick = {
             GmsBarcodeScanning.getClient(context).startScan()
                 .addOnSuccessListener { b -> b.rawValue?.let { raw -> c.provisioning.updateForm { Validation.applyScan(it, raw) } } }
         }) { Text("Scansiona etichetta (barcode/QR)") }
@@ -252,7 +254,7 @@ fun ProvisionApplyStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
         Text("Collega il telefono alla Wi-Fi di management della CPE (IP ${pkg.target.host}). Se Android avvisa che la rete non ha Internet, scegli di restare connesso.",
             style = MaterialTheme.typography.bodySmall)
         KeyValue("Wi-Fi attuale", wifi?.let { "${it.wifiSsid ?: "connessa"} · ${it.addresses.firstOrNull { a -> !a.contains(':') } ?: "senza IPv4"}" } ?: "nessuna")
-        OutlinedButton(onClick = {
+        SecondaryButton(onClick = {
             val i = if (Build.VERSION.SDK_INT >= 29) Intent(AndroidSettings.Panel.ACTION_WIFI) else Intent(AndroidSettings.ACTION_WIFI_SETTINGS)
             context.startActivity(i)
         }) { Text("Apri impostazioni Wi-Fi") }
@@ -265,7 +267,7 @@ fun ProvisionApplyStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
     SectionCard("2 · Primo avvio airOS") {
         Text("Se la CPE è appena resettata completa il primo accesso: Country Licensed, accetta i termini e imposta le credenziali CDA Net.",
             style = MaterialTheme.typography.bodySmall)
-        OutlinedButton(onClick = onOpenCpeWeb, enabled = !applying) { Text("Apri interfaccia CPE nell'app") }
+        SecondaryButton(onClick = onOpenCpeWeb, enabled = !applying) { Text("Apri interfaccia CPE nell'app") }
     }
 
     SectionCard("3 · Applica configurazione") {
