@@ -1,5 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
-import { type FormEvent, useState } from 'react';
+import { type FormEvent, useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { toast } from '../lib/toast';
 import { Button, Field, Notice, Skeleton } from '../ui';
@@ -8,7 +8,7 @@ import { Button, Field, Notice, Skeleton } from '../ui';
  * «Nuovo subscriber» (admins, UISP CRM app key set): the CPE of a job accepted as a new customer.
  * The server creates the CRM client and the service of the chosen plan, then authorizes the CPE in
  * the endpoint site UISP makes for that service. The form starts from the server's draft (name
- * from the PPPoE user, address of the work order).
+ * from the PPPoE user, address of the work order, the plan of the PPPoE profile in ISP Billing).
  */
 
 export interface SubscriberDraft {
@@ -16,6 +16,9 @@ export interface SubscriberDraft {
   lastName: string;
   street: string;
   crm: boolean;
+  /** The plan matching the job's PPPoE profile in ISP Billing (null: the NOC chooses). */
+  planPeriodId?: number | null;
+  planName?: string | null;
 }
 interface Plan {
   id: number;
@@ -50,7 +53,13 @@ const message = (e: unknown) => {
 
 export function NewSubscriber({ jobId, draft, onDone, onCancel }: { jobId: string; draft: SubscriberDraft; onDone: () => Promise<unknown>; onCancel: () => void }) {
   const plans = useQuery({ queryKey: ['admin', 'uisp', 'service-plans'], queryFn: () => api<Plan[]>('/api/admin/uisp/service-plans'), staleTime: 5 * 60_000, retry: false });
-  const [f, setF] = useState({ firstName: draft.firstName, lastName: draft.lastName, street: draft.street, period: '' });
+  const suggested = draft.planPeriodId != null ? String(draft.planPeriodId) : '';
+  const [f, setF] = useState({ firstName: draft.firstName, lastName: draft.lastName, street: draft.street, period: suggested });
+  // the suggested plan only when UISP has it among the plans of the default organization
+  useEffect(() => {
+    if (plans.data && f.period && !plans.data.some((p) => String(p.periodId) === f.period)) setF((x) => ({ ...x, period: '' }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [plans.data]);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // created in the CRM but not yet authorized (UISP had not made its site yet): retried without creating it again
@@ -112,7 +121,7 @@ export function NewSubscriber({ jobId, draft, onDone, onCancel }: { jobId: strin
       <Field label="Indirizzo">
         <input value={f.street} autoComplete="off" maxLength={200} onChange={(e) => setF({ ...f, street: e.target.value })} />
       </Field>
-      <Field label="Piano di servizio">
+      <Field label="Piano di servizio" hint={suggested && f.period === suggested && plans.data ? `Dal profilo ISPBilling${draft.planName ? ` (${draft.planName})` : ''}: cambialo se serve.` : undefined}>
         {plans.error ? (
           <Notice tone="bad">{message(plans.error)}</Notice>
         ) : !plans.data ? (
