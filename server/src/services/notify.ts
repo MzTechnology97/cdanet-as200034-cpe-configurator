@@ -52,12 +52,9 @@ export function createNotifier(
       const lines = [`Installatore: ${j.username}`, `CPE: ${j.model} · ${j.mac}`, `SSID: ${j.ssid}`, ...(stages ? [`Ultima fase: ${stages}`] : []), ...(j.error ? [`Errore: ${j.error.slice(0, 300)}`] : [])];
       void telegram.notify('provisioning_failed', `❌ <b>${e(title)}</b>\n${lines.map(e).join('\n')}` + jobLink(j.mac));
       inbox.push('noc', { kind: 'provisioning_failed', title, lines, jobId, mac: j.mac });
-    } else if (j.status === 'success' && getUisp()) {
-      void telegram.notify(
-        'uisp_pending',
-        `🆕 <b>CPE ${j.replaces_job_id ? 'sostitutiva ' : ''}pronta da accettare in UISP</b>\n${e(j.model)} · ${e(j.mac)} · ${e(j.ssid)}\nInstallatore: ${e(j.username)}` + jobLink(j.mac),
-      );
     }
+    // "pronta da accettare in UISP" waits for the acceptance test (readyForUisp): only then the CPE
+    // is really installed, connected and online
   }
 
   /** Postponed or KO installation reported by the technician (same switch as a failed provisioning). */
@@ -106,6 +103,24 @@ export function createNotifier(
     const lines = [`Installatore: ${r.username}`, `Cliente: ${customer(r)}`, `CPE: ${r.mac} · ${r.ssid}${r.signal != null ? ` · ${r.signal} dBm` : ''}`, `Motivo: ${r.reason}`];
     void telegram.notify('provisioning_failed', `📶 <b>${e(title)}</b>\n${lines.map(e).join('\n')}` + jobLink(r.mac));
     inbox.push('noc', { kind: 'review_pending', title, lines, jobId, mac: r.mac });
+  }
+
+  /**
+   * The acceptance test passed (or the NOC approved it): the CPE is on the roof, connected and
+   * online, ready to be accepted in UISP. Told once per installation.
+   */
+  function readyForUisp(jobId: string) {
+    if (!getUisp()) return;
+    const j = db
+      .prepare('SELECT j.model, j.mac, j.ssid, j.replaces_job_id, u.username FROM provisioning_jobs j JOIN users u ON u.id = j.user_id WHERE j.id = ?')
+      .get(jobId) as { model: string; mac: string; ssid: string; replaces_job_id: string | null; username: string } | undefined;
+    if (!j) return;
+    if (db.prepare("SELECT 1 FROM events WHERE action = 'job.uisp_ready' AND target = ? LIMIT 1").get(jobId)) return;
+    db.prepare("INSERT INTO events(created_at, user_id, action, target, detail) VALUES(?, NULL, 'job.uisp_ready', ?, 'collaudo superato')").run(nowIso(), jobId);
+    void telegram.notify(
+      'uisp_pending',
+      `🆕 <b>CPE ${j.replaces_job_id ? 'sostitutiva ' : ''}pronta da accettare in UISP</b>\n${e(j.model)} · ${e(j.mac)} · ${e(j.ssid)}\nInstallatore: ${e(j.username)}\nCollaudo superato: la CPE è collegata e online.` + jobLink(j.mac),
+    );
   }
 
   /** The NOC's decision, to who installed the CPE and who did the acceptance test. */
@@ -265,6 +280,7 @@ export function createNotifier(
 
   let timers: NodeJS.Timeout[] = [];
   return {
+    readyForUisp,
     workOrderAssigned,
     workOrderAlerts,
     inbox,
