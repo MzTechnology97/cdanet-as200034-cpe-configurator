@@ -21,10 +21,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** CDA Net brand orange: the seed of the whole Material 3 palette. */
-val CdaOrange = Color(0xFFF15A2C)
+/** CDA Net brand orange (the --brand token of the console). */
+val CdaOrange = ConsoleTokens.Light.brand
 
-/** Status colors (ok / attention / error), each with its tonal container, for light and dark. */
+/** Status colors (ok / attention / error / information), each with its soft background, as the console. */
 @Immutable
 data class StatusColors(
     val good: Color,
@@ -33,18 +33,18 @@ data class StatusColors(
     val warnContainer: Color,
     val bad: Color,
     val badContainer: Color,
+    val info: Color,
+    val infoContainer: Color,
 )
 
-private val LightStatus = StatusColors(
-    good = Color(0xFF1A7F4B), goodContainer = Color(0xFFD6F2E2),
-    warn = Color(0xFF8F5B00), warnContainer = Color(0xFFFFE8C2),
-    bad = Color(0xFFB42318), badContainer = Color(0xFFFFDAD5),
+private fun statusOf(t: ConsolePalette) = StatusColors(
+    good = t.good, goodContainer = t.goodBg,
+    warn = t.warn, warnContainer = t.warnBg,
+    bad = t.bad, badContainer = t.badBg,
+    info = t.info, infoContainer = t.infoBg,
 )
-private val DarkStatus = StatusColors(
-    good = Color(0xFF6DD9A0), goodContainer = Color(0xFF0F3D26),
-    warn = Color(0xFFF2C064), warnContainer = Color(0xFF473100),
-    bad = Color(0xFFFFB4A9), badContainer = Color(0xFF5C120C),
-)
+private val LightStatus = statusOf(ConsoleTokens.Light)
+private val DarkStatus = statusOf(ConsoleTokens.Dark)
 
 val LocalStatusColors = staticCompositionLocalOf { LightStatus }
 
@@ -72,84 +72,97 @@ enum class Area(private val light: Accent, private val dark: Accent) {
 
 val LocalDarkTheme = staticCompositionLocalOf { false }
 
-private val Light = lightColorScheme(
-    primary = Color(0xFFC2410F),
+/**
+ * Material 3 roles from the tokens of the console (ConsoleTokens, generated from tokens.css): the
+ * neutral surfaces of the console, its brand orange for the actions and its state colours. The
+ * screens keep using the Material roles, so they all follow the console at once.
+ */
+private fun lightScheme(t: ConsolePalette) = lightColorScheme(
+    primary = t.brandInk,
     onPrimary = Color.White,
-    primaryContainer = Color(0xFFFFDBCF),
-    onPrimaryContainer = Color(0xFF3A0B00),
-    secondary = Color(0xFF77574C),
+    primaryContainer = t.brandSoft,
+    onPrimaryContainer = t.brandInk,
+    // selected chips, the bar at the bottom: the soft brand of the active item in the console
+    secondary = t.muted,
     onSecondary = Color.White,
-    secondaryContainer = Color(0xFFFFDBCF),
-    onSecondaryContainer = Color(0xFF2C160D),
-    tertiary = Color(0xFF00696E),
+    secondaryContainer = t.brandSoft,
+    onSecondaryContainer = t.brandInk,
+    tertiary = t.info,
     onTertiary = Color.White,
-    tertiaryContainer = Color(0xFF9CF0F5),
-    onTertiaryContainer = Color(0xFF002022),
-    error = Color(0xFFB42318),
-    errorContainer = Color(0xFFFFDAD5),
-    onErrorContainer = Color(0xFF410001),
-    background = Color(0xFFFBF8F6),
-    onBackground = Color(0xFF201A18),
-    surface = Color(0xFFFBF8F6),
-    onSurface = Color(0xFF201A18),
-    surfaceVariant = Color(0xFFF2DFD8),
-    onSurfaceVariant = Color(0xFF53433E),
-    surfaceContainerLowest = Color.White,
-    surfaceContainerLow = Color(0xFFFFFFFF),
-    surfaceContainer = Color(0xFFF6F0EE),
-    surfaceContainerHigh = Color(0xFFF0EAE7),
-    surfaceContainerHighest = Color(0xFFEAE4E1),
-    surfaceBright = Color(0xFFFBF8F6),
-    surfaceDim = Color(0xFFE2DAD7),
-    outline = Color(0xFF85736D),
-    outlineVariant = Color(0xFFE2D4CF),
-    inverseSurface = Color(0xFF362F2C),
-    inverseOnSurface = Color(0xFFFBEEEA),
-    inversePrimary = Color(0xFFFFB59C),
+    tertiaryContainer = t.infoBg,
+    onTertiaryContainer = t.info,
+    error = t.bad,
+    onError = Color.White,
+    errorContainer = t.badBg,
+    onErrorContainer = t.bad,
+    background = t.bg,
+    onBackground = t.ink,
+    surface = t.bg,
+    onSurface = t.ink,
+    surfaceVariant = t.surface3,
+    onSurfaceVariant = t.muted,
+    // cards white on the grey page, as the console
+    surfaceContainerLowest = t.surface,
+    surfaceContainerLow = t.surface,
+    surfaceContainer = t.surface2,
+    surfaceContainerHigh = t.surface3,
+    surfaceContainerHighest = t.line,
+    surfaceBright = t.surface,
+    surfaceDim = t.surface3,
+    outline = t.lineStrong,
+    outlineVariant = t.line,
+    inverseSurface = t.ink,
+    inverseOnSurface = t.surface,
+    inversePrimary = t.brand,
 )
 
-private val Dark = darkColorScheme(
-    primary = Color(0xFFFFB59C),
-    onPrimary = Color(0xFF5C1900),
-    primaryContainer = Color(0xFF822A06),
-    onPrimaryContainer = Color(0xFFFFDBCF),
-    secondary = Color(0xFFE7BDB0),
-    onSecondary = Color(0xFF442A21),
-    secondaryContainer = Color(0xFF5D4036),
-    onSecondaryContainer = Color(0xFFFFDBCF),
-    tertiary = Color(0xFF80D4D9),
-    onTertiary = Color(0xFF00363A),
-    tertiaryContainer = Color(0xFF004F53),
-    onTertiaryContainer = Color(0xFF9CF0F5),
-    error = Color(0xFFFFB4A9),
-    errorContainer = Color(0xFF8C1D12),
-    onErrorContainer = Color(0xFFFFDAD5),
-    background = Color(0xFF141110),
-    onBackground = Color(0xFFEDE0DC),
-    surface = Color(0xFF141110),
-    onSurface = Color(0xFFEDE0DC),
-    surfaceVariant = Color(0xFF53433E),
-    onSurfaceVariant = Color(0xFFD8C2BB),
-    surfaceContainerLowest = Color(0xFF0F0C0B),
-    surfaceContainerLow = Color(0xFF1D1917),
-    surfaceContainer = Color(0xFF211D1B),
-    surfaceContainerHigh = Color(0xFF2C2725),
-    surfaceContainerHighest = Color(0xFF37322F),
-    surfaceBright = Color(0xFF3B3735),
-    surfaceDim = Color(0xFF141110),
-    outline = Color(0xFFA08D87),
-    outlineVariant = Color(0xFF53433E),
-    inverseSurface = Color(0xFFEDE0DC),
-    inverseOnSurface = Color(0xFF362F2C),
-    inversePrimary = Color(0xFFA63B10),
+private fun darkScheme(t: ConsolePalette) = darkColorScheme(
+    primary = t.brandInk,
+    onPrimary = t.bg,
+    primaryContainer = t.brandSoft,
+    onPrimaryContainer = t.brandInk,
+    secondary = t.muted,
+    onSecondary = t.bg,
+    secondaryContainer = t.brandSoft,
+    onSecondaryContainer = t.brandInk,
+    tertiary = t.info,
+    onTertiary = t.bg,
+    tertiaryContainer = t.infoBg,
+    onTertiaryContainer = t.info,
+    error = t.bad,
+    onError = t.bg,
+    errorContainer = t.badBg,
+    onErrorContainer = t.bad,
+    background = t.bg,
+    onBackground = t.ink,
+    surface = t.bg,
+    onSurface = t.ink,
+    surfaceVariant = t.surface3,
+    onSurfaceVariant = t.muted,
+    surfaceContainerLowest = t.bg,
+    surfaceContainerLow = t.surface,
+    surfaceContainer = t.surface2,
+    surfaceContainerHigh = t.surface3,
+    surfaceContainerHighest = t.line,
+    surfaceBright = t.surface3,
+    surfaceDim = t.bg,
+    outline = t.lineStrong,
+    outlineVariant = t.line,
+    inverseSurface = t.ink,
+    inverseOnSurface = t.surface,
+    inversePrimary = t.brand,
 )
 
+private val Light = lightScheme(ConsoleTokens.Light)
+private val Dark = darkScheme(ConsoleTokens.Dark)
+
+/** The radii of the console: controls 8, cards and panels 16 (sheets and dialogs a bit more). */
 private val CdaShapes = Shapes(
-    extraSmall = RoundedCornerShape(8.dp),
-    small = RoundedCornerShape(12.dp),
-    medium = RoundedCornerShape(16.dp),
-    large = RoundedCornerShape(24.dp),
-    extraLarge = RoundedCornerShape(32.dp),
+    extraSmall = RoundedCornerShape(ConsoleTokens.RADIUS_SM.dp),
+    small = RoundedCornerShape(ConsoleTokens.RADIUS_SM.dp),
+    medium = RoundedCornerShape(ConsoleTokens.RADIUS.dp),
+    large = RoundedCornerShape(ConsoleTokens.RADIUS_LG.dp),
+    extraLarge = RoundedCornerShape(24.dp),
 )
 
 private val CdaTypography = Typography().run {
