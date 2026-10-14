@@ -5,6 +5,7 @@ import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
 import { TARGET_FIRMWARE, parseClientHeader, parseMac, versionAtLeast, type CpeModel } from '../domain/policy.ts';
 import { cpeMacSchema, cpeSerialSchema, provisionRequestSchema } from '../services/provisioning.ts';
+import { stockCheck } from './warehouse.ts';
 
 interface OldJob {
   id: string;
@@ -86,6 +87,9 @@ export function replaceRoutes(app: FastifyInstance, ctx: AppContext) {
       .strict()
       .parse(req.body);
     if (parseMac(old.mac) === b.mac) throw new HttpError(409, 'replace_same_mac');
+    // the new CPE comes from the installer's warehouse, as for a new installation
+    const stock = stockCheck(ctx, req.user!.id, b.mac);
+    if (!stock.allowed) throw new HttpError(409, 'cpe_not_in_stock', { result: stock.result });
 
     const model = b.model ?? old.model;
     // Same named template as the old job when still available to this user (else the default).

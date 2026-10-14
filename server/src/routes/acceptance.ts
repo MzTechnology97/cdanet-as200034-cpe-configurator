@@ -165,7 +165,10 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
     recordEvent(db, req.user!.id, 'job.acceptance', job.id, `esito ${v}${a.radio.signal != null ? ` · ${a.radio.signal} dBm` : ''}${reason ? ' · da approvare dal NOC' : ''}`);
     if (reason) ctx.notify.reviewPending(job.id);
     // a passed test: the CPE is connected and online, the NOC may accept it in UISP
-    if (v !== 'bad' && !reason) ctx.notify.readyForUisp(job.id);
+    if (v !== 'bad' && !reason) {
+      ctx.notify.readyForUisp(job.id);
+      ctx.warehouse.record('collaudo', job.mac, `collaudo superato (${req.user!.username})`, job.id);
+    }
     // a passed test after a postponed or KO attempt closes those reports (with poor radio: once approved)
     const resolved = v === 'bad' || reason ? 0 : resolveKoByAcceptance(db, job, req.user!.id);
     return { ok: true, review: reason ? 'pending' : null, reviewReason: reason, resolvedKo: resolved };
@@ -185,6 +188,7 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
     if (b.decision === 'approved') {
       resolveKoByAcceptance(db, job, req.user!.id);
       ctx.notify.readyForUisp(job.id);
+      ctx.warehouse.record('collaudo', job.mac, `collaudo approvato dal NOC (${req.user!.username})`, job.id);
     }
     ctx.notify.reviewDecision(job.id, req.user!.username);
     return { ok: true };
