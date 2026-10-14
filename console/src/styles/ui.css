@@ -373,3 +373,11 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .ac-qr { width: 200px; max-width: 100%; background: #fff; padding: var(--sp-2); border-radius: var(--radius-sm); }
 .ac-qr svg { width: 100%; height: auto; display: block; }
 .ac-pad { padding: var(--sp-3) var(--sp-4) 0; }
+
+/* Impostazioni server */
+.ss-p { margin: 0; }
+.ss-list { display: grid; gap: var(--sp-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+.ss-item { display: grid; gap: 6px; align-content: start; }
+.ss-meta { display: flex; flex-wrap: wrap; gap: 4px var(--sp-2); align-items: center; font-size: var(--fs-xs); color: var(--muted); }
+.ss-reset { min-height: 26px; padding: 0 var(--sp-2); font-size: var(--fs-xs); }
+.ss-group h3 { margin: 0 0 var(--sp-2); font-size: 1rem; }

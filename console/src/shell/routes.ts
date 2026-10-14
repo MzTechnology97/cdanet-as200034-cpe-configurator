@@ -68,7 +68,7 @@ export const ROUTES: Array<Route | Group> = [
   { id: 'profiles', icon: 'settings_input_antenna', label: 'Profili airOS', admin: true, legacy: () => import('../../../web/js/views/profiles.js').then((m) => m.profilesView) },
   { id: 'firmware', icon: 'system_update', label: 'Firmware airOS', admin: true, module: 'firmware_upgrade', react: () => import('../pages/Firmware').then((m) => m.Firmware) },
   { id: 'connectors', icon: 'link', label: 'Connettori', admin: true, react: () => import('../pages/Connectors').then((m) => m.Connectors) },
-  { id: 'server', icon: 'dns', label: 'Impostazioni server', admin: true, legacy: () => import('../../../web/js/views/server-settings.js').then((m) => m.serverSettingsView) },
+  { id: 'server', icon: 'dns', label: 'Impostazioni server', admin: true, react: () => import('../pages/ServerSettings').then((m) => m.ServerSettings) },
   { id: 'modules', icon: 'handyman', label: 'Funzionalità', admin: true, react: () => import('../pages/Modules').then((m) => m.Modules) },
   { id: 'privacy', icon: 'lock', label: 'Informativa privacy', admin: true, react: () => import('../pages/Privacy').then((m) => m.Privacy) },
   { id: 'events', icon: 'manage_search', label: 'Registro attività', admin: true, react: () => import('../pages/Events').then((m) => m.Events) },
