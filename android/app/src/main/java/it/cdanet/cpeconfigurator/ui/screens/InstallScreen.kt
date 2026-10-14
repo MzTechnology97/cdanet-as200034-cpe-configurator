@@ -745,6 +745,16 @@ private fun FinalStep(c: AppContainer, onAcceptance: () -> Unit) {
     val context = LocalContext.current
     val f by c.field.state.collectAsState()
     val st by c.install.state.collectAsState()
+    // the CPE is linked and pointed: straight to the acceptance test, no detour through Storico
+    // (once; coming back from it, this summary stays with "Apri il collaudo")
+    LaunchedEffect(st.job?.id) {
+        val job = st.job
+        if (job != null && c.moduleOn("acceptance") && !st.acceptanceOpened) {
+            c.install.acceptanceOpened()
+            c.selectedJob.value = job
+            onAcceptance()
+        }
+    }
     CpeStep(c) {
         val s = f.status
         if (s == null) {
