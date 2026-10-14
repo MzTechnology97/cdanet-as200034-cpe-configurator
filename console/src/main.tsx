@@ -1,10 +1,9 @@
-// The console: the new frame (React) with the pages of web/js inside it, converted one at a time
-// (docs: "Piano nuovo frontend React CDA Net"). Style: the pages' stylesheet, then the tokens and
-// the components of the new design system.
+// The console (React). Style: the base stylesheet (maps, tables, the pieces shared with the map of
+// the app), then the tokens and the components of the design system.
 import { QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import '../../web/css/app.css';
+import './styles/app.css';
 import './styles/tokens.css';
 import './styles/ui.css';
 import './styles/shell.css';

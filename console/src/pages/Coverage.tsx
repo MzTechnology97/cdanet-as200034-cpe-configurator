@@ -1,13 +1,13 @@
 import { type FormEvent, type ReactNode, useRef, useState } from 'react';
 import { type Ap, dec, EstimateCell, km, LoadCell, type Point, type Profile, RATING, type Result, type Tone } from '../coverage/parts';
-import { toast } from '../../../web/js/dom.js';
-import { drawCoverage as drawCoverageJs, MAP_COLORS as C } from '../../../web/js/map.js';
-import { DECLINATION_DEG, signalBar } from '../../../web/js/views/coverage-link.js';
+import { toast } from '../lib/toast';
+import { drawCoverage, MAP_COLORS as C } from '../map/leaflet';
+import { DECLINATION_DEG, SignalBar } from '../coverage/link';
 import { api } from '../lib/api';
 import { MapView } from '../map/MapView';
 import { CoverageAdmin, LinkCharts } from './CoverageAdmin';
 import type { PageContext } from '../shell/routes';
-import { AsyncButton, Badge, Button, Card, Dom, Field, Icon, Notice, PageHeader, Skeleton } from '../ui';
+import { AsyncButton, Badge, Button, Card, Field, Icon, Notice, PageHeader, Skeleton } from '../ui';
 
 /**
  * Copertura. Installers: the APs advised for an address, coordinates or this device's position
@@ -15,9 +15,6 @@ import { AsyncButton, Badge, Button, Card, Dom, Field, Icon, Notice, PageHeader,
  * link with one of them: pointing, tilt, expected signal and the terrain profile. Admins: the full
  * page with the map of every AP and the radio simulation (CoverageAdmin).
  */
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const drawCoverage = drawCoverageJs as (target: unknown, la: number, lo: number, aps: Ap[]) => any[];
 
 export function Coverage({ user }: PageContext) {
   return user.role === 'admin' ? <CoverageAdmin /> : <InstallerCoverage />;
@@ -342,7 +339,7 @@ function LinkCard({ link, onHeight }: { link: { a: Ap; p?: Profile; error?: stri
           Sul tetto: edificio di circa {p.roofM} m, antenna a {dec(p.mountedM ?? 0)} m dal suolo.
         </p>
       )}
-      <Dom make={() => signalBar(a.estimate)} deps={[a.estimate]} />
+      <SignalBar e={a.estimate} />
       <LinkCharts p={p} />
       <p className="ui-muted ui-small">
         {p.verdict === 'clear'

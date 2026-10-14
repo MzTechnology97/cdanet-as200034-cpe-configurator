@@ -1,11 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useState } from 'react';
-import { toast } from '../../../web/js/dom.js';
-import { loadModules } from '../../../web/js/modules.js';
+import { toast } from '../lib/toast';
+import { loadModules } from '../lib/modules';
 import { Assignments } from '../infra/Assignments';
 import { api } from '../lib/api';
 import type { PageContext, User } from '../shell/routes';
-import { AsyncButton, Badge, Button, Card, Dom, Drawer, Field, Icon, Notice, PageHeader, Skeleton, Table } from '../ui';
+import { AsyncButton, Badge, Button, Card, Drawer, Field, Icon, Notice, PageHeader, Skeleton, Table } from '../ui';
 
 /**
  * Account (admins): installers and administrators. Disabling an account and resetting its password

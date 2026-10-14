@@ -4,8 +4,10 @@
  */
 let admin = false;
 
-export const setAdmin = (v) => (admin = !!v);
+export const setAdmin = (v: boolean) => {
+  admin = !!v;
+};
 export const isAdminUser = () => admin;
 
 /** [adminText] for admins, [installerText] for installers. */
-export const nms = (adminText, installerText) => (admin ? adminText : installerText);
+export const nms = (adminText: string, installerText: string) => (admin ? adminText : installerText);

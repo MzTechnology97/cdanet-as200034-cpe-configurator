@@ -1,9 +1,8 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useState } from 'react';
-import { download } from '../../../web/js/api.js';
-import { toast } from '../../../web/js/dom.js';
-import { isOn } from '../../../web/js/modules.js';
-import { api } from '../lib/api';
+import { toast } from '../lib/toast';
+import { isOn } from '../lib/modules';
+import { api, download } from '../lib/api';
 import { keys } from '../lib/query';
 import type { PageContext } from '../shell/routes';
 import { matches } from '../shell/search';

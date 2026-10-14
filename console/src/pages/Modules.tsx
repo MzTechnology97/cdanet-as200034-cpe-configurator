@@ -1,7 +1,7 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
-import { toast } from '../../../web/js/dom.js';
-import { setModules } from '../../../web/js/modules.js';
+import { toast } from '../lib/toast';
+import { setModules } from '../lib/modules';
 import { api } from '../lib/api';
 import { Badge, Card, Notice, PageHeader, Skeleton } from '../ui';
 
