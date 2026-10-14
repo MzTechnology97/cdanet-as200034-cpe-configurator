@@ -89,6 +89,7 @@ Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). 
 ## Già rilasciato
 
 - v1.32.65: IA-AP: un avviso critico viene notificato al massimo una volta alla settimana (prima tornava a ogni ricomparsa), notifiche con link a IA-AP; ottimizzazioni in corso e programmate in evidenza in Panoramica e sulla riga dell'AP; problemi critici IA-AP in Panoramica.
+- v1.33.33: in Connettori → UISP, «Test connessione» verifica anche la chiave del CRM: legge i piani di servizio e dice quanti sono, oppure perché la chiave non va.
 - v1.33.31: connettore per il CRM di UISP (Connettori → UISP, chiave app cifrata). All'accettazione il NOC crea un nuovo subscriber, con nome dall'utente PPPoE, indirizzo e posizione dall'installazione e il piano scelto dall'elenco di UISP; la CPE viene autorizzata nel sito di quel subscriber e non più nel sito dell'AP. Senza chiave resta l'autorizzazione di prima.
 - v1.33.30: a fine installazione, quando la CPE è agganciata e puntata, l'app apre da sola il collaudo, senza passare da Installa → Storico. Tornando indietro resta il riepilogo con «Apri il collaudo». Il collaudo funziona anche senza Internet (dalla 1.33.21 le credenziali della CPE restano sul telefono) e viene inviato appena c'è rete.
 - v1.33.29: l'avviso Telegram «CPE pronta da accettare in UISP» arriva quando il collaudo è superato (o il NOC lo approva), cioè con la CPE davvero installata, collegata e online. Prima arrivava appena la configurazione era scritta. L'avviso parte una sola volta per installazione.
