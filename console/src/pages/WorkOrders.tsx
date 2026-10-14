@@ -4,11 +4,12 @@ import { toast } from '../lib/toast';
 import { api } from '../lib/api';
 import type { PageContext } from '../shell/routes';
 import { AsyncButton, Badge, Button, Card, Drawer, EmptyState, Field, Notice, PageHeader, Segmented, Skeleton, Stat } from '../ui';
+import { Calendar, type NewAt } from '../workorders/Calendar';
 
 /**
  * Interventi: the office plans the day of each installer with the customer's data and the PPPoE
  * credentials (the password is sealed on the server, never shown); installers find them in the
- * app (Oggi) and here, read-only.
+ * app (Oggi) and here, read-only. Two views: the list and the calendar (workorders/Calendar.tsx).
  */
 
 type Tone = 'good' | 'warn' | 'bad' | 'neutral' | 'info';
@@ -45,6 +46,32 @@ const dayLabel = (d: string) => {
   return new Date(`${d}T12:00:00`).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
 };
 
+/** List or calendar, remembered on this browser. */
+function useLayout(): ['list' | 'calendar', (v: 'list' | 'calendar') => void] {
+  const [v, setV] = useState<'list' | 'calendar'>(() => {
+    try {
+      return localStorage.getItem('cda.workOrdersLayout') === 'calendar' ? 'calendar' : 'list';
+    } catch {
+      return 'list';
+    }
+  });
+  return [
+    v,
+    (n) => {
+      setV(n);
+      try {
+        localStorage.setItem('cda.workOrdersLayout', n);
+      } catch {
+        /* not remembered */
+      }
+    },
+  ];
+}
+const LAYOUTS = [
+  { value: 'list' as const, label: 'Elenco' },
+  { value: 'calendar' as const, label: 'Calendario' },
+];
+
 function StatusBadges({ o }: { o: Order }) {
   return (
     <span className="ui-row">
@@ -61,10 +88,26 @@ export function WorkOrders({ user }: PageContext) {
 /** Installers: their orders of a day plus the ones left open. */
 function Mine() {
   const [day, setDay] = useState(romeDay());
-  const q = useQuery({ queryKey: ['work-orders', 'mine', day], queryFn: () => api<{ items: Order[] }>(`/api/work-orders?day=${day}`) });
+  const [layout, setLayout] = useLayout();
+  const [shown, setShown] = useState<Order | null>(null);
+  const q = useQuery({ queryKey: ['work-orders', 'mine', day], queryFn: () => api<{ items: Order[] }>(`/api/work-orders?day=${day}`), enabled: layout === 'list' });
+  const header = <PageHeader icon="pending_actions" title="I miei interventi" subtitle="Assegnati dall’ufficio: quelli del giorno e quelli rimasti aperti. Si avviano dall’app (Oggi → Inizia): cliente, posizione e PPPoE sono già compilati." actions={<Segmented label="Vista" value={layout} onChange={setLayout} options={LAYOUTS} />} />;
+  if (layout === 'calendar') {
+    return (
+      <div className="ui-page">
+        {header}
+        <Calendar admin={false} onOpen={(o) => setShown(o as unknown as Order)} />
+        {shown && (
+          <Drawer title={shown.customer} onClose={() => setShown(null)}>
+            <OrderList items={[shown]} />
+          </Drawer>
+        )}
+      </div>
+    );
+  }
   return (
     <div className="ui-page">
-      <PageHeader icon="pending_actions" title="I miei interventi" subtitle="Assegnati dall’ufficio: quelli del giorno e quelli rimasti aperti. Si avviano dall’app (Oggi → Inizia): cliente, posizione e PPPoE sono già compilati." />
+      {header}
       <div className="wo-toolbar">
         <Segmented
           label="Giorno"
@@ -86,7 +129,8 @@ function Office() {
   const [from, setFrom] = useState(romeDay());
   const [to, setTo] = useState(romeDay());
   const [who, setWho] = useState('');
-  const [editing, setEditing] = useState<Order | 'new' | null>(null);
+  const [editing, setEditing] = useState<Order | 'new' | NewAt | null>(null);
+  const [layout, setLayout] = useLayout();
 
   const span = range === 'today' ? [romeDay(), romeDay()] : range === 'tomorrow' ? [romeDay(1), romeDay(1)] : range === 'week' ? [romeDay(), romeDay(6)] : [from, to < from ? from : to];
   const users = useQuery({ queryKey: ['admin', 'users'], queryFn: () => api<Array<{ id: number; username: string; role: string; active?: boolean }>>('/api/admin/users') });
@@ -95,6 +139,7 @@ function Office() {
   const list = useQuery({
     queryKey: ['work-orders', 'office', span[0], span[1], who],
     queryFn: () => api<{ items: Order[] }>(`/api/admin/work-orders?${new URLSearchParams({ from: span[0]!, to: span[1]!, ...(who ? { user: who } : {}) })}`),
+    enabled: layout === 'list',
   });
   const refresh = () => qc.invalidateQueries({ queryKey: ['work-orders'] });
   const items = list.data?.items ?? [];
@@ -107,67 +152,77 @@ function Office() {
         title="Interventi"
         subtitle="L’agenda degli installatori: ognuno trova i suoi in Oggi nell’app, con cliente, posizione e PPPoE già compilati."
         actions={
-          <Button variant="primary" icon="add_circle" onClick={() => setEditing('new')}>
-            Nuovo intervento
-          </Button>
+          <>
+            <Segmented label="Vista" value={layout} onChange={setLayout} options={LAYOUTS} />
+            <Button variant="primary" icon="add_circle" onClick={() => setEditing('new')}>
+              Nuovo intervento
+            </Button>
+          </>
         }
       />
-      <div className="wo-toolbar">
-        <Segmented
-          label="Periodo"
-          value={range}
-          onChange={setRange}
-          options={[
-            { value: 'today', label: 'Oggi' },
-            { value: 'tomorrow', label: 'Domani' },
-            { value: 'week', label: '7 giorni' },
-            { value: 'custom', label: 'Date' },
-          ]}
-        />
-        {range === 'custom' && (
-          <>
-            <input type="date" className="wo-date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} aria-label="Dal" />
-            <input type="date" className="wo-date" value={to} onChange={(e) => e.target.value && setTo(e.target.value)} aria-label="Al" />
-          </>
-        )}
-        <select className="wo-date" value={who} onChange={(e) => setWho(e.target.value)} aria-label="Installatore">
-          <option value="">Tutti gli installatori</option>
-          {installers.map((u) => (
-            <option key={u.id} value={u.id}>
-              {u.username}
-            </option>
-          ))}
-        </select>
-      </div>
-      {list.data && (
-        <section className="ui-stats" aria-label="Riepilogo">
-          <Stat label="da fare" value={n((o) => o.status === 'open')} />
-          <Stat label="in corso" value={n((o) => o.status === 'started')} tone="info" />
-          <Stat label="fatti" value={n((o) => o.status === 'done')} tone="good" />
-          <Stat label="in ritardo" value={n((o) => o.overdue)} tone={n((o) => o.overdue) ? 'bad' : 'good'} />
-          <Stat label="da assegnare" value={n((o) => !o.assignedTo && o.status !== 'cancelled')} tone={n((o) => !o.assignedTo && o.status !== 'cancelled') ? 'warn' : 'good'} />
-        </section>
-      )}
-      {list.error ? (
-        <Notice tone="bad">{(list.error as Error).message}</Notice>
-      ) : !list.data ? (
-        <Skeleton lines={5} />
+      {layout === 'calendar' ? (
+        <Calendar admin onNew={(at) => setEditing(at)} onOpen={(o) => setEditing(o as unknown as Order)} />
       ) : (
-        <OrderList
-          items={items}
-          office
-          onEdit={(o) => setEditing(o)}
-          onDelete={async (o) => {
-            if (!confirm(`${o.jobId ? 'Annullare' : 'Eliminare'} l’intervento di ${o.customer}?`)) return;
-            await api(`/api/admin/work-orders/${o.id}`, { method: 'DELETE' });
-            await refresh();
-          }}
-        />
+        <>
+          <div className="wo-toolbar">
+            <Segmented
+              label="Periodo"
+              value={range}
+              onChange={setRange}
+              options={[
+                { value: 'today', label: 'Oggi' },
+                { value: 'tomorrow', label: 'Domani' },
+                { value: 'week', label: '7 giorni' },
+                { value: 'custom', label: 'Date' },
+              ]}
+            />
+            {range === 'custom' && (
+              <>
+                <input type="date" className="wo-date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} aria-label="Dal" />
+                <input type="date" className="wo-date" value={to} onChange={(e) => e.target.value && setTo(e.target.value)} aria-label="Al" />
+              </>
+            )}
+            <select className="wo-date" value={who} onChange={(e) => setWho(e.target.value)} aria-label="Installatore">
+              <option value="">Tutti gli installatori</option>
+              {installers.map((u) => (
+                <option key={u.id} value={u.id}>
+                  {u.username}
+                </option>
+              ))}
+            </select>
+          </div>
+          {list.data && (
+            <section className="ui-stats" aria-label="Riepilogo">
+              <Stat label="da fare" value={n((o) => o.status === 'open')} />
+              <Stat label="in corso" value={n((o) => o.status === 'started')} tone="info" />
+              <Stat label="fatti" value={n((o) => o.status === 'done')} tone="good" />
+              <Stat label="in ritardo" value={n((o) => o.overdue)} tone={n((o) => o.overdue) ? 'bad' : 'good'} />
+              <Stat label="da assegnare" value={n((o) => !o.assignedTo && o.status !== 'cancelled')} tone={n((o) => !o.assignedTo && o.status !== 'cancelled') ? 'warn' : 'good'} />
+            </section>
+          )}
+          {list.error ? (
+            <Notice tone="bad">{(list.error as Error).message}</Notice>
+          ) : !list.data ? (
+            <Skeleton lines={5} />
+          ) : (
+            <OrderList
+              items={items}
+              office
+              onEdit={(o) => setEditing(o)}
+              onDelete={async (o) => {
+                if (!confirm(`${o.jobId ? 'Annullare' : 'Eliminare'} l’intervento di ${o.customer}?`)) return;
+                await api(`/api/admin/work-orders/${o.id}`, { method: 'DELETE' });
+                await refresh();
+              }}
+            />
+          )}
+        </>
       )}
       {editing && (
         <OrderForm
-          order={editing === 'new' ? null : editing}
-          day={span[0]!}
+          order={editing === 'new' || !('id' in editing) ? null : editing}
+          day={editing !== 'new' && !('id' in editing) ? editing.day : span[0]!}
+          preset={editing !== 'new' && !('id' in editing) ? editing : undefined}
           installers={installers}
           models={(models.data ?? []).map((m) => m.model)}
           onClose={() => setEditing(null)}
@@ -240,11 +295,11 @@ function OrderList({ items, office, onEdit, onDelete }: { items: Order[]; office
 }
 
 /** New order or changes: the password goes to the server sealed and never comes back. */
-function OrderForm({ order: o, day, installers, models, onClose, onSaved }: { order: Order | null; day: string; installers: Array<{ id: number; username: string }>; models: string[]; onClose: () => void; onSaved: () => Promise<void> }) {
+function OrderForm({ order: o, day, preset, installers, models, onClose, onSaved }: { order: Order | null; day: string; preset?: NewAt; installers: Array<{ id: number; username: string }>; models: string[]; onClose: () => void; onSaved: () => Promise<void> }) {
   const [f, setF] = useState({
-    assignedTo: o?.assignedTo ? String(o.assignedTo) : '',
+    assignedTo: o?.assignedTo ? String(o.assignedTo) : preset?.assignedTo ? String(preset.assignedTo) : '',
     day: o?.day ?? day,
-    slot: o?.slot ?? '',
+    slot: o?.slot ?? preset?.slot ?? '',
     kind: o?.kind ?? 'new',
     customer: o?.customer ?? '',
     address: o?.address ?? '',

@@ -484,3 +484,57 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .jb-sub h4 { margin: 0; }
 .cn-json { min-height: 120px; font-family: var(--font-mono); font-size: var(--fs-sm); }
 .ui-field .cn-json + input[type=file] { min-height: 0; padding: 0; border: 0; background: none; font-size: var(--fs-sm); }
+
+/* Calendario degli interventi (workorders/Calendar.tsx): colori per tipo come nell'app */
+.cal { display: grid; gap: var(--sp-3); }
+.cal-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.cal-nav { display: inline-flex; }
+.cal-title { margin: 0 auto 0 var(--sp-1); font-size: var(--fs-lg); }
+.cal-title::first-letter { text-transform: uppercase; }
+.cal-help { margin: 0; }
+.cal-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+.cal-grid { display: grid; min-width: min-content; }
+.cal-corner, .cal-head { position: sticky; top: 0; z-index: 2; background: var(--surface); border-bottom: 1px solid var(--line); }
+.cal-head { padding: var(--sp-2); text-align: center; font-weight: 700; font-size: var(--fs-sm); text-transform: capitalize; border-left: 1px solid var(--line); }
+.cal-head.today, .cal-head.today .ui-link { color: var(--brand-ink); }
+.cal-gutter { display: grid; align-content: start; }
+.cal-allday-label { font-size: .7rem; color: var(--muted); padding: 4px; text-align: right; border-bottom: 1px solid var(--line); }
+.cal-allday { display: grid; gap: 2px; align-content: start; padding: 2px; min-height: 28px; border-left: 1px solid var(--line); border-bottom: 1px solid var(--line); }
+.cal-hour { font-size: .7rem; color: var(--muted); text-align: right; padding: 0 6px; transform: translateY(-.6em); font-variant-numeric: tabular-nums; }
+.cal-hour:first-child { transform: none; }
+.cal-col { position: relative; border-left: 1px solid var(--line); background-image: linear-gradient(to bottom, var(--line) 1px, transparent 1px); }
+.cal-col.today { background-color: color-mix(in srgb, var(--brand) 5%, transparent); }
+.cal-col.plannable, .cal-cell.plannable { cursor: copy; }
+.cal-ev { --k: var(--line-strong); --k-bg: var(--surface-2); display: block; width: 100%; text-align: left; font: inherit; font-size: .78rem; line-height: 1.25; color: var(--ink); background: var(--k-bg); border: 1px solid color-mix(in srgb, var(--k) 45%, transparent); border-left: 4px solid var(--k); border-radius: 6px; padding: 2px 6px; overflow: hidden; cursor: pointer; }
+.cal-col .cal-ev { position: absolute; }
+.cal-ev[draggable='true'] { cursor: grab; }
+.cal-ev:hover { box-shadow: var(--shadow); z-index: 1; }
+.cal-ev strong { font-weight: 700; }
+.cal-ev-time { font-variant-numeric: tabular-nums; color: var(--muted); }
+.cal-ev-sub { display: block; color: var(--muted); font-size: .72rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.cal-ev.k-new { --k: var(--brand); --k-bg: var(--brand-soft); }
+.cal-ev.k-repoint { --k: var(--info); --k-bg: var(--info-bg); }
+.cal-ev.k-repair { --k: var(--warn); --k-bg: var(--warn-bg); }
+.cal-ev.k-survey { --k: var(--good); --k-bg: var(--good-bg); }
+.cal-ev.done { opacity: .5; }
+.cal-ev.late { border-color: var(--bad); box-shadow: inset 0 0 0 1px var(--bad); }
+.cal-ev.postponed { border-style: dashed; border-left-style: solid; }
+.cal-ev.started .cal-ev-time::before { content: '● '; color: var(--info); }
+.cal-month { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); border: 1px solid var(--line); border-radius: var(--radius-lg); overflow: hidden; background: var(--surface); }
+.cal-month-head { padding: var(--sp-1) var(--sp-2); font-size: var(--fs-sm); font-weight: 700; color: var(--muted); text-transform: capitalize; border-bottom: 1px solid var(--line); }
+.cal-cell { display: grid; gap: 2px; align-content: start; min-height: 104px; padding: 4px; border-top: 1px solid var(--line); border-left: 1px solid var(--line); min-width: 0; }
+.cal-cell:nth-child(7n + 1) { border-left: 0; }
+.cal-cell.other { background: var(--surface-2); }
+.cal-cell.other .cal-cell-day { color: var(--muted); }
+.cal-cell .cal-ev { white-space: nowrap; text-overflow: ellipsis; }
+.cal-cell-day { justify-self: start; font: inherit; font-size: var(--fs-sm); font-weight: 700; background: none; border: 0; padding: 2px 6px; border-radius: 999px; cursor: pointer; color: var(--ink); }
+.cal-cell.today .cal-cell-day { background: var(--brand); color: #fff; }
+.cal-more { justify-self: start; font: inherit; font-size: .72rem; color: var(--brand-ink); background: none; border: 0; padding: 0 4px; cursor: pointer; }
+@media (max-width: 720px) {
+  .cal-title { order: -1; flex-basis: 100%; margin: 0; }
+  .cal-cell { min-height: 72px; }
+  /* phone: the orders of a day as coloured bars; the day opens with a tap on its number */
+  .cal-cell .cal-ev { font-size: 0; height: 6px; min-height: 0; padding: 0; border: 0; border-radius: 3px; background: var(--k); }
+  .cal-cell .cal-ev.done { opacity: .4; }
+  .cal-cell .cal-ev.late { box-shadow: 0 0 0 1px var(--bad); }
+}
