@@ -60,7 +60,7 @@ export const ROUTES: Array<Route | Group> = [
   { id: 'network', icon: 'hub', label: 'Stato rete', module: 'network_status', react: () => import('../pages/Network').then((m) => m.Network) },
   { id: 'ia-ap', icon: 'troubleshoot', label: 'IA-AP', admin: true, legacy: () => import('../../../web/js/views/advisor.js').then((m) => m.advisorView) },
   { id: 'mytemplates', icon: 'memory', label: 'Template disponibili', installer: true, legacy: () => import('../../../web/js/views/mytemplates.js').then((m) => m.myTemplatesView) },
-  { id: 'coverage', icon: 'explore', label: 'Copertura', module: 'coverage', bottom: true, legacy: () => import('../../../web/js/views/coverage.js').then((m) => m.coverageView) },
+  { id: 'coverage', icon: 'explore', label: 'Copertura', module: 'coverage', bottom: true, react: () => import('../pages/Coverage').then((m) => m.Coverage) },
   { id: 'routeros', icon: 'router', label: 'MikroTik · RouterOS', module: 'routeros', legacy: () => import('../../../web/js/views/routeros.js').then((m) => m.routerosView) },
   { group: 'Amministrazione', admin: true },
   { id: 'users', icon: 'person', label: 'Account', admin: true, legacy: () => import('../../../web/js/views/users.js').then((m) => m.usersView) },
