@@ -513,10 +513,27 @@ data class WorkOrderDto(
     val statusNote: String = "",
     val overdue: Boolean = false,
     val jobId: String? = null,
+    /** The installer it is assigned to (the NOC's calendar shows everyone's). */
+    val assignedTo: Long? = null,
+    val assignee: String? = null,
 )
 
 @Serializable
 data class WorkOrdersDto(val day: String = "", val items: List<WorkOrderDto> = emptyList())
+
+/** An installer the NOC can plan on (calendar filter). */
+@Serializable
+data class InstallerDto(val id: Long, val username: String)
+
+/** The orders of a range of days (Calendario): an installer's own, or everyone's for the NOC. */
+@Serializable
+data class CalendarDto(
+    val from: String,
+    val to: String,
+    val today: String = "",
+    val items: List<WorkOrderDto> = emptyList(),
+    val installers: List<InstallerDto>? = null,
+)
 
 /** CPE position: phone GPS, geocoded address or manual entry. */
 @Serializable
