@@ -172,6 +172,11 @@ class ProvisioningController(
         }
     }
 
+    /** A message for the write step (shown as its probe line), e.g. after a firmware update. */
+    fun reportNote(text: String) {
+        _state.update { it.copy(probe = text) }
+    }
+
     fun retry() {
         _state.update { if (it.pkg != null) it.copy(phase = Phase.Prepared, stages = emptyList(), success = null, error = null, firmwareTarget = null) else it }
     }
@@ -181,6 +186,11 @@ class ProvisioningController(
      * with the package's own address and credentials, and waits for it to come back. Returns the
      * builds before and after; throws with an Italian message when it cannot or did not work.
      */
+    /** The flash worked but the CPE is back to its factory settings: the airOS first access is needed again. */
+    class FactoryReset(version: String) : Exception(
+        "Firmware $version installato, ma la CPE è tornata alle impostazioni di fabbrica: rifai il primo avvio airOS (card «2 · Primo avvio airOS»), poi applica la configurazione.",
+    )
+
     suspend fun updateFirmware(store: FirmwareStore, onStage: (String) -> Unit): Pair<String, String> = withContext(Dispatchers.IO) {
         val pkg = _state.value.pkg ?: throw IllegalStateException("Configurazione non più disponibile: preparala di nuovo")
         val list = store.savedList() ?: throw IOException("Elenco dei firmware non sul telefono: apri CPE collegata → Firmware con Internet")
@@ -200,7 +210,12 @@ class ProvisioningController(
         } catch (e: CpeFirmwareFlasher.AlreadyUpToDate) {
             return@withContext before.build to e.build.build
         }
-        val after = flasher.waitBack(open)
+        // a CPE that went back to its factory settings answers but refuses the package's credentials
+        val after = try {
+            flasher.waitBack(open, stopOn = { it.message.orEmpty().startsWith("Autenticazione") })
+        } catch (e: IOException) {
+            if (e.message.orEmpty().startsWith("Autenticazione")) throw FactoryReset(img.version) else throw e
+        }
             ?: throw IOException("La CPE non è tornata raggiungibile entro 9 minuti: non toglierle alimentazione, ricollegati alla sua Wi-Fi e riprova la scrittura")
         if (after.version != img.version) throw IOException("La CPE è ripartita con ${after.version} invece di ${img.version}: aggiornamento non applicato")
         before.build to after.build

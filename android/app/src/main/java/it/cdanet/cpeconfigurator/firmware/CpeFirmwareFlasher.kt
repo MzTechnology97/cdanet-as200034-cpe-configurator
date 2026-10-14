@@ -45,13 +45,14 @@ class CpeFirmwareFlasher(private val onStage: (String) -> Unit) {
 
     /**
      * Waits for the CPE to come back after the flash ([connect] opens a new SSH session, or throws
-     * while the CPE is still rebooting) and returns its new build.
+     * while the CPE is still rebooting) and returns its new build. An error for which [stopOn] is
+     * true ends the wait at once and is thrown (the CPE answered, but not as before).
      */
-    suspend fun waitBack(connect: suspend () -> SshConnection, maxMs: Long = 9 * 60_000L): AirosBuild? {
+    suspend fun waitBack(connect: suspend () -> SshConnection, maxMs: Long = 9 * 60_000L, stopOn: (Throwable) -> Boolean = { false }): AirosBuild? {
         val until = System.currentTimeMillis() + maxMs
         delay(90_000)
         while (System.currentTimeMillis() < until) {
-            val build = runCatching { connect().use { readVersion(it) } }.getOrNull()
+            val build = runCatching { connect().use { readVersion(it) } }.onFailure { if (stopOn(it)) throw it }.getOrNull()
             if (build != null) return build
             onStage("La CPE si sta riavviando… (se Android ha lasciato la sua Wi-Fi, ricollegati)")
             delay(10_000)

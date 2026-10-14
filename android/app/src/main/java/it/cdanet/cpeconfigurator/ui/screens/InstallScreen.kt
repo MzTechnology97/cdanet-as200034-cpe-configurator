@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.provisioning.ProvisioningController
 import androidx.compose.runtime.mutableStateListOf
 import it.cdanet.cpeconfigurator.ui.SecondaryButton
 import it.cdanet.cpeconfigurator.ui.NoticeKind
@@ -401,7 +402,16 @@ private fun FirmwareFix(c: AppContainer, target: String) {
                         c.provisioning.retry()
                         c.provisioning.apply()
                     }
-                    .onFailure { error = it.message ?: it.toString() }
+                    .onFailure {
+                        if (it is ProvisioningController.FactoryReset) {
+                            launch { runCatching { c.api.firmwareReport(mac, "?", target, true, "CPE tornata alle impostazioni di fabbrica") } }
+                            // back to the write step, where the first access to airOS is
+                            c.provisioning.retry()
+                            c.provisioning.reportNote(it.message.orEmpty())
+                        } else {
+                            error = it.message ?: it.toString()
+                        }
+                    }
                 busy = false
             }
         }
