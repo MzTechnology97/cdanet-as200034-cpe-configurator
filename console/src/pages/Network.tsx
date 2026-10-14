@@ -6,6 +6,7 @@ import { api } from '../lib/api';
 import { keys } from '../lib/query';
 import { type Leaflet, type LMap, MapView, mapPopup } from '../map/MapView';
 import type { PageContext } from '../shell/routes';
+import { ago, isStale } from '../shell/UispBanner';
 import { Badge, Button, Card, Icon, Notice, PageHeader, Skeleton, Stat } from '../ui';
 
 /**
@@ -54,6 +55,8 @@ interface Data {
   apsWithoutPop: Ap[];
   restricted?: boolean;
   assignedCount?: number | null;
+  /** When the device list shown was read (the server serves its last copy when the source is slow). */
+  dataAt?: string | null;
 }
 
 const km = (m: number) => (m < 1000 ? `${m} m` : `${(m / 1000).toFixed(1).replace('.', ',')} km`);
@@ -346,9 +349,15 @@ export function Network({ user }: PageContext) {
             <Stat label="con molte CPE offline" value={s.degraded} tone={s.degraded ? 'warn' : 'good'} active={isOnly('degraded')} onClick={() => only('degraded')} />
             <Stat label="con guasto Enel vicino" value={s.powerOutage} tone={s.powerOutage ? 'bad' : 'neutral'} />
           </section>
-          <p className="ui-muted ui-small">
-            Aggiornato {date(data.generatedAt)} · si aggiorna ogni minuto{admin ? ' · dati da UISP' : ''}.
-          </p>
+          {isStale(data.dataAt) ? (
+            <Notice tone="warn">
+              Dati della rete {ago(data.dataAt!)}: {admin ? 'UISP non risponde, la pagina mostra l’ultima copia.' : 'l’aggiornamento è in ritardo, la pagina mostra l’ultima copia.'}
+            </Notice>
+          ) : (
+            <p className="ui-muted ui-small">
+              Aggiornato {date(data.generatedAt)} · si aggiorna ogni minuto{admin ? ' · dati da UISP' : ''}.
+            </p>
+          )}
           {admin && <NetworkMap data={data} shown={shown} q={q} open={open} setOpen={setOpen} apiRef={mapApi} tools={tools} />}
           {data.restricted && !data.assignedCount ? (
             <Notice tone="warn">Nessun POP/AP assegnato al tuo account: chiedi all’amministratore.</Notice>

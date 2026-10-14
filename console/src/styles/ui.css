@@ -272,3 +272,78 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .cva-popup-btn { margin-top: var(--sp-2); min-height: 32px; }
 .link-dock .dock-close { position: absolute; top: 6px; right: 8px; }
 .link-dock .ui-field select { min-height: 32px; }
+
+/* table (cards on phones) */
+.ui-table-wrap { overflow-x: auto; }
+.ui-table { width: 100%; border-collapse: collapse; font-size: var(--fs-sm); }
+.ui-table th, .ui-table td { text-align: left; padding: var(--sp-2) var(--sp-3); border-bottom: 1px solid var(--line); vertical-align: top; background: none; }
+.ui-table th { color: var(--muted); font-weight: 600; font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; border-radius: 0; }
+.ui-table th.end, .ui-table td.end { text-align: right; }
+.ui-table tr:last-child td { border-bottom: 0; }
+.ui-table tr.clickable { cursor: pointer; }
+.ui-table tr.clickable:hover td { background: var(--surface-2); }
+.ui-table-empty { color: var(--muted); text-align: center; padding: var(--sp-6) var(--sp-3); }
+.ui-card.flush .ui-table th:first-child, .ui-card.flush .ui-table td:first-child { padding-left: var(--sp-4); }
+.ui-card.flush .ui-table th:last-child, .ui-card.flush .ui-table td:last-child { padding-right: var(--sp-4); }
+@media (max-width: 640px) {
+  .ui-table, .ui-table tbody, .ui-table tr, .ui-table td { display: block; width: 100%; }
+  .ui-table thead { display: none; }
+  .ui-table tr { border-bottom: 1px solid var(--line); padding: var(--sp-2) var(--sp-4); }
+  .ui-table tr:last-child { border-bottom: 0; }
+  .ui-table td { border: 0; padding: 4px 0; display: grid; grid-template-columns: minmax(90px, 36%) minmax(0, 1fr); gap: var(--sp-2); overflow-wrap: anywhere; }
+  .ui-table td.end { text-align: left; }
+  .ui-table td[data-label]::before { content: attr(data-label); color: var(--muted); font-size: var(--fs-xs); text-transform: uppercase; letter-spacing: .04em; padding-top: 2px; }
+  .ui-table td:not([data-label]) { grid-template-columns: 1fr; }
+  .ui-card.flush .ui-table td:first-child, .ui-card.flush .ui-table td:last-child { padding-left: 0; padding-right: 0; }
+}
+
+/* switch */
+.ui-switch { position: relative; display: inline-flex; flex: none; width: 46px; height: 26px; cursor: pointer; }
+.ui-switch input { position: absolute; inset: 0; opacity: 0; margin: 0; cursor: pointer; }
+.ui-switch span { width: 100%; height: 100%; border-radius: var(--radius-full); background: var(--line-strong); transition: background .15s var(--ease); }
+.ui-switch span::after { content: ''; position: absolute; top: 3px; left: 3px; width: 20px; height: 20px; border-radius: 50%; background: #fff; box-shadow: var(--shadow); transition: transform .15s var(--ease); }
+.ui-switch input:checked + span { background: var(--brand); }
+.ui-switch input:checked + span::after { transform: translateX(20px); }
+.ui-switch input:focus-visible + span { box-shadow: var(--focus); }
+.ui-switch input:disabled + span { opacity: .5; }
+
+/* Funzionalità, Firmware, Registro */
+.md-row { align-items: center; }
+.md-desc, .fw-p { margin: 0; }
+.fw-file { position: relative; overflow: hidden; max-width: 100%; }
+.fw-file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.ev-date { white-space: nowrap; font-variant-numeric: tabular-nums; }
+
+/* Statistiche */
+.st-chart { width: 100%; height: auto; display: block; }
+.st-ok { fill: var(--good); }
+.st-ko { fill: var(--bad); }
+.st-val { font-size: 11px; fill: var(--ink); }
+.st-axis { font-size: 10px; fill: var(--muted); }
+.st-p { margin: 0; }
+.st-note, .pv-note { margin: 0; padding: var(--sp-3) var(--sp-4) 0; }
+.ui-page-head .ui-field select { min-height: 38px; }
+
+/* MikroTik */
+.ro-term { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: flex-end; }
+.ro-term .ui-field { flex: 1 1 320px; }
+.ro-cmd { margin: 0; }
+.ro-out { margin: 0; padding: var(--sp-3); border-radius: var(--radius-sm); background: var(--surface-2); border: 1px solid var(--line); font-family: var(--font-mono); font-size: var(--fs-xs); overflow-x: auto; white-space: pre; max-height: 60vh; }
+
+/* Informativa privacy */
+.pv-p { margin: 0; }
+.pv-text h3 { margin: var(--sp-3) 0 var(--sp-2); }
+.pv-text h4 { margin: var(--sp-3) 0 var(--sp-1); }
+.pv-text p { margin: 0 0 var(--sp-2); }
+
+/* Storico provisioning */
+.jb-filters { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); align-items: flex-end; }
+.jb-filters .hl-search { flex: 1 1 280px; }
+.jb-filters .ui-field { flex: 0 1 170px; }
+.jb-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.jb-chips::-webkit-scrollbar { display: none; }
+.jb-chips .nw-chip { flex: none; opacity: 1; }
+.jb-row { cursor: pointer; }
+.jb-sec h3 { margin: 0 0 var(--sp-2); font-size: 1rem; }
+.jb-sec p { margin: 0; }
+.jb-stages { margin: 0; padding-left: 1.2em; font-size: var(--fs-sm); }
