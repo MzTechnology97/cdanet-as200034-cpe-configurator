@@ -4,8 +4,8 @@ import { defineConfig } from 'vite';
 
 /**
  * The console is built into web/app (served by the server under /app/, files with a content hash
- * in their name: cached for a year). The helpers still in web/js (api, map, map3d…) are bundled as
- * they are; vendor files, images, maps and the wiki stay in web/ and are served as before.
+ * in their name: cached for a year). Two pages: the console and the map of the Android app
+ * (map-embed.html); vendor files (Leaflet, MapLibre), images and the wiki stay in web/ as they are.
  * `npm run dev`: this console on :5173 against the demo server on :8799.
  */
 const web = fileURLToPath(new URL('../web/', import.meta.url));

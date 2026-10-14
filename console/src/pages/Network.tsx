@@ -1,7 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useMemo, useRef, useState } from 'react';
-import { toast } from '../../../web/js/dom.js';
-import { towards } from '../../../web/js/map.js';
+import { toast } from '../lib/toast';
+import { towards } from '../map/leaflet';
 import { api } from '../lib/api';
 import { keys } from '../lib/query';
 import { type Leaflet, type LMap, MapView, mapPopup } from '../map/MapView';

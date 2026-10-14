@@ -63,14 +63,13 @@ Il client non esegue comandi forniti dal server: lettura, scrittura e `cfgmtd` s
 
 ## Console web (`console/` e `web/`)
 
-La console è un'applicazione React 19 in TypeScript (`console/`), compilata con Vite in `web/app` e servita dal server: `/` e ogni indirizzo della console rispondono con `web/app/index.html`, i file con l'hash nel nome stanno sotto `/app/assets/` con cache di un anno. `web/index.html` resta solo come avviso quando la build manca (un checkout di sviluppo). La CSP ammette solo script del server (`script-src 'self'`).
+La console è un'applicazione React 19 in TypeScript (`console/`), compilata con Vite in `web/app` e servita dal server: `/` e ogni indirizzo della console rispondono con `web/app/index.html`, `/map-embed.html` (la mappa dentro l'app Android) con `web/app/map-embed.html`, i file con l'hash nel nome stanno sotto `/app/assets/` con cache di un anno. In `web/` restano solo i file serviti così come sono (`vendor/` con Leaflet, Protomaps e MapLibre, `assets/`, `wiki/`) e `web/index.html`, l'avviso mostrato quando la build manca (un checkout di sviluppo). La CSP ammette solo script del server (`script-src 'self'`).
 
 - **Cornice** (`console/src/shell`): menu, barra in basso sul telefono, ricerca globale (Ctrl+K), tema chiaro/scuro, avviso quando UISP non risponde. Le pagine (`routes.ts`) si caricano quando si aprono, con le stesse regole di visibilità del server (admin, installatori, moduli).
 - **Design system** (`console/src/styles/tokens.css`, `ui.css`, `console/src/ui`): colori, spaziature e tipografia come token, gli stessi nei due temi; componenti comuni (pulsanti, schede, tabelle che sul telefono diventano schede, pannelli laterali, segmenti, statistiche). Nessuna pagina definisce stili propri fuori da `ui.css`.
-- **Dati**: TanStack Query, condivisi tra le pagine e rinfrescati dagli eventi del server (`/api/events`, Server-Sent Events) in `console/src/lib/live.ts`. Il client API è quello di `web/js/api.js` (token, errori in italiano, scadenza della sessione).
-- **Mappe** (`console/src/map/MapView.tsx`): un solo componente sopra `web/js/map.js` (Leaflet, mappa di base locale, viste admin, 3D in `map3d.js`). La stessa `map.js` serve la mappa dentro l'app Android (`map-embed`).
-- **Librerie ancora in `web/js`**: `api.js`, `dom.js`, `map.js`, `map3d.js`, `map-embed.js` e pochi altri moduli JavaScript usati dalle pagine React (le pagine e i pannelli sono tutti componenti React in `console/src`).
-- Il testo passa sempre da React (o da `dom.js`), che lo protegge dall'inserimento di markup.
+- **Dati**: TanStack Query, condivisi tra le pagine e rinfrescati dagli eventi del server (`/api/events`, Server-Sent Events) in `console/src/lib/live.ts`. Il client API è `console/src/lib/api.ts` (token, errori in italiano e neutri per gli installatori, scadenza della sessione).
+- **Mappe** (`console/src/map/`): `MapView.tsx`, un solo componente per ogni pagina con mappa, sopra `leaflet.ts` (Leaflet, mappa di base locale, viste admin); la vista 3D in `map3d.tsx` (MapLibre, con barra e legenda in React). Le stesse funzioni disegnano la mappa dentro l'app Android (`console/src/map-embed.ts`, pagina `/map-embed.html`).
+- Il testo passa sempre da React (o da `textContent` nei popup delle mappe), che lo protegge dall'inserimento di markup.
 
 ## App Android (`android/`)
 

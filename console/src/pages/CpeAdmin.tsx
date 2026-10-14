@@ -1,11 +1,10 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useEffect, useState } from 'react';
-import { download } from '../../../web/js/api.js';
-import { toast } from '../../../web/js/dom.js';
+import { toast } from '../lib/toast';
 import { SignalChart } from '../jobs/SignalChart';
-import { api } from '../lib/api';
+import { api, download } from '../lib/api';
 import type { PageContext } from '../shell/routes';
-import { AsyncButton, Badge, Card, Dom, Field, Icon, Notice, PageHeader, Segmented, Skeleton, Tabs } from '../ui';
+import { AsyncButton, Badge, Card, Field, Icon, Notice, PageHeader, Segmented, Skeleton, Tabs } from '../ui';
 
 /**
  * Gestione CPE (admins): one customer CPE as in the UISP app, through the UISP API (overview,

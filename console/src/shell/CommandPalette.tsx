@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { isOn } from '../../../web/js/modules.js';
+import { isOn } from '../lib/modules';
 import { Icon } from '../ui/Icon';
 import { labelOf, type Route, type User } from './routes';
 import { matches, useGlobalSearch, type Hit } from './search';

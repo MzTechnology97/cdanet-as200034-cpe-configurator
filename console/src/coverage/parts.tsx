@@ -59,7 +59,7 @@ export interface Ap {
   estimate?: Estimate | null;
   load?: Load | null;
   cpe?: { name: string; gainDbi: number; auto?: boolean; proposed?: boolean } | null;
-  approx?: unknown;
+  approx?: { lat: number; lon: number; radiusM: number } | null;
   lat?: number;
   lon?: number;
 }

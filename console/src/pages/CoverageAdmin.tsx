@@ -1,15 +1,15 @@
 import { useQuery } from '@tanstack/react-query';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
-import { toast } from '../../../web/js/dom.js';
-import { drawFresnelLink, legend, pointPicker, simulationOverlay, towards, MAP_COLORS as C } from '../../../web/js/map.js';
-import { openLink3d, openSimulation3d } from '../../../web/js/map3d.js';
+import { toast } from '../lib/toast';
+import { drawFresnelLink, pointPicker, simulationOverlay, towards, MAP_COLORS as C } from '../map/leaflet';
+import { openLink3d, openSimulation3d } from '../map/map3d';
 import { ALT_FROM, bearing, DECLINATION_DEG, LinkFacts, MAX_MAST_M, parseCoords, ProfileChart, SignalBar } from '../coverage/link';
 import { type Ap, dec, EstimateCell, km, LoadCell, RATING, type Tone } from '../coverage/parts';
 import { AccuracyTab, AntennasTab, TerrainTab } from '../coverage/Tools';
 import { api } from '../lib/api';
 import { keys } from '../lib/query';
-import { type Leaflet, type LMap, MapView, mapPopup } from '../map/MapView';
-import { AsyncButton, Badge, Button, Card, Dom, Field, Icon, Notice, PageHeader, Segmented, Skeleton } from '../ui';
+import { type Leaflet, Legend, type LMap, MapView, mapPopup } from '../map/MapView';
+import { AsyncButton, Badge, Button, Card, Field, Icon, Notice, PageHeader, Segmented, Skeleton } from '../ui';
 
 /**
  * Copertura for admins: every AP on the map, one search box (address, coordinates, AP name or a
@@ -18,7 +18,8 @@ import { AsyncButton, Badge, Button, Card, Dom, Field, Icon, Notice, PageHeader,
  * estimate, terrain and obstacles, antennas of the APs) are in coverage/Tools.tsx.
  */
 
-const STATE_COLOR: Record<string, string> = { ok: '#14b8a6', degraded: '#f59e0b', down: '#dc2626' };
+const STATE_COLOR = { ok: '#14b8a6', degraded: '#f59e0b', down: '#dc2626' };
+const stateColor = (state?: string) => (STATE_COLOR as Record<string, string | undefined>)[state ?? ''];
 const RATING_COLOR: Record<string, string> = { buono: '#16a34a', possibile: '#f59e0b', 'senza stima': '#64748b', improbabile: '#dc2626', 'non attivo': '#dc2626' };
 /** Signal scale of the simulation, from excellent to unusable. */
 const SCALE: Array<[number, string, string]> = [
@@ -181,7 +182,7 @@ export function CoverageAdmin() {
         void simulate(a.id);
       };
       box.append(btn);
-      return ctl.L.circleMarker([a.lat, a.lon], { radius: 5, color: STATE_COLOR[a.state] ?? '#64748b', weight: 2, fillOpacity: 0.85, bubblingMouseEvents: false })
+      return ctl.L.circleMarker([a.lat, a.lon], { radius: 5, color: stateColor(a.state) ?? '#64748b', weight: 2, fillOpacity: 0.85, bubblingMouseEvents: false })
         .bindTooltip(a.name)
         .bindPopup(box)
         .addTo(ctl.base);
@@ -482,17 +483,15 @@ export function CoverageAdmin() {
           <MapView tall zoom={9} fitMode="never" onReady={onReady} draw={() => []} />
           {link && point && <LinkDock link={link} point={point} cpe={cpe} cpeModels={cpeModels} height={Number(String(height).replace(',', '.'))} dockRef={dockRef} onCpe={(v) => (setCpe(v), recheck({ cpe: v }))} onHeight={changeHeight} on3d={show3dLink} onClose={closeLink} />}
         </div>
-        <Dom
-          make={() =>
-            legend([
+        <Legend
+          items={[
               [STATE_COLOR.ok, 'AP in funzione'],
               [STATE_COLOR.degraded, 'molte CPE offline'],
               [STATE_COLOR.down, 'non raggiungibile'],
               [C.point, 'punto verificato'],
               ['#16a34a', 'cliente: stima entro 6 dB'],
               ['#dc2626', 'cliente: stima sbagliata di oltre 12 dB'],
-            ])
-          }
+          ]}
         />
         <div className="cva-tools">
           <p className="ui-muted ui-small">
@@ -718,17 +717,15 @@ export function LinkCharts({ p }: { p: Profile }) {
         <figcaption>Zona di Fresnel: altezze misurate dalla linea di vista (0 m)</figcaption>
         <ProfileChart p={p} view="fresnel" height={220} />
       </figure>
-        <Dom
-          make={() =>
-            legend([
+        <Legend
+          items={[
               ['#a8a29e', 'terreno (con la curvatura terrestre)'],
               ['#78716c', 'edifici'],
               ['#4d7c0f', 'alberi'],
               ['#2563eb', 'linea di vista'],
               ['#38bdf8', 'prima zona di Fresnel'],
               ['#f59e0b', 'limite del 60%'],
-            ])
-          }
+          ]}
         />
     </div>
   );
@@ -795,7 +792,7 @@ function SimulationPanel({ sim, mode, onMode, onClear, on3d }: { sim: { d?: Sim;
         </div>
       </div>
       {modes.length > 1 && <Segmented label="Mostra" options={modes} value={mode} onChange={onMode} />}
-      <Dom make={() => legend(scaleFor(d, mode).map(([, color, text]) => [color, text]))} deps={[d, mode]} />
+      <Legend items={scaleFor(d, mode).map(([, color, text]) => [color, text])} />
       {d.load?.level && (
         <div className="ui-small">
           Carico serale dell’AP: <LoadCell l={d.load} />

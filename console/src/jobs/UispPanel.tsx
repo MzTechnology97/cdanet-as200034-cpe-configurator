@@ -1,9 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { download } from '../../../web/js/api.js';
-import { toast } from '../../../web/js/dom.js';
-import { isOn } from '../../../web/js/modules.js';
-import { api } from '../lib/api';
+import { toast } from '../lib/toast';
+import { isOn } from '../lib/modules';
+import { api, download } from '../lib/api';
 import { AsyncButton, Button, Notice, Segmented, Skeleton, Stat, Table } from '../ui';
 import { SignalChart, type SignalStats } from './SignalChart';
 

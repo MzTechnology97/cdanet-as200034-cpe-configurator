@@ -1,12 +1,11 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, type ReactNode, useState } from 'react';
-import { download } from '../../../web/js/api.js';
-import { toast } from '../../../web/js/dom.js';
-import { isOn } from '../../../web/js/modules.js';
+import { toast } from '../lib/toast';
+import { isOn } from '../lib/modules';
 import { AcceptancePanel } from '../jobs/AcceptancePanel';
 import { FollowUp, JobKo, KO_REASONS, ReviewPanel } from '../jobs/KoPanels';
 import { UispPanel } from '../jobs/UispPanel';
-import { api } from '../lib/api';
+import { api, download } from '../lib/api';
 import { keys } from '../lib/query';
 import type { PageContext } from '../shell/routes';
 import { AsyncButton, Badge, Button, Card, Drawer, EmptyState, Field, Icon, Notice, PageHeader, Skeleton } from '../ui';

@@ -1,7 +1,7 @@
 import { type FormEvent, type ReactNode, useRef, useState } from 'react';
 import { type Ap, dec, EstimateCell, km, LoadCell, type Point, type Profile, RATING, type Result, type Tone } from '../coverage/parts';
-import { toast } from '../../../web/js/dom.js';
-import { drawCoverage as drawCoverageJs, MAP_COLORS as C } from '../../../web/js/map.js';
+import { toast } from '../lib/toast';
+import { drawCoverage, MAP_COLORS as C } from '../map/leaflet';
 import { DECLINATION_DEG, SignalBar } from '../coverage/link';
 import { api } from '../lib/api';
 import { MapView } from '../map/MapView';
@@ -15,9 +15,6 @@ import { AsyncButton, Badge, Button, Card, Field, Icon, Notice, PageHeader, Skel
  * link with one of them: pointing, tilt, expected signal and the terrain profile. Admins: the full
  * page with the map of every AP and the radio simulation (CoverageAdmin).
  */
-
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const drawCoverage = drawCoverageJs as (target: unknown, la: number, lo: number, aps: Ap[]) => any[];
 
 export function Coverage({ user }: PageContext) {
   return user.role === 'admin' ? <CoverageAdmin /> : <InstallerCoverage />;

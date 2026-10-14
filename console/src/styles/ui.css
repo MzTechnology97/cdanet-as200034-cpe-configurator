@@ -206,8 +206,6 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .ui-tabs button { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 10px var(--sp-4); border: 0; border-bottom: 2px solid transparent; background: none; font: inherit; font-weight: 600; color: var(--muted); cursor: pointer; white-space: nowrap; }
 .ui-tabs button:hover { color: var(--ink); }
 .ui-tabs button.on { color: var(--brand-ink); border-bottom-color: var(--brand); }
-.ui-dom { min-width: 0; }
-.ui-dom svg.chart { width: 100%; height: auto; }
 
 /* Gestione CPE */
 .cp-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-radius: var(--radius-lg); background: var(--surface); border: 1px solid var(--line); box-shadow: var(--shadow); }
@@ -255,7 +253,7 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .cv-form { display: grid; gap: var(--sp-3); }
 .cv-pad { padding: var(--sp-3) var(--sp-4); display: grid; gap: var(--sp-2); }
 .cv-ap { cursor: pointer; align-items: flex-start; }
-.cv-ap > .icon, .cv-ap > .cx-icon-wrap { align-self: center; }
+.cv-ap > .icon { align-self: center; }
 .cv-facts { display: flex; flex-wrap: wrap; gap: 2px var(--sp-3); font-size: var(--fs-sm); }
 .cv-arrow { display: inline-block; font-weight: 700; color: var(--brand-ink); transition: transform .2s var(--ease); }
 .cv-cells { display: grid; gap: var(--sp-3); grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); margin-top: var(--sp-1); }
