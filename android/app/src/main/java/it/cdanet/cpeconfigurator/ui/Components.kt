@@ -95,7 +95,7 @@ fun Notice(text: String, kind: NoticeKind, onDismiss: (() -> Unit)? = null) {
         NoticeKind.Good -> Triple(st.good, st.goodContainer, R.drawable.ic_check_circle_filled)
         NoticeKind.Warn -> Triple(st.warn, st.warnContainer, R.drawable.ic_warning_filled)
         NoticeKind.Bad -> Triple(st.bad, st.badContainer, R.drawable.ic_error_filled)
-        NoticeKind.Info -> Triple(MaterialTheme.colorScheme.onSecondaryContainer, MaterialTheme.colorScheme.secondaryContainer, R.drawable.ic_info_filled)
+        NoticeKind.Info -> Triple(st.info, st.infoContainer, R.drawable.ic_info_filled)
     }
     Row(
         Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.medium).background(bg).padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
