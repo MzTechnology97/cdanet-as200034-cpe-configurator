@@ -308,7 +308,8 @@ private fun ProfileChart(d: LosDto) {
     val thin = 2 * maxR / (fullHi - fullLo) < 0.06
     // Fresnel view: every height measured from the line of sight (straight at 0), the zone fills the chart
     var zoom by remember(d) { mutableStateOf(thin) }
-    val span = ceil(maxOf(maxR * 2.4, 10.0))
+    // at least ±2 m: on a link of a few tens of metres the zone is under a metre
+    val span = ceil(maxOf(maxR * 2.4, 2.0))
     val above = pts.maxOf { (it.top ?: it.ground) - it.los }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(selected = !zoom, onClick = { zoom = false }, label = { Text("Profilo intero") })

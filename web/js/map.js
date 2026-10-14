@@ -115,9 +115,50 @@ export async function createMap(el, { center = [37.57, 14.27], zoom = 9, onStatu
  * Tiles read with the session of the admin (the imagery goes through our server): fetched, then
  * shown from a blob. An empty answer (no imagery there) leaves the tile blank.
  */
+/** How many zooms below a missing photo are tried: its own photo, enlarged (6: a 64th of a tile). */
+const FALLBACK_LEVELS = 6;
+
 function authTileLayer(url, options) {
   const L = window.L;
+  // the photos of the zooms below, shared by the tiles that use them (the last few dozen)
+  const parents = new Map();
   const Layer = L.TileLayer.extend({
+    /** A photo of this layer as a bitmap; null when the service has nothing there. */
+    photo(coords) {
+      const u = this.getTileUrl(coords);
+      let p = parents.get(u);
+      if (!p) {
+        // shared by many tiles: not stopped when one of them leaves the view
+        p = api(u, { raw: true })
+          .then(async (r) => (r.ok && r.status !== 204 ? createImageBitmap(await r.blob()) : null))
+          .catch(() => null);
+        parents.set(u, p);
+        if (parents.size > 48) parents.delete(parents.keys().next().value);
+      }
+      return p;
+    },
+    /**
+     * No photo for this tile (the public service often answers blank): the part of the nearest
+     * zoom below that has one, enlarged, instead of an empty square. Null when none has it.
+     */
+    async fromBelow(coords, signal) {
+      const min = this.options.minNativeZoom ?? 0;
+      for (let k = 1; k <= FALLBACK_LEVELS && coords.z - k >= min; k++) {
+        const n = 2 ** k;
+        const parent = { x: Math.floor(coords.x / n), y: Math.floor(coords.y / n), z: coords.z - k };
+        const bmp = await this.photo(parent);
+        if (signal.aborted) return null;
+        if (!bmp) continue;
+        const size = this.getTileSize();
+        const canvas = document.createElement('canvas');
+        canvas.width = size.x;
+        canvas.height = size.y;
+        const part = bmp.width / n;
+        canvas.getContext('2d').drawImage(bmp, (coords.x % n) * part, (coords.y % n) * part, part, part, 0, 0, size.x, size.y);
+        return new Promise((res) => canvas.toBlob((b) => res(b), 'image/jpeg', 0.85));
+      }
+      return null;
+    },
     createTile(coords, done) {
       const img = document.createElement('img');
       img.alt = '';
@@ -125,12 +166,17 @@ function authTileLayer(url, options) {
       // wait behind tens of useless ones (the public orthophotos are slow)
       const ctrl = new AbortController();
       img._abort = () => ctrl.abort();
+      const show = (blob) => {
+        if (!blob) return done(null, img);
+        img.onload = () => (URL.revokeObjectURL(img.src), done(null, img));
+        img.onerror = () => done(new Error('tile'), img);
+        img.src = URL.createObjectURL(blob);
+      };
       api(this.getTileUrl(coords), { raw: true, signal: ctrl.signal })
         .then(async (r) => {
-          if (!r.ok || r.status === 204) return done(null, img);
-          img.onload = () => (URL.revokeObjectURL(img.src), done(null, img));
-          img.onerror = () => done(new Error('tile'), img);
-          img.src = URL.createObjectURL(await r.blob());
+          if (r.ok && r.status !== 204) return show(await r.blob());
+          if (ctrl.signal.aborted) return null;
+          return show(await this.fromBelow(coords, ctrl.signal));
         })
         .catch((e) => (ctrl.signal.aborted ? null : done(e, img)));
       return img;

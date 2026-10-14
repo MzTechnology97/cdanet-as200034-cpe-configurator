@@ -599,6 +599,7 @@ tr:hover > td { background: color-mix(in srgb, var(--brand) 4%, transparent); }
   .ia-kpis.five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-/* aerial photos as the base of the map: the clear sea of the coast tiles shows this colour */
-.leaflet-container.photo-base { background: #8fb8de; }
+/* aerial photos as the base of the map: where there is no photo at all (sea of the coast tiles,
+   areas the public service never served) a quiet neutral, neither sea nor land */
+.leaflet-container.photo-base { background: #cfd6d0; }
 
