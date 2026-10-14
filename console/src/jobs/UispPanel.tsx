@@ -4,12 +4,14 @@ import { toast } from '../lib/toast';
 import { isOn } from '../lib/modules';
 import { api, download } from '../lib/api';
 import { AsyncButton, Button, Notice, Segmented, Skeleton, Stat, Table } from '../ui';
+import { NewSubscriber, type SubscriberDraft } from './NewSubscriber';
 import { SignalChart, type SignalStats } from './SignalChart';
 
 /**
  * The network side of a provisioning (job detail): the CPE as UISP sees it, its acceptance into a
- * site, the backups, the comparison with the template and the signal over time. Installers see the
- * same state without the data source and without the actions.
+ * site (or, with the UISP CRM key, as a new subscriber), the backups, the comparison with the
+ * template and the signal over time. Installers see the same state without the data source and
+ * without the actions.
  */
 
 const ERRORS: Record<string, string> = {
@@ -41,7 +43,12 @@ export function UispPanel({ job, admin }: { job: Job; admin: boolean }) {
   const [site, setSite] = useState('');
   const [drift, setDrift] = useState(false);
   const [backupsRev, setBackupsRev] = useState(0);
+  const [newSub, setNewSub] = useState(false);
   const s = q.data;
+  const waiting = admin && !!s?.device && !s.device.authorized;
+  // with the UISP CRM key the CPE can be accepted as a new subscriber (the form starts from this draft)
+  const draft = useQuery({ queryKey: ['jobs', job.id, 'uisp-subscriber'], queryFn: () => api<SubscriberDraft>(`/api/admin/provisioning/jobs/${job.id}/uisp/subscriber`), enabled: waiting, retry: false, staleTime: 60_000 });
+  const crm = waiting && !!draft.data?.crm;
 
   if (q.error) return <Notice tone="bad">{errText(q.error)}</Notice>;
   if (!s) return <Skeleton lines={3} />;
@@ -109,12 +116,17 @@ export function UispPanel({ job, admin }: { job: Job; admin: boolean }) {
         </label>
       )}
       <div className="ui-row">
-        <AsyncButton icon="refresh" onClick={() => q.refetch()} onError={fail}>
+        <AsyncButton icon="refresh" onClick={() => Promise.all([q.refetch(), waiting ? draft.refetch() : null])} onError={fail}>
           Aggiorna
         </AsyncButton>
-        {admin && pending && (
-          <AsyncButton variant="primary" onClick={accept} onError={fail}>
-            {sites && !s.proposedSite ? 'Accetta nel site scelto' : 'Accetta in UISP'}
+        {crm && !newSub && (
+          <Button variant="primary" onClick={() => setNewSub(true)}>
+            Nuovo subscriber
+          </Button>
+        )}
+        {admin && pending && !newSub && (
+          <AsyncButton variant={crm ? 'secondary' : 'primary'} onClick={accept} onError={fail}>
+            {sites && !s.proposedSite ? 'Accetta nel site scelto' : crm ? 'Accetta nel site dell’AP' : 'Accetta in UISP'}
           </AsyncButton>
         )}
         {admin && !pending && (
@@ -124,6 +136,17 @@ export function UispPanel({ job, admin }: { job: Job; admin: boolean }) {
         )}
         {admin && !pending && isOn('config_drift') && <Button onClick={() => setDrift(true)}>Confronta con il template</Button>}
       </div>
+      {crm && newSub && draft.data && (
+        <NewSubscriber
+          jobId={job.id}
+          draft={draft.data}
+          onCancel={() => setNewSub(false)}
+          onDone={async () => {
+            setNewSub(false);
+            await q.refetch();
+          }}
+        />
+      )}
       {!pending && isOn('signal_history') && <SignalHistory job={job} admin={admin} />}
       {drift && <Drift job={job} />}
       {admin && !pending && <Backups job={job} rev={backupsRev} />}
