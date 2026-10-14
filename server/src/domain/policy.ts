@@ -51,6 +51,12 @@ export function parseMac(input: string): string | null {
   return /^[0-9A-Fa-f]{12}$/.test(hex) ? (hex.toUpperCase().match(/../g) as string[]).join(':') : null;
 }
 
+/** A MAC a device can have: unicast (first byte even) and not all zeros. */
+export function isDeviceMac(mac: string): boolean {
+  const hex = mac.replace(/:/g, '');
+  return (parseInt(hex.slice(0, 2), 16) & 1) === 0 && !/^0+$/.test(hex);
+}
+
 /** `ROSSI.MARIO@cda-net.it` -> `ROSSI MARIO` (SNMP location and Device Name). */
 export function customerNameFromRadius(username: string): string {
   const local = String(username).trim().replace(/@cda-net\.it$/i, '').split('@')[0] ?? '';

@@ -23,12 +23,19 @@ object Validation {
 
     fun isMac(raw: String) = parseMac(raw) != null
 
+    /** A MAC a device can have: unicast (first byte even) and not all zeros; e.g. 81:78:… is another code of the box. */
+    fun isDeviceMac(raw: String): Boolean {
+        val hex = parseMac(raw)?.replace(":", "") ?: return false
+        return hex.substring(0, 2).toInt(16) and 1 == 0 && hex.any { it != '0' }
+    }
+
     fun customerName(user: String): String =
         user.trim().replace(Regex("""@cda-net\.it$""", RegexOption.IGNORE_CASE), "").substringBefore('@')
             .replace(Regex("[._-]+"), " ").replace(Regex("""\s+"""), " ").trim().uppercase()
 
     fun formErrors(f: ProvisionForm): List<String> = buildList {
         if (!isMac(f.mac)) add("MAC non valido: 12 cifre esadecimali, con o senza separatori")
+        else if (!isDeviceMac(f.mac)) add("Questo non è il MAC di un apparato (il primo numero è dispari): scansiona il codice «MAC» dell'etichetta o usa «Rileva il modello dalla CPE»")
         if (f.serial.isBlank()) add("Seriale obbligatorio")
         if (!PPPOE.matches(f.pppoeUser.trim())) add("Username RADIUS nel formato cognome.nome@cda-net.it")
         if (f.pppoePassword.isEmpty() && f.replaces == null && f.workOrderId == null) add("Password PPPoE obbligatoria")
@@ -51,13 +58,25 @@ object Validation {
         }
     }
 
-    /** Barcode/QR from the CPE label: a MAC (any notation) or the serial. */
+    /**
+     * Barcode/QR from the CPE label: a MAC (any notation) or the serial. A code that looks like a
+     * MAC but cannot be one of a device (e.g. 81:78:… from the box) changes nothing: see [scanProblem].
+     */
     fun applyScan(f: ProvisionForm, value: String): ProvisionForm {
         val v = value.trim()
-        val mac = MAC_IN_TEXT.find(v)?.value?.let { parseMac(it) }
+        val candidates = MAC_IN_TEXT.findAll(v).mapNotNull { parseMac(it.value) }.toList()
+        val mac = candidates.firstOrNull { isDeviceMac(it) }
         return when {
             mac != null -> f.copy(mac = mac, serial = f.serial.ifBlank { if (MAC_HEX.matches(v)) v.uppercase() else "" })
+            candidates.isNotEmpty() -> f
             else -> f.copy(serial = v.take(128))
         }
+    }
+
+    /** Why a scanned code was not used: it looks like a MAC but no device can have it. */
+    fun scanProblem(value: String): String? {
+        val candidates = MAC_IN_TEXT.findAll(value.trim()).mapNotNull { parseMac(it.value) }.toList()
+        if (candidates.isEmpty() || candidates.any { isDeviceMac(it) }) return null
+        return "Il codice letto (${candidates.first()}) non è il MAC di un apparato: inquadra il codice «MAC» sull'etichetta della CPE, non altri codici della scatola."
     }
 }

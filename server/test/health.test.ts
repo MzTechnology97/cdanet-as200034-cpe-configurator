@@ -127,7 +127,7 @@ describe('Salute CPE installate', () => {
       return id;
     };
     await install(tec, 'AA:BB:CC:DD:EE:FF'); // the fake UISP station
-    await install(altro, '11:22:33:44:55:66');
+    await install(altro, '12:22:33:44:55:66');
 
     const mine = (await app.inject({ method: 'GET', url: '/api/cpe-health', headers: H(tec) })).json();
     assert.equal(mine.cpes.length, 1);
@@ -138,7 +138,7 @@ describe('Salute CPE installate', () => {
     // admins: every customer CPE in UISP, also those not installed with the app
     const all = (await app.inject({ method: 'GET', url: '/api/cpe-health', headers: H(admin) })).json();
     assert.equal(all.cpes.length, 3);
-    assert.equal(all.cpes.find((c: { mac: string }) => c.mac === '11:22:33:44:55:66').issues[0], 'not_in_uisp');
+    assert.equal(all.cpes.find((c: { mac: string }) => c.mac === '12:22:33:44:55:66').issues[0], 'not_in_uisp');
     const old = all.cpes.find((c: { mac: string }) => c.mac === '22:33:44:55:66:77');
     assert.equal(old.source, 'uisp');
     assert.equal(old.deviceName, 'BIANCHI LUCA');

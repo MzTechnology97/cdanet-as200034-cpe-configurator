@@ -77,6 +77,13 @@ class ValidationTest {
         assertEquals("24:A4:3C:11:22:33", f.mac)
         assertEquals("24A43C112233", f.serial)
         assertEquals("SN-XYZ", Validation.applyScan(f, "SN-XYZ").serial)
+        // segnalazione #7: a code of the box that cannot be a device MAC is not taken
+        val box = Validation.applyScan(ProvisionForm(), "817882027250")
+        assertEquals("", box.mac)
+        assertEquals("", box.serial)
+        assertEquals(true, Validation.scanProblem("817882027250")?.contains("non è il MAC") == true)
+        assertEquals(null, Validation.scanProblem("1C6A1BCA95C3"))
+        assertEquals(false, Validation.isDeviceMac("81:78:82:02:72:50"))
     }
 
     @Test fun derivesSsidAndCustomer() {

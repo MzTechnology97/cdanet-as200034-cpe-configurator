@@ -4,7 +4,7 @@ import { HttpError } from '../auth.ts';
 import type { Config } from '../config.ts';
 import { md5Crypt, sha256Hex, type Sealer } from '../crypto.ts';
 import { nowIso, type Db } from '../db.ts';
-import {
+import { isDeviceMac,
   MANAGEMENT_PORTS,
   PPPOE_USER_RX,
   SSID_RX,
@@ -26,7 +26,9 @@ export const provisionRequestSchema = z
       .transform((v, ctx) => {
         const mac = parseMac(v);
         if (!mac) ctx.addIssue({ code: 'custom', message: 'MAC non valido' });
-        return mac ?? z.NEVER;
+        // a device MAC is unicast (first byte even) and not all zeros: anything else is another code of the label
+        else if (!isDeviceMac(mac)) ctx.addIssue({ code: 'custom', message: 'Non è il MAC di un apparato' });
+        return mac && isDeviceMac(mac) ? mac : z.NEVER;
       }),
     serial: z.string().trim().min(1).max(128).regex(/^[\x20-\x7e]+$/),
     ssid: z.string().regex(SSID_RX),

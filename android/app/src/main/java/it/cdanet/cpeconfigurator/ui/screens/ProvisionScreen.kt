@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.Notice
+import it.cdanet.cpeconfigurator.ui.NoticeKind
 import it.cdanet.cpeconfigurator.ui.SecondaryButton
 import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import it.cdanet.cpeconfigurator.ui.WifiRequired
@@ -114,18 +116,27 @@ fun ProvisionFormStep(c: AppContainer) {
             form.mac,
             { v -> c.provisioning.updateForm { it.copy(mac = v) } },
             placeholder = "24A43C112233 o 24:A4:3C:11:22:33",
-            isError = showErrors && parsedMac == null,
+            isError = (showErrors && parsedMac == null) || (parsedMac != null && !Validation.isDeviceMac(parsedMac)),
             supporting = when {
+                // checked as soon as it is typed or scanned: 81:78:… from the box is not a MAC of a device
+                parsedMac != null && !Validation.isDeviceMac(parsedMac) -> "Non è il MAC di un apparato: usa il codice «MAC» dell'etichetta della CPE"
                 parsedMac != null && parsedMac != form.mac.trim() -> "Verrà usato $parsedMac"
                 showErrors && parsedMac == null -> "12 cifre esadecimali, con o senza : - ."
                 else -> null
             },
         )
         Field("Seriale", form.serial, { v -> c.provisioning.updateForm { it.copy(serial = v) } })
+        var scanMsg by remember { mutableStateOf<String?>(null) }
         SecondaryButton(onClick = {
             GmsBarcodeScanning.getClient(context).startScan()
-                .addOnSuccessListener { b -> b.rawValue?.let { raw -> c.provisioning.updateForm { Validation.applyScan(it, raw) } } }
+                .addOnSuccessListener { b ->
+                    b.rawValue?.let { raw ->
+                        scanMsg = Validation.scanProblem(raw)
+                        c.provisioning.updateForm { Validation.applyScan(it, raw) }
+                    }
+                }
         }) { Text("Scansiona etichetta (barcode/QR)") }
+        scanMsg?.let { Notice(it, NoticeKind.Warn) }
         Text("Scansiona sempre l'etichetta della CPE: prima di scrivere la configurazione l'app controlla che il MAC sia proprio quello della CPE collegata.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         // MAC and serial come only from the label: the MAC announced on the network can be the
         // wireless one, while the label (and UISP) carry the LAN one. The CPE only tells its model.
