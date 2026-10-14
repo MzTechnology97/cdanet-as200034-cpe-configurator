@@ -73,7 +73,8 @@ nav.toc a.here { color: var(--primary); font-weight: 600; }
   .toc-toggle { display: inline-block; border: 1px solid var(--primary); background: var(--primary-soft); color: var(--primary); border-radius: 999px; padding: 7px 14px; font: inherit; font-size: 15px; font-weight: 600; cursor: pointer; }
   .layout { grid-template-columns: 1fr; padding: 14px 16px 80px; gap: 0; }
   /* the index: a panel over the page, opened with «Indice» */
-  nav.toc { position: fixed; inset: 56px 0 0 0; z-index: 5; max-height: none; background: var(--surface); padding: 14px 18px 40px; overflow: auto; font-size: 16px; transform: translateY(-110%); transition: transform .22s ease; box-shadow: 0 10px 30px rgb(0 0 0 / 25%); }
+  /* align-self: auto, or the desktop «start» shrinks the fixed panel to its content and moves it over the header */
+  nav.toc { position: fixed; inset: var(--header-h, 56px) 0 0 0; align-self: auto; z-index: 5; max-height: none; background: var(--surface); padding: 14px 18px 40px; overflow: auto; font-size: 16px; transform: translateY(-110%); transition: transform .22s ease; box-shadow: 0 10px 30px rgb(0 0 0 / 25%); }
   body.toc-open nav.toc { transform: none; }
   body.toc-open { overflow: hidden; }
   nav.toc li { margin: 0; }

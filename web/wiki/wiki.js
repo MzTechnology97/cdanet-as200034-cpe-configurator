@@ -117,6 +117,8 @@
   filter.setAttribute('aria-label', 'Cerca nell’indice');
   toc.prepend(filter);
   const setOpen = (open) => {
+    // the panel starts right under the header, whatever its height on this phone
+    document.documentElement.style.setProperty('--header-h', `${Math.round(header.getBoundingClientRect().height)}px`);
     document.body.classList.toggle('toc-open', open);
     btn.setAttribute('aria-expanded', String(open));
     if (open) filter.focus({ preventScroll: true });
