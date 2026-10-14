@@ -480,3 +480,5 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .cn-modules { list-style: none; margin: 0; padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line); border-radius: var(--radius); display: grid; gap: 4px; }
 .cn-modules li { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--sp-2); }
 .cn-provider { display: grid; gap: var(--sp-2); padding: var(--sp-3) 0; border-top: 1px solid var(--line); }
+.cn-json { min-height: 120px; font-family: var(--font-mono); font-size: var(--fs-sm); }
+.ui-field .cn-json + input[type=file] { min-height: 0; padding: 0; border: 0; background: none; font-size: var(--fs-sm); }

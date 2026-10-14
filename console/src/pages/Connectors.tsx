@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from '../lib/toast';
 import { type Crm, CrmCard } from '../connectors/CrmCard';
+import { type Firebase, FirebaseCard } from '../connectors/FirebaseCard';
 import { type Imagery, ImageryCard } from '../connectors/ImageryCard';
 import { type Telegram, TelegramCard } from '../connectors/TelegramCard';
 import { api } from '../lib/api';
@@ -10,7 +11,8 @@ import { AsyncButton, Badge, Card, Field, Notice, PageHeader, Skeleton, Stat } f
 /**
  * Connettori (admins): the external systems, configured and tested from the console. Credentials
  * stay on the server, encrypted, and are never shown again (only whether they are set). UISP and
- * the address search, CRM (ISP Billing), Telegram and aerial imagery.
+ * the address search, CRM (ISP Billing), Telegram, Firebase (push notifications of the app) and
+ * aerial imagery.
  */
 
 const ERRORS: Record<string, string> = {
@@ -48,6 +50,7 @@ interface Data {
   telegram?: Telegram | null;
   geocoder: Geocoder;
   imagery?: Imagery | null;
+  firebase?: Firebase | null;
 }
 interface TestResult {
   ok: boolean;
@@ -86,6 +89,7 @@ export function Connectors() {
           <UispCard key={`${d.uisp.updatedAt ?? ''}-${d.uisp.source}`} u={d.uisp} onSaved={reload} />
           <CrmCard key={`crm-${d.crm.updatedAt ?? ""}`} c={d.crm} onSaved={reload} />
           {d.telegram ? <TelegramCard key={`tg-${d.telegram.updatedAt ?? ""}`} t={d.telegram} onSaved={reload} /> : null}
+          {d.firebase ? <FirebaseCard key={`fb-${d.firebase.updatedAt ?? ''}-${d.firebase.configured}`} f={d.firebase} onSaved={reload} /> : null}
           <GeocoderCard g={d.geocoder} />
           {d.imagery ? <ImageryCard key={`im-${d.imagery.updatedAt ?? ""}`} v={d.imagery} onSaved={reload} /> : null}
         </>
