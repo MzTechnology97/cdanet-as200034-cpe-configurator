@@ -259,3 +259,16 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .cv-sub { display: block; font-size: var(--fs-xs); font-weight: 400; color: var(--muted); }
 .cv-stepper { display: inline-flex; align-items: center; gap: var(--sp-2); }
 .cv-stepper button { width: 30px; height: 30px; border-radius: var(--radius-sm); border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); font: inherit; font-weight: 700; cursor: pointer; }
+
+/* Copertura (admin) */
+.cva-search { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
+.cva-search .hl-search { flex: 1 1 280px; }
+.cva-tools { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-4); align-items: center; justify-content: space-between; }
+.cva-tools p { flex: 1 1 320px; }
+.cva-sim { display: grid; gap: var(--sp-3); }
+.cva-sim-head { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; justify-content: space-between; }
+.cva-more > summary { color: var(--muted); font-weight: 600; }
+.cva-p { margin: 0; }
+.cva-popup-btn { margin-top: var(--sp-2); min-height: 32px; }
+.link-dock .dock-close { position: absolute; top: 6px; right: 8px; }
+.link-dock .ui-field select { min-height: 32px; }
