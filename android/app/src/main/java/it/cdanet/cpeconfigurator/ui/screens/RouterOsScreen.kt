@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
+import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -70,7 +72,7 @@ fun RouterOsScreen(c: AppContainer) {
                 Switch(checked = viaWifi, onCheckedChange = { viaWifi = it })
             }
             BusyButton("Connetti / Dashboard", busy == "dashboard", Modifier.fillMaxWidth(), enabled = busy == null) { run("dashboard", "dashboard") }
-            OutlinedButton(onClick = {
+            SecondaryButton(onClick = {
                 pass = ""
                 result = null
             }) { Text("Dimentica password") }

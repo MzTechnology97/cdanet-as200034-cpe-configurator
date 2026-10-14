@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
+import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import it.cdanet.cpeconfigurator.ui.EmptyState
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
@@ -132,7 +134,7 @@ fun HistoryScreen(c: AppContainer, onAcceptance: (JobDto) -> Unit, onReplace: (J
                             Spacer(Modifier.width(8.dp))
                             Text(if (j.acceptance == null) "Collaudo" else "Collaudo e foto")
                         }
-                        if (c.moduleOn("replacement")) OutlinedButton(onClick = { onReplace(j) }) { Text("Sostituisci CPE") }
+                        if (c.moduleOn("replacement")) SecondaryButton(onClick = { onReplace(j) }) { Text("Sostituisci CPE") }
                     }
                 }
             }

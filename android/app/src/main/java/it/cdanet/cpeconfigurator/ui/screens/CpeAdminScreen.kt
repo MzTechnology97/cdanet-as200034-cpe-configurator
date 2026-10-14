@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
+import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -470,7 +472,7 @@ private fun stateLabel(state: String): Pair<String, NoticeKind> = when (state) {
 @Composable
 private fun WirelessEditor(w: AdminWirelessDto, online: Boolean, busy: Boolean, onApply: (JsonObject) -> Unit) {
     var open by remember { mutableStateOf(false) }
-    OutlinedButton(onClick = { open = !open }, modifier = Modifier.fillMaxWidth()) {
+    SecondaryButton(onClick = { open = !open }, modifier = Modifier.fillMaxWidth()) {
         Icon(painterResource(R.drawable.ic_edit), contentDescription = null, modifier = Modifier.size(18.dp))
         Spacer(Modifier.width(8.dp))
         Text(if (open) "Chiudi modifica" else "Modifica parametri wireless")

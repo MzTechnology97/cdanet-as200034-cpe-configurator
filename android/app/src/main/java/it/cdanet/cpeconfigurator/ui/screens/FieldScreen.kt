@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
+import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.ui.geometry.Size
@@ -139,7 +141,7 @@ fun FieldConnection(c: AppContainer, mode: FieldMode) {
         }
         if (showManual) {
             Field("IP della CPE", manual, { manual = it.trim() }, keyboardType = KeyboardType.Uri, placeholder = "es. 192.168.1.254")
-            OutlinedButton(onClick = { c.field.start(mode, manual.ifBlank { null }) }, enabled = manual.isNotBlank()) { Text("Collega a questo IP") }
+            SecondaryButton(onClick = { c.field.start(mode, manual.ifBlank { null }) }, enabled = manual.isNotBlank()) { Text("Collega a questo IP") }
         }
         st.credentialsUsed?.takeIf { st.status != null && it != "CDA Net" }?.let {
             Text("Collegata con credenziali $it: la CPE non usa le credenziali standard CDA Net.", style = MaterialTheme.typography.bodySmall, color = WarnAmber)
@@ -149,7 +151,7 @@ fun FieldConnection(c: AppContainer, mode: FieldMode) {
                 Text("Usate solo per questa sessione e tenute in memoria: non vengono salvate né inviate al server.", style = MaterialTheme.typography.bodySmall)
                 Field("Utente", user, { user = it })
                 Field("Password", pass, { pass = it }, password = true)
-                OutlinedButton(onClick = {
+                SecondaryButton(onClick = {
                     c.field.useManualCredentials(user, pass)
                     pass = ""
                     c.field.start(mode, manual.ifBlank { null })
@@ -207,7 +209,7 @@ fun AlignmentScreen(c: AppContainer) {
                 s.noise?.let { KeyValue("Rumore", "$it dBm") }
             }
         }
-        OutlinedButton(onClick = { c.field.resetPeak(); feedback?.resetPeak() }) { Text("Azzera picco e grafico") }
+        SecondaryButton(onClick = { c.field.resetPeak(); feedback?.resetPeak() }) { Text("Azzera picco e grafico") }
         SurveyCard(c, st.status?.apMac)
     }
 }
@@ -390,11 +392,11 @@ fun DiagnosisScreen(c: AppContainer) {
             st.checks.forEach { ch -> CheckRow(ch.title, ch.verdict, ch.detail) }
         }
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = {
+            SecondaryButton(onClick = {
                 val cm = context.getSystemService(ClipboardManager::class.java)
                 cm.setPrimaryClip(ClipData.newPlainText("Diagnosi CPE", FieldDiagnosis.report(s, st.checks)))
             }) { Text("Copia") }
-            OutlinedButton(onClick = {
+            SecondaryButton(onClick = {
                 val send = Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, FieldDiagnosis.report(s, st.checks))
                 context.startActivity(Intent.createChooser(send, "Invia diagnosi"))
             }) { Text("Condividi con il NOC") }

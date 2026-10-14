@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
+import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.pm.PackageManager
@@ -150,13 +152,13 @@ fun WifiAnalyzerScreen(c: AppContainer) {
         if (!c.network.wifiEnabled) {
             SectionCard("Wi-Fi spento") {
                 Text("Per analizzare le reti il Wi-Fi del telefono deve essere acceso (non serve collegarsi).")
-                OutlinedButton(onClick = { runCatching { context.startActivity(wifiPanelIntent()) } }) { Text("Accendi il Wi-Fi") }
+                SecondaryButton(onClick = { runCatching { context.startActivity(wifiPanelIntent()) } }) { Text("Accendi il Wi-Fi") }
             }
         }
         if (!granted) {
             SectionCard("Permesso di posizione") {
                 Text("Android mostra le reti Wi-Fi solo alle app con il permesso di posizione (e con la localizzazione attiva).")
-                OutlinedButton(onClick = { ask.launch(Manifest.permission.ACCESS_FINE_LOCATION) }) { Text("Consenti") }
+                SecondaryButton(onClick = { ask.launch(Manifest.permission.ACCESS_FINE_LOCATION) }) { Text("Consenti") }
             }
             return@Column
         }

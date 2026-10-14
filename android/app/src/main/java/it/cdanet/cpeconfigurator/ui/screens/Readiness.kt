@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
+import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import android.Manifest
 import android.content.Context
 import android.content.Intent
@@ -92,7 +94,7 @@ private fun ReadinessRow(@DrawableRes icon: Int, title: String, why: String, ok:
             Text(title, fontWeight = FontWeight.SemiBold)
             Text(why, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        if (ok) StatusChip("ok", NoticeKind.Good) else OutlinedButton(onClick = onFix) { Text(action) }
+        if (ok) StatusChip("ok", NoticeKind.Good) else SecondaryButton(onClick = onFix) { Text(action) }
     }
     if (!ok && required) Text("Obbligatorio per installazioni e interventi", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
 }
@@ -133,7 +135,7 @@ fun ReadinessCard(onAllDone: (() -> Unit)? = null) {
             runCatching { context.startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
         }
         if (onAllDone != null) {
-            Button(onClick = onAllDone, modifier = Modifier.fillMaxWidth()) { Text(if (FieldReadiness.missing(context)) "Continua (le installazioni restano bloccate)" else "Continua") }
+            PrimaryButton(onClick = onAllDone, modifier = Modifier.fillMaxWidth()) { Text(if (FieldReadiness.missing(context)) "Continua (le installazioni restano bloccate)" else "Continua") }
         }
     }
     }
