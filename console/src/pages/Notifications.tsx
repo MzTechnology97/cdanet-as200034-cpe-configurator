@@ -37,6 +37,7 @@ const KIND: Record<string, { icon: string; tone: string }> = {
   work_order_reminder: { icon: 'pending_actions', tone: 'info' },
   work_order_late: { icon: 'warning_filled', tone: 'warn' },
   work_order_noc: { icon: 'warning_filled', tone: 'warn' },
+  screenshot_attempt: { icon: 'lock', tone: 'bad' },
 };
 /** Notifications of IA-AP open its page, those of work orders Interventi, the others the history of the installation. */
 const IA_AP = new Set(['network_advice', 'network_optimizer']);
@@ -133,7 +134,7 @@ export function Notifications({ user }: PageContext) {
               <ul className="nt-list">
                 {ns.map((n) => {
                   const k = KIND[n.kind] ?? { icon: 'notifications', tone: 'neutral' };
-                  const href = IA_AP.has(n.kind) ? '#/ia-ap' : n.kind.startsWith('work_order') ? '#/work-orders' : n.mac ? `#/jobs?q=${encodeURIComponent(n.mac)}` : '#/jobs';
+                  const href = n.kind === 'screenshot_attempt' ? '#/events' : IA_AP.has(n.kind) ? '#/ia-ap' : n.kind.startsWith('work_order') ? '#/work-orders' : n.mac ? `#/jobs?q=${encodeURIComponent(n.mac)}` : '#/jobs';
                   return (
                     <li key={n.id} className={`nt-item ui-tone-${k.tone}${n.readAt ? '' : ' unread'}`}>
                       <span className="nt-icon">
@@ -147,7 +148,7 @@ export function Notifications({ user }: PageContext) {
                         {n.body && <p className="nt-body">{n.body}</p>}
                         <div className="ui-row">
                           <a className="ui-btn ui-btn-ghost nt-open" href={href} onClick={() => !n.readAt && read.mutate({ ids: [n.id] })}>
-                            {IA_AP.has(n.kind) ? 'Apri IA-AP' : n.kind.startsWith('work_order') ? 'Apri gli interventi' : 'Apri nello storico'}
+                            {n.kind === 'screenshot_attempt' ? 'Apri il registro attività' : IA_AP.has(n.kind) ? 'Apri IA-AP' : n.kind.startsWith('work_order') ? 'Apri gli interventi' : 'Apri nello storico'}
                           </a>
                           {!n.readAt && (
                             <Button variant="ghost" onClick={() => read.mutate({ ids: [n.id] })}>
