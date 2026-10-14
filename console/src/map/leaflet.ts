@@ -441,7 +441,7 @@ export function towards(lat: number, lon: number, bearing: number, distanceM: nu
   return [(p2 * 180) / Math.PI, (l2 * 180) / Math.PI];
 }
 
-const km = (m: number) => (m < 1000 ? `${m} m` : `${(m / 1000).toFixed(m < 10000 ? 2 : 1)} km`);
+const km = (m: number) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(m < 10000 ? 2 : 1).replace('.', ',')} km`);
 
 export interface CoverageAp {
   id: string;
