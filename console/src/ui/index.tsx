@@ -182,13 +182,21 @@ export function Drawer({ title, onClose, children, footer }: { title: string; on
   );
 }
 
-/** Something still made by web/js (DOM: a chart, a card), shown as it is; made again when [deps] change. */
-export function Dom({ make, deps = [] }: { make: () => Node | null; deps?: unknown[] }) {
+/**
+ * Something still made by web/js (DOM: a chart, a card, a panel that loads its data), shown as it
+ * is; made again when [deps] change. A promise is waited for (a newer one wins).
+ */
+export function Dom({ make, deps = [] }: { make: () => Node | null | Promise<Node | null>; deps?: unknown[] }) {
   const host = useRef<HTMLDivElement>(null);
   useLayoutEffect(() => {
-    const n = make();
-    if (n) host.current?.replaceChildren(n);
-    else host.current?.replaceChildren();
+    let current = true;
+    const put = (n: Node | null) => current && (n ? host.current?.replaceChildren(n) : host.current?.replaceChildren());
+    const r = make();
+    if (r instanceof Promise) void r.then(put, () => put(null));
+    else put(r);
+    return () => {
+      current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps);
   return <div ref={host} className="ui-dom" />;
@@ -204,6 +212,54 @@ export function Tabs<T extends string>({ value, tabs, onChange }: { value: T; ta
           {t.badge}
         </button>
       ))}
+    </div>
+  );
+}
+
+export interface Column<T> {
+  label: string;
+  render: (row: T) => ReactNode;
+  /** Right-aligned (numbers, actions). */
+  end?: boolean;
+}
+
+/**
+ * Rows of data under their headers; on phones every row becomes a card with the labels at the side.
+ * [onRow] makes the rows clickable (and reachable with the keyboard).
+ */
+export function Table<T>({ columns, rows, rowKey, onRow, empty = 'Nessun elemento.' }: { columns: Array<Column<T>>; rows: T[]; rowKey: (row: T) => string | number; onRow?: (row: T) => void; empty?: ReactNode }) {
+  return (
+    <div className="ui-table-wrap">
+      <table className="ui-table">
+        <thead>
+          <tr>
+            {columns.map((c, i) => (
+              <th key={i} className={c.end ? 'end' : undefined}>
+                {c.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length ? (
+            rows.map((r) => (
+              <tr key={rowKey(r)} className={onRow ? 'clickable' : undefined} onClick={onRow ? () => onRow(r) : undefined} tabIndex={onRow ? 0 : undefined} onKeyDown={onRow ? (e) => e.key === 'Enter' && onRow(r) : undefined}>
+                {columns.map((c, i) => (
+                  <td key={i} data-label={c.label || undefined} className={c.end ? 'end' : undefined}>
+                    {c.render(r)}
+                  </td>
+                ))}
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={columns.length} className="ui-table-empty">
+                {empty}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
     </div>
   );
 }

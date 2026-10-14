@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { api, session } from '../lib/api';
 import { useLiveEvents } from '../lib/live';
+import { UispBanner } from './UispBanner';
 import { keys, queryClient } from '../lib/query';
 import { isOn, loadModules, modulesLoaded, resetModules } from '../../../web/js/modules.js';
 import { toast } from '../../../web/js/dom.js';
@@ -218,6 +219,7 @@ export function App() {
         </nav>
         {menuOpen && <div className="cx-shade" onClick={() => setMenuOpen(false)} />}
         <main className="view cx-main" aria-live="polite">
+          {user.role === 'admin' && <UispBanner />}
           {modulesReady ? <Page key={`${route.id}?${hash.query}#${modulesRev}`} route={route} user={user} query={hash.query} /> : <p className="muted">Caricamento…</p>}
         </main>
       </div>
