@@ -10,6 +10,7 @@ import type { Connectors } from './services/connectors.ts';
 import type { CrmSettings } from './services/crm.ts';
 import type { Imagery } from './services/imagery.ts';
 import type { CrmSync } from './services/crm-sync.ts';
+import type { Warehouse } from './services/warehouse.ts';
 import type { Modules } from './services/modules.ts';
 import type { Oui } from './services/oui.ts';
 import type { Outages } from './services/outages.ts';
@@ -47,6 +48,7 @@ export interface AppContext {
   imagery: Imagery;
   /** RADIUS state copied from the CRM for the NOC (admins only). */
   crmSync: CrmSync;
+  warehouse: Warehouse;
   /** Load of the APs and capacity curve, refreshed hourly from UISP. */
   apLoad: ApLoadService;
   /** Assistente rete: findings on APs and CPEs, after every load refresh. */

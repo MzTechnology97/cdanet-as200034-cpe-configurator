@@ -26,6 +26,7 @@ const stopSync = cfg.releases.githubRepo
 ctx.notify.start();
 ctx.outages.start();
 ctx.crmSync.start();
+ctx.warehouse.start();
 ctx.apLoad.start();
 ctx.optimizer.start();
 // the orthophotos of the area of the network kept ready on disk (UISP read at each run: it may be set later)
@@ -41,6 +42,7 @@ const shutdown = async (signal: string) => {
   ctx.notify.stop();
   ctx.outages.stop();
   ctx.crmSync.stop();
+  ctx.warehouse.stop();
   ctx.apLoad.stop();
   ctx.optimizer.stop();
   imageryPrefetch.stop();

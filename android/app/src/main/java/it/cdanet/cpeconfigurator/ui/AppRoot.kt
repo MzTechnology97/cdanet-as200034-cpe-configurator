@@ -231,7 +231,12 @@ fun AppRoot(c: AppContainer) {
     LaunchedEffect(session) {
         if (session != null) {
             // Features enabled by the admin: hidden screens and buttons follow this map.
-            launch { runCatching { c.api.meta() }.onSuccess { c.modules.value = it.modules } }
+            launch {
+                runCatching { c.api.meta() }.onSuccess {
+                    c.modules.value = it.modules
+                    c.updateSecureScreen(session?.user?.role, it.modules)
+                }
+            }
             c.resultQueue.syncInBackground()
             c.acceptanceQueue.syncInBackground()
             // the firmware the CPEs need stays on the phone, ready for the roof without Internet
@@ -347,6 +352,7 @@ fun AppRoot(c: AppContainer) {
                                 Spacer(Modifier.width(12.dp))
                             }
                             val title = if (screen == Screen.CpeHealth && session?.user?.role == "admin") "Salute CPE" else screen.title
+                            androidx.compose.runtime.SideEffect { c.currentScreen.value = title }
                             Text(
                                 title,
                                 // long titles one step smaller instead of cut ("Collaudo installazione")

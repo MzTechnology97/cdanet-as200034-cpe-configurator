@@ -49,7 +49,8 @@ class NetworkHelper(context: Context) {
                 android.net.NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(),
                 object : ConnectivityManager.NetworkCallback() {
                     override fun onAvailable(network: Network) { _wifiConnected.value = true }
-                    override fun onLost(network: Network) { _wifiConnected.value = wifiNetwork() != null }
+                    // the lost network can still be listed while this runs: left out explicitly
+                    override fun onLost(network: Network) { _wifiConnected.value = wifiNetwork(except = network) != null }
                 },
             )
         }
@@ -99,7 +100,7 @@ class NetworkHelper(context: Context) {
             override fun onLost(network: Network) {
                 if (network == cpeNet) cpeNet = null
                 _cpeWifi.value = CpeWifi.Lost
-                _wifiConnected.value = wifiNetwork() != null
+                _wifiConnected.value = wifiNetwork(except = network) != null
             }
         }
         cpeCallback = cb
@@ -108,6 +109,11 @@ class NetworkHelper(context: Context) {
             cpeCallback = null
             _cpeWifi.value = CpeWifi.NotFound
         }
+    }
+
+    /** A failed attempt's message belongs to the screen it was made on: back to idle when that screen goes. */
+    fun clearCpeWifiResult() {
+        if (_cpeWifi.value == CpeWifi.NotFound) _cpeWifi.value = CpeWifi.Idle
     }
 
     /** Leaves the CPE's Wi-Fi joined from the app (and stops asking for it). */
@@ -120,8 +126,8 @@ class NetworkHelper(context: Context) {
     }
 
     /** The Wi-Fi the CPE steps use: the CPE's one joined from the app first, else the phone's Wi-Fi. */
-    fun wifiNetwork(): Network? = cpeNet?.takeIf { cm.getNetworkCapabilities(it) != null } ?: cm.allNetworksCompat().firstOrNull {
-        cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+    fun wifiNetwork(except: Network? = null): Network? = cpeNet?.takeIf { it != except && cm.getNetworkCapabilities(it) != null } ?: cm.allNetworksCompat().firstOrNull {
+        it != except && cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
     }
 
     @Suppress("DEPRECATION")
@@ -184,7 +190,9 @@ class NetworkHelper(context: Context) {
             val c = Ip.Cidr(ip and Ip.parseCidr("0.0.0.0/${la.prefixLength}").mask, la.prefixLength)
             cidr = c.toString()
         }
-        val gateway = lp?.routes?.firstOrNull { it.isDefaultRoute && it.gateway != null }?.gateway?.hostAddress
+        // IPv4 first: a link-local IPv6 router (fe80::…) is listed too on some Wi-Fi, never the CPE
+        val defaults = lp?.routes?.filter { it.isDefaultRoute && it.gateway != null }.orEmpty()
+        val gateway = (defaults.firstOrNull { it.gateway is java.net.Inet4Address } ?: defaults.firstOrNull())?.gateway?.hostAddress
         val info: WifiInfo? = if (isWifi) wifiInfo(caps) else null
         return LinkInfo(
             transport = when {

@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.runtime.collectAsState
 import it.cdanet.cpeconfigurator.R
+import it.cdanet.cpeconfigurator.ui.localTime
 import it.cdanet.cpeconfigurator.ui.EmptyState
 import it.cdanet.cpeconfigurator.ui.ListHeader
 import androidx.compose.foundation.clickable
@@ -31,7 +32,7 @@ import it.cdanet.cpeconfigurator.ui.ErrorBanner
 import it.cdanet.cpeconfigurator.ui.SectionCard
 import kotlinx.coroutines.launch
 
-private val ICONS = mapOf("provisioning_failed" to "❌", "install_ko" to "⛔", "review_pending" to "📶", "install_activated" to "✅", "work_order_noc" to "📋", "network_advice" to "🛠️", "network_optimizer" to "🔧")
+private val ICONS = mapOf("screenshot_attempt" to "📵", "provisioning_failed" to "❌", "install_ko" to "⛔", "review_pending" to "📶", "install_activated" to "✅", "work_order_noc" to "📋", "network_advice" to "🛠️", "network_optimizer" to "🔧")
 
 /**
  * The user's notifications (NOC approvals, activations; for admins also failures, KO and
@@ -97,7 +98,7 @@ fun NotificationsScreen(c: AppContainer, onUnread: (Int) -> Unit) {
                     },
                 ) {
                     Text(title, fontWeight = if (n.readAt == null) FontWeight.Bold else FontWeight.Normal)
-                    Text(n.createdAt.replace('T', ' ').take(16), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    Text(localTime(n.createdAt), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     if (n.body.isNotBlank()) Text(n.body, style = MaterialTheme.typography.bodySmall)
                     androidx.compose.foundation.layout.Row(verticalAlignment = androidx.compose.ui.Alignment.CenterVertically) {
                         if (n.readAt == null) Text("Tocca per segnarla come letta", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.primary, modifier = Modifier.weight(1f))

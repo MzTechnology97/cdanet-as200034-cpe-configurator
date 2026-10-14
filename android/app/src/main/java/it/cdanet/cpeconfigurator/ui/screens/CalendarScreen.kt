@@ -317,7 +317,8 @@ private fun Timeline(days: List<LocalDate>, items: List<WorkOrderDto>, today: Lo
                         }
                         if (days.size == 1) {
                             Text(listOfNotNull(o.slot, o.kindLabel, if (showAssignee) o.assignee else null).joinToString(" · "), color = t.content, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                            if (o.address.isNotBlank()) Text(o.address, color = t.content, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                            // a one-hour block holds two lines: the address only in longer ones (a tap shows it)
+                            if (o.address.isNotBlank() && height > HOUR) Text(o.address, color = t.content, fontSize = 11.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
                         }
                     }
                 }

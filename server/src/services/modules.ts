@@ -26,6 +26,8 @@ export const MODULES = [
   { key: 'network_status', label: 'Stato rete', area: 'web + app', description: 'Stato di POP e AP (raggiungibili, CPE offline, guasti Enel vicini): installatori solo quelli assegnati, senza notifiche.', default: false },
   { key: 'work_orders', label: 'Agenda interventi', area: 'web + app', description: 'Interventi assegnati dall’ufficio con cliente, indirizzo e PPPoE già compilati: l’installatore li trova in Oggi e li avvia con un tocco.', default: true },
   { key: 'firmware_upgrade', label: 'Aggiornamento firmware', area: 'web + app', description: 'L’admin carica i firmware airOS di riferimento; l’installatore li scarica sul telefono e porta la CPE alla versione richiesta prima del provisioning.', default: false },
+  // owner and NOC, 14/10/2026: only admins take screenshots; an installer may be allowed one by one
+  { key: 'screenshots', label: 'Screenshot nell’app', area: 'app', description: 'Screenshot e registrazione dello schermo nell’app. Spento: l’app li blocca (anche l’anteprima nelle app recenti). Gli amministratori possono sempre; per installatori e partner si attiva account per account.', default: false },
   { key: 'telegram', label: 'Notifiche Telegram', area: 'server', description: 'Gruppo del NOC e notifiche personali di ogni utente (bot in Connettori → Telegram).', default: true, global: true },
 ] as const;
 

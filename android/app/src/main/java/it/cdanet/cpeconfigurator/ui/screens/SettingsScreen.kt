@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.localTime
 import it.cdanet.cpeconfigurator.ui.SecondaryButton
 import it.cdanet.cpeconfigurator.ui.QuickLoginCard
 import android.content.Intent
@@ -125,7 +126,7 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
         SectionCard("Account", icon = it.cdanet.cpeconfigurator.R.drawable.ic_person) {
             KeyValue("Utente", session?.user?.let { "${it.username} (${if (it.role == "admin") "amministratore" else "installatore"})" } ?: "non connesso")
             // with the persistent login the session renews by itself: its expiry is in "Accesso su questo telefono"
-            if (c.quickLogin.saved() == null) KeyValue("Sessione fino a", session?.expiresAt?.replace('T', ' ')?.take(16) ?: "—")
+            if (c.quickLogin.saved() == null) KeyValue("Sessione fino a", session?.expiresAt?.let { localTime(it) } ?: "—")
             SecondaryButton(onClick = onLogout) { Text(if (session != null) "Esci" else "Torna al login") }
         }
 

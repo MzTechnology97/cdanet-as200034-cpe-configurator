@@ -63,6 +63,8 @@ private val ERRORS = mapOf(
     "ap_not_found" to "AP non trovato tra quelli vicini",
     "work_order_not_found" to "Intervento non trovato",
     "work_order_closed" to "Intervento già chiuso o annullato",
+    "cpe_not_in_stock" to "Questa CPE non risulta nel tuo magazzino: usa una CPE del tuo magazzino o chiedi all'ufficio",
+    "template_needs_mac" to "Questo template ha bisogno del MAC già in preparazione: prepara la configurazione sul posto",
     "work_order_password_missing" to "L'intervento non ha la password PPPoE: chiedila all'ufficio",
     "too_many_zones" to "Hai già 20 zone: eliminane una",
     "zone_not_found" to "Zona non trovata",
@@ -85,9 +87,13 @@ private val ERRORS = mapOf(
     "wrong_current_password" to "Password attuale non corretta",
     "password_unchanged" to "La nuova password è uguale a quella attuale",
     "password_contains_username" to "La password non può contenere il nome utente",
+    "uisp_device_not_found" to "CPE non ancora vista dalla rete: i dati compaiono dopo che il NOC l'ha accettata",
 )
 
-fun apiMessage(code: String): String = ERRORS[code] ?: code
+/** Codes that name a data source (uisp_…, crm_…): never shown as they are. */
+private val SOURCE_CODE = Regex("^(uisp|crm|ispbilling|edistribuzione)_")
+
+fun apiMessage(code: String): String = ERRORS[code] ?: if (SOURCE_CODE.containsMatchIn(code)) "Servizio di rete non disponibile in questo momento, riprova più tardi" else code
 
 /** Thin JSON client for the CDA Net server. */
 class ApiClient(
@@ -324,7 +330,15 @@ class ApiClient(
     suspend fun reverseGeocode(lat: Double, lon: Double): ReverseGeocodeDto =
         AppJson.decodeFromString(ReverseGeocodeDto.serializer(), request("GET", "/api/geocode/reverse?lat=$lat&lon=$lon"))
 
+    /** A screenshot taken by an account that may not (the NOC is told). */
+    suspend fun reportScreenshot(screen: String) {
+        request("POST", "/api/security/screenshot-attempt", buildJsonObject { put("screen", screen.take(80)) })
+    }
+
     suspend fun workOrders(): WorkOrdersDto = AppJson.decodeFromString(WorkOrdersDto.serializer(), request("GET", "/api/work-orders"))
+
+    /** The CPEs in the installer's own warehouse. */
+    suspend fun myStock(): MyStockDto = AppJson.decodeFromString(MyStockDto.serializer(), request("GET", "/api/warehouse/mine"))
 
     /** Calendario: the orders from [from] to [to] (YYYY-MM-DD, up to 62 days); [user] = one installer (NOC). */
     suspend fun workOrderCalendar(from: String, to: String, user: Long? = null): CalendarDto =

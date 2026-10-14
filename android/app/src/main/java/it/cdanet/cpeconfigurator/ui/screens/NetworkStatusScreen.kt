@@ -1,6 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
 import androidx.compose.runtime.collectAsState
+import it.cdanet.cpeconfigurator.ui.localTime
 import it.cdanet.cpeconfigurator.ui.RefreshButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -57,7 +58,7 @@ private fun stateColor(s: String): Color = when (s) {
     else -> GoodGreen
 }
 
-private fun ts(s: String?) = s?.replace('T', ' ')?.take(16) ?: ""
+private fun ts(s: String?) = localTime(s)
 
 /** "Stato rete": state of the POPs and APs (installers: only the assigned ones). Refreshes every minute, no notifications. */
 @Composable

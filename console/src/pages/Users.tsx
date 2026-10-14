@@ -22,6 +22,10 @@ interface Account {
   lastLoginAt: string | null;
   createdAt: string;
   jobs: number;
+  /** Warehouse of the stock (ISP Billing site) and whether CPEs outside it may be installed. */
+  warehouseSiteId?: number | null;
+  warehouseSite?: string | null;
+  stockBypass?: boolean;
 }
 interface Template {
   model: string;
@@ -115,6 +119,7 @@ export function Users({ user: me }: PageContext) {
               { label: 'Ruolo', render: (u) => <Badge tone={u.role === 'admin' ? 'warn' : 'neutral'}>{u.role === 'admin' ? 'Admin' : 'Installatore'}</Badge> },
               { label: 'Stato', render: (u) => <Badge tone={u.active ? 'good' : 'bad'}>{u.active ? 'Attivo' : 'Disabilitato'}</Badge> },
               { label: '2FA', render: (u) => (u.totpEnabled ? <Badge tone="good">attiva</Badge> : u.role === 'admin' ? <Badge tone="warn">no</Badge> : '—') },
+              { label: 'Magazzino', render: (u) => (u.warehouseSite ? <span className="ui-small">{u.warehouseSite}{u.stockBypass ? ' · anche fuori magazzino' : ''}</span> : <span className="ui-muted">—</span>) },
               { label: 'Ultimo accesso', render: (u) => date(u.lastLoginAt) },
               { label: 'Provisioning', end: true, render: (u) => u.jobs },
             ]}
@@ -142,12 +147,13 @@ function NewAccount({ onClose, onDone }: { onClose: () => void; onDone: () => Pr
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [role, setRole] = useState('installer');
+  const [stock, setStock] = useState<{ siteId: number | null; bypass: boolean }>({ siteId: null, bypass: false });
   const [busy, setBusy] = useState(false);
   const submit = async (e: FormEvent) => {
     e.preventDefault();
     setBusy(true);
     try {
-      await api('/api/admin/users', { method: 'POST', body: { username: username.trim(), password, role } });
+      await api('/api/admin/users', { method: 'POST', body: { username: username.trim(), password, role, ...(role === 'installer' ? { warehouseSiteId: stock.siteId, stockBypass: stock.bypass } : {}) } });
       toast(`Account ${username.trim()} creato`);
       await onDone();
     } catch (err) {
@@ -184,6 +190,7 @@ function NewAccount({ onClose, onDone }: { onClose: () => void; onDone: () => Pr
             <option value="admin">Admin</option>
           </select>
         </Field>
+        {role === 'installer' && <WarehouseFields value={stock} onChange={setStock} />}
       </form>
     </Drawer>
   );
@@ -235,6 +242,13 @@ function AccountDrawer({ u, me, templates, onClose, onChanged }: { u: Account; m
           </AsyncButton>
         )}
       </section>
+
+      {u.role === 'installer' && (
+        <section className="us-sec">
+          <h3>Magazzino</h3>
+          <AccountWarehouse u={u} onSave={(body) => patch(body, 'Magazzino aggiornato')} />
+        </section>
+      )}
 
       <section className="us-sec">
         <h3>Template airOS</h3>
@@ -330,5 +344,57 @@ function UserModules({ u, me }: { u: Account; me: User }) {
         ))}
       </ul>
     </>
+  );
+}
+
+interface WarehouseSites {
+  at: string | null;
+  error: string | null;
+  sites: Array<{ id: number; name: string; items: number; cpe: number }>;
+}
+
+/** The warehouse of an installer or partner (from the last reading of ISPBilling) and the bypass. */
+function WarehouseFields({ value, onChange }: { value: { siteId: number | null; bypass: boolean }; onChange: (v: { siteId: number | null; bypass: boolean }) => void }) {
+  const q = useQuery({ queryKey: ['admin', 'warehouse', 'sites'], queryFn: () => api<WarehouseSites>('/api/admin/warehouse/sites'), staleTime: 60_000 });
+  const sites = q.data?.sites ?? [];
+  const known = value.siteId == null || sites.some((s) => s.id === value.siteId);
+  return (
+    <>
+      <Field
+        label="Magazzino ISPBilling"
+        hint={q.error ? (q.error as Error).message : !q.data ? 'Caricamento dei magazzini…' : q.data.at ? 'Le CPE di questo magazzino sono quelle che può installare.' : 'Il magazzino non è ancora stato letto: aprilo da Magazzino → Aggiorna ora.'}
+      >
+        <select value={value.siteId ?? ''} onChange={(e) => onChange({ ...value, siteId: e.target.value ? Number(e.target.value) : null })}>
+          <option value="">— nessuno (può installare qualunque CPE) —</option>
+          {!known && <option value={value.siteId!}>magazzino non più presente</option>}
+          {sites.map((s) => (
+            <option key={s.id} value={s.id}>
+              {s.name} ({s.cpe} CPE)
+            </option>
+          ))}
+        </select>
+      </Field>
+      {value.siteId != null && (
+        <label className="ui-check">
+          <input type="checkbox" checked={value.bypass} onChange={(e) => onChange({ ...value, bypass: e.target.checked })} />
+          Può installare CPE non presenti nel suo magazzino
+        </label>
+      )}
+    </>
+  );
+}
+
+function AccountWarehouse({ u, onSave }: { u: Account; onSave: (body: { warehouseSiteId: number | null; stockBypass: boolean }) => Promise<void> }) {
+  const [v, setV] = useState({ siteId: u.warehouseSiteId ?? null, bypass: !!u.stockBypass });
+  const changed = v.siteId !== (u.warehouseSiteId ?? null) || v.bypass !== !!u.stockBypass;
+  return (
+    <div className="us-warehouse">
+      <WarehouseFields value={v} onChange={setV} />
+      <div className="ui-row">
+        <AsyncButton disabled={!changed} onClick={() => onSave({ warehouseSiteId: v.siteId, stockBypass: v.siteId != null && v.bypass })} onError={fail}>
+          Salva magazzino
+        </AsyncButton>
+      </div>
+    </div>
   );
 }

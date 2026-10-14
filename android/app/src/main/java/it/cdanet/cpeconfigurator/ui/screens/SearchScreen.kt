@@ -32,6 +32,7 @@ import it.cdanet.cpeconfigurator.R
 import it.cdanet.cpeconfigurator.core.AppContainer
 import it.cdanet.cpeconfigurator.data.CpeHealthItemDto
 import it.cdanet.cpeconfigurator.data.JobDto
+import it.cdanet.cpeconfigurator.ui.localTime
 import it.cdanet.cpeconfigurator.ui.EmptyState
 import it.cdanet.cpeconfigurator.ui.NoticeKind
 import it.cdanet.cpeconfigurator.ui.StatusChip
@@ -76,7 +77,7 @@ fun SearchScreen(c: AppContainer, onAcceptance: (JobDto) -> Unit) {
         jobHits.forEach { j ->
             ResultRow(
                 title = j.deviceName.ifBlank { j.pppoeUser },
-                lines = listOf("${j.model} · ${j.mac}", "${j.ssid} · ${j.createdAt.replace('T', ' ').take(16)}"),
+                lines = listOf(listOf(j.model, j.mac).filter { it.isNotBlank() }.joinToString(" · "), "${j.ssid} · ${localTime(j.createdAt)}"),
                 chip = when (j.status) {
                     "success" -> (if (j.acceptance == null) "da collaudare" else "installata") to (if (j.acceptance == null) NoticeKind.Warn else NoticeKind.Good)
                     "failed" -> "fallita" to NoticeKind.Bad
