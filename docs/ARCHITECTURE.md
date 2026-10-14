@@ -61,17 +61,16 @@ Il client non esegue comandi forniti dal server: lettura, scrittura e `cfgmtd` s
 
 `users`, `wireless_secrets` (cifrate), `provision_profiles` (template cifrati), `provisioning_jobs` (solo metadati: niente password, niente config), `events` (registro delle attività admin), `audits` (tabella v0.5 mantenuta in sola lettura e migrata nei job). La retention `GDPR_AUDIT_RETENTION_DAYS` si applica a job, eventi e audits.
 
-## Console web (`web/`)
+## Console web (`console/` e `web/`)
 
-Moduli JavaScript serviti così come sono, senza build: `js/main.js` è il router (`#/pagina`), ogni pagina è una funzione in `js/views/` che restituisce l'elemento da mostrare. Le librerie stanno in `vendor/` (Leaflet, protomaps-leaflet, MapLibre GL, React, htm) e la CSP ammette solo script del server (`script-src 'self'`).
+La console è un'applicazione React 19 in TypeScript (`console/`), compilata con Vite in `web/app` e servita dal server: `/` e ogni indirizzo della console rispondono con `web/app/index.html`, i file con l'hash nel nome stanno sotto `/app/assets/` con cache di un anno. `web/index.html` resta solo come avviso quando la build manca (un checkout di sviluppo). La CSP ammette solo script del server (`script-src 'self'`).
 
-**React, pagina per pagina.** Le pagine più complesse passano a React una alla volta (IA-AP, Copertura per gli admin); le altre restano com'erano.
-- `js/react.js` carica React e ReactDOM (build di produzione in `vendor/react`) solo la prima volta che si apre una pagina React.
-- I componenti si scrivono con htm: template `` html`…` `` al posto del JSX, sempre senza build.
-- `reactView(Componente)` trasforma il componente in una pagina del router e lo smonta quando si cambia pagina, fermando timer e richieste.
-- `js/ui.js` raccoglie i componenti comuni (intestazione, schede, etichette, pulsante con attesa, segmenti), con le stesse classi CSS delle pagine classiche.
-- Come in `dom.js`, il testo passa sempre da React, che lo protegge dall'inserimento di markup.
-- Le mappe Leaflet restano imperative: la pagina crea la mappa una volta (un hook) e ne aggiorna i livelli negli effetti. I grafici già scritti con `dom.js` (il profilo del collegamento in `coverage-link.js`) entrano nei componenti con `Dom`.
+- **Cornice** (`console/src/shell`): menu, barra in basso sul telefono, ricerca globale (Ctrl+K), tema chiaro/scuro, avviso quando UISP non risponde. Le pagine (`routes.ts`) si caricano quando si aprono, con le stesse regole di visibilità del server (admin, installatori, moduli).
+- **Design system** (`console/src/styles/tokens.css`, `ui.css`, `console/src/ui`): colori, spaziature e tipografia come token, gli stessi nei due temi; componenti comuni (pulsanti, schede, tabelle che sul telefono diventano schede, pannelli laterali, segmenti, statistiche). Nessuna pagina definisce stili propri fuori da `ui.css`.
+- **Dati**: TanStack Query, condivisi tra le pagine e rinfrescati dagli eventi del server (`/api/events`, Server-Sent Events) in `console/src/lib/live.ts`. Il client API è quello di `web/js/api.js` (token, errori in italiano, scadenza della sessione).
+- **Mappe** (`console/src/map/MapView.tsx`): un solo componente sopra `web/js/map.js` (Leaflet, mappa di base locale, viste admin, 3D in `map3d.js`). La stessa `map.js` serve la mappa dentro l'app Android (`map-embed`).
+- **Pezzi ancora in `web/js`**: alcuni pannelli e schede scritti con DOM o htm (collaudo, KO, stato UISP, CRM, Telegram, immagini satellitari, strumenti di Copertura, profilo del collegamento) entrano nelle pagine React con `Dom` o come componenti. Nella build `web/js/react.js` è sostituito dal React della console (`console/src/lib/react-legacy.ts`): ce n'è uno solo.
+- Il testo passa sempre da React (o da `dom.js`), che lo protegge dall'inserimento di markup.
 
 ## App Android (`android/`)
 
