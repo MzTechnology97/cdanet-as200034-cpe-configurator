@@ -70,6 +70,10 @@ function JobBadges({ j }: { j: Job }) {
   );
 }
 
+/** A job prepared from a work order gets MAC and serial from the field (scanned by the installer on site). */
+const onSite = (j: { status?: string; mac?: string | null }) => j.status === 'prepared' && !j.mac;
+const macText = (j: { status?: string; mac?: string | null }) => j.mac || (onSite(j) ? 'MAC da scansionare sul posto' : '');
+
 export function Jobs({ user, params }: PageContext) {
   const admin = user.role === 'admin';
   const qc = useQueryClient();
@@ -102,7 +106,7 @@ export function Jobs({ user, params }: PageContext) {
     setFollowRev((n) => n + 1);
     await qc.invalidateQueries({ queryKey: ['jobs'] });
     if (open) {
-      const fresh = await api<Job[]>(`/api/provisioning/jobs?q=${encodeURIComponent(open.mac ?? open.id)}&limit=50`).catch(() => []);
+      const fresh = await api<Job[]>(`/api/provisioning/jobs?q=${encodeURIComponent(open.mac || open.id)}&limit=50`).catch(() => []);
       setOpen(fresh.find((x) => x.id === open.id) ?? open);
     }
   };
@@ -166,7 +170,7 @@ export function Jobs({ user, params }: PageContext) {
                       <strong>{j.deviceName || j.pppoeUser || j.mac || '—'}</strong>
                       {j.deviceName && j.pppoeUser && <span className="ui-muted ui-small">{j.pppoeUser}</span>}
                     </div>
-                    <div className="hl-sub">{[j.model, j.mac, j.ssid, j.template && `template ${j.template}`].filter(Boolean).join(' · ')}</div>
+                    <div className="hl-sub">{[j.model, macText(j), j.ssid, j.template && `template ${j.template}`].filter(Boolean).join(' · ')}</div>
                     <div className="ui-row hl-badges">
                       <JobBadges j={j} />
                       {!!j.photos && <span className="ui-muted ui-small">{j.photos} foto</span>}
@@ -208,11 +212,11 @@ function JobDrawer({ j, admin, onClose, onChange }: { j: Job; admin: boolean; on
         {fact('Creato', date(j.createdAt))}
         {fact('Completato', date(j.completedAt))}
         {fact('Cliente', [j.deviceName, j.pppoeUser].filter(Boolean).join(' · ') || '—')}
-        {fact('CPE', [j.model, j.mac].filter(Boolean).join(' · ') || '—')}
+        {fact('CPE', [j.model, macText(j)].filter(Boolean).join(' · ') || '—')}
         {fact('SSID', j.ssid || '—')}
         {fact('Template', j.template || '—')}
         {fact('Client', j.client || '—')}
-        {fact('Seriale', j.serial || '—')}
+        {fact('Seriale', j.serial || (onSite(j) ? 'da scansionare sul posto' : '—'))}
         {fact('Firmware rilevato', j.detected?.firmware || '—')}
         {fact('Board rilevata', j.detected?.board || '—')}
         {fact('MAC rilevato', j.detected?.mac || '—')}
