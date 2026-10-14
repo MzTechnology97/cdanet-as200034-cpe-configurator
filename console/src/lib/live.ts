@@ -11,8 +11,7 @@ const REFRESH: Record<string, ReadonlyArray<readonly string[]>> = {
 /**
  * Live updates (/api/events): read with fetch and the session's token (never in the address), one
  * stream at a time, opened again when the server closes it (every 15 minutes) or the network drops.
- * Each event refreshes the shared data and is also told to the pages of web/js (window event
- * `cda:live`, detail = the topic). A server without /api/events: tried again every few minutes.
+ * Each event refreshes the shared data. A server without /api/events: tried again every few minutes.
  */
 export function useLiveEvents(token: string | null) {
   useEffect(() => {
@@ -47,7 +46,6 @@ export function useLiveEvents(token: string | null) {
             const topic = /^event: (.+)$/m.exec(block)?.[1]?.trim();
             if (!topic || topic === 'ready') continue;
             for (const k of REFRESH[topic] ?? []) void queryClient.invalidateQueries({ queryKey: k });
-            window.dispatchEvent(new CustomEvent('cda:live', { detail: topic }));
           }
         }
         wait = 1_000; // closed by the server: open the next one at once

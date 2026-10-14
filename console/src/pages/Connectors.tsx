@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
-import { toast } from '../../../web/js/dom.js';
+import { toast } from '../lib/toast';
 import { type Crm, CrmCard } from '../connectors/CrmCard';
 import { type Imagery, ImageryCard } from '../connectors/ImageryCard';
 import { type Telegram, TelegramCard } from '../connectors/TelegramCard';

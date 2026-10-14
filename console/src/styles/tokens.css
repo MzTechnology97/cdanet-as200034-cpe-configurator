@@ -1,7 +1,7 @@
 /*
  * Design tokens of the console: one source for colours, spacing, radii, type and shadows, in the
- * light and the dark theme. The pages of web/js read the same names (--brand, --bg, --surface,
- * --ink, --muted, --line, --good/--warn/--bad…): they take the new values with no change of theirs.
+ * light and the dark theme. app.css reads the same names (--brand, --bg, --surface, --ink, --muted,
+ * --line, --good/--warn/--bad…).
  * The Android app aligns to these values (its Theme.kt).
  *
  * Theme: as the system, or forced with <html data-theme="light|dark"> (the button in the top bar).

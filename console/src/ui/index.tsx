@@ -1,4 +1,4 @@
-import { type ButtonHTMLAttributes, type ReactNode, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { type ButtonHTMLAttributes, type ReactNode, useEffect, useRef, useState } from 'react';
 import { Icon } from './Icon';
 
 /**
@@ -180,26 +180,6 @@ export function Drawer({ title, onClose, children, footer }: { title: string; on
       </aside>
     </div>
   );
-}
-
-/**
- * Something still made by web/js (DOM: a chart, a card, a panel that loads its data), shown as it
- * is; made again when [deps] change. A promise is waited for (a newer one wins).
- */
-export function Dom({ make, deps = [] }: { make: () => Node | null | Promise<Node | null>; deps?: unknown[] }) {
-  const host = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    let current = true;
-    const put = (n: Node | null) => current && (n ? host.current?.replaceChildren(n) : host.current?.replaceChildren());
-    const r = make();
-    if (r instanceof Promise) void r.then(put, () => put(null));
-    else put(r);
-    return () => {
-      current = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, deps);
-  return <div ref={host} className="ui-dom" />;
 }
 
 /** Sections of a page side by side (they scroll sideways on phones). */
