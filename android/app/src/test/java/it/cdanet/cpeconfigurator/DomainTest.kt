@@ -84,6 +84,11 @@ class ValidationTest {
         assertEquals(true, Validation.scanProblem("817882027250")?.contains("non è il MAC") == true)
         assertEquals(null, Validation.scanProblem("1C6A1BCA95C3"))
         assertEquals(false, Validation.isDeviceMac("81:78:82:02:72:50"))
+        // a scan button per field: the MAC one takes only a device MAC, the serial one warns on a MAC
+        assertEquals("1C:6A:1B:CA:95:C3", Validation.scanMac("MAC 1C6A1BCA95C3").first)
+        assertEquals(null, Validation.scanMac("817882027250").first)
+        assertEquals(true, Validation.scanSerial("1C:6A:1B:CA:95:C3").second != null)
+        assertEquals(null, Validation.scanSerial("1C6A1BCA95C3").second)
         // the two fields swapped: a MAC with separators in the serial, two different MACs
         assertEquals(true, Validation.serialLooksLikeMac("1C:6A:1B:CA:95:C3"))
         assertEquals(false, Validation.serialLooksLikeMac("1C6A1BCA95C3"))

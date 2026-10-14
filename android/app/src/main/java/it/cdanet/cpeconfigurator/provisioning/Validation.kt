@@ -90,6 +90,22 @@ object Validation {
         return if (serialMac != mac) "Sulle CPE Ubiquiti seriale e MAC di solito coincidono: controlla di non aver scambiato i due codici dell'etichetta." else null
     }
 
+    /**
+     * The scan button of the MAC field: the device MAC in the code (any notation), or why the code
+     * is not one (another code of the box, or no MAC at all).
+     */
+    fun scanMac(raw: String): Pair<String?, String?> {
+        val candidates = MAC_IN_TEXT.findAll(raw.trim()).mapNotNull { parseMac(it.value) }.toList()
+        candidates.firstOrNull { isDeviceMac(it) }?.let { return it to null }
+        return null to (scanProblem(raw) ?: "Il codice letto non contiene un MAC: inquadra il codice «MAC» sull'etichetta della CPE.")
+    }
+
+    /** The scan button of the serial field: the code as it is, with a warning when it is a MAC with separators. */
+    fun scanSerial(raw: String): Pair<String, String?> {
+        val v = raw.trim().take(128)
+        return v to (if (serialLooksLikeMac(v)) "Hai inquadrato il MAC: per il seriale usa il codice «S/N» dell'etichetta." else null)
+    }
+
     /** Why a scanned code was not used: it looks like a MAC but no device can have it. */
     fun scanProblem(value: String): String? {
         val candidates = MAC_IN_TEXT.findAll(value.trim()).mapNotNull { parseMac(it.value) }.toList()
