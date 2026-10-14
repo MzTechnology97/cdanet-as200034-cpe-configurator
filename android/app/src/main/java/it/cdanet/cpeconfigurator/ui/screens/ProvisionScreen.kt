@@ -264,18 +264,22 @@ fun ProvisionApplyStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
         state.probe?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
     }
 
-    SectionCard("2 · Primo avvio airOS") {
-        Text("Se la CPE è appena resettata completa il primo accesso: Country Licensed, accetta i termini e imposta le credenziali CDA Net.",
-            style = MaterialTheme.typography.bodySmall)
-        SecondaryButton(onClick = onOpenCpeWeb, enabled = !applying) { Text("Apri interfaccia CPE nell'app") }
-    }
-
-    SectionCard("3 · Applica configurazione") {
-        Text("Verifica firmware 8.7.4, board e MAC, scrive system.cfg, salva con cfgmtd e riavvia.", style = MaterialTheme.typography.bodySmall)
-        BusyButton("Applica alla CPE", applying, Modifier.fillMaxWidth(), enabled = !left.isNegative && !state.busy) {
-            scope.launch { c.provisioning.apply() }
+    SectionCard("2 · Installa sulla CPE") {
+        Text(
+            "Un solo tocco: l'app entra nella CPE (anche nuova o resettata, con le credenziali di fabbrica), la porta al firmware ${pkg.checks.firmware} se ne ha un altro, verifica board e MAC, scrive la configurazione e la riavvia.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        BusyButton("Installa sulla CPE", applying, Modifier.fillMaxWidth(), enabled = !left.isNegative && !state.busy) {
+            // the app's scope: a firmware update must not stop when the screen changes
+            c.scope.launch { c.provisioning.install(c.firmware) }
         }
         state.stages.forEach { Text("✓ $it", style = MaterialTheme.typography.bodyMedium) }
+    }
+
+    SectionCard("Solo se l'app non entra nella CPE") {
+        Text("Primo accesso a mano dall'interfaccia della CPE: Country Licensed, accetta i termini e imposta le credenziali CDA Net. Poi torna qui e tocca di nuovo «Installa sulla CPE».",
+            style = MaterialTheme.typography.bodySmall)
+        SecondaryButton(onClick = onOpenCpeWeb, enabled = !applying) { Text("Apri interfaccia CPE nell'app") }
     }
 
     TextButton(onClick = { c.provisioning.reset() }, enabled = !applying) { Text("Annulla e cancella il pacchetto") }

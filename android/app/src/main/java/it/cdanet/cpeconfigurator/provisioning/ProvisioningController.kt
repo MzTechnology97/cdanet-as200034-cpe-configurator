@@ -267,6 +267,7 @@ class ProvisioningController(
             stages += s
             _state.update { it.copy(stages = stages.toList()) }
         }
+        var flashing = false
         withContext(Dispatchers.IO) {
             runCatching {
                 val open = opener(pkg, stage)
@@ -275,13 +276,21 @@ class ProvisioningController(
                 when {
                     before == null -> Unit
                     before.version == pkg.checks.firmware -> stage("Firmware ${before.version}: è quello richiesto")
+                    // the installer chose to keep it after failed updates: no new attempt
+                    _state.value.allowedFirmware != null -> stage("Firmware ${before.version} tenuto: aggiornamento non riuscito in precedenza")
                     else -> {
                         stage("Firmware ${before.version}: va portato alla ${pkg.checks.firmware}")
+                        flashing = true
                         flash(pkg, store, before, open, stage)
+                        flashing = false
                         stage("Firmware ${pkg.checks.firmware} installato")
                     }
                 }
-            }.onFailure { e -> stage("Firmware non aggiornato: ${e.message ?: e}") }
+            }.onFailure { e ->
+                stage("Firmware non aggiornato: ${e.message ?: e}")
+                // a failed update counts towards "Configura comunque" (FIRMWARE_TRIES)
+                if (flashing) firmwareFailed()
+            }
         }
         apply(stages.toList())
     }
