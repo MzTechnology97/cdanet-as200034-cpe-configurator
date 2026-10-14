@@ -416,6 +416,8 @@ private fun WorkOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
         }
         // the configuration of each new installation goes on the phone now, ready for a roof without Internet
         orders?.let { list -> c.scope.launch { runCatching { c.provisioning.prepareForField(list) } } }
+        // and the CPEs of the installer's warehouse, to pick and check them offline
+        c.scope.launch { c.provisioning.stock.refresh(c.api) }
     }
     val ready by c.provisioning.field.ready.collectAsState()
     LaunchedEffect(c.refresh.collectAsState().value) { load() }

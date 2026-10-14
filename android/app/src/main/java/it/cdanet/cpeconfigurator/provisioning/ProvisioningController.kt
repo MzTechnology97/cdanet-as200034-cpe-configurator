@@ -104,6 +104,8 @@ class ProvisioningController(
     private val store: SecureStore? = null,
     /** Configurations prepared before the visit, one per work order. */
     val field: FieldPackages = FieldPackages(store),
+    /** The CPEs in the installer's own warehouse. */
+    val stock: MyStock = MyStock(store),
 ) {
     private val _state = MutableStateFlow(ProvisioningState())
     val state: StateFlow<ProvisioningState> = _state.asStateFlow()
@@ -187,6 +189,7 @@ class ProvisioningController(
         val pkg = _state.value.pkg ?: return "Configurazione non più disponibile"
         if (!pkg.needsCpe && !pkg.scannedOnSite) return "La CPE di questa configurazione è già indicata"
         Validation.siteCpeErrors(mac, serial).firstOrNull()?.let { return it }
+        stock.problem(mac)?.takeIf { it.blocking }?.let { return it.text }
         val m = Validation.normalizeMac(mac)
         val s = serial.trim()
         _state.update {

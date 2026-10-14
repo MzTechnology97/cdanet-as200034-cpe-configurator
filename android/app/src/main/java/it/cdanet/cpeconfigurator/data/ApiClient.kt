@@ -63,6 +63,8 @@ private val ERRORS = mapOf(
     "ap_not_found" to "AP non trovato tra quelli vicini",
     "work_order_not_found" to "Intervento non trovato",
     "work_order_closed" to "Intervento già chiuso o annullato",
+    "cpe_not_in_stock" to "Questa CPE non risulta nel tuo magazzino: usa una CPE del tuo magazzino o chiedi all'ufficio",
+    "template_needs_mac" to "Questo template ha bisogno del MAC già in preparazione: prepara la configurazione sul posto",
     "work_order_password_missing" to "L'intervento non ha la password PPPoE: chiedila all'ufficio",
     "too_many_zones" to "Hai già 20 zone: eliminane una",
     "zone_not_found" to "Zona non trovata",
@@ -319,6 +321,9 @@ class ApiClient(
         AppJson.decodeFromString(ReverseGeocodeDto.serializer(), request("GET", "/api/geocode/reverse?lat=$lat&lon=$lon"))
 
     suspend fun workOrders(): WorkOrdersDto = AppJson.decodeFromString(WorkOrdersDto.serializer(), request("GET", "/api/work-orders"))
+
+    /** The CPEs in the installer's own warehouse. */
+    suspend fun myStock(): MyStockDto = AppJson.decodeFromString(MyStockDto.serializer(), request("GET", "/api/warehouse/mine"))
 
     suspend fun setWorkOrderStatus(id: Long, status: String, note: String = "") {
         request("POST", "/api/work-orders/$id/status", buildJsonObject { put("status", status); put("note", note) })
