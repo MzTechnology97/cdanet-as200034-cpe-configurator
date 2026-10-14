@@ -603,6 +603,3 @@ tr:hover > td { background: color-mix(in srgb, var(--brand) 4%, transparent); }
    areas the public service never served) a quiet neutral, neither sea nor land */
 .leaflet-container.photo-base { background: #cfd6d0; }
 
-/* the profile of a link: whole, or zoomed on the line where the Fresnel zone is readable */
-.link-chart-views { display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 2px; }
-.link-chart-views .small-btn.on { border-color: var(--brand); color: var(--brand); }
