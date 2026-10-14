@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
+import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import android.webkit.WebView
 import androidx.compose.foundation.layout.height
 import it.cdanet.cpeconfigurator.data.AppJson
@@ -193,11 +195,11 @@ fun NearbyAps(c: AppContainer, location: CpeLocation, onPick: ((CoverageAp) -> U
                 }
                 if (onCompass != null) {
                     androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
-                    OutlinedButton(onClick = { onCompass(CompassTarget(ap.name.ifBlank { ap.id }, ap.bearing, ap.distanceM, location.latitude, location.longitude)) }) { Text("Bussola") }
+                    SecondaryButton(onClick = { onCompass(CompassTarget(ap.name.ifBlank { ap.id }, ap.bearing, ap.distanceM, location.latitude, location.longitude)) }) { Text("Bussola") }
                 }
                 if (onPick != null && ap.node != null && ap.district != null) {
                     androidx.compose.foundation.layout.Spacer(Modifier.width(8.dp))
-                    OutlinedButton(onClick = { onPick(ap) }) { Text("Usa") }
+                    SecondaryButton(onClick = { onPick(ap) }) { Text("Usa") }
                 }
             }
         }

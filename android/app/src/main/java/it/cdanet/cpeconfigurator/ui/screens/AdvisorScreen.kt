@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
+import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -214,7 +216,7 @@ fun AdvisorScreen(c: AppContainer) {
                     }
                 }
             }
-            OutlinedButton(
+            SecondaryButton(
                 onClick = {
                     scope.launch {
                         runCatching { c.api.refreshAdvisor() }
@@ -346,7 +348,7 @@ private fun OptimizeDialog(f: AdvisorFindingDto, onDismiss: () -> Unit, onConfir
                 ChoiceRow("Adesso", at == "now") { at = "now" }
             }
         },
-        confirmButton = { androidx.compose.material3.Button(onClick = { onConfirm(mode, at) }) { Text("Conferma") } },
+        confirmButton = { PrimaryButton(onClick = { onConfirm(mode, at) }) { Text("Conferma") } },
         dismissButton = { TextButton(onClick = onDismiss) { Text("Annulla") } },
     )
 }

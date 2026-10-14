@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
+import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import it.cdanet.cpeconfigurator.ui.wifiPanelIntent
 import android.content.ActivityNotFoundException
 import android.content.Intent
@@ -145,7 +147,7 @@ fun DiscoveryScreen(c: AppContainer) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SectionCard("Subnet") {
             Field("Subnet (max /24)", cidr, { cidr = it.trim() })
-            OutlinedButton(onClick = { c.tools.suggestedCidr()?.let { cidr = it } }) { Text("Usa subnet attuale") }
+            SecondaryButton(onClick = { c.tools.suggestedCidr()?.let { cidr = it } }) { Text("Usa subnet attuale") }
             WifiSwitch(viaWifi) { viaWifi = it }
             ToolButton(r, "Scansiona subnet", primary = true) { c.tools.discover(cidr, viaWifi) }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {

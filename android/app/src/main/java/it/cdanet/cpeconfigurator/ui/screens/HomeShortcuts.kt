@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
+import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -178,7 +180,7 @@ fun ShortcutEditor(catalog: List<Shortcut>, chosen: List<String>, onChange: (Lis
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = onReset) { Text("Ripristina predefinite") }
                 Spacer(Modifier.weight(1f))
-                Button(onClick = onDismiss) { Text("Fatto") }
+                PrimaryButton(onClick = onDismiss) { Text("Fatto") }
             }
         }
     }

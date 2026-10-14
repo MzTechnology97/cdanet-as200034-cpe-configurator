@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
+import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Intent
@@ -303,7 +305,7 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
                     topoBusy != null,
                     Modifier.fillMaxWidth(),
                 ) { start() }
-                else OutlinedButton(onClick = { job?.cancel() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Interrompi") }
+                else SecondaryButton(onClick = { job?.cancel() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Interrompi") }
                 // debug builds only: the fictitious office LAN (guide screenshots, tries without a network)
                 if (BuildConfig.DEBUG && hosts.isEmpty() && job == null) TextButton(onClick = {
                     cidr = "192.168.88.0/24"
@@ -415,7 +417,7 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
                     )
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
                         BusyButton(if (topo == null) "Costruisci mappa" else "Ricostruisci", topoBusy != null, Modifier.weight(1f), enabled = topoBusy == null && job == null) { buildTopology() }
-                        OutlinedButton(onClick = { topoSettings = !topoSettings }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (topoSettings) "Chiudi" else "SNMP e discovery") }
+                        SecondaryButton(onClick = { topoSettings = !topoSettings }, modifier = Modifier.heightIn(min = 48.dp)) { Text(if (topoSettings) "Chiudi" else "SNMP e discovery") }
                     }
                     androidx.compose.animation.AnimatedVisibility(topoSettings) {
                         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -437,7 +439,7 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
                         .filter { cidr -> cidr.prefix >= 16 && Ip.isPrivate(Ip.format(cidr.network)) && scanned.none { it in cidr.network..cidr.broadcast } }
                     if (more.isNotEmpty() && job == null) {
                         Text("Subnet dichiarate dai router e non ancora scansionate: ${more.joinToString(", ")}", style = MaterialTheme.typography.bodySmall)
-                        OutlinedButton(onClick = {
+                        SecondaryButton(onClick = {
                             job = scope.launch {
                                 try {
                                     val net = c.network.wifiNetwork() ?: throw IllegalStateException("Collegati alla Wi-Fi della LAN da scansionare")
@@ -461,8 +463,8 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
                         TopologyNodeCard(graph, id, graph.byId[id]?.host?.let { h -> { open(h) } }) { selectedNode = null }
                     }
                     if (t != null) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        OutlinedButton(onClick = { shareCsv(context, "Collegamenti di rete", TopoGraph.csv(t.graph)) }) { Text("Collegamenti CSV") }
-                        OutlinedButton(onClick = { shareCsv(context, "Dispositivi di rete", TopoGraph.devicesCsv(t.graph)) }) { Text("Dispositivi CSV") }
+                        SecondaryButton(onClick = { shareCsv(context, "Collegamenti di rete", TopoGraph.csv(t.graph)) }) { Text("Collegamenti CSV") }
+                        SecondaryButton(onClick = { shareCsv(context, "Dispositivi di rete", TopoGraph.devicesCsv(t.graph)) }) { Text("Dispositivi CSV") }
                     }
                 } }
                 topo?.found?.takeIf { it.isNotEmpty() }?.let { found ->
@@ -489,7 +491,7 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
                 @Composable
                 fun SortAndCsv() {
                     Dropdown("Ordina per", listOf("IP", "Latenza", "Tipo", "Produttore"), sort, { it }, { sort = it }, if (wide) Modifier.width(170.dp) else Modifier.fillMaxWidth(0.72f))
-                    OutlinedButton(onClick = {
+                    SecondaryButton(onClick = {
                         shareCsv(context, "Scansione $cidr", listOf(listOf("IP", "Nome", "MAC", "Produttore", "Tipo", "Porte", "Latenza ms", "Rilevato con")) +
                             hosts.map { listOf(it.ip, it.hostname ?: it.netbios, it.mac, it.vendor, it.kind, it.ports.joinToString(" "), it.latencyMs, it.how) })
                     }, modifier = Modifier.heightIn(min = 56.dp)) { Text("CSV") }
@@ -651,7 +653,7 @@ fun PortScannerScreen(c: AppContainer) {
                 SwitchRow("Banner, header HTTP e certificati TLS", grab) { grab = it }
                 SwitchRow("Mostra anche porte chiuse/filtrate", showClosed) { showClosed = it }
                 if (job == null) BusyButton("Avvia scansione", false, Modifier.fillMaxWidth()) { start() }
-                else OutlinedButton(onClick = { job?.cancel() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Interrompi") }
+                else SecondaryButton(onClick = { job?.cancel() }, modifier = Modifier.fillMaxWidth().heightIn(min = 48.dp)) { Text("Interrompi") }
                 // debug builds only: the demo router (guide screenshots)
                 if (BuildConfig.DEBUG && job == null && results.isEmpty()) TextButton(onClick = {
                     host = TopologyDemo.GATEWAY
@@ -817,7 +819,7 @@ fun NetDiagScreen(c: AppContainer) {
                     }
                 }
             } else {
-                OutlinedButton(onClick = { pingJob?.cancel() }, modifier = Modifier.fillMaxWidth()) { Text("Ferma") }
+                SecondaryButton(onClick = { pingJob?.cancel() }, modifier = Modifier.fillMaxWidth()) { Text("Ferma") }
             }
             if (samples.isNotEmpty()) {
                 val s = NetDiag.stats(samples.toList())
