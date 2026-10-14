@@ -62,6 +62,25 @@ class AppContainer(context: Context) {
     val modules = kotlinx.coroutines.flow.MutableStateFlow<Map<String, Boolean>>(emptyMap())
     fun moduleOn(key: String): Boolean = modules.value[key] != false
 
+    private val screenPrefs = appContext.getSharedPreferences("screen", Context.MODE_PRIVATE)
+
+    /**
+     * Screenshots and screen recording blocked for this account (owner and NOC, 14/10/2026: only
+     * admins, and the installers enabled one by one). The last answer stays on the phone, so the
+     * block holds offline and from the very first frame.
+     */
+    val secureScreen = kotlinx.coroutines.flow.MutableStateFlow(screenPrefs.getBoolean("secure", false))
+
+    /** Title of the screen on show (for the NOC's notice of a screenshot attempt). */
+    val currentScreen = kotlinx.coroutines.flow.MutableStateFlow("")
+
+    /** Decides it from the account's features: admins never, others when «Screenshot nell'app» is off. */
+    fun updateSecureScreen(role: String?, modules: Map<String, Boolean>) {
+        val secure = role != "admin" && modules["screenshots"] == false
+        secureScreen.value = secure
+        runCatching { screenPrefs.edit().putBoolean("secure", secure).apply() }
+    }
+
     /** Host chosen in the IP scanner for the port scanner. */
     val portScanTarget = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 

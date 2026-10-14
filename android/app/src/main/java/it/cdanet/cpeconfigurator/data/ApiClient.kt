@@ -326,6 +326,11 @@ class ApiClient(
     suspend fun reverseGeocode(lat: Double, lon: Double): ReverseGeocodeDto =
         AppJson.decodeFromString(ReverseGeocodeDto.serializer(), request("GET", "/api/geocode/reverse?lat=$lat&lon=$lon"))
 
+    /** A screenshot taken by an account that may not (the NOC is told). */
+    suspend fun reportScreenshot(screen: String) {
+        request("POST", "/api/security/screenshot-attempt", buildJsonObject { put("screen", screen.take(80)) })
+    }
+
     suspend fun workOrders(): WorkOrdersDto = AppJson.decodeFromString(WorkOrdersDto.serializer(), request("GET", "/api/work-orders"))
 
     /** The CPEs in the installer's own warehouse. */
