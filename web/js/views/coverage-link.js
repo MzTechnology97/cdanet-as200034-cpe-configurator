@@ -38,14 +38,15 @@ let clipIds = 0;
  * Elevation profile of the link, as in UISP Design: ground (with the earth bulge) and the obstacles
  * on it, the two antennas on their masts, the line of sight, the whole first Fresnel zone (ellipse)
  * and its 60% limit, distances along the bottom and the critical point.
- * Two views: the whole profile, and the Fresnel zone: everything measured from the line of sight
- * (straight at 0), so the zone fills the drawing and what enters it shows at once (a hill of 500 m
- * and a zone of ±8 m do not fit the same scale). That view opens by itself when the zone would be
- * a thin line in the whole profile; ground far above or below the line is cut at the edges.
+ * [view] 'full': the whole profile. 'fresnel': everything measured from the line of sight
+ * (straight at 0), on a scale made for the zone, so that it fills the drawing and what enters it
+ * shows at once (a hill of 500 m and a zone of ±1 m do not fit the same scale); ground far above
+ * or below the line is cut at the edges. 'auto': the zone view when the zone would be a thin line
+ * in the whole profile. [height]: of the drawing, out of a width of 980 (a lower one for a strip).
  */
-export function profileChart(p) {
+export function profileChart(p, { view = 'full', height = 300 } = {}) {
   const W = 980;
-  const H = 300;
+  const H = height;
   const pad = { l: 52, r: 16, t: 18, b: 34 };
   const pts = p.chart.map((q) => ({ ...q, r: fresnelR(q.d, p.distanceM, p.frequencyMhz) }));
   const D = pts[pts.length - 1].d || 1;
@@ -53,7 +54,7 @@ export function profileChart(p) {
   const ys = pts.flatMap((q) => [q.ground, q.top ?? q.ground, q.los + q.r, q.los - q.r]);
   const full = [Math.floor(Math.min(...ys) - 8), Math.ceil(Math.max(...ys) + 8)];
   // the zone and room around it for what touches it, in metres from the line of sight
-  const span = Math.ceil(Math.max(maxR * 2.4, 10));
+  const span = Math.max(Math.ceil(maxR * 2.4 * 2) / 2, 2);
   const line = [-span, span];
   const thin = (2 * maxR * (H - pad.t - pad.b)) / (full[1] - full[0] || 1) < THIN_FRESNEL;
   // how far the ground and the obstacles go above the line (zoom: cut beyond the window)
@@ -85,7 +86,7 @@ export function profileChart(p) {
     for (const v of [lo, Math.round((lo + hi) / 2), hi]) {
       svg.append(s('line', { x1: pad.l, x2: W - pad.r, y1: yv(v), y2: yv(v), class: 'link-grid' }));
       const t = s('text', { x: pad.l - 6, y: yv(v) + 4, class: 'los-axis', 'text-anchor': 'end' });
-      t.textContent = zoom ? `${v > 0 ? '+' : ''}${v} m` : `${v} m`;
+      t.textContent = zoom ? `${v > 0 ? '+' : ''}${dec(v)} m` : `${v} m`;
       svg.append(t);
     }
     // Fresnel ellipse (whole first zone), then terrain and obstacles over it
@@ -125,18 +126,7 @@ export function profileChart(p) {
     }
     return svg;
   };
-  let zoom = thin;
-  const views = h('div', { class: 'link-chart-views' });
-  const render = () => {
-    views.replaceChildren(
-      ...[
-        [false, 'Profilo intero'],
-        [true, 'Zona di Fresnel'],
-      ].map(([z, label]) => h('button', { type: 'button', class: `small-btn${zoom === z ? ' on' : ''}`, 'aria-pressed': zoom === z ? 'true' : 'false', onclick: () => ((zoom = z), render()) }, label)),
-    );
-    wrap.replaceChildren(views, draw(zoom));
-  };
-  render();
+  wrap.append(draw(view === 'fresnel' || (view === 'auto' && thin)));
   return wrap;
 }
 

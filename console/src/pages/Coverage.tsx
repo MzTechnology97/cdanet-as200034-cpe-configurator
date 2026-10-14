@@ -2,10 +2,10 @@ import { type FormEvent, type ReactNode, useRef, useState } from 'react';
 import { type Ap, dec, EstimateCell, km, LoadCell, type Point, type Profile, RATING, type Result, type Tone } from '../coverage/parts';
 import { toast } from '../../../web/js/dom.js';
 import { drawCoverage as drawCoverageJs, MAP_COLORS as C } from '../../../web/js/map.js';
-import { DECLINATION_DEG, profileChart, signalBar } from '../../../web/js/views/coverage-link.js';
+import { DECLINATION_DEG, signalBar } from '../../../web/js/views/coverage-link.js';
 import { api } from '../lib/api';
 import { MapView } from '../map/MapView';
-import { CoverageAdmin } from './CoverageAdmin';
+import { CoverageAdmin, LinkCharts } from './CoverageAdmin';
 import type { PageContext } from '../shell/routes';
 import { AsyncButton, Badge, Button, Card, Dom, Field, Icon, Notice, PageHeader, Skeleton } from '../ui';
 
@@ -343,7 +343,7 @@ function LinkCard({ link, onHeight }: { link: { a: Ap; p?: Profile; error?: stri
         </p>
       )}
       <Dom make={() => signalBar(a.estimate)} deps={[a.estimate]} />
-      <Dom make={() => profileChart(p)} deps={[p]} />
+      <LinkCharts p={p} />
       <p className="ui-muted ui-small">
         {p.verdict === 'clear'
           ? 'Profilo del terreno con edifici e alberi; verifica sempre a vista sul posto.'
