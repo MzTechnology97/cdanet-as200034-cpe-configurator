@@ -56,6 +56,9 @@ import it.cdanet.cpeconfigurator.R
 import it.cdanet.cpeconfigurator.tools.ToolResult
 import androidx.annotation.DrawableRes
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.res.painterResource
@@ -67,12 +70,14 @@ fun SectionCard(title: String? = null, modifier: Modifier = Modifier, @DrawableR
         shape = MaterialTheme.shapes.large,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
         elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        // the card of the console: white on the grey page, a thin line and a soft shadow
+        border = cardBorder(),
     ) {
-        Column(Modifier.padding(horizontal = 18.dp, vertical = 16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Column(Modifier.padding(horizontal = ConsoleTokens.SPACE_5.dp, vertical = ConsoleTokens.SPACE_4.dp), verticalArrangement = Arrangement.spacedBy(ConsoleTokens.SPACE_3.dp)) {
             if (title != null) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     if (icon != null) {
-                        Box(Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
+                        Box(Modifier.size(32.dp).clip(MaterialTheme.shapes.small).background(MaterialTheme.colorScheme.primaryContainer), contentAlignment = Alignment.Center) {
                             Icon(painterResource(icon), contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
                         }
                         Spacer(Modifier.width(10.dp))
@@ -87,23 +92,35 @@ fun SectionCard(title: String? = null, modifier: Modifier = Modifier, @DrawableR
 
 enum class NoticeKind { Info, Good, Warn, Bad }
 
-/** Tonal message with a status icon (info, ok, attention, error). */
+/**
+ * Tonal message with a status icon (info, ok, attention, error), as the console's notice: soft
+ * background, a stripe of the tone on the left, an optional [title] in the tone.
+ */
 @Composable
-fun Notice(text: String, kind: NoticeKind, onDismiss: (() -> Unit)? = null) {
-    val st = StatusPalette
-    val (fg, bg, icon) = when (kind) {
-        NoticeKind.Good -> Triple(st.good, st.goodContainer, R.drawable.ic_check_circle_filled)
-        NoticeKind.Warn -> Triple(st.warn, st.warnContainer, R.drawable.ic_warning_filled)
-        NoticeKind.Bad -> Triple(st.bad, st.badContainer, R.drawable.ic_error_filled)
-        NoticeKind.Info -> Triple(st.info, st.infoContainer, R.drawable.ic_info_filled)
+fun Notice(text: String, kind: NoticeKind, title: String? = null, onDismiss: (() -> Unit)? = null) {
+    val t = kind.tone.colors
+    val icon = when (kind) {
+        NoticeKind.Good -> R.drawable.ic_check_circle_filled
+        NoticeKind.Warn -> R.drawable.ic_warning_filled
+        NoticeKind.Bad -> R.drawable.ic_error_filled
+        NoticeKind.Info -> R.drawable.ic_info_filled
     }
     Row(
-        Modifier.fillMaxWidth().padding(vertical = 4.dp).clip(MaterialTheme.shapes.medium).background(bg).padding(start = 14.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
+        Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clip(MaterialTheme.shapes.medium)
+            .background(t.container)
+            .drawBehind { drawRect(t.content, size = Size(4.dp.toPx(), size.height)) }
+            .padding(start = 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+        verticalAlignment = if (title != null) Alignment.Top else Alignment.CenterVertically,
     ) {
-        Icon(painterResource(icon), contentDescription = null, tint = fg, modifier = Modifier.size(22.dp))
+        Icon(painterResource(icon), contentDescription = null, tint = t.content, modifier = Modifier.size(22.dp))
         Spacer(Modifier.width(12.dp))
-        Text(text, color = if (kind == NoticeKind.Info) fg else MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f).padding(end = 6.dp))
+        Column(Modifier.weight(1f).padding(end = 6.dp)) {
+            if (title != null) Text(title, color = t.content, style = MaterialTheme.typography.titleSmall)
+            Text(text, color = MaterialTheme.colorScheme.onSurface, style = MaterialTheme.typography.bodyMedium)
+        }
         if (onDismiss != null) TextButton(onClick = onDismiss) { Text("OK") }
     }
 }
@@ -118,7 +135,7 @@ fun Banner(text: String, color: Color, onDismiss: (() -> Unit)? = null) {
         st.bad, MaterialTheme.colorScheme.error -> NoticeKind.Bad
         else -> NoticeKind.Info
     }
-    Notice(text, kind, onDismiss)
+    Notice(text, kind, onDismiss = onDismiss)
 }
 
 @Composable
@@ -135,17 +152,28 @@ fun BusyButton(text: String, busy: Boolean, modifier: Modifier = Modifier, enabl
         }
         Text(text)
     }
+    // the corners of the console's buttons (8), at the height of a finger (48)
+    val shape = MaterialTheme.shapes.small
     if (primary) {
-        Button(onClick = onClick, enabled = enabled && !busy, modifier = modifier.heightIn(min = 48.dp)) { content() }
+        Button(onClick = onClick, enabled = enabled && !busy, modifier = modifier.heightIn(min = 48.dp), shape = shape) { content() }
     } else if (tonal) {
         androidx.compose.material3.FilledTonalButton(
             onClick = onClick,
             enabled = enabled && !busy,
             modifier = modifier.heightIn(min = 48.dp),
+            shape = shape,
             contentPadding = androidx.compose.foundation.layout.PaddingValues(horizontal = 12.dp),
         ) { content() }
     } else {
-        OutlinedButton(onClick = onClick, enabled = enabled && !busy, modifier = modifier.heightIn(min = 48.dp)) { content() }
+        // the secondary button of the console: ink on the card, a stronger line around
+        OutlinedButton(
+            onClick = onClick,
+            enabled = enabled && !busy,
+            modifier = modifier.heightIn(min = 48.dp),
+            shape = shape,
+            colors = androidx.compose.material3.ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
+            border = androidx.compose.foundation.BorderStroke(1.dp, if (enabled && !busy) MaterialTheme.colorScheme.outline else MaterialTheme.colorScheme.outlineVariant),
+        ) { content() }
     }
 }
 
@@ -175,7 +203,7 @@ fun Field(
         singleLine = true,
         trailingIcon = trailing,
         leadingIcon = leadingIcon?.let { { Icon(painterResource(it), contentDescription = null, modifier = Modifier.size(20.dp)) } },
-        shape = MaterialTheme.shapes.medium,
+        shape = MaterialTheme.shapes.small,
         visualTransformation = if (password) PasswordVisualTransformation() else androidx.compose.ui.text.input.VisualTransformation.None,
         keyboardOptions = KeyboardOptions(keyboardType = if (password) KeyboardType.Password else keyboardType),
         modifier = modifier.fillMaxWidth(),
@@ -300,7 +328,7 @@ fun StatusChip(text: String, kind: NoticeKind, modifier: Modifier = Modifier) {
     ) {
         Box(Modifier.size(7.dp).clip(RoundedCornerShape(50)).background(fg))
         Spacer(Modifier.width(6.dp))
-        Text(text, color = fg, style = MaterialTheme.typography.labelMedium, maxLines = 1)
+        Text(text, color = fg, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, maxLines = 1)
     }
 }
 
@@ -389,7 +417,7 @@ fun SkeletonRows(rows: Int = 3) {
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         repeat(rows) {
             Column(
-                Modifier.fillMaxWidth().clip(RoundedCornerShape(20.dp)).background(MaterialTheme.colorScheme.surfaceContainerLow).padding(16.dp),
+                Modifier.fillMaxWidth().clip(MaterialTheme.shapes.large).background(MaterialTheme.colorScheme.surfaceContainerLow).border(cardBorder(), MaterialTheme.shapes.large).padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 Box(Modifier.fillMaxWidth(0.55f).height(16.dp).clip(RoundedCornerShape(8.dp)).background(block))

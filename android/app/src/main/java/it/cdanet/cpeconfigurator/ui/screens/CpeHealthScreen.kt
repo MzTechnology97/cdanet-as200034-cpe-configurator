@@ -1,6 +1,8 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
 import androidx.compose.runtime.collectAsState
+import it.cdanet.cpeconfigurator.ui.StatTile
+import it.cdanet.cpeconfigurator.ui.Tone
 import it.cdanet.cpeconfigurator.ui.RefreshButton
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -206,20 +208,13 @@ fun CpeHealthScreen(c: AppContainer, onRepoint: (() -> Unit)? = null) {
 /** One of the four tiles: count and label, highlighted when it is the active filter. */
 @Composable
 private fun StateTile(st: HealthState, count: Int, selected: Boolean, modifier: Modifier, onClick: () -> Unit) {
-    val accent = when (st) {
-        HealthState.Online -> GoodGreen
-        HealthState.Offline -> BadRed
-        HealthState.Issues -> WarnAmber
-        HealthState.All -> MaterialTheme.colorScheme.primary
+    val tone = when (st) {
+        HealthState.Online -> Tone.Good
+        HealthState.Offline -> Tone.Bad
+        HealthState.Issues -> Tone.Warn
+        HealthState.All -> Tone.Neutral
     }
-    val bg = if (selected) accent.copy(alpha = 0.16f) else MaterialTheme.colorScheme.surfaceContainerHigh
-    Column(
-        modifier.clip(RoundedCornerShape(16.dp)).background(bg).clickable(onClick = onClick).padding(horizontal = 10.dp, vertical = 10.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-    ) {
-        Text(count.toString(), style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.SemiBold, color = if (st == HealthState.All) MaterialTheme.colorScheme.onSurface else accent)
-        Text(st.label, style = MaterialTheme.typography.labelMedium, color = if (selected) accent else MaterialTheme.colorScheme.onSurfaceVariant, maxLines = 1)
-    }
+    StatTile(st.label, count.toString(), modifier, tone = tone, active = selected, compact = true, onClick = onClick)
 }
 
 private const val PAGE = 50
