@@ -22,6 +22,10 @@ class AirosImageTest {
         assertEquals("8.7.4", AirosImage.parseHeader(header("XC.qca956x.v8.7.4.45112.210415.1103"))?.version)
         assertNull(AirosImage.parseHeader(ByteArray(260)))
         assertNull(AirosImage.parseBuild("BusyBox v1.25"))
+        // segnalazione #5: some CPEs write only platform and version in /etc/version
+        val short = AirosImage.parseBuild("WA.v8.7.11\n")
+        assertEquals("WA", short?.platform)
+        assertEquals("8.7.11", short?.version)
     }
 
     @Test
