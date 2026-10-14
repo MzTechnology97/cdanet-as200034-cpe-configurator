@@ -69,6 +69,7 @@ Vedi [CRM.md](CRM.md).
 
 ## Da valutare
 
+- **Scarico automatico della CPE in ISP Billing** (possibile implementazione, titolare 14/10/2026). Quando il NOC approva il collaudo, la CPE va scaricata dal magazzino del partner e assegnata al cliente, con traccia nel registro movimenti. La chiave API ha già i permessi di scrittura sul magazzino. Le API di ISP Billing però hanno solo i carichi: serve un endpoint di scarico, con magazzino di uscita, seriali, causale e cliente (`customer_id` e/o `service_instance_id`), e possibilmente il trasferimento tra magazzini. Fino ad allora c'è l'elenco «Da scaricare» per l'ufficio (v1.33.49).
 - **Console in React** (scelta dell'utente 11/10/2026: React solo dove serve, senza build): fatte la base (React e htm in `vendor/`, `js/react.js`, componenti comuni in `js/ui.js`) IA-AP (v1.32.82) e Copertura admin (v1.32.83); poi le altre pagine complesse una alla volta.
 - **Realismo della copertura** (richiesto 11/10/2026): fatti edifici, alberi, CPE sul tetto, correzione locale, antenne vere e avvisi IA-AP (v1.32.72); fatti anche simulazione 3D, velocità la sera e civici ANNCSU (v1.32.73); resta il LiDAR del Ministero dove disponibile.
 - **Mappa 3D**: fatta la vista del collegamento (v1.32.70); restano i settori degli AP (servono azimut e antenna in UISP), la vista 3D di tutta la rete e la vista 3D nell'app.
@@ -85,6 +86,9 @@ Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). 
 | Accesso rapido con impronta o volto (v1.30) | attivazione dopo il login, accesso con impronta e con volto, revoca da Il mio account |
 | Aggiornamento obbligatorio (v1.31) | un'app più vecchia mostra solo la schermata di aggiornamento e si aggiorna da sola |
 | Tema scuro (v1.32.1) | con il telefono in modalità scura: nessun lampo bianco all'avvio, mappe in versione scura |
+| Installazione senza rete (v1.33.37) | configurazione «pronto offline» preparata da sola, scrittura sul tetto senza rete mobile, scelta dell'AP, esito con MAC, seriale e AP all'arrivo della rete |
+| Wi-Fi della CPE dall'app (v1.33.44) | «Collegati alla Wi-Fi della CPE» elenca la rete di management di una CPE nuova, collegamento senza Internet mentre il server resta raggiungibile dalla rete mobile |
+| Magazzino nell'app (v1.33.50) | elenco «Dal tuo magazzino» con le CPE vere di un partner, blocco o avviso su un MAC fuori magazzino |
 
 ## Già rilasciato
 
