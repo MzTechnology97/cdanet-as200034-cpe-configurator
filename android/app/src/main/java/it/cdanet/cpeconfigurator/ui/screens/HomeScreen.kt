@@ -497,9 +497,13 @@ private fun WorkOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
     }
 }
 
-/** The brand gradient of the hero card (and of the login): brand, brand ink and a deeper ink. */
+/**
+ * The brand gradient of the hero card (and of the login): from a brand already close to brand ink,
+ * then brand ink and a deeper ink. White text on the pure brand orange is 3.4:1, too little for the
+ * small lines of the card in the sun; from 80% towards brand ink it is 4.7:1 everywhere.
+ */
 internal val HeroBrush = Brush.linearGradient(
-    listOf(ConsoleTokens.Light.brand, ConsoleTokens.Light.brandInk, lerp(ConsoleTokens.Light.brandInk, Color.Black, 0.3f)),
+    listOf(lerp(ConsoleTokens.Light.brand, ConsoleTokens.Light.brandInk, 0.8f), ConsoleTokens.Light.brandInk, lerp(ConsoleTokens.Light.brandInk, Color.Black, 0.3f)),
 )
 
 /** «Inizia» of a work order (Oggi and Calendario): the acceptance test will check the GPS against its position. */
