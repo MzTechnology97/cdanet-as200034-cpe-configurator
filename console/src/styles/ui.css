@@ -1,6 +1,8 @@
 /* Components of the console (src/ui). Tokens only: no colour or size written here twice. */
 
-.ui-page { display: grid; gap: var(--sp-4); }
+.ui-page { display: grid; gap: var(--sp-4); grid-template-columns: minmax(0, 1fr); }
+/* a wide child (a selector, a table) scrolls inside itself: the page never gets wider than the screen */
+.ui-page > * { min-width: 0; }
 .ui-muted { color: var(--muted); margin: 0; }
 .ui-row { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
 .ui-actions { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; }
@@ -55,7 +57,8 @@
 button.ui-stat { cursor: pointer; transition: border-color .15s var(--ease), background .15s var(--ease); }
 button.ui-stat:hover { border-color: var(--line-strong); }
 .ui-stat.active { background: var(--tone-bg); border-color: var(--tone); }
-.ui-stat-value { font-size: var(--fs-num); font-weight: 700; line-height: 1.1; color: var(--tone); font-variant-numeric: tabular-nums; }
+.ui-stat { min-width: 0; }
+.ui-stat-value { overflow-wrap: anywhere; font-size: var(--fs-num); font-weight: 700; line-height: 1.1; color: var(--tone); font-variant-numeric: tabular-nums; }
 .ui-tone-neutral .ui-stat-value { color: var(--ink); }
 .ui-stat-label { font-size: var(--fs-sm); color: var(--muted); font-weight: 600; }
 .ui-stat-hint { font-size: var(--fs-xs); color: var(--muted); }
@@ -71,8 +74,9 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .ui-field-error { font-size: var(--fs-xs); color: var(--bad); font-weight: 600; }
 
 /* segmented */
-.ui-segmented { display: inline-flex; padding: 3px; gap: 2px; border-radius: var(--radius-sm); background: var(--surface-3); }
-.ui-segmented button { font: inherit; font-size: var(--fs-sm); font-weight: 600; border: 0; border-radius: 6px; padding: 6px 14px; background: transparent; color: var(--muted); cursor: pointer; }
+.ui-segmented { display: inline-flex; padding: 3px; gap: 2px; border-radius: var(--radius-sm); background: var(--surface-3); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.ui-segmented::-webkit-scrollbar { display: none; }
+.ui-segmented button { flex: none; white-space: nowrap; font: inherit; font-size: var(--fs-sm); font-weight: 600; border: 0; border-radius: 6px; padding: 6px 14px; background: transparent; color: var(--muted); cursor: pointer; }
 .ui-segmented button.on { background: var(--surface); color: var(--ink); box-shadow: var(--shadow); }
 
 /* empty, skeleton */
@@ -420,3 +424,8 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .ia-p { margin: 0; }
 .ia-toolbar .hl-search { flex: 1 1 220px; }
 .ia-btn { min-height: 32px; padding: 0 var(--sp-3); font-size: var(--fs-sm); }
+
+@media (max-width: 640px) {
+  .ia-toolbar { padding: var(--sp-2); }
+  .ia-toolbar > * { max-width: 100%; }
+}

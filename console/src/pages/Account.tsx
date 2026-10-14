@@ -43,8 +43,8 @@ export function Account() {
       {a.totpRequired && !a.totpEnabled && <Notice tone="bad">Per gli amministratori la verifica in due passaggi è obbligatoria: attivala qui sotto per usare la console.</Notice>}
       <PageHeader icon="lock" title="Il mio account" subtitle={`${a.username} · ${role}`} />
       <section className="ui-stats" aria-label="Account">
-        <Stat label="utente" value={a.username} />
-        <Stat label="ruolo" value={role} />
+        <Stat label="utente" value={<span className="ac-date">{a.username}</span>} />
+        <Stat label="ruolo" value={<span className="ac-date">{role}</span>} />
         <Stat label="ultimo accesso" value={<span className="ac-date">{date(a.lastLoginAt)}</span>} />
         <Stat label="creato il" value={<span className="ac-date">{date(a.createdAt)}</span>} />
       </section>
