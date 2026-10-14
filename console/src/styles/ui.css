@@ -335,3 +335,15 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .pv-text h3 { margin: var(--sp-3) 0 var(--sp-2); }
 .pv-text h4 { margin: var(--sp-3) 0 var(--sp-1); }
 .pv-text p { margin: 0 0 var(--sp-2); }
+
+/* Storico provisioning */
+.jb-filters { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); align-items: flex-end; }
+.jb-filters .hl-search { flex: 1 1 280px; }
+.jb-filters .ui-field { flex: 0 1 170px; }
+.jb-chips { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; padding-bottom: 2px; }
+.jb-chips::-webkit-scrollbar { display: none; }
+.jb-chips .nw-chip { flex: none; opacity: 1; }
+.jb-row { cursor: pointer; }
+.jb-sec h3 { margin: 0 0 var(--sp-2); font-size: 1rem; }
+.jb-sec p { margin: 0; }
+.jb-stages { margin: 0; padding-left: 1.2em; font-size: var(--fs-sm); }

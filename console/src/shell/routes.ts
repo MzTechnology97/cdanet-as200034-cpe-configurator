@@ -50,7 +50,7 @@ export const ROUTES: Array<Route | Group> = [
   { id: 'dashboard', label: 'Panoramica', icon: 'home', admin: true, bottom: true, react: () => import('../pages/Dashboard').then((m) => m.Dashboard) },
   { id: 'notifications', label: 'Notifiche', icon: 'notifications', react: () => import('../pages/Notifications').then((m) => m.Notifications) },
   { id: 'work-orders', icon: 'pending_actions', label: 'Interventi', installerLabel: 'I miei interventi', module: 'work_orders', bottom: true, react: () => import('../pages/WorkOrders').then((m) => m.WorkOrders) },
-  { id: 'jobs', label: 'Storico provisioning', icon: 'history', legacy: () => import('../../../web/js/views/jobs.js').then((m) => m.jobsView) },
+  { id: 'jobs', label: 'Storico provisioning', icon: 'history', react: () => import('../pages/Jobs').then((m) => m.Jobs) },
   { id: 'health', icon: 'monitor_heart', label: 'Salute CPE', installerLabel: 'Le mie CPE', module: 'cpe_health', bottom: true, react: () => import('../pages/Health').then((m) => m.Health) },
   // one CPE managed as in the UISP app (opened from Salute CPE, not in the menu)
   { id: 'cpe', icon: 'monitor_heart', label: 'Gestione CPE', module: 'cpe_health', admin: true, hidden: true, parent: 'health', react: () => import('../pages/CpeAdmin').then((m) => m.CpeAdmin) },
