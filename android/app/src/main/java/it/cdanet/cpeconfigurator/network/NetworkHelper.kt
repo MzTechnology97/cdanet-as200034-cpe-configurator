@@ -111,6 +111,11 @@ class NetworkHelper(context: Context) {
         }
     }
 
+    /** A failed attempt's message belongs to the screen it was made on: back to idle when that screen goes. */
+    fun clearCpeWifiResult() {
+        if (_cpeWifi.value == CpeWifi.NotFound) _cpeWifi.value = CpeWifi.Idle
+    }
+
     /** Leaves the CPE's Wi-Fi joined from the app (and stops asking for it). */
     fun leaveCpeWifi() {
         cpeCallback?.let { runCatching { cm.unregisterNetworkCallback(it) } }
@@ -185,7 +190,9 @@ class NetworkHelper(context: Context) {
             val c = Ip.Cidr(ip and Ip.parseCidr("0.0.0.0/${la.prefixLength}").mask, la.prefixLength)
             cidr = c.toString()
         }
-        val gateway = lp?.routes?.firstOrNull { it.isDefaultRoute && it.gateway != null }?.gateway?.hostAddress
+        // IPv4 first: a link-local IPv6 router (fe80::…) is listed too on some Wi-Fi, never the CPE
+        val defaults = lp?.routes?.filter { it.isDefaultRoute && it.gateway != null }.orEmpty()
+        val gateway = (defaults.firstOrNull { it.gateway is java.net.Inet4Address } ?: defaults.firstOrNull())?.gateway?.hostAddress
         val info: WifiInfo? = if (isWifi) wifiInfo(caps) else null
         return LinkInfo(
             transport = when {

@@ -82,6 +82,7 @@ fun WifiRequired(c: AppContainer, target: String, why: String, cpe: Boolean = ta
  */
 @Composable
 fun CpeWifiJoin(c: AppContainer, state: S, compact: Boolean = false) {
+    androidx.compose.runtime.DisposableEffect(Unit) { onDispose { c.network.clearCpeWifiResult() } }
     val message = when (state) {
         S.Searching -> "Scegli la Wi-Fi della CPE nella finestra di Android (es. «LBE-5AC-Gen2:…»)."
         S.NotFound -> if (!c.network.wifiEnabled) "Il Wi-Fi del telefono è spento: accendilo e tocca di nuovo «Collegati alla Wi-Fi della CPE»."
