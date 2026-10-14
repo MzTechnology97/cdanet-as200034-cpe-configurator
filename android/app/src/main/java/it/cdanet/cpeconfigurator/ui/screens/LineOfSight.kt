@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import androidx.compose.material3.FilterChip
+import kotlin.math.ceil
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -295,20 +297,35 @@ private fun ProfileChart(d: LosDto) {
     val muted = MaterialTheme.colorScheme.onSurfaceVariant
     val fresnel = Color(0xFF38BDF8)
     val sight = Color(0xFF2563EB)
+    val pts = d.chart
+    if (pts.size < 2) return
+    val total = pts.last().d.toDouble().coerceAtLeast(1.0)
+    val r = remember(d) { pts.map { fresnelRadius(it.d.toDouble(), total, d.frequencyMhz) } }
+    val maxR = r.max()
+    val fullLo = pts.indices.minOf { minOf(pts[it].ground, pts[it].los - r[it]) } - 6
+    val fullHi = pts.indices.maxOf { maxOf(pts[it].top ?: pts[it].ground, pts[it].los + r[it]) } + 14
+    // a zone this thin in the whole profile (a 500 m hill and ±8 m of zone) opens the Fresnel view
+    val thin = 2 * maxR / (fullHi - fullLo) < 0.06
+    // Fresnel view: every height measured from the line of sight (straight at 0), the zone fills the chart
+    var zoom by remember(d) { mutableStateOf(thin) }
+    val span = ceil(maxOf(maxR * 2.4, 10.0))
+    val above = pts.maxOf { (it.top ?: it.ground) - it.los }
+    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(selected = !zoom, onClick = { zoom = false }, label = { Text("Profilo intero") })
+        FilterChip(selected = zoom, onClick = { zoom = true }, label = { Text("Zona di Fresnel") })
+    }
     Canvas(Modifier.fillMaxWidth().height(230.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceContainerLow)) {
-        val pts = d.chart
-        if (pts.size < 2) return@Canvas
-        val total = pts.last().d.toDouble().coerceAtLeast(1.0)
-        val r = pts.map { fresnelRadius(it.d.toDouble(), total, d.frequencyMhz) }
-        val lo = pts.indices.minOf { minOf(pts[it].ground, pts[it].los - r[it]) } - 6
-        val hi = pts.indices.maxOf { maxOf(pts[it].top ?: pts[it].ground, pts[it].los + r[it]) } + 14
+        val lo = if (zoom) -span else fullLo
+        val hi = if (zoom) span else fullHi
         val padL = 8.dp.toPx()
         val padR = 8.dp.toPx()
         val padB = 18.dp.toPx()
         val w = size.width - padL - padR
         val hgt = size.height - padB
         fun x(v: Int) = padL + (v / total * w).toFloat()
-        fun y(v: Double) = ((hi - v) / (hi - lo) * hgt).toFloat()
+        fun yv(v: Double) = ((hi - v) / (hi - lo) * hgt).toFloat()
+        // a height at a point of the link: as it is, or from the line of sight (Fresnel view)
+        fun y(p: it.cdanet.cpeconfigurator.data.LosPointDto, v: Double) = yv(if (zoom) v - p.los else v).coerceIn(-2f, hgt + 2f)
         val text = android.graphics.Paint().apply { isAntiAlias = true; textSize = 10.dp.toPx(); color = muted.toArgb() }
         // distances along the bottom
         val step = listOf(100, 250, 500, 1000, 2000, 5000).firstOrNull { total / it <= 6 } ?: 5000
@@ -321,14 +338,14 @@ private fun ProfileChart(d: LosDto) {
         }
         // whole first Fresnel zone (ellipse) and its 60% limit
         val ellipse = Path().apply {
-            pts.forEachIndexed { i, p -> if (i == 0) moveTo(x(p.d), y(p.los + r[i])) else lineTo(x(p.d), y(p.los + r[i])) }
-            for (i in pts.indices.reversed()) lineTo(x(pts[i].d), y(pts[i].los - r[i]))
+            pts.forEachIndexed { i, p -> if (i == 0) moveTo(x(p.d), y(p, p.los + r[i])) else lineTo(x(p.d), y(p, p.los + r[i])) }
+            for (i in pts.indices.reversed()) lineTo(x(pts[i].d), y(pts[i], pts[i].los - r[i]))
             close()
         }
         drawPath(ellipse, fresnel.copy(alpha = 0.16f))
         drawPath(ellipse, fresnel.copy(alpha = 0.8f), style = Stroke(1.dp.toPx()))
         drawPath(
-            Path().apply { pts.forEachIndexed { i, p -> if (i == 0) moveTo(x(p.d), y(p.los - 0.6 * r[i])) else lineTo(x(p.d), y(p.los - 0.6 * r[i])) } },
+            Path().apply { pts.forEachIndexed { i, p -> if (i == 0) moveTo(x(p.d), y(p, p.los - 0.6 * r[i])) else lineTo(x(p.d), y(p, p.los - 0.6 * r[i])) } },
             st.warn.copy(alpha = 0.85f),
             style = Stroke(1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(10f, 8f))),
         )
@@ -337,30 +354,40 @@ private fun ProfileChart(d: LosDto) {
         pts.forEach { p ->
             val top = p.top ?: return@forEach
             val color = if (p.obstacle == "edificio") ground.copy(alpha = 0.6f) else Color(0xFF2E7D32).copy(alpha = 0.5f)
-            drawRect(color, Offset(x(p.d) - barW / 2, y(top)), androidx.compose.ui.geometry.Size(barW, y(p.ground) - y(top)))
+            drawRect(color, Offset(x(p.d) - barW / 2, y(p, top)), androidx.compose.ui.geometry.Size(barW, y(p, p.ground) - y(p, top)))
         }
         val terrain = Path().apply {
             moveTo(x(0), hgt)
-            pts.forEach { lineTo(x(it.d), y(it.ground)) }
+            pts.forEach { lineTo(x(it.d), y(it, it.ground)) }
             lineTo(x(pts.last().d), hgt)
             close()
         }
         drawPath(terrain, groundFill)
-        drawPath(Path().apply { pts.forEachIndexed { i, p -> if (i == 0) moveTo(x(p.d), y(p.ground)) else lineTo(x(p.d), y(p.ground)) } }, ground, style = Stroke(1.5.dp.toPx()))
+        drawPath(Path().apply { pts.forEachIndexed { i, p -> if (i == 0) moveTo(x(p.d), y(p, p.ground)) else lineTo(x(p.d), y(p, p.ground)) } }, ground, style = Stroke(1.5.dp.toPx()))
         // line of sight and the two antennas on their masts
-        drawLine(sight, Offset(x(pts.first().d), y(pts.first().los)), Offset(x(pts.last().d), y(pts.last().los)), strokeWidth = 2.5.dp.toPx())
+        drawLine(sight, Offset(x(pts.first().d), y(pts.first(), pts.first().los)), Offset(x(pts.last().d), y(pts.last(), pts.last().los)), strokeWidth = 2.5.dp.toPx())
         val label = android.graphics.Paint().apply { isAntiAlias = true; textSize = 11.dp.toPx(); isFakeBoldText = true; color = ink.toArgb() }
         listOf(pts.first() to "CPE", pts.last() to "AP").forEachIndexed { i, (p, name) ->
-            drawLine(ink, Offset(x(p.d), y(p.ground)), Offset(x(p.d), y(p.los)), strokeWidth = 2.dp.toPx())
-            drawCircle(Color(0xFFF97316), 5.dp.toPx(), Offset(x(p.d), y(p.los)))
+            drawLine(ink, Offset(x(p.d), y(p, p.ground)), Offset(x(p.d), y(p, p.los)), strokeWidth = 2.dp.toPx())
+            drawCircle(Color(0xFFF97316), 5.dp.toPx(), Offset(x(p.d), y(p, p.los)))
             label.textAlign = if (i == 0) android.graphics.Paint.Align.LEFT else android.graphics.Paint.Align.RIGHT
-            drawContext.canvas.nativeCanvas.drawText("$name ${fmt(p.los - p.ground)} m", x(p.d) + if (i == 0) 6.dp.toPx() else -6.dp.toPx(), y(p.los) - 8.dp.toPx(), label)
+            drawContext.canvas.nativeCanvas.drawText("$name ${fmt(p.los - p.ground)} m", x(p.d) + if (i == 0) 6.dp.toPx() else -6.dp.toPx(), y(p, p.los) - 8.dp.toPx(), label)
         }
         d.worst?.takeIf { d.verdict != "clear" }?.let { wst ->
             val p = pts.minByOrNull { abs(it.d - wst.d) }!!
             val top = maxOf(p.ground, p.top ?: p.ground)
-            drawLine(st.bad, Offset(x(p.d), y(top)), Offset(x(p.d), y(p.los)), strokeWidth = 1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)))
-            drawCircle(st.bad, 5.dp.toPx(), Offset(x(p.d), y(top)))
+            drawLine(st.bad, Offset(x(p.d), y(p, top)), Offset(x(p.d), y(p, p.los)), strokeWidth = 1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)))
+            drawCircle(st.bad, 5.dp.toPx(), Offset(x(p.d), y(p, top)))
+        }
+        // Fresnel view: the scale (metres from the line) and what is cut at the top
+        if (zoom) {
+            text.textAlign = android.graphics.Paint.Align.LEFT
+            drawContext.canvas.nativeCanvas.drawText("+${span.toInt()} m", padL + 2.dp.toPx(), 12.dp.toPx(), text)
+            drawContext.canvas.nativeCanvas.drawText("−${span.toInt()} m", padL + 2.dp.toPx(), hgt - 4.dp.toPx(), text)
+            if (above > span) {
+                label.textAlign = android.graphics.Paint.Align.RIGHT
+                drawContext.canvas.nativeCanvas.drawText("ostacolo fino a ${above.toInt()} m sopra la linea", size.width - padR - 4.dp.toPx(), 14.dp.toPx(), label)
+            }
         }
     }
 }

@@ -40,12 +40,21 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8: smaller and faster app (Compose runs much faster optimised); rules in proguard-rules.pro
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (keystorePath != null) signingConfig = signingConfigs.getByName("cdaRelease")
         }
         debug {
             applicationIdSuffix = ".debug"
             versionNameSuffix = "-debug"
+            // -PminifyDebug: the debug app optimised like the release one, to try R8 on the emulator
+            if (project.hasProperty("minifyDebug")) {
+                isMinifyEnabled = true
+                isShrinkResources = true
+                proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            }
         }
     }
 

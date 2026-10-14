@@ -1,6 +1,10 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
 import it.cdanet.cpeconfigurator.ui.EmptyState
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -70,16 +74,21 @@ fun HistoryScreen(c: AppContainer, onAcceptance: (JobDto) -> Unit, onReplace: (J
     }
     LaunchedEffect(c.refresh.collectAsState().value) { load() }
 
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        ErrorBanner(error) { error = null }
-        if (jobs.isEmpty() && busy) it.cdanet.cpeconfigurator.ui.SkeletonRows(4)
-        if (pending.isNotEmpty()) {
-            SectionCard("In attesa di invio (${pending.size})") {
-                pending.forEach { Text("• ${it.label} · ${if (it.result.result == "success") "completato" else "fallito"}") }
+    // a lazy list: only the rows on screen are composed (an installer may have hundreds of jobs)
+    LazyColumn(Modifier.fillMaxSize(), contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        item {
+            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                ErrorBanner(error) { error = null }
+                if (jobs.isEmpty() && busy) it.cdanet.cpeconfigurator.ui.SkeletonRows(4)
+                if (pending.isNotEmpty()) {
+                    SectionCard("In attesa di invio (${pending.size})") {
+                        pending.forEach { Text("• ${it.label} · ${if (it.result.result == "success") "completato" else "fallito"}") }
+                    }
+                }
+                ListHeader(if (jobs.isEmpty()) "Provisioning" else "${jobs.size} provisioning", busy) { scope.launch { load() } }
             }
         }
-        ListHeader(if (jobs.isEmpty()) "Provisioning" else "${jobs.size} provisioning", busy) { scope.launch { load() } }
-        jobs.forEach { j ->
+        items(jobs, key = { it.id }) { j ->
             val (label, kind) = statusLabel(j.status)
             SectionCard {
                 Row(verticalAlignment = Alignment.Top) {
@@ -128,6 +137,6 @@ fun HistoryScreen(c: AppContainer, onAcceptance: (JobDto) -> Unit, onReplace: (J
                 }
             }
         }
-        if (jobs.isEmpty() && !busy) EmptyState(R.drawable.ic_history, "Nessun provisioning", "Le installazioni che fai con l'app compaiono qui, con esito e collaudo.")
+        if (jobs.isEmpty() && !busy) item { EmptyState(R.drawable.ic_history, "Nessun provisioning", "Le installazioni che fai con l'app compaiono qui, con esito e collaudo.") }
     }
 }
