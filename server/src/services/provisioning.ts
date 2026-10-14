@@ -40,6 +40,11 @@ export const provisionRequestSchema = z
     mac: cpeMacSchema.optional(),
     serial: cpeSerialSchema.optional(),
     ssid: z.string().regex(SSID_RX),
+    /**
+     * Other APs the CPE may point to (prepared before the visit): a configuration for each is in the
+     * package, the installer picks the AP on site without Internet. APs without a Wi-Fi key are skipped.
+     */
+    alternativeSsids: z.array(z.string().regex(SSID_RX)).max(4).optional(),
     pppoeUser: z.string().trim().min(3).max(128).regex(PPPOE_USER_RX),
     /** Omitted when the job starts from a work order: the server uses the order's sealed password. */
     pppoePassword: z.string().min(1).max(200).optional(),
@@ -80,6 +85,8 @@ export const provisionResultSchema = z
       .strict()
       .optional()
       .default({}),
+    /** The AP chosen on site among the ones the job was prepared for (omitted: the job's own). */
+    ssid: z.string().regex(SSID_RX).optional(),
     /** MAC and serial scanned on site, for a job prepared without them (they must come with its result). */
     cpe: z.object({ mac: cpeMacSchema, serial: cpeSerialSchema }).strict().optional(),
     completedAt: z.string().datetime().optional(),
@@ -248,37 +255,52 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
 
     const s = cfg.cpeSecrets;
     const n = cfg.network;
-    const { values, name } = jobValues(x, wpa2);
-
-    let text: string;
-    try {
-      text = renderSystemCfg(template, {
-        values,
-        enforced: enforcedKeys(name, x.location),
+    const render = (ssid: string, key: string) => {
+      const { values, name } = jobValues({ ...x, ssid }, key);
+      try {
+        return { name, text: renderSystemCfg(template, { values, enforced: enforcedKeys(name, x.location) }) };
+      } catch (e) {
+        const code = (e as Error).message;
+        if (code === 'missing_value_UISP_ENROLLMENT') throw new HttpError(503, 'runtime_secret_missing', { placeholder: 'UISP_ENROLLMENT' });
+        if ((code === 'missing_value_EXPECTED_MAC' || code === 'missing_value_EXPECTED_SERIAL') && x.mac === undefined) throw new HttpError(409, 'template_needs_mac');
+        throw new HttpError(409, code.startsWith('missing_value_') || code.startsWith('profile_') ? code : 'profile_render_failed');
+      }
+    };
+    const { name, text } = render(x.ssid, wpa2);
+    // the same configuration for the other APs it may point to (only those with their Wi-Fi key)
+    const alternatives = [...new Set(x.alternativeSsids ?? [])]
+      .filter((ssid) => ssid !== x.ssid)
+      .flatMap((ssid) => {
+        const w = getWpa.get(ssid) as { wpa2_ciphertext: string } | undefined;
+        if (!w) return [];
+        let key: string;
+        try {
+          key = sealer.open(w.wpa2_ciphertext);
+        } catch {
+          return [];
+        }
+        const t = render(ssid, key).text;
+        return [{ ssid, config: { path: '/tmp/system.cfg', text: t, sha256: sha256Hex(t) } }];
       });
-    } catch (e) {
-      const code = (e as Error).message;
-      if (code === 'missing_value_UISP_ENROLLMENT') throw new HttpError(503, 'runtime_secret_missing', { placeholder: 'UISP_ENROLLMENT' });
-      if ((code === 'missing_value_EXPECTED_MAC' || code === 'missing_value_EXPECTED_SERIAL') && x.mac === undefined) throw new HttpError(409, 'template_needs_mac');
-      throw new HttpError(409, code.startsWith('missing_value_') || code.startsWith('profile_') ? code : 'profile_render_failed');
-    }
 
     const id = randomUUID();
     const created = new Date();
     const expiresAt = new Date(created.getTime() + cfg.jobTtlMinutes * 60_000).toISOString();
     const configSha256 = sha256Hex(text);
+    const options = alternatives.length ? JSON.stringify(Object.fromEntries([[x.ssid, configSha256], ...alternatives.map((a) => [a.ssid, a.config.sha256])])) : null;
     db.prepare(
-      `INSERT INTO provisioning_jobs(id, created_at, expires_at, user_id, client, model, mac, serial, ssid, pppoe_user, device_name, profile_sha256, config_sha256, template_name, latitude, longitude, location_accuracy, location_source, status)
-       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'prepared')`,
+      `INSERT INTO provisioning_jobs(id, created_at, expires_at, user_id, client, model, mac, serial, ssid, pppoe_user, device_name, profile_sha256, config_sha256, template_name, latitude, longitude, location_accuracy, location_source, ssid_options, status)
+       VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'prepared')`,
     ).run(id, created.toISOString(), expiresAt, userId, client, x.model, x.mac ?? '', x.serial ?? '', x.ssid, x.pppoeUser, name, profile.sha256, configSha256, profile.name,
-      x.location?.latitude ?? null, x.location?.longitude ?? null, x.location?.accuracy ?? null, x.location?.source ?? '');
+      x.location?.latitude ?? null, x.location?.longitude ?? null, x.location?.accuracy ?? null, x.location?.source ?? '', options);
     // "Modifica e riprova": the old attempt leaves the installer's open work (only theirs, only if not installed)
     if (x0.supersedes) {
       db.prepare("UPDATE provisioning_jobs SET superseded_by = ? WHERE id = ? AND user_id = ? AND status IN ('prepared', 'failed', 'expired') AND superseded_by IS NULL").run(id, x0.supersedes, userId);
     }
     if (order) {
       db.prepare('UPDATE provisioning_jobs SET work_order_id = ? WHERE id = ?').run(order.id, id);
-      db.prepare("UPDATE work_orders SET status = 'started', updated_at = ? WHERE id = ? AND status IN ('open','postponed')").run(nowIso(), order.id);
+      // prepared before the visit (no MAC yet): the order is not started until the installer is there
+      if (x.mac !== undefined) db.prepare("UPDATE work_orders SET status = 'started', updated_at = ? WHERE id = ? AND status IN ('open','postponed')").run(nowIso(), order.id);
     }
 
     return {
@@ -291,15 +313,23 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
       config: { path: '/tmp/system.cfg', text, sha256: configSha256 },
       summary: { model: x.model, template: profile.name, ssid: x.ssid, pppoeUser: x.pppoeUser, deviceName: name, mac: x.mac ?? '', serial: x.serial ?? '' },
       afterApply: { lanIp: n.lanIp, httpPort: MANAGEMENT_PORTS.http, httpsPort: MANAGEMENT_PORTS.https },
+      alternatives,
     };
   }
 
   function recordResult(jobId: string, user: { id: number; role: string }, input: z.infer<typeof provisionResultSchema>) {
-    const job = db.prepare('SELECT id, user_id, status, mac FROM provisioning_jobs WHERE id = ?').get(jobId) as
-      | { id: string; user_id: number; status: string; mac: string }
+    const job = db.prepare('SELECT id, user_id, status, mac, ssid, ssid_options FROM provisioning_jobs WHERE id = ?').get(jobId) as
+      | { id: string; user_id: number; status: string; mac: string; ssid: string; ssid_options: string | null }
       | undefined;
     if (!job) throw new HttpError(404, 'job_not_found');
     if (job.user_id !== user.id && user.role !== 'admin') throw new HttpError(403, 'forbidden');
+    // the AP chosen on site: only one the job was prepared for, and only before it is written
+    if (input.ssid && input.ssid !== job.ssid && job.status !== 'success') {
+      const options = JSON.parse(job.ssid_options ?? '{}') as Record<string, string>;
+      const sha = options[input.ssid];
+      if (!sha) throw new HttpError(400, 'ssid_not_prepared');
+      db.prepare('UPDATE provisioning_jobs SET ssid = ?, config_sha256 = ? WHERE id = ?').run(input.ssid, sha, jobId);
+    }
     // prepared before the visit: the CPE scanned on site becomes the job's (once; then it is the job's own)
     if (!job.mac) {
       if (!input.cpe) throw new HttpError(400, 'cpe_mac_required');

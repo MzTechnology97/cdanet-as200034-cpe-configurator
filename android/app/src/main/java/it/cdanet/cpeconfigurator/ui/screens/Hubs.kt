@@ -265,6 +265,8 @@ fun toDoItems(jobs: List<JobDto>): List<ToDo> {
                 j.review == "rejected" -> add(ToDo(j, name, "Collaudo non accettato dal NOC: vedi Notifiche, poi ripunta o rifai il collaudo.", NoticeKind.Bad, "non accettato", "Collaudo"))
                 j.ko?.kind == "postponed" -> add(ToDo(j, name, "Installazione rimandata: da riprovare.", NoticeKind.Warn, "rimandata", null))
                 j.status == "failed" && j.mac !in okMacs -> add(ToDo(j, name, j.error.ifBlank { "Scrittura nella CPE non riuscita." }, NoticeKind.Bad, "fallita", REDO))
+                // prepared before the visit (no MAC yet): it is in the work order, not open work
+                (j.status == "prepared" || j.status == "expired") && j.mac.isBlank() -> Unit
                 (j.status == "prepared" || j.status == "expired") && j.mac !in okMacs ->
                     add(ToDo(j, name, "Configurazione preparata ma mai scritta nella CPE.", NoticeKind.Warn, "non scritta", REDO))
                 j.status == "success" && j.acceptance == null -> add(ToDo(j, name, "Installata: manca il collaudo con misure e foto.", NoticeKind.Warn, "collaudo da fare", "Collaudo"))

@@ -102,6 +102,8 @@ class ProvisioningController(
     private val queue: ResultQueue,
     private val scope: CoroutineScope,
     private val store: SecureStore? = null,
+    /** Configurations prepared before the visit, one per work order. */
+    val field: FieldPackages = FieldPackages(store),
 ) {
     private val _state = MutableStateFlow(ProvisioningState())
     val state: StateFlow<ProvisioningState> = _state.asStateFlow()
@@ -193,6 +195,53 @@ class ProvisioningController(
         return null
     }
 
+    /** The APs this package can be written for: its own first, then the alternatives. */
+    fun ssidOptions(): List<String> = _state.value.pkg?.let { listOf(it.summary.ssid) + it.alternatives.map { a -> a.ssid } }.orEmpty()
+
+    /** The AP the CPE points to, among the ones the package was prepared for: its configuration is the one written. */
+    fun chooseSsid(ssid: String) {
+        val pkg = _state.value.pkg ?: return
+        if (ssid == pkg.summary.ssid) return
+        val all = listOf(it.cdanet.cpeconfigurator.data.AltConfigDto(pkg.summary.ssid, pkg.config)) + pkg.alternatives
+        val pick = all.firstOrNull { it.ssid == ssid } ?: return
+        _state.update { it.copy(pkg = pkg.copy(config = pick.config, summary = pkg.summary.copy(ssid = pick.ssid), alternatives = all - pick)) }
+    }
+
+    /**
+     * Prepares, while there is Internet, the configuration of every new installation assigned for
+     * today: model, customer and PPPoE of the order, the best AP for its position and the next ones
+     * (up to 5 in all, only those with a Wi-Fi key). MAC and serial are scanned on site. Best effort:
+     * an order that cannot be prepared is simply done on site as before. Returns how many are ready.
+     */
+    suspend fun prepareForField(orders: List<it.cdanet.cpeconfigurator.data.WorkOrderDto>): Int {
+        field.prune()
+        val todo = orders.filter { o ->
+            o.kind == "new" && o.status in setOf("open", "postponed") && o.jobId == null && o.hasPassword &&
+                o.pppoeUser.isNotBlank() && o.model in ProvisionForm.MODELS && o.lat != null && o.lon != null && !field.fresh(o.id)
+        }
+        if (todo.isEmpty()) return field.ready.value.size
+        val configured = runCatching { api.wirelessNetworks() }.getOrNull() ?: return field.ready.value.size
+        for (o in todo) {
+            runCatching {
+                val aps = api.pointing(o.lat!!, o.lon!!, null).aps
+                val ssids = it.cdanet.cpeconfigurator.install.ApAdvisor.beforeInstall(aps, configured).filter { it.usable }.map { it.ssid }.distinct().take(5)
+                if (ssids.isEmpty()) return@runCatching
+                val pkg = api.createJob(
+                    ProvisionRequest(
+                        model = o.model,
+                        ssid = ssids.first(),
+                        pppoeUser = o.pppoeUser,
+                        location = it.cdanet.cpeconfigurator.data.CpeLocation(o.lat, o.lon, null, "address"),
+                        workOrderId = o.id,
+                        alternativeSsids = ssids.drop(1).ifEmpty { null },
+                    ),
+                )
+                field.put(o.id, pkg)
+            }
+        }
+        return field.ready.value.size
+    }
+
     suspend fun apply(prior: List<String> = emptyList()) {
         val pkg = _state.value.pkg ?: return
         if (pkg.needsCpe) {
@@ -215,6 +264,7 @@ class ProvisioningController(
             } catch (e: Exception) {
                 ProvisionResult("failed", stages.toList(), error = e.message ?: e.toString(), completedAt = Instant.now().toString())
             }.let { r -> if (pkg.scannedOnSite) r.copy(cpe = CpeIdDto(pkg.summary.mac, pkg.summary.serial)) else r }
+                .let { r -> if (pkg.alternatives.isNotEmpty()) r.copy(ssid = pkg.summary.ssid) else r }
         }
         queue.enqueue(PendingResult(pkg.jobId, result, "${pkg.summary.deviceName} · ${pkg.summary.mac}"))
         queue.syncInBackground()
@@ -395,7 +445,11 @@ class ProvisioningController(
      * model are filled in; the password stays on the server.
      */
     fun startWorkOrder(o: it.cdanet.cpeconfigurator.data.WorkOrderDto) {
-        _state.value = ProvisioningState()
+        // prepared before the visit: straight to the write, even without Internet
+        _state.value = field.get(o.id)?.let { pkg ->
+            field.remove(o.id)
+            ProvisioningState(phase = Phase.Prepared, pkg = pkg)
+        } ?: ProvisioningState()
         _form.value = ProvisionForm(
             model = o.model.takeIf { it in ProvisionForm.MODELS } ?: ProvisionForm.MODELS.first(),
             pppoeUser = o.pppoeUser,
