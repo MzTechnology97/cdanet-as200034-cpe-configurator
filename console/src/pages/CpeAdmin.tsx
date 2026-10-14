@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ReactNode, useEffect, useState } from 'react';
 import { download } from '../../../web/js/api.js';
 import { toast } from '../../../web/js/dom.js';
-import { signalChart } from '../../../web/js/views/uisp-panel.js';
+import { SignalChart } from '../jobs/SignalChart';
 import { api } from '../lib/api';
 import type { PageContext } from '../shell/routes';
 import { AsyncButton, Badge, Card, Dom, Field, Icon, Notice, PageHeader, Segmented, Skeleton, Tabs } from '../ui';
@@ -515,7 +515,7 @@ function SignalHistory({ id }: { id: string }) {
   const s = useQuery({ queryKey: ['admin', 'cpe', id, 'statistics', range], queryFn: () => api(`/api/admin/cpe/${encodeURIComponent(id)}/statistics?range=${range}`) });
   return (
     <Card title="Storico segnale" actions={<Segmented label="Periodo" value={range} onChange={setRange} options={[{ value: 'day', label: '24 ore' }, { value: 'week', label: 'Settimana' }, { value: 'month', label: 'Mese' }]} />}>
-      {s.error ? <p className="ui-muted">Storico non disponibile: {(s.error as Error).message}</p> : !s.data ? <Skeleton lines={4} /> : <Dom make={() => signalChart(s.data)} deps={[s.data]} />}
+      {s.error ? <p className="ui-muted">Storico non disponibile: {(s.error as Error).message}</p> : !s.data ? <Skeleton lines={4} /> : <SignalChart st={s.data} />}
       <p className="ui-muted ui-small">Linea piena: segnale della CPE; tratteggiata: segnale lato AP; linee guida verde e rossa: soglie di Impostazioni server.</p>
     </Card>
   );

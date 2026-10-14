@@ -1,5 +1,4 @@
-import { type ComponentType, useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { loginView } from '../../../web/js/views/login.js';
+import { type ComponentType, useEffect, useState } from 'react';
 import type { PageContext, Route, User } from './routes';
 
 /** The page of the address: its component, loaded when opened. While it loads: a skeleton, not an empty area. */
@@ -62,13 +61,4 @@ function PageSkeleton() {
       <div className="cx-sk cx-sk-card" />
     </div>
   );
-}
-
-/** The login of the console (its form, its checks and the two-step code) inside the new frame. */
-export function LegacyLogin({ onLogin, onTotp }: { onLogin: (u: string, p: string) => Promise<{ mfaToken?: string }>; onTotp: (t: string, c: string) => Promise<void> }) {
-  const host = useRef<HTMLDivElement>(null);
-  useLayoutEffect(() => {
-    host.current?.replaceChildren(loginView(onLogin, onTotp));
-  }, []);
-  return <div ref={host} />;
 }

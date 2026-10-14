@@ -1,9 +1,9 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useState } from 'react';
 import { toast } from '../../../web/js/dom.js';
-import { myTelegramCard } from '../../../web/js/views/my-telegram.js';
+import { MyTelegram } from '../account/MyTelegram';
 import { api, session } from '../lib/api';
-import { AsyncButton, Badge, Button, Card, Dom, Field, Notice, PageHeader, Skeleton, Stat } from '../ui';
+import { AsyncButton, Badge, Button, Card, Field, Notice, PageHeader, Skeleton, Stat } from '../ui';
 import { openAttestation } from './Privacy';
 
 /**
@@ -52,7 +52,7 @@ export function Account() {
         <PasswordCard />
         <TotpCard a={a} />
       </div>
-      <Dom make={() => myTelegramCard()} />
+      <MyTelegram />
       <PhonesCard />
       <PrivacyCard />
       <Card title="Sessioni">
