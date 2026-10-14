@@ -129,6 +129,10 @@ fun ProvisionFormStep(c: AppContainer) {
             modelTemplates.size == 1 -> KeyValue("Template", modelTemplates.first().name + if (modelTemplates.first().personal) " (riservato)" else "")
         }
         var scanMsg by remember { mutableStateOf<String?>(null) }
+        // a new customer, an account that may not install CPEs outside its warehouse: the CPE comes
+        // only from the warehouse, MAC and serial cannot be typed or scanned (owner, 14/10/2026)
+        val pickOnly = stock?.linked == true && stock?.bypass == false && form.replaces == null
+        if (pickOnly && stock?.items.isNullOrEmpty()) Notice("Nessuna CPE nel tuo magazzino: chiedi all'ufficio di caricarne una.", NoticeKind.Bad)
         // the installer's own CPEs: one tap fills model, MAC and serial (no scan, no typing errors)
         stock?.takeIf { it.linked && it.items.isNotEmpty() }?.let { s ->
             val none = it.cdanet.cpeconfigurator.data.StockItemDto(model = "", mac = "")
@@ -155,6 +159,10 @@ fun ProvisionFormStep(c: AppContainer) {
                 androidx.compose.material3.Icon(painterResource(R.drawable.ic_qr_code_scanner), contentDescription = "Scansiona $what")
             }
         }
+        if (pickOnly) {
+            KeyValue("MAC", form.mac.ifBlank { "scegli la CPE dal magazzino" })
+            KeyValue("Seriale", form.serial.ifBlank { "—" })
+        } else {
         Field(
             "MAC",
             form.mac,
@@ -201,6 +209,7 @@ fun ProvisionFormStep(c: AppContainer) {
         )
         scanMsg?.let { Notice(it, NoticeKind.Warn) }
         Text("Scansiona MAC e seriale dall'etichetta della CPE con il tasto nel campo: prima di scrivere la configurazione l'app controlla che il MAC sia proprio quello della CPE collegata.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
         // MAC and serial come only from the label: the MAC announced on the network can be the
         // wireless one, while the label (and UISP) carry the LAN one. The CPE only tells its model.
         var reading by remember { mutableStateOf(false) }
@@ -408,6 +417,13 @@ private fun SiteCpeCard(c: AppContainer, pkg: it.cdanet.cpeconfigurator.data.Pro
             }, Modifier.fillMaxWidth())
         }
         c.provisioning.stock.problem(mac)?.let { p -> Notice(p.text, if (p.blocking) NoticeKind.Bad else NoticeKind.Warn) }
+        // as at step 1: without the account's option the CPE comes only from the warehouse
+        val pickOnly = stock?.linked == true && stock?.bypass == false
+        if (pickOnly && stock?.items.isNullOrEmpty()) Notice("Nessuna CPE nel tuo magazzino: chiedi all'ufficio di caricarne una.", NoticeKind.Bad)
+        if (pickOnly) {
+            KeyValue("MAC", mac.ifBlank { "scegli la CPE dal magazzino" })
+            KeyValue("Seriale", serial.ifBlank { "—" })
+        } else {
         Field("MAC", mac, { mac = it }, placeholder = "24A43C112233 o 24:A4:3C:11:22:33", trailing = {
             scanIcon("il MAC") {
                 scan { raw ->
@@ -426,6 +442,7 @@ private fun SiteCpeCard(c: AppContainer, pkg: it.cdanet.cpeconfigurator.data.Pro
                 }
             }
         })
+        }
         message?.let { Notice(it, NoticeKind.Warn) }
         if (saved) {
             Text("✓ CPE ${pkg.summary.mac} indicata per questa configurazione", style = MaterialTheme.typography.bodyMedium)
