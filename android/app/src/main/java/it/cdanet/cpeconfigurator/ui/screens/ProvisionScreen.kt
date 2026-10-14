@@ -205,7 +205,7 @@ fun ProvisionFormStep(c: AppContainer) {
 
     SectionCard("4 · Prepara (online)") {
         Text(
-            "Il server genera la configurazione completa e la consegna solo a questa app, in memoria. Poi collegati alla Wi-Fi della CPE: Internet non serve più.",
+            "Il server genera la configurazione completa e la consegna solo a questa app, che la tiene cifrata sul telefono fino alla scadenza. Poi collegati alla Wi-Fi della CPE: Internet non serve più, anche se l'app viene chiusa.",
             style = MaterialTheme.typography.bodySmall,
         )
         BusyButton("Verifica piano", state.busy, Modifier.fillMaxWidth(), primary = false) {

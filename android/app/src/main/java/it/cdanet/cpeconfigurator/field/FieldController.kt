@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.field
 
+import it.cdanet.cpeconfigurator.data.AppJson
+import it.cdanet.cpeconfigurator.security.SecureStore
 import it.cdanet.cpeconfigurator.data.ApiClient
 import it.cdanet.cpeconfigurator.data.CredentialsDto
 import it.cdanet.cpeconfigurator.network.Ip
@@ -30,6 +32,9 @@ data class FieldAccess(
     val expiresAt: String,
 )
 
+/** Name of the CPE credentials in the [SecureStore]. */
+private const val SAVED_ACCESS = "field-access"
+
 enum class FieldMode { Alignment, Diagnosis }
 
 data class FieldState(
@@ -54,7 +59,9 @@ data class FieldState(
  * CPE credentials come from the server and live only in memory; they are fetched while
  * online (login) so the tools also work later on a roof without Internet.
  */
-class FieldController(private val api: ApiClient, private val network: NetworkHelper, private val scope: CoroutineScope) {
+class FieldController(private val api: ApiClient, private val network: NetworkHelper, private val scope: CoroutineScope,
+    private val store: SecureStore? = null,
+) {
     private val _state = MutableStateFlow(FieldState())
     val state: StateFlow<FieldState> = _state.asStateFlow()
 
@@ -75,16 +82,33 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
     val thresholds: FieldThresholds get() = access?.thresholds ?: FieldThresholds()
     val targetFirmware: String? get() = access?.targetFirmware
 
-    /** Fetches (or reuses) the CPE credentials. Called after login and before each session. */
+    private fun valid(a: FieldAccess?) = a != null && runCatching { Instant.parse(a.expiresAt).isAfter(Instant.now()) }.getOrDefault(false)
+
+    /**
+     * Fetches (or reuses) the CPE credentials. Called after login and before each session. They are
+     * kept encrypted on the phone until they expire: on the CPE's Wi-Fi without Internet, even after
+     * Android closed the app, the field tools still reach the CPE.
+     */
     suspend fun prefetch(purpose: String = "diagnosis"): Boolean {
-        val a = access
-        if (a != null && runCatching { Instant.parse(a.expiresAt).isAfter(Instant.now()) }.getOrDefault(false)) return true
-        return runCatching { api.fieldAccess(purpose) }.onSuccess { access = it }.isSuccess
+        if (valid(access)) return true
+        val fresh = runCatching { api.fieldAccess(purpose) }.getOrNull()
+        if (fresh != null) {
+            access = fresh
+            runCatching { store?.put(SAVED_ACCESS, AppJson.encodeToString(FieldAccess.serializer(), fresh)) }
+            return true
+        }
+        val saved = runCatching { store?.get(SAVED_ACCESS)?.let { AppJson.decodeFromString(FieldAccess.serializer(), it) } }.getOrNull()
+        if (valid(saved)) {
+            access = saved
+            return true
+        }
+        return false
     }
 
     fun forget() {
         stop()
         access = null
+        store?.remove(SAVED_ACCESS)
         client = null
         working = null
     }
