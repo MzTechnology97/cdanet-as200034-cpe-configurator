@@ -25,8 +25,8 @@ class AppContainer(context: Context) {
 
     val settings = Settings(appContext)
     val session = Session()
-    val api = ApiClient(settings, session, clientHeader = "android/${BuildConfig.VERSION_NAME.removeSuffix("-debug")}")
     val network = NetworkHelper(appContext)
+    val api = ApiClient(settings, session, clientHeader = "android/${BuildConfig.VERSION_NAME.removeSuffix("-debug")}", network = network)
     val resultQueue = ResultQueue(appContext, api, session, scope)
     val provisioning = ProvisioningController(api, network, resultQueue, scope)
     val routerOs = RouterOsClient(api, network)

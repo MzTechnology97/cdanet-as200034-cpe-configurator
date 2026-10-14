@@ -95,7 +95,33 @@ class ApiClient(
     private val session: Session,
     private val clientHeader: String,
     private val http: OkHttpClient = defaultHttp(),
+    private val network: it.cdanet.cpeconfigurator.network.NetworkHelper? = null,
 ) {
+    /** The client routed through [routedNet] (built once per network). */
+    @Volatile private var routed: Triple<android.net.Network, OkHttpClient, OkHttpClient>? = null
+
+    /**
+     * The client for our server. On the CPE's Wi-Fi (no Internet) the default route ends at the
+     * CPE, which answers with its own certificate ("Trust anchor ... not found"): the calls go
+     * through the network that has Internet instead, mobile data, so the server stays reachable.
+     */
+    private fun serverClient(): OkHttpClient {
+        val base = TestTls.wrap(http)
+        val net = network?.internetNetwork() ?: return base
+        routed?.let { (n, b, c) -> if (n == net && b === base) return c }
+        val c = base.newBuilder().socketFactory(net.socketFactory).dns(object : okhttp3.Dns { override fun lookup(hostname: String) = net.getAllByName(hostname).toList() }).build()
+        routed = Triple(net, base, c)
+        return c
+    }
+
+    /** No network of the phone reaches Internet: a clear sentence instead of a TLS or socket error. */
+    private fun offline(e: IOException): IOException =
+        if (e !is ApiException && network?.noInternet() == true) {
+            IOException("Senza Internet: il telefono è su una Wi-Fi senza Internet (es. quella della CPE) e senza dati mobili. Questi dati del server tornano quando sei online.", e)
+        } else {
+            e
+        }
+
     private val jsonType = "application/json; charset=utf-8".toMediaType()
 
     /** Set when the server refuses this app version (426): the app then blocks until updated. */
@@ -110,7 +136,11 @@ class ApiClient(
             if (auth) session.token?.let { b.header("Authorization", "Bearer $it") }
             if (client) b.header("X-CDA-Client", clientHeader)
             b.method(method, body?.toString()?.toRequestBody(jsonType) ?: if (method == "GET") null else "{}".toRequestBody(jsonType))
-            TestTls.wrap(http).newCall(b.build()).execute().use { r ->
+            try {
+                serverClient().newCall(b.build()).execute()
+            } catch (e: IOException) {
+                throw offline(e)
+            }.use { r ->
                 val text = r.body?.string().orEmpty()
                 if (!r.isSuccessful) {
                     val err = runCatching { AppJson.decodeFromString(ApiErrorDto.serializer(), text) }.getOrNull()
@@ -137,7 +167,7 @@ class ApiClient(
         // app; only these paths of our own server get it, the rest of the page stays without
         val path = runCatching { java.net.URI(url).path }.getOrNull().orEmpty()
         if (path.startsWith("/api/admin/map/")) session.token?.let { b.header("Authorization", "Bearer $it") }
-        return TestTls.wrap(http).newCall(b.build()).execute()
+        return serverClient().newCall(b.build()).execute()
     }
 
     suspend fun health(): HealthDto = AppJson.decodeFromString(HealthDto.serializer(), request("GET", "/api/health", auth = false))
@@ -248,7 +278,7 @@ class ApiClient(
         val url = (base() + "/api/provisioning/jobs/$jobId/photos").toHttpUrl().newBuilder().addQueryParameter("caption", caption).build()
         val b = Request.Builder().url(url).post(jpeg.toRequestBody("image/jpeg".toMediaType()))
         session.token?.let { b.header("Authorization", "Bearer $it") }
-        TestTls.wrap(http).newCall(b.build()).execute().use { r ->
+        serverClient().newCall(b.build()).execute().use { r ->
             if (!r.isSuccessful) {
                 val code = runCatching { AppJson.decodeFromString(ApiErrorDto.serializer(), r.body?.string().orEmpty()).error }.getOrNull()?.ifBlank { null } ?: "HTTP ${r.code}"
                 throw ApiException(r.code, code, apiMessage(code))
@@ -341,7 +371,7 @@ class ApiClient(
     suspend fun firmwareDownload(id: Int, dest: java.io.File, onBytes: (Long) -> Unit) = withContext(Dispatchers.IO) {
         val b = Request.Builder().url((base() + "/api/firmware/$id/file").toHttpUrl())
         session.token?.let { b.header("Authorization", "Bearer $it") }
-        TestTls.wrap(http).newCall(b.build()).execute().use { r ->
+        serverClient().newCall(b.build()).execute().use { r ->
             if (!r.isSuccessful) {
                 if (r.code == 401) session.clear()
                 throw ApiException(r.code, "HTTP ${r.code}", if (r.code == 404) apiMessage("firmware_not_found") else "Download del firmware non riuscito (HTTP ${r.code})")
