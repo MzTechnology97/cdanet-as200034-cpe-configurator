@@ -77,7 +77,7 @@ fun SearchScreen(c: AppContainer, onAcceptance: (JobDto) -> Unit) {
         jobHits.forEach { j ->
             ResultRow(
                 title = j.deviceName.ifBlank { j.pppoeUser },
-                lines = listOf("${j.model} · ${j.mac}", "${j.ssid} · ${localTime(j.createdAt)}"),
+                lines = listOf(listOf(j.model, j.mac).filter { it.isNotBlank() }.joinToString(" · "), "${j.ssid} · ${localTime(j.createdAt)}"),
                 chip = when (j.status) {
                     "success" -> (if (j.acceptance == null) "da collaudare" else "installata") to (if (j.acceptance == null) NoticeKind.Warn else NoticeKind.Good)
                     "failed" -> "fallita" to NoticeKind.Bad
