@@ -2,6 +2,8 @@ package it.cdanet.cpeconfigurator.ui.screens
 
 import it.cdanet.cpeconfigurator.ui.SecondaryButton
 import it.cdanet.cpeconfigurator.ui.PrimaryButton
+import it.cdanet.cpeconfigurator.provisioning.ProvisioningController
+import androidx.compose.runtime.mutableStateListOf
 import it.cdanet.cpeconfigurator.ui.NoticeKind
 import it.cdanet.cpeconfigurator.ui.Notice
 import it.cdanet.cpeconfigurator.ui.CheckRow
@@ -106,6 +108,10 @@ fun InstallScreen(
     // a replacement (Storico → Sostituisci) or a package already prepared: straight into the new installation
     LaunchedEffect(Unit) {
         if (st.mode == null && (form.replaces != null || prov.phase != Phase.Form)) c.install.start(InstallMode.New)
+    }
+    // the firmware the CPE may need goes on the phone now, while there is still Internet
+    LaunchedEffect(st.mode) {
+        if (st.mode == InstallMode.New) c.scope.launch { c.firmware.prefetch(c.api) }
     }
     // the provisioning phases drive the first two steps
     LaunchedEffect(prov.phase, st.mode) {
@@ -355,6 +361,8 @@ private fun WriteStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
                     }
                     c.install.next()
                 }
+            } else if (prov.pkg != null && prov.firmwareTarget != null) {
+                FirmwareFix(c, prov.firmwareTarget!!)
             } else if (prov.pkg != null) {
                 BusyButton("Riprova con lo stesso pacchetto", false, Modifier.fillMaxWidth()) { c.provisioning.retry() }
             } else {
@@ -362,6 +370,53 @@ private fun WriteStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
             }
         }
         Phase.Form -> Text("Prepara prima la configurazione.")
+    }
+}
+
+/**
+ * The write stopped because the CPE has another firmware: flash the required one from here, with
+ * the image already on the phone, then write the same package again by itself.
+ */
+@Composable
+private fun FirmwareFix(c: AppContainer, target: String) {
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    val stages = remember { mutableStateListOf<String>() }
+    SectionCard("Porta la CPE al firmware $target") {
+        Notice(
+            "L'aggiornamento dura 3-5 minuti e la CPE si riavvia da sola. Non toglierle alimentazione e resta sulla sua Wi-Fi: al termine la configurazione viene scritta di nuovo.",
+            NoticeKind.Warn,
+        )
+        stages.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
+        error?.let { Notice(it, NoticeKind.Bad) }
+        BusyButton(if (busy) "Aggiornamento in corso…" else "Aggiorna alla $target e riscrivi", busy, Modifier.fillMaxWidth()) {
+            busy = true
+            error = null
+            stages.clear()
+            // the app's scope: leaving the screen must not stop a flash halfway
+            c.scope.launch {
+                val mac = c.provisioning.state.value.pkg?.summary?.mac
+                runCatching { c.provisioning.updateFirmware(c.firmware) { s -> c.scope.launch { stages += s } } }
+                    .onSuccess { (from, to) ->
+                        launch { runCatching { c.api.firmwareReport(mac, from, target, true, null) } }
+                        stages += "Firmware $to installato: scrittura della configurazione"
+                        c.provisioning.retry()
+                        c.provisioning.apply()
+                    }
+                    .onFailure {
+                        if (it is ProvisioningController.FactoryReset) {
+                            launch { runCatching { c.api.firmwareReport(mac, "?", target, true, "CPE tornata alle impostazioni di fabbrica") } }
+                            // back to the write step, where the first access to airOS is
+                            c.provisioning.retry()
+                            c.provisioning.reportNote(it.message.orEmpty())
+                        } else {
+                            error = it.message ?: it.toString()
+                        }
+                    }
+                busy = false
+            }
+        }
+        SecondaryButton(onClick = { c.provisioning.retry() }, modifier = Modifier.fillMaxWidth(), enabled = !busy) { Text("Riprova la scrittura senza aggiornare") }
     }
 }
 
