@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.provisioning
 
+import it.cdanet.cpeconfigurator.data.CredentialsDto
 import it.cdanet.cpeconfigurator.data.DetectedDto
 import it.cdanet.cpeconfigurator.data.ProvisionPackage
 import it.cdanet.cpeconfigurator.network.Ip
@@ -16,6 +17,33 @@ class ProvisioningFailure(message: String, val detected: DetectedDto?, cause: Th
  * Must run with the process bound to the CPE Wi-Fi (see NetworkHelper.onWifi).
  */
 class CpeProvisioner(private val onStage: (String) -> Unit) {
+
+    companion object {
+        /** airOS factory credentials: a CPE just reset keeps them until the configuration sets the CDA Net ones. */
+        val FACTORY = CredentialsDto("ubnt", "ubnt")
+
+        /**
+         * SSH to the package's CPE with its credentials and, when they are refused, with the factory
+         * ones: a new or reset CPE needs no manual first access, the written configuration sets the
+         * CDA Net credentials. The message of a refusal starts with "Autenticazione".
+         */
+        fun connect(pkg: ProvisionPackage, onStage: (String) -> Unit = {}): SshConnection {
+            val host = pkg.target.host
+            try {
+                return SshConnection.connect(host, pkg.target.sshPort, pkg.credentials.username, pkg.credentials.password)
+            } catch (e: IOException) {
+                if (!e.message.orEmpty().startsWith("Autenticazione") || pkg.credentials == FACTORY) throw e
+                val ssh = try {
+                    SshConnection.connect(host, pkg.target.sshPort, FACTORY.username, FACTORY.password)
+                } catch (f: IOException) {
+                    if (!f.message.orEmpty().startsWith("Autenticazione")) throw f
+                    throw IOException("Autenticazione SSH rifiutata con le credenziali CDA Net e con quelle di fabbrica: fai il primo avvio airOS dalla card qui sotto, poi riprova", f)
+                }
+                onStage("CPE nuova o resettata: accesso con le credenziali di fabbrica")
+                return ssh
+            }
+        }
+    }
 
     fun probe(host: String, ports: List<Int> = listOf(22, 80, 443, 20080, 20443)): List<Int> {
         require(Ip.isPrivate(host)) { "Target CPE non locale" }
@@ -38,7 +66,7 @@ class CpeProvisioner(private val onStage: (String) -> Unit) {
         var detected: DetectedDto? = null
         try {
             onStage("Connessione SSH a $host")
-            SshConnection.connect(host, pkg.target.sshPort, pkg.credentials.username, pkg.credentials.password).use { ssh ->
+            connect(pkg, onStage).use { ssh ->
                 onStage("Lettura firmware, board e MAC")
                 val rb = DeviceCheck.parse(ssh.exec(DeviceCheck.READBACK_COMMAND, 8_000).stdout)
                 detected = rb.detected()
