@@ -3,7 +3,7 @@ import { describe, it } from 'node:test';
 import { buildApp } from '../src/app.ts';
 import { openDatabase } from '../src/db.ts';
 import { subscriberTiming } from '../src/routes/uisp.ts';
-import { subscriberName } from '../src/services/uisp-crm.ts';
+import { planForProfile, subscriberName } from '../src/services/uisp-crm.ts';
 import { fakeUisp } from './fake-uisp.ts';
 import { ADMIN, SAMPLE_TEMPLATE, testConfig } from './helpers.ts';
 
@@ -11,6 +11,14 @@ describe('Nuovo subscriber in UISP all\'accettazione', () => {
   it('names the subscriber from the PPPoE user or the device name', () => {
     assert.deepEqual(subscriberName('rossi.mario@cda-net.it', ''), { lastName: 'Rossi', firstName: 'Mario' });
     assert.deepEqual(subscriberName('x@cda-net.it', 'BIANCHI LUCA'), { lastName: 'Bianchi', firstName: 'Luca' });
+  });
+
+  it('maps the ISPBilling PPPoE profile to the UISP plan', () => {
+    assert.equal(planForProfile('ISP37@CDA-NET-HOME-25-5'), 'CDA NET HOME 25/5');
+    assert.equal(planForProfile('CDA-NET-RICARICABILE-20-2-NEW'), 'CDA NET RICARICABILE 20/2');
+    assert.equal(planForProfile('ISP37@cda-net-b2b-50-50'), 'CDA NET B2B 50/50');
+    assert.equal(planForProfile('ISP37@CDA-NET-DEDICATA-COMUNE'), null);
+    assert.equal(planForProfile(''), null);
   });
 
   it('creates client and service of the chosen plan in the CRM, then authorizes the CPE in their site', async () => {
@@ -28,17 +36,20 @@ describe('Nuovo subscriber in UISP all\'accettazione', () => {
       if (key !== 'crm-key') return new Response('{}', { status: 401 });
       if (path === '/service-plans') {
         return new Response(JSON.stringify([
-          { id: 3, name: 'CDA NET HOME 25/5', periods: [{ id: 30, period: 12, enabled: true }, { id: 31, period: 1, enabled: true }] },
+          { id: 3, name: 'CDA NET HOME 25/5', organizationId: 1, periods: [{ id: 30, period: 12, enabled: true }, { id: 31, period: 1, enabled: true }] },
           { id: 4, name: 'Vecchio', archived: true, periods: [{ id: 41, period: 1 }] },
+          { id: 5, name: 'CDA NET HOME 25/5', organizationId: 2, periods: [{ id: 51, period: 1, enabled: true }] },
         ]));
       }
+      if (path === '/organizations') return new Response(JSON.stringify([{ id: 1, selected: true }, { id: 2, selected: false }]));
       if (path === '/clients' && method === 'POST') return new Response(JSON.stringify({ id: 501 }), { status: 201 });
       if (path === '/clients/501/services' && method === 'POST') return new Response(JSON.stringify({ id: 701, unmsClientSiteId: null }), { status: 201 });
       if (path === '/clients/services/701') return new Response(JSON.stringify({ id: 701, unmsClientSiteId: 'site-sub-1' }));
       return new Response('{}', { status: 404 });
     }) as typeof fetch;
     const cfg = testConfig();
-    const { app } = await buildApp(cfg, 'test', { db: openDatabase(':memory:'), logger: false, uisp: null, fetchImpl });
+    const db = openDatabase(':memory:');
+    const { app } = await buildApp(cfg, 'test', { db, logger: false, uisp: null, fetchImpl });
     const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: ADMIN.username, password: ADMIN.password } });
     const H = { authorization: `Bearer ${login.json().token}` };
     const call = (method: 'GET' | 'POST' | 'PUT', url: string, payload?: object, extra: Record<string, string> = {}) => app.inject({ method, url, headers: { ...H, ...extra }, payload });
@@ -62,8 +73,13 @@ describe('Nuovo subscriber in UISP all\'accettazione', () => {
     }, { 'x-cda-client': 'android/1.0.7' })).json();
 
     const plans = (await call('GET', '/api/admin/uisp/service-plans')).json();
-    assert.deepEqual(plans, [{ id: 3, name: 'CDA NET HOME 25/5', periodId: 31 }], 'the monthly period; archived plans left out');
-    const draft = (await call('GET', `/api/admin/provisioning/jobs/${job.jobId}/uisp/subscriber`)).json();
+    assert.deepEqual(plans, [{ id: 3, name: 'CDA NET HOME 25/5', periodId: 31 }], 'the monthly period; archived plans and other organizations left out');
+    const url = `/api/admin/provisioning/jobs/${job.jobId}/uisp/subscriber`;
+    // no ISPBilling profile for the PPPoE user: the NOC picks the plan
+    assert.equal((await call('GET', url)).json().planPeriodId, null);
+    db.prepare("INSERT INTO crm_radius(account_id, username, profile) VALUES('a1', 'ROSSI.MARIO@cda-net.it', 'ISP37@CDA-NET-HOME-25-5')").run();
+    const draft = (await call('GET', url)).json();
+    assert.deepEqual({ planPeriodId: draft.planPeriodId, planName: draft.planName, profile: draft.profile }, { planPeriodId: 31, planName: 'CDA NET HOME 25/5', profile: 'CDA-NET-HOME-25-5' });
     assert.equal(draft.lastName, 'Rossi');
     assert.equal(draft.firstName, 'Mario');
     assert.equal(draft.lat, 37.58);

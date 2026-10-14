@@ -50,13 +50,20 @@ export function createUispCrm(opts: { url: string; appKey: string; fetchImpl?: t
     return r.status === 204 ? null : r.json();
   }
 
-  /** The service plans with their monthly period (the NOC chooses one at acceptance). */
+  /**
+   * The service plans with their monthly period (the NOC chooses one at acceptance). A service only
+   * takes plans of its client's organization, and new clients go into the default one: the plans
+   * of the other organizations are left out.
+   */
   async function servicePlans(): Promise<ServicePlan[]> {
     const list = (await call('GET', '/service-plans')) as unknown[];
+    const orgs = (await call('GET', '/organizations').catch(() => [])) as Array<{ id?: unknown; selected?: unknown }>;
+    const home = num((Array.isArray(orgs) ? orgs : []).find((o) => o?.selected === true)?.id);
     return (Array.isArray(list) ? list : []).flatMap((p) => {
-      const o = p as { id?: unknown; name?: unknown; archived?: unknown; periods?: Array<{ id?: unknown; period?: unknown; enabled?: unknown }> };
+      const o = p as { id?: unknown; name?: unknown; archived?: unknown; organizationId?: unknown; periods?: Array<{ id?: unknown; period?: unknown; enabled?: unknown }> };
       const id = num(o.id);
       if (id === null || typeof o.name !== 'string' || o.archived === true) return [];
+      if (home !== null && num(o.organizationId) !== null && num(o.organizationId) !== home) return [];
       const periods = (o.periods ?? []).filter((x) => x.enabled !== false);
       const monthly = periods.find((x) => x.period === 1) ?? periods[0];
       return [{ id, name: o.name, periodId: num(monthly?.id) }];
@@ -98,6 +105,15 @@ export function createUispCrm(opts: { url: string; appKey: string; fetchImpl?: t
   return { servicePlans, createSubscriber, serviceSite };
 }
 export type UispCrm = ReturnType<typeof createUispCrm>;
+
+/**
+ * The UISP plan of an ISPBilling PPPoE profile: "ISP37@CDA-NET-HOME-25-5" (or …-NEW) → "CDA NET HOME 25/5".
+ * null for the profiles without a plan of that form (dedicated lines, FTTH…): the NOC picks it.
+ */
+export function planForProfile(profile: string): string | null {
+  const m = /^(?:[^@]*@)?CDA-NET-(HOME|B2B|RICARICABILE)-(\d+)-(\d+)(?:-NEW)?$/i.exec(profile.trim());
+  return m ? `CDA NET ${m[1]!.toUpperCase()} ${Number(m[2])}/${Number(m[3])}` : null;
+}
 
 /** "rossi.mario@cda-net.it" or "ROSSI MARIO" → first and last name for the subscriber (surname first in our users). */
 export function subscriberName(pppoeUser: string, deviceName: string): { firstName: string; lastName: string } {

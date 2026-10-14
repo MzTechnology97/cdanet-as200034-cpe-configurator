@@ -1,5 +1,5 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
-import { subscriberName } from '../services/uisp-crm.ts';
+import { planForProfile, subscriberName, type UispCrm } from '../services/uisp-crm.ts';
 import { Readable } from 'node:stream';
 import { eveningShare, expectedModulation } from '../domain/ap-load.ts';
 import { apModels } from '../services/model-inputs.ts';
@@ -534,12 +534,26 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     return c;
   };
 
+  /** The UISP plan matching the ISPBilling PPPoE profile of the user, when there is one. */
+  const profilePlan = async (pppoeUser: string, c: UispCrm | null) => {
+    const none = { planPeriodId: null as number | null, planName: null as string | null, profile: null as string | null };
+    const row = db.prepare('SELECT profile FROM crm_radius WHERE username = ? COLLATE NOCASE').get(pppoeUser) as { profile: string } | undefined;
+    if (!row?.profile) return none;
+    const name = planForProfile(row.profile);
+    const plan = name && c ? (await c.servicePlans().catch(() => [])).find((p) => p.name.toUpperCase() === name.toUpperCase()) : undefined;
+    return { planPeriodId: plan?.periodId ?? null, planName: plan ? plan.name : null, profile: row.profile.replace(/^[^@]*@/, '') };
+  };
+
   /** The service plans of UISP: the NOC picks the customer's one when accepting the CPE. */
   app.get('/api/admin/uisp/service-plans', admin, async () => (await crm().servicePlans()).filter((p) => p.periodId !== null));
 
-  /** What the "Crea subscriber" form starts from: name from the PPPoE user, address and position of the installation. */
+  /**
+   * What the "Crea subscriber" form starts from: name from the PPPoE user, address and position of
+   * the installation, and the plan of the PPPoE profile in ISPBilling (null = the NOC picks it).
+   */
   app.get('/api/admin/provisioning/jobs/:id/uisp/subscriber', admin, async (req) => {
     const job = loadJob(req);
+    const c = ctx.connectors.crm();
     const order = job.work_order_id
       ? (db.prepare('SELECT address, lat, lon FROM work_orders WHERE id = ?').get(job.work_order_id) as { address: string; lat: number | null; lon: number | null } | undefined)
       : undefined;
@@ -548,7 +562,8 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       street: order?.address ?? '',
       lat: job.latitude ?? order?.lat ?? null,
       lon: job.longitude ?? order?.lon ?? null,
-      crm: !!ctx.connectors.crm(),
+      crm: !!c,
+      ...(await profilePlan(job.pppoe_user, c)),
     };
   });
 
