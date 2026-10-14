@@ -105,3 +105,11 @@ kbd { font: 600 .72rem var(--font-mono); padding: 2px 6px; border-radius: 6px; b
 @media (max-width: 420px) {
   .cx-brand span { display: none; }
 }
+
+/* UISP slow or down (admins) */
+.cx-banner { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-4); padding: var(--sp-2) var(--sp-4); border-radius: var(--radius); background: var(--tone-bg); border-left: 4px solid var(--tone); font-size: var(--fs-sm); }
+.cx-banner > .icon, .cx-banner > .cx-icon-wrap .icon { width: 20px; height: 20px; fill: var(--tone); flex: none; }
+.cx-banner > span { flex: 1; min-width: 0; }
+.cx-banner strong { color: var(--tone); }
+.cx-banner-detail { color: var(--muted); overflow-wrap: anywhere; }
+.cx-banner a { font-weight: 600; white-space: nowrap; }
