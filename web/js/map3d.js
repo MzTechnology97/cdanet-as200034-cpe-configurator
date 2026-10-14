@@ -195,13 +195,15 @@ async function openScene({ title, ariaLabel, legendItems, center, bearing, onLoa
   layers.push({ id: 'shade', type: 'hillshade', source: 'shade', paint: { 'hillshade-exaggeration': pics.length ? 0.15 : 0.6, 'hillshade-shadow-color': '#3f3f46' } });
   // buildings of the basemap in relief: OpenStreetMap height where mapped, else 7 m (2 floors)
   if (bm?.tiles) {
-    layers.push({ id: 'buildings3d', type: 'fill-extrusion', source: 'osm', 'source-layer': 'buildings', minzoom: 13, paint: { 'fill-extrusion-color': '#e7e5e4', 'fill-extrusion-height': ['coalesce', ['get', 'height'], 7], 'fill-extrusion-base': ['coalesce', ['get', 'min_height'], 0], 'fill-extrusion-opacity': 0.88 } });
+    layers.push({ id: 'buildings3d', type: 'fill-extrusion', source: 'osm', 'source-layer': 'buildings', minzoom: 14, paint: { 'fill-extrusion-color': '#e7e5e4', 'fill-extrusion-height': ['coalesce', ['get', 'height'], 7], 'fill-extrusion-base': ['coalesce', ['get', 'min_height'], 0], 'fill-extrusion-opacity': 0.88 } });
   }
   let shown = -1;
   const show = (i) => {
     shown = i;
     hint();
     pics.forEach((v, j) => v.parts.forEach((_, k) => map.setLayoutProperty(`img${j}_${k}`, 'visibility', i === j ? 'visible' : 'none')));
+    // the shaded relief only without the photos (they show the relief already): one pass less on every tile
+    map.setLayoutProperty('shade', 'visibility', i >= 0 ? 'none' : 'visible');
     try {
       localStorage.setItem(BASE_KEY, pics[i]?.label ?? '');
     } catch {
@@ -221,7 +223,12 @@ async function openScene({ title, ariaLabel, legendItems, center, bearing, onLoa
     zoom: 13,
     pitch: 60,
     bearing,
-    maxPitch: 85,
+    // above 75° the horizon brings in hundreds of far tiles for a few pixels: the main cost of a tilted view
+    maxPitch: 75,
+    // sharp enough on high-density screens without drawing four times the pixels
+    pixelRatio: Math.min(window.devicePixelRatio || 1, 1.5),
+    fadeDuration: 0,
+    renderWorldCopies: false,
     attributionControl: { compact: true },
   });
   map.addControl(new gl.NavigationControl({ visualizePitch: true }), 'top-right');

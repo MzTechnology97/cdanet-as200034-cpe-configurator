@@ -74,7 +74,9 @@ export async function createMap(el, { center = [37.57, 14.27], zoom = 9, onStatu
   // read every time: the basemap may have been installed meanwhile
   const config = await api('/api/map/config');
   const L = window.L;
-  const map = L.map(el, { center, zoom, scrollWheelZoom: false });
+  // markers, lines and areas drawn on one canvas instead of one SVG element each: hundreds of APs,
+  // customers or outages stay smooth
+  const map = L.map(el, { center, zoom, scrollWheelZoom: false, preferCanvas: true });
   // the basemap lives in a group: the layer switch of the admins shows/hides it as one, even when
   // the public tiles replace it
   const base = L.layerGroup().addTo(map);
@@ -119,18 +121,25 @@ function authTileLayer(url, options) {
     createTile(coords, done) {
       const img = document.createElement('img');
       img.alt = '';
-      api(this.getTileUrl(coords), { raw: true })
+      // a tile that leaves the view (zoom, a quick pan) stops its request: the visible tiles do not
+      // wait behind tens of useless ones (the public orthophotos are slow)
+      const ctrl = new AbortController();
+      img._abort = () => ctrl.abort();
+      api(this.getTileUrl(coords), { raw: true, signal: ctrl.signal })
         .then(async (r) => {
           if (!r.ok || r.status === 204) return done(null, img);
           img.onload = () => (URL.revokeObjectURL(img.src), done(null, img));
           img.onerror = () => done(new Error('tile'), img);
           img.src = URL.createObjectURL(await r.blob());
         })
-        .catch((e) => done(e, img));
+        .catch((e) => (ctrl.signal.aborted ? null : done(e, img)));
       return img;
     },
   });
-  return new Layer(url, options);
+  // no new tiles during the zoom animation, few kept around the view: less work and fewer requests
+  const layer = new Layer(url, { updateWhenZooming: false, updateWhenIdle: true, keepBuffer: 1, ...options });
+  layer.on('tileunload', (e) => e.tile._abort?.());
+  return layer;
 }
 
 const BASE_KEY = 'cda.mapBase';
@@ -197,6 +206,7 @@ async function addViews(map, base, config) {
       if (paintRules.length || labelRules.length) overlays[name] = vector({ paintRules, labelRules, attribution: '' });
     }
   }
+  const photos = [];
   for (const v of s?.layers ?? []) {
     // a service that draws nothing far out (the AGEA orthophotos from zoom 11): one level further
     // its own tiles scaled down, further still the basemap, never an empty or white map. The
@@ -204,8 +214,11 @@ async function addViews(map, base, config) {
     const min = v.minZoom ?? 0;
     const opts = { maxZoom: 20, maxNativeZoom: v.maxNativeZoom, minZoom: Math.max(0, min - 1), minNativeZoom: min, tileSize: 256 };
     const parts = v.parts.map(([provider, part], i) => authTileLayer(`/api/admin/map/imagery/${provider}/${part}/{z}/{x}/{y}`, { ...opts, ...(i === 0 ? { attribution: v.attribution } : {}) }));
-    if (min > 1) parts.unshift(pm ? vector({ flavor: 'light', attribution: '' }) : L.tileLayer(config.fallback.url, { maxZoom: 19, attribution: config.fallback.attribution, referrerPolicy: 'strict-origin-when-cross-origin' }));
+    // the basemap only where the photos are not drawn at all (far out): drawing both everywhere
+    // doubled the work of the map. The sea of the coast tiles (clear) shows the colour of the map.
+    if (min > 1) parts.unshift(pm ? vector({ flavor: 'light', maxZoom: min - 2, attribution: '' }) : L.tileLayer(config.fallback.url, { maxZoom: min - 2, attribution: config.fallback.attribution, referrerPolicy: 'strict-origin-when-cross-origin' }));
     bases[v.label] = parts.length === 1 ? parts[0] : L.layerGroup(parts);
+    photos.push(bases[v.label]);
   }
   if (Object.keys(bases).length === 1 && !Object.keys(overlays).length) return;
   const chosen = bases[savedBase()];
@@ -232,7 +245,10 @@ async function addViews(map, base, config) {
     });
     new Btn().addTo(map);
   }
-  map.on('baselayerchange', (e) => remember(BASE_KEY, e.name));
+  // with the photos on, the background of the map is the sea: the coast tiles are clear there
+  const sea = () => map.getContainer().classList.toggle('photo-base', photos.some((l) => map.hasLayer(l)));
+  sea();
+  map.on('baselayerchange', (e) => (remember(BASE_KEY, e.name), sea()));
   const saveOverlays = () => remember(OVERLAY_KEY, JSON.stringify(Object.entries(overlays).filter(([, l]) => map.hasLayer(l)).map(([n]) => n)));
   map.on('overlayadd overlayremove', saveOverlays);
 }
