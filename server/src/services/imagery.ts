@@ -1,3 +1,6 @@
+import { createHash } from 'node:crypto';
+import { existsSync, mkdirSync, readFileSync, renameSync, statSync, writeFileSync } from 'node:fs';
+import { join } from 'node:path';
 import type { Sealer } from '../crypto.ts';
 import type { Db } from '../db.ts';
 import { nowIso } from '../db.ts';
@@ -113,12 +116,81 @@ export interface ImageryLayer {
   minZoom: number;
 }
 
+/** A WMS tile this small is a blank one (white JPEG): the service had nothing to draw, or failed. */
+export const BLANK_JPEG_BYTES = 1500;
+/** A blank answer is asked again after this long: the public WMS often fails for a while. */
+const BLANK_RETRY_MS = 6 * 3_600_000;
+/** At most this many tiles asked to the WMS at once: more only makes the public service slower. */
+const WMS_PARALLEL = 6;
+
 /**
  * [touchesSea]: whether a box ([south, west, north, east]) reaches the sea, from the terrain model;
  * the WMS tiles there come transparent, so the sea of the map shows instead of white.
+ * [dir]: where the WMS tiles are kept. Orthophotos of a year never change and the public service is
+ * slow and unreliable: every tile is asked once, then served from the disk. (Keyed providers are
+ * never stored: their terms forbid it.)
  */
-export function createImagery(db: Db, sealer: Sealer, opts: { fetchImpl?: typeof fetch | undefined; touchesSea?: (box: [number, number, number, number]) => Promise<boolean> } = {}) {
+export function createImagery(db: Db, sealer: Sealer, opts: { fetchImpl?: typeof fetch | undefined; touchesSea?: (box: [number, number, number, number]) => Promise<boolean>; dir?: string } = {}) {
   const doFetch = opts.fetchImpl ?? fetch;
+  // ---- WMS tiles on disk: one folder per service and layers, a marker for the blank answers ----
+  const inflight = new Map<string, Promise<{ type: string; body: Buffer } | null>>();
+  let running = 0;
+  const waiting: Array<() => void> = [];
+  const slot = async () => {
+    if (running >= WMS_PARALLEL) await new Promise<void>((res) => waiting.push(res));
+    running++;
+  };
+  const release = () => {
+    running--;
+    waiting.shift()?.();
+  };
+  const tileFile = (w: { url: string; layers: string }, z: number, x: number, y: number) => {
+    const id = createHash('sha1').update(`${w.url}|${w.layers}`).digest('hex').slice(0, 12);
+    return join(opts.dir!, 'wms', id, String(z), String(x), String(y));
+  };
+  const fromDisk = (f: string): { type: string; body: Buffer } | null | undefined => {
+    for (const [ext, type] of [['jpg', 'image/jpeg'], ['png', 'image/png']] as const) {
+      if (existsSync(`${f}.${ext}`)) return { type, body: readFileSync(`${f}.${ext}`) };
+    }
+    // blank recently: not asked again for a while (the map keeps the tile of the zoom below)
+    if (existsSync(`${f}.blank`) && Date.now() - statSync(`${f}.blank`).mtimeMs < BLANK_RETRY_MS) return null;
+    return undefined;
+  };
+  const toDisk = (f: string, t: { type: string; body: Buffer } | null) => {
+    try {
+      mkdirSync(join(f, '..'), { recursive: true });
+      const target = t ? `${f}.${t.type === 'image/png' ? 'png' : 'jpg'}` : `${f}.blank`;
+      writeFileSync(`${target}.tmp`, t ? t.body : '');
+      renameSync(`${target}.tmp`, target);
+    } catch {
+      // a full disk only costs the cache
+    }
+  };
+  async function wmsTile(w: { url: string; layers: string }, z: number, x: number, y: number, store: boolean) {
+    const f = opts.dir && store ? tileFile(w, z, x, y) : null;
+    if (f) {
+      const hit = fromDisk(f);
+      if (hit !== undefined) return hit;
+    }
+    const key = `${w.url}|${w.layers}|${z}/${x}/${y}`;
+    let p = inflight.get(key);
+    if (!p) {
+      p = (async () => {
+        await slot();
+        try {
+          const url = wmsTileUrl(w.url, w.layers, z, x, y, await seaTile(z, x, y));
+          const t = await answer(await doFetch(url, { signal: AbortSignal.timeout(20_000) }).catch(() => null));
+          const blank = !t || (t.type === 'image/jpeg' && t.body.length < BLANK_JPEG_BYTES);
+          if (f) toDisk(f, blank ? null : t);
+          return blank ? null : t;
+        } finally {
+          release();
+        }
+      })().finally(() => inflight.delete(key));
+      inflight.set(key, p);
+    }
+    return p;
+  }
   // a tile is on the coast or not for good: remembered (the last few thousand)
   const coast = new Map<string, boolean>();
   const seaTile = async (z: number, x: number, y: number) => {
@@ -185,7 +257,8 @@ export function createImagery(db: Db, sealer: Sealer, opts: { fetchImpl?: typeof
       if (!w?.url) throw new HttpError(503, 'imagery_not_configured');
       // orthophotos are heavy to render far out: nothing below zoom 9
       if (z < 9) return null;
-      url = wmsTileUrl(w.url, w.layers, z, x, y, await seaTile(z, x, y));
+      // the saved service from the disk (a test of other settings never goes there)
+      return wmsTile(w, z, x, y, !override?.wms);
     } else {
       const key = override?.key ?? (enabled(provider) ? keyOf(provider) : null);
       if (!key) throw new HttpError(503, 'imagery_not_configured');
@@ -221,7 +294,7 @@ export function createImagery(db: Db, sealer: Sealer, opts: { fetchImpl?: typeof
         if (p === 'wms') {
           const w = read().stored.wms!;
           // the AGEA WMS draws nothing (white tiles) under zoom 11: the base map shows there instead
-          out.push({ id: 'wms', label: w.label || WMS_DEFAULT.label, parts: [['wms', 'ortofoto']], attribution: w.attribution || WMS_DEFAULT.attribution, maxNativeZoom: 20, minZoom: 11 });
+          out.push({ id: 'wms', label: w.label || WMS_DEFAULT.label, parts: [['wms', 'ortofoto']], attribution: w.attribution || WMS_DEFAULT.attribution, maxNativeZoom: 18, minZoom: 11 });
           continue;
         }
         const native = p === 'google' ? 20 : 19;

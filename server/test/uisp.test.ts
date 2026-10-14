@@ -1,10 +1,13 @@
 import assert from 'node:assert/strict';
+import { existsSync, mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { buildApp } from '../src/app.ts';
 import { openDatabase } from '../src/db.ts';
 import { bearingDeg, cardinal, distanceM } from '../src/domain/geo.ts';
 import { createGeocoder } from '../src/services/geocode.ts';
-import { normalizeDevice } from '../src/services/uisp.ts';
+import { createUisp, normalizeDevice } from '../src/services/uisp.ts';
 import { STATION, fakeUisp } from './fake-uisp.ts';
 import { ADMIN, SAMPLE_TEMPLATE, testConfig } from './helpers.ts';
 
@@ -20,6 +23,39 @@ describe('geo', () => {
 });
 
 describe('UISP client', () => {
+  it('UISP down: the last device list from the disk at once, no waiting until the pause is over', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'cdanet-uisp-'));
+    try {
+      const up = fakeUisp();
+      const first = createUisp({ url: 'https://uisp.test', token: 'tok-secret', fetchImpl: up.fetchImpl, cacheDir: dir });
+      const live = await first.allDevices();
+      assert.ok(live.length > 0);
+      for (let i = 0; i < 50 && !existsSync(join(dir, 'devices.json')); i++) await new Promise((r) => setTimeout(r, 10));
+      assert.ok(existsSync(join(dir, 'devices.json')), 'the list is kept on disk');
+      assert.equal(first.health().online, true);
+
+      // the server restarts while UISP is down
+      let asked = 0;
+      const down = (async () => {
+        asked++;
+        throw new Error('connect ETIMEDOUT');
+      }) as unknown as typeof fetch;
+      const second = createUisp({ url: 'https://uisp.test', token: 'tok-secret', fetchImpl: down, cacheDir: dir });
+      // a page wants fresh data (as after a provisioning): UISP does not answer
+      await second.test().catch(() => null);
+      assert.deepEqual((await second.allDevices()).map((d) => d.id), live.map((d) => d.id), 'the copy, not an error');
+      const h = second.health();
+      assert.equal(h.online, false);
+      assert.ok(h.dataAt, 'with the age of the data');
+      const before = asked;
+      await second.allDevices();
+      await second.allDevices().catch(() => null);
+      assert.equal(asked, before, 'not asked again during the pause');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('normalises devices defensively', () => {
     const d = normalizeDevice(STATION);
     assert.equal(d.mac, 'AA:BB:CC:DD:EE:FF');

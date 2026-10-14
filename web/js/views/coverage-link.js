@@ -30,10 +30,18 @@ export const ALT_FROM = { sito: 'altezza del sito in UISP', gps: 'altitudine GPS
 /** First Fresnel zone radius at [d] of a [D] m link, m. */
 const fresnelR = (d, D, freqMhz) => Math.sqrt(((299.79 / (freqMhz || 5600)) * d * Math.max(0, D - d)) / D);
 
+/** Below this height of the Fresnel zone (viewBox units, out of 248) the whole profile hides it. */
+const THIN_FRESNEL = 14;
+let clipIds = 0;
+
 /**
  * Elevation profile of the link, as in UISP Design: ground (with the earth bulge) and the obstacles
  * on it, the two antennas on their masts, the line of sight, the whole first Fresnel zone (ellipse)
  * and its 60% limit, distances along the bottom and the critical point.
+ * Two views: the whole profile, and the Fresnel zone: everything measured from the line of sight
+ * (straight at 0), so the zone fills the drawing and what enters it shows at once (a hill of 500 m
+ * and a zone of ±8 m do not fit the same scale). That view opens by itself when the zone would be
+ * a thin line in the whole profile; ground far above or below the line is cut at the edges.
  */
 export function profileChart(p) {
   const W = 980;
@@ -41,52 +49,95 @@ export function profileChart(p) {
   const pad = { l: 52, r: 16, t: 18, b: 34 };
   const pts = p.chart.map((q) => ({ ...q, r: fresnelR(q.d, p.distanceM, p.frequencyMhz) }));
   const D = pts[pts.length - 1].d || 1;
+  const maxR = Math.max(...pts.map((q) => q.r));
   const ys = pts.flatMap((q) => [q.ground, q.top ?? q.ground, q.los + q.r, q.los - q.r]);
-  const lo = Math.floor(Math.min(...ys) - 8);
-  const hi = Math.ceil(Math.max(...ys) + 8);
-  const x = (d) => pad.l + ((W - pad.l - pad.r) * d) / D;
-  const y = (v) => pad.t + ((H - pad.t - pad.b) * (hi - v)) / (hi - lo || 1);
-  const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'los-chart link-chart', role: 'img', 'aria-label': 'Profilo del collegamento' });
-  // grid and axes
-  const stepM = [100, 250, 500, 1000, 2000, 5000].find((st) => D / st <= 10) ?? 5000;
-  for (let d = 0; d <= D; d += stepM) {
-    svg.append(s('line', { x1: x(d), x2: x(d), y1: pad.t, y2: H - pad.b, class: 'link-grid' }));
-    const t = s('text', { x: x(d), y: H - 12, class: 'los-axis', 'text-anchor': d === 0 ? 'start' : 'middle' });
-    t.textContent = km(Math.round(d));
-    svg.append(t);
-  }
-  for (const v of [lo, Math.round((lo + hi) / 2), hi]) {
-    svg.append(s('line', { x1: pad.l, x2: W - pad.r, y1: y(v), y2: y(v), class: 'link-grid' }));
-    const t = s('text', { x: pad.l - 6, y: y(v) + 4, class: 'los-axis', 'text-anchor': 'end' });
-    t.textContent = `${v} m`;
-    svg.append(t);
-  }
-  // Fresnel ellipse (whole first zone), then terrain and obstacles over it
-  const upper = pts.map((q) => `${x(q.d)},${y(q.los + q.r)}`);
-  const lower = pts.map((q) => `${x(q.d)},${y(q.los - q.r)}`).reverse();
-  svg.append(s('path', { d: `M${upper.join(' L')} L${lower.join(' L')} Z`, class: 'link-fresnel' }));
-  svg.append(s('path', { d: 'M' + pts.map((q) => `${x(q.d)},${y(q.los - 0.6 * q.r)}`).join(' L'), class: 'los-fresnel' }));
-  const step = pts.length > 1 ? Math.max(1.5, (x(pts[1].d) - x(pts[0].d)) * 0.95) : 2;
-  for (const q of pts) if (q.obstacle && q.top > q.ground) svg.append(s('rect', { x: x(q.d) - step / 2, y: y(q.top), width: step, height: Math.max(1, y(q.ground) - y(q.top)), class: q.obstacle === 'edificio' ? 'los-building' : 'los-tree' }));
-  svg.append(s('path', { d: `M${x(0)},${y(lo)} ` + pts.map((q) => `L${x(q.d)},${y(q.ground)}`).join(' ') + ` L${x(D)},${y(lo)} Z`, class: 'los-ground' }));
-  // line of sight, coloured where it is obstructed
-  svg.append(s('path', { d: 'M' + pts.map((q) => `${x(q.d)},${y(q.los)}`).join(' L'), class: 'los-line' }));
-  // the antennas on their masts
-  const first = pts[0];
-  const last = pts[pts.length - 1];
-  for (const [q, label, anchor, dx] of [[first, `CPE ${dec(first.los - first.ground)} m`, 'start', 6], [last, `AP ${dec(last.los - last.ground)} m`, 'end', -6]]) {
-    svg.append(s('line', { x1: x(q.d), x2: x(q.d), y1: y(q.ground), y2: y(q.los), class: 'link-mast' }));
-    svg.append(s('circle', { cx: x(q.d), cy: y(q.los), r: 5, class: 'link-antenna' }));
-    const t = s('text', { x: x(q.d) + dx, y: y(q.los) - 9, class: 'link-label', 'text-anchor': anchor });
-    t.textContent = label;
-    svg.append(t);
-  }
-  if (p.worst) {
-    const q = pts.reduce((a, b) => (Math.abs(b.d - p.worst.d) < Math.abs(a.d - p.worst.d) ? b : a));
-    svg.append(s('line', { x1: x(q.d), x2: x(q.d), y1: y(Math.max(q.ground, q.top ?? q.ground)), y2: y(q.los), class: 'link-critical' }));
-    svg.append(s('circle', { cx: x(q.d), cy: y(Math.max(q.ground, q.top ?? q.ground)), r: 5, class: 'los-worst' }));
-  }
-  return h('div', { class: 'link-chart-wrap' }, svg);
+  const full = [Math.floor(Math.min(...ys) - 8), Math.ceil(Math.max(...ys) + 8)];
+  // the zone and room around it for what touches it, in metres from the line of sight
+  const span = Math.ceil(Math.max(maxR * 2.4, 10));
+  const line = [-span, span];
+  const thin = (2 * maxR * (H - pad.t - pad.b)) / (full[1] - full[0] || 1) < THIN_FRESNEL;
+  // how far the ground and the obstacles go above the line (zoom: cut beyond the window)
+  const above = Math.max(...pts.map((q) => (q.top ?? q.ground) - q.los));
+  const wrap = h('div', { class: 'link-chart-wrap' });
+  const draw = (zoom) => {
+    const [lo, hi] = zoom ? line : full;
+    const x = (d) => pad.l + ((W - pad.l - pad.r) * d) / D;
+    const yv = (v) => pad.t + ((H - pad.t - pad.b) * (hi - v)) / (hi - lo || 1);
+    // a height at a point of the link: as it is, or from the line of sight (zoom)
+    const y = (q, v) => yv(zoom ? v - q.los : v);
+    const svg = s('svg', { viewBox: `0 0 ${W} ${H}`, class: 'los-chart link-chart', role: 'img', 'aria-label': zoom ? 'Profilo del collegamento: zona di Fresnel, altezze dalla linea di vista' : 'Profilo del collegamento' });
+    // what falls outside the window (zoom) is cut at the edges of the drawing
+    const clip = `link-clip-${++clipIds}`;
+    const defs = s('defs');
+    const cp = s('clipPath', { id: clip });
+    cp.append(s('rect', { x: pad.l, y: pad.t, width: W - pad.l - pad.r, height: H - pad.t - pad.b }));
+    defs.append(cp);
+    svg.append(defs);
+    const plot = s('g', { 'clip-path': `url(#${clip})` });
+    // grid and axes
+    const stepM = [100, 250, 500, 1000, 2000, 5000].find((st) => D / st <= 10) ?? 5000;
+    for (let d = 0; d <= D; d += stepM) {
+      svg.append(s('line', { x1: x(d), x2: x(d), y1: pad.t, y2: H - pad.b, class: 'link-grid' }));
+      const t = s('text', { x: x(d), y: H - 12, class: 'los-axis', 'text-anchor': d === 0 ? 'start' : 'middle' });
+      t.textContent = km(Math.round(d));
+      svg.append(t);
+    }
+    for (const v of [lo, Math.round((lo + hi) / 2), hi]) {
+      svg.append(s('line', { x1: pad.l, x2: W - pad.r, y1: yv(v), y2: yv(v), class: 'link-grid' }));
+      const t = s('text', { x: pad.l - 6, y: yv(v) + 4, class: 'los-axis', 'text-anchor': 'end' });
+      t.textContent = zoom ? `${v > 0 ? '+' : ''}${v} m` : `${v} m`;
+      svg.append(t);
+    }
+    // Fresnel ellipse (whole first zone), then terrain and obstacles over it
+    const upper = pts.map((q) => `${x(q.d)},${y(q, q.los + q.r)}`);
+    const lower = pts.map((q) => `${x(q.d)},${y(q, q.los - q.r)}`).reverse();
+    plot.append(s('path', { d: `M${upper.join(' L')} L${lower.join(' L')} Z`, class: 'link-fresnel' }));
+    plot.append(s('path', { d: 'M' + pts.map((q) => `${x(q.d)},${y(q, q.los - 0.6 * q.r)}`).join(' L'), class: 'los-fresnel' }));
+    const step = pts.length > 1 ? Math.max(1.5, (x(pts[1].d) - x(pts[0].d)) * 0.95) : 2;
+    for (const q of pts) if (q.obstacle && q.top > q.ground) plot.append(s('rect', { x: x(q.d) - step / 2, y: y(q, q.top), width: step, height: Math.max(1, y(q, q.ground) - y(q, q.top)), class: q.obstacle === 'edificio' ? 'los-building' : 'los-tree' }));
+    // the ground down to the bottom edge of the drawing
+    const floor = H - pad.b + 2;
+    plot.append(s('path', { d: `M${x(0)},${floor} ` + pts.map((q) => `L${x(q.d)},${Math.min(floor, y(q, q.ground))}`).join(' ') + ` L${x(D)},${floor} Z`, class: 'los-ground' }));
+    // line of sight
+    plot.append(s('path', { d: 'M' + pts.map((q) => `${x(q.d)},${y(q, q.los)}`).join(' L'), class: 'los-line' }));
+    svg.append(plot);
+    // the antennas on their masts
+    const first = pts[0];
+    const last = pts[pts.length - 1];
+    for (const [q, label, anchor, dx] of [[first, `CPE ${dec(first.los - first.ground)} m`, 'start', 6], [last, `AP ${dec(last.los - last.ground)} m`, 'end', -6]]) {
+      svg.append(s('line', { x1: x(q.d), x2: x(q.d), y1: Math.min(H - pad.b, y(q, q.ground)), y2: y(q, q.los), class: 'link-mast' }));
+      svg.append(s('circle', { cx: x(q.d), cy: y(q, q.los), r: 5, class: 'link-antenna' }));
+      const t = s('text', { x: x(q.d) + dx, y: y(q, q.los) - 9, class: 'link-label', 'text-anchor': anchor });
+      t.textContent = label;
+      svg.append(t);
+    }
+    if (p.worst) {
+      const q = pts.reduce((a, b) => (Math.abs(b.d - p.worst.d) < Math.abs(a.d - p.worst.d) ? b : a));
+      const yt = Math.max(pad.t, Math.min(H - pad.b, y(q, Math.max(q.ground, q.top ?? q.ground))));
+      svg.append(s('line', { x1: x(q.d), x2: x(q.d), y1: yt, y2: y(q, q.los), class: 'link-critical' }));
+      svg.append(s('circle', { cx: x(q.d), cy: yt, r: 5, class: 'los-worst' }));
+    }
+    // zoom: the ground cut at the top is said, with how far above the line it goes
+    if (zoom && above > hi) {
+      const t = s('text', { x: W - pad.r - 4, y: pad.t + 14, class: 'link-label', 'text-anchor': 'end' });
+      t.textContent = `ostacolo fino a ${Math.round(above)} m sopra la linea (tagliato)`;
+      svg.append(t);
+    }
+    return svg;
+  };
+  let zoom = thin;
+  const views = h('div', { class: 'link-chart-views' });
+  const render = () => {
+    views.replaceChildren(
+      ...[
+        [false, 'Profilo intero'],
+        [true, 'Zona di Fresnel'],
+      ].map(([z, label]) => h('button', { type: 'button', class: `small-btn${zoom === z ? ' on' : ''}`, 'aria-pressed': zoom === z ? 'true' : 'false', onclick: () => ((zoom = z), render()) }, label)),
+    );
+    wrap.replaceChildren(views, draw(zoom));
+  };
+  render();
+  return wrap;
 }
 
 /** Bearing from [a] to [b], degrees from north. */

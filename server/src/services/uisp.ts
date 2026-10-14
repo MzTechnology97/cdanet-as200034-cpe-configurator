@@ -1,3 +1,6 @@
+import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { rename, writeFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { HttpError } from '../auth.ts';
 import { parseMac } from '../domain/policy.ts';
 import { buildApModel, networkCalibrationDb, sectorWidth, type ApModel, type ClientSample, type RadioDefaults } from '../domain/coverage-model.ts';
@@ -197,15 +200,57 @@ export interface UispOptions {
   token: string;
   cacheSeconds?: number;
   fetchImpl?: typeof fetch;
+  /**
+   * Where the last device and site lists are kept: after a restart, or while UISP is slow or
+   * down, the pages use them at once instead of waiting for UISP.
+   */
+  cacheDir?: string;
+}
+
+/** After UISP fails to answer, it is not asked again for this long: pages answer at once meanwhile. */
+const UISP_PAUSE_MS = 30_000;
+
+/** How UISP is doing, for the pages: online, and how old the data shown is. */
+export interface UispHealth {
+  online: boolean;
+  /** When the device list the pages use was read from UISP (ISO), null before the first read. */
+  dataAt: string | null;
+  lastOkAt: string | null;
+  lastErrorAt: string | null;
+  lastError: string | null;
 }
 
 export function createUisp(opts: UispOptions) {
   const base = `${opts.url.replace(/\/+$/, '')}/nms/api/v2.1`;
   const f = opts.fetchImpl ?? fetch;
   const ttl = (opts.cacheSeconds ?? 60) * 1000;
-  const cache = new Map<string, { at: number; value: unknown }>();
+  // [stale]: to read again on the next request (kept meanwhile as a fallback, with its real age)
+  const cache = new Map<string, { at: number; value: unknown; stale?: boolean }>();
+  // the lists of the last run, so a restart does not start from nothing
+  const snapshot = (key: string) => (opts.cacheDir ? join(opts.cacheDir, `${key}.json`) : null);
+  for (const key of ['devices', 'sites']) {
+    const f = snapshot(key);
+    if (!f || !existsSync(f)) continue;
+    try {
+      const s = JSON.parse(readFileSync(f, 'utf8')) as { at: number; value: unknown };
+      if (typeof s.at === 'number' && Array.isArray(s.value)) cache.set(key, s);
+    } catch {
+      // a broken copy is ignored: the next answer of UISP replaces it
+    }
+  }
+  const keep = (key: string, entry: { at: number; value: unknown }) => {
+    const f = snapshot(key);
+    if (!f) return;
+    mkdirSync(opts.cacheDir!, { recursive: true });
+    void writeFile(`${f}.tmp`, JSON.stringify(entry))
+      .then(() => rename(`${f}.tmp`, f))
+      .catch(() => {});
+  };
+  const health = { pausedUntil: 0, lastOkAt: null as number | null, lastErrorAt: null as number | null, lastError: null as string | null };
 
   async function call(method: string, path: string, body?: unknown, raw = false, timeoutMs = 20_000): Promise<Response | unknown> {
+    // UISP did not answer a moment ago: no page waits for it again until the pause is over
+    if (Date.now() < health.pausedUntil) throw new HttpError(502, 'uisp_unreachable', { detail: health.lastError ?? 'UISP non risponde' });
     let r: Response;
     try {
       r = await f(`${base}${path}`, {
@@ -215,8 +260,12 @@ export function createUisp(opts: UispOptions) {
         signal: AbortSignal.timeout(raw ? 120_000 : timeoutMs),
       });
     } catch (e) {
-      throw new HttpError(502, 'uisp_unreachable', { detail: (e as Error).message.slice(0, 200) });
+      const detail = (e as Error).message.slice(0, 200);
+      Object.assign(health, { pausedUntil: Date.now() + UISP_PAUSE_MS, lastErrorAt: Date.now(), lastError: detail });
+      throw new HttpError(502, 'uisp_unreachable', { detail });
     }
+    health.lastOkAt = Date.now();
+    if (r.status < 500) health.lastError = null;
     if (r.status === 401 || r.status === 403) throw new HttpError(502, 'uisp_auth_failed', { status: r.status });
     if (!r.ok) {
       const text = (await r.text().catch(() => '')).slice(0, 300);
@@ -233,35 +282,55 @@ export function createUisp(opts: UispOptions) {
 
   /**
    * Cache with one load at a time per key and stale-while-revalidate: on a big network UISP can
-   * take 15-20 s to build the site list, so pages get the previous answer while it refreshes.
+   * take 15-20 s to build the site list, so pages get the previous answer while it refreshes. Up
+   * to STALE_MAX_MS the old answer is served at once; older, the page waits for UISP, but when
+   * UISP does not answer it still gets the last list (with its age in health()) instead of an error.
    */
   async function cached<T>(key: string, load: () => Promise<T>): Promise<T> {
     const hit = cache.get(key);
-    if (hit && Date.now() - hit.at < ttl) return hit.value as T;
+    const age = hit ? Date.now() - hit.at : Infinity;
+    if (hit && !hit.stale && age < ttl) return hit.value as T;
     let p = inflight.get(key) as Promise<T> | undefined;
     if (!p) {
       p = load()
         .then((value) => {
-          cache.set(key, { at: Date.now(), value });
+          const entry = { at: Date.now(), value };
+          cache.set(key, entry);
+          if (key === 'devices' || key === 'sites') keep(key, entry);
           return value;
         })
         .finally(() => inflight.delete(key));
       inflight.set(key, p);
     }
-    if (hit && Date.now() - hit.at < STALE_MAX_MS) {
+    if (hit && !hit.stale && (age < STALE_MAX_MS || Date.now() < health.pausedUntil)) {
       p.catch(() => {}); // refreshed in background; errors are reported on the next cold call
       return hit.value as T;
     }
+    // too old, or to read again: the page waits for UISP, but gets the last list if UISP fails
+    if (hit) return p.catch(() => hit.value as T);
     return p;
   }
 
   // Full lists can be slow on large networks (1000+ devices): longer timeout than single calls.
   const devices = () => cached('devices', async () => ((await call('GET', '/devices', undefined, false, 60_000)) as unknown[]).map(normalizeDevice));
   const sites = () => cached('sites', async () => ((await call('GET', '/sites', undefined, false, 60_000)) as unknown[]).map(normalizeSite));
+  /**
+   * Everything read again on the next request (provisioning changes UISP quickly). The old lists
+   * stay as a fallback: if UISP does not answer, the pages still get them.
+   */
   const invalidate = () => {
-    cache.clear();
+    for (const e of cache.values()) e.stale = true;
     inflight.clear();
   };
+  const iso = (t: number | null) => (t === null ? null : new Date(t).toISOString());
+  /** Online, and the age of the data the pages show (the device list). */
+  const healthView = (): UispHealth => ({
+    online: Date.now() >= health.pausedUntil && health.lastError === null,
+    dataAt: iso(cache.get('devices')?.at ?? null),
+    lastOkAt: iso(health.lastOkAt),
+    lastErrorAt: iso(health.lastErrorAt),
+    lastError: health.lastError,
+  });
 
   /** AP coordinates: device location, else its site location. */
   async function aps(): Promise<Array<UispDevice & { location: LatLon; siteHeight: number | null }>> {
@@ -277,6 +346,8 @@ export function createUisp(opts: UispOptions) {
   }
 
   return {
+    /** Online, and the age of the data the pages show. */
+    health: healthView,
     async test() {
       invalidate();
       const started = Date.now();

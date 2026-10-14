@@ -117,6 +117,13 @@ export function networkRoutes(app: FastifyInstance, ctx: AppContext) {
       summary: { aps: all.length, down: all.filter((a) => a.state === 'down').length, degraded: all.filter((a) => a.state === 'degraded').length, powerOutage: all.filter((a) => a.powerOutage).length },
       pops,
       apsWithoutPop: loose,
+      // how fresh the data is: when the network manager is slow or down the page shows the last
+      // list, with its age (admins also see why; installers never see the data sources)
+      dataAt: ctx.uisp.health?.().dataAt ?? null,
+      ...(keys ? {} : { uisp: ctx.uisp.health?.() ?? null }),
     };
   });
+
+  /** Admins: UISP online, and when the data the pages show was read. */
+  app.get('/api/uisp/health', { preHandler: ctx.auth.requireAdmin }, async () => (ctx.uisp ? { configured: true, ...(ctx.uisp.health?.() ?? {}) } : { configured: false }));
 }

@@ -598,3 +598,10 @@ tr:hover > td { background: color-mix(in srgb, var(--brand) 4%, transparent); }
 @media (max-width: 1099px) {
   .ia-kpis.five { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
+
+/* aerial photos as the base of the map: the clear sea of the coast tiles shows this colour */
+.leaflet-container.photo-base { background: #8fb8de; }
+
+/* the profile of a link: whole, or zoomed on the line where the Fresnel zone is readable */
+.link-chart-views { display: flex; gap: 6px; justify-content: flex-end; margin-bottom: 2px; }
+.link-chart-views .small-btn.on { border-color: var(--brand); color: var(--brand); }
