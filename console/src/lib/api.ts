@@ -108,7 +108,12 @@ const INSTALLER_MESSAGES: Record<string, string> = {
   uisp_unreachable: 'Servizio di rete non raggiungibile, riprova più tardi',
   uisp_auth_failed: 'Servizio di rete non disponibile: contatta l’amministratore',
   runtime_secret_missing: 'Configurazione del server incompleta: contatta l’amministratore',
+  uisp_device_not_found: 'La CPE non è ancora visibile in rete: riprova tra qualche minuto',
+  uisp_already_authorized: 'La CPE è già attiva in rete',
 };
+
+/** Error codes that name a data source (UISP, the CRM/ISPBilling, e-distribuzione, the warehouse reading). */
+const SOURCE_CODE = /^(uisp|crm|ispbilling|edist|outages_source|warehouse_sync|imagery|firebase)_/;
 
 export interface ApiErrorBody {
   error?: string;
@@ -122,7 +127,9 @@ export class ApiError extends Error {
   constructor(status: number, body: ApiErrorBody) {
     const code = body?.error ?? `HTTP ${status}`;
     const detail = body?.issues?.map((i) => `${i.path}: ${i.message}`).join('; ');
-    const installer = !isAdminUser() && INSTALLER_MESSAGES[code];
+    // installers never see the data sources: a code of UISP, the CRM or the other sources without
+    // its own neutral message becomes a generic one
+    const installer = !isAdminUser() && (INSTALLER_MESSAGES[code] ?? (SOURCE_CODE.test(code) ? 'Servizio non disponibile: contatta l’amministratore' : undefined));
     // the CPE is in a warehouse, but not the installer's one
     const elsewhere = code === 'cpe_not_in_stock' && body?.result === 'other_warehouse' ? 'La CPE è in un altro magazzino, non in quello del tecnico' : '';
     super(elsewhere || installer || (MESSAGES[code] ?? code) + (detail ? ` (${detail})` : ''));

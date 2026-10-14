@@ -23,7 +23,8 @@ const ERRORS: Record<string, string> = {
   uisp_already_authorized: 'La CPE è già stata accettata in UISP.',
   uisp_site_unknown: 'Non riesco a determinare il site dell’AP: sceglilo qui sotto.',
 };
-const errText = (e: unknown) => ERRORS[(e as { body?: { error?: string } }).body?.error ?? ''] ?? (e as Error).message;
+/** The detailed messages name UISP: admins only (for installers the client's neutral message). */
+const errText = (e: unknown, admin = true) => (admin ? ERRORS[(e as { body?: { error?: string } }).body?.error ?? ''] : undefined) ?? (e as Error).message;
 const fail = (e: unknown) => toast(errText(e), 'bad');
 const date = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 
@@ -50,7 +51,7 @@ export function UispPanel({ job, admin }: { job: Job; admin: boolean }) {
   const draft = useQuery({ queryKey: ['jobs', job.id, 'uisp-subscriber'], queryFn: () => api<SubscriberDraft>(`/api/admin/provisioning/jobs/${job.id}/uisp/subscriber`), enabled: waiting, retry: false, staleTime: 60_000 });
   const crm = waiting && !!draft.data?.crm;
 
-  if (q.error) return <Notice tone="bad">{errText(q.error)}</Notice>;
+  if (q.error) return <Notice tone="bad">{errText(q.error, admin)}</Notice>;
   if (!s) return <Skeleton lines={3} />;
   if (!s.configured) return <p className="ui-muted ui-small">{admin ? 'Integrazione UISP non configurata.' : 'Stato di rete non disponibile.'}</p>;
   const d = s.device;
