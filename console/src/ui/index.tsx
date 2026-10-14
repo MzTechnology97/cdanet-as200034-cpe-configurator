@@ -208,4 +208,52 @@ export function Tabs<T extends string>({ value, tabs, onChange }: { value: T; ta
   );
 }
 
+export interface Column<T> {
+  label: string;
+  render: (row: T) => ReactNode;
+  /** Right-aligned (numbers, actions). */
+  end?: boolean;
+}
+
+/**
+ * Rows of data under their headers; on phones every row becomes a card with the labels at the side.
+ * [onRow] makes the rows clickable (and reachable with the keyboard).
+ */
+export function Table<T>({ columns, rows, rowKey, onRow, empty = 'Nessun elemento.' }: { columns: Array<Column<T>>; rows: T[]; rowKey: (row: T) => string | number; onRow?: (row: T) => void; empty?: ReactNode }) {
+  return (
+    <div className="ui-table-wrap">
+      <table className="ui-table">
+        <thead>
+          <tr>
+            {columns.map((c, i) => (
+              <th key={i} className={c.end ? 'end' : undefined}>
+                {c.label}
+              </th>
+            ))}
+          </tr>
+        </thead>
+        <tbody>
+          {rows.length ? (
+            rows.map((r) => (
+              <tr key={rowKey(r)} className={onRow ? 'clickable' : undefined} onClick={onRow ? () => onRow(r) : undefined} tabIndex={onRow ? 0 : undefined} onKeyDown={onRow ? (e) => e.key === 'Enter' && onRow(r) : undefined}>
+                {columns.map((c, i) => (
+                  <td key={i} data-label={c.label || undefined} className={c.end ? 'end' : undefined}>
+                    {c.render(r)}
+                  </td>
+                ))}
+              </tr>
+            ))
+          ) : (
+            <tr>
+              <td colSpan={columns.length} className="ui-table-empty">
+                {empty}
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
 export { Icon };
