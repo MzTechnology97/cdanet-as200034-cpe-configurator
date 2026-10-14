@@ -2,7 +2,7 @@
 
 ## Pagina Notifiche (console e app, v1.32.7)
 
-Ogni utente ha la sua pagina **Notifiche**, con la campanella e il numero da leggere: nella console in alto e nel menu, nell'app nella barra in alto e nella schermata principale. Si conservano 90 giorni.
+Ogni utente ha la sua pagina **Notifiche**, con la campanella e il numero da leggere: nella console in alto e nel menu, nell'app nella barra in alto e nella schermata principale. Si possono eliminare una per una, le lette o tutte; dopo 14 giorni si cancellano da sole.
 
 | Notifica | A chi | Quando |
 |---|---|---|

@@ -75,6 +75,7 @@ fun shortcutCatalog(m: Map<String, Boolean>, admin: Boolean, offline: Boolean): 
     // my work
     if (on) add(Shortcut("todo", "Da completare", "Installazioni lasciate a metà o rifiutate", R.drawable.ic_pending_actions, Area.Work, Dest(Screen.Installations, "Da completare")))
     if (on) add(Shortcut("history", "Storico", "I miei provisioning e i loro esiti", R.drawable.ic_history, Area.Work, Dest(Screen.Installations, "Storico")))
+    if (on && m["work_orders"] != false) add(Shortcut("calendar", "Calendario", "I tuoi interventi per giorno, settimana e mese", R.drawable.ic_calendar_month, Area.Work, Dest(Screen.Calendar)))
     install.firstOrNull { it == "Salute CPE" || it == "Stato CPE" }?.let { t ->
         if (on) add(Shortcut("cpe_health", t, if (admin) "CPE con problemi in tutta la rete" else "Le CPE che ho installato", R.drawable.ic_monitor_heart, Area.Work, Dest(Screen.Installations, t)))
     }
