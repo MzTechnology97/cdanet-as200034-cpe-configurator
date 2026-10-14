@@ -164,6 +164,8 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
     ).run(job.id, nowIso(), req.user!.id, v, JSON.stringify(data), reason ? 'pending' : null, reason);
     recordEvent(db, req.user!.id, 'job.acceptance', job.id, `esito ${v}${a.radio.signal != null ? ` · ${a.radio.signal} dBm` : ''}${reason ? ' · da approvare dal NOC' : ''}`);
     if (reason) ctx.notify.reviewPending(job.id);
+    // a passed test: the CPE is connected and online, the NOC may accept it in UISP
+    if (v !== 'bad' && !reason) ctx.notify.readyForUisp(job.id);
     // a passed test after a postponed or KO attempt closes those reports (with poor radio: once approved)
     const resolved = v === 'bad' || reason ? 0 : resolveKoByAcceptance(db, job, req.user!.id);
     return { ok: true, review: reason ? 'pending' : null, reviewReason: reason, resolvedKo: resolved };
@@ -180,7 +182,10 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
     const r = db.prepare("UPDATE job_acceptance SET review = ?, review_at = ?, review_by = ?, review_note = ? WHERE job_id = ? AND review IS NOT NULL").run(b.decision, nowIso(), req.user!.id, b.note, job.id);
     if (!r.changes) throw new HttpError(409, 'review_not_required');
     recordEvent(db, req.user!.id, b.decision === 'approved' ? 'job.review_approved' : 'job.review_rejected', job.id, b.note);
-    if (b.decision === 'approved') resolveKoByAcceptance(db, job, req.user!.id);
+    if (b.decision === 'approved') {
+      resolveKoByAcceptance(db, job, req.user!.id);
+      ctx.notify.readyForUisp(job.id);
+    }
     ctx.notify.reviewDecision(job.id, req.user!.username);
     return { ok: true };
   });
