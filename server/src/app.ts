@@ -37,6 +37,8 @@ import { createConnectors } from './services/connectors.ts';
 import { createCrmSettings } from './services/crm.ts';
 import { createImagery } from './services/imagery.ts';
 import { createCrmSync, type CrmSync } from './services/crm-sync.ts';
+import { createWarehouse, type Warehouse } from './services/warehouse.ts';
+import { warehouseRoutes } from './routes/warehouse.ts';
 import { crmRoutes } from './routes/crm.ts';
 import { connectorRoutes } from './routes/connectors.ts';
 import { cpeAdminRoutes } from './routes/cpe-admin.ts';
@@ -133,6 +135,7 @@ export async function buildApp(
       },
     }),
     crmSync: undefined as unknown as CrmSync,
+    warehouse: undefined as unknown as Warehouse,
     apLoad: undefined as unknown as ApLoadService,
     advisor: undefined as unknown as Advisor,
     optimizer: undefined as unknown as Optimizer,
@@ -150,6 +153,7 @@ export async function buildApp(
     version,
   };
   ctx.crmSync = createCrmSync(db, ctx.crm);
+  ctx.warehouse = createWarehouse(db, ctx.crm);
   ctx.advisor = createAdvisor(ctx);
   ctx.optimizer = createOptimizer(ctx);
   ctx.apLoad = createApLoad(db, () => ctx.uisp, undefined, (inputs) => ctx.advisor.run(inputs));
@@ -263,6 +267,7 @@ export async function buildApp(
   firmwareRoutes(app, ctx);
   privacyRoutes(app, ctx);
   crmRoutes(app, ctx);
+  warehouseRoutes(app, ctx);
   adminRoutes(app, ctx);
   toolRoutes(app, ctx);
   uispRoutes(app, ctx);

@@ -6,6 +6,7 @@ import { recordEvent } from '../db.ts';
 import { toCsv } from '../domain/csv.ts';
 import { parseClientHeader, versionAtLeast } from '../domain/policy.ts';
 import { provisionRequestSchema, provisionResultSchema } from '../services/provisioning.ts';
+import { stockCheck } from './warehouse.ts';
 
 export function provisioningRoutes(app: FastifyInstance, ctx: AppContext) {
   const user = { preHandler: ctx.auth.requireUser };
@@ -36,6 +37,11 @@ export function provisioningRoutes(app: FastifyInstance, ctx: AppContext) {
       throw new HttpError(426, 'client_update_required', { minVersion: ctx.cfg.minAndroidVersion });
     }
     const x = provisionRequestSchema.parse(req.body);
+    // the CPE must come from the installer's warehouse, unless their account may skip the check
+    if (x.mac) {
+      const stock = stockCheck(ctx, req.user!.id, x.mac);
+      if (!stock.allowed) throw new HttpError(409, 'cpe_not_in_stock', { result: stock.result });
+    }
     const pkg = ctx.provisioning.createJob(x, req.user!, `${client.platform}/${client.version}`);
     recordEvent(ctx.db, req.user!.id, 'job.create', pkg.jobId, `${x.model} ${x.mac ?? 'MAC sul posto'}`);
     reply.header('Cache-Control', 'no-store');
@@ -55,6 +61,11 @@ export function provisioningRoutes(app: FastifyInstance, ctx: AppContext) {
     const body = provisionResultSchema.parse(req.body);
     const r = ctx.provisioning.recordResult(id, req.user!, body);
     if (!r.duplicate) ctx.notify.provisioningResult(id);
+    // audit of the CPEs: this one left its warehouse for a customer
+    if (!r.duplicate && body.result === 'success') {
+      const j = ctx.db.prepare('SELECT mac, device_name FROM provisioning_jobs WHERE id = ?').get(id) as { mac: string; device_name: string } | undefined;
+      if (j) ctx.warehouse.record('installata', j.mac, `installata da ${req.user!.username} per ${j.device_name}`, id);
+    }
     return r;
   });
 

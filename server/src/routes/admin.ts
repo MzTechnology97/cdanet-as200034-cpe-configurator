@@ -75,19 +75,45 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
     db
       .prepare(
         `SELECT u.id, u.username, u.role, u.active, u.created_at createdAt, u.last_login_at lastLoginAt, u.totp_enabled totpEnabled,
+                u.warehouse_site_id warehouseSiteId, u.warehouse_site warehouseSite, u.stock_bypass stockBypass,
                 (SELECT count(*) FROM provisioning_jobs j WHERE j.user_id = u.id) jobs
          FROM users u ORDER BY u.role, u.username`,
       )
       .all()
-      .map((r) => ({ ...r, active: !!(r as { active: number }).active, totpEnabled: !!(r as { totpEnabled: number }).totpEnabled })),
+      .map((r) => ({
+        ...r,
+        active: !!(r as { active: number }).active,
+        totpEnabled: !!(r as { totpEnabled: number }).totpEnabled,
+        stockBypass: !!(r as { stockBypass: number }).stockBypass,
+      })),
   );
 
+  /** The name of a warehouse of the stock (ISP Billing), for the account it is linked to. */
+  const warehouseName = (siteId: number | null | undefined) => {
+    if (siteId == null) return '';
+    const site = ctx.warehouse.sites().find((s) => s.id === siteId);
+    if (!site) throw new HttpError(400, 'warehouse_not_found');
+    return site.name;
+  };
+
   app.post('/api/admin/users', admin, async (req, reply) => {
-    const b = z.object({ username, password, role: z.enum(['installer', 'admin']).default('installer') }).strict().parse(req.body);
+    const b = z
+      .object({
+        username,
+        password,
+        role: z.enum(['installer', 'admin']).default('installer'),
+        /** Warehouse of the installer or partner (ISP Billing site); null = none. */
+        warehouseSiteId: z.number().int().positive().nullable().optional(),
+        /** May install CPEs that are not in that warehouse. */
+        stockBypass: z.boolean().default(false),
+      })
+      .strict()
+      .parse(req.body);
+    const site = warehouseName(b.warehouseSiteId);
     try {
       const r = db
-        .prepare('INSERT INTO users(username, password_hash, role, created_at) VALUES(?,?,?,?)')
-        .run(b.username, hashPassword(b.password), b.role, nowIso());
+        .prepare('INSERT INTO users(username, password_hash, role, created_at, warehouse_site_id, warehouse_site, stock_bypass) VALUES(?,?,?,?,?,?,?)')
+        .run(b.username, hashPassword(b.password), b.role, nowIso(), b.warehouseSiteId ?? null, site, b.stockBypass ? 1 : 0);
       recordEvent(db, actor(req), 'user.create', b.username, b.role);
       return reply.code(201).send({ ok: true, id: Number(r.lastInsertRowid) });
     } catch {
@@ -98,7 +124,14 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
   app.patch('/api/admin/users/:id', admin, async (req) => {
     const id = z.coerce.number().int().positive().parse((req.params as { id: string }).id);
     const b = z
-      .object({ active: z.boolean().optional(), password: password.optional(), role: z.enum(['installer', 'admin']).optional(), resetTotp: z.literal(true).optional() })
+      .object({
+        active: z.boolean().optional(),
+        password: password.optional(),
+        role: z.enum(['installer', 'admin']).optional(),
+        resetTotp: z.literal(true).optional(),
+        warehouseSiteId: z.number().int().positive().nullable().optional(),
+        stockBypass: z.boolean().optional(),
+      })
       .strict()
       .refine((x) => Object.keys(x).length > 0, 'empty')
       .parse(req.body);
@@ -123,6 +156,9 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
     if (b.role === 'admin' && target.role !== 'admin') ctx.notify.security(`<b>${escapeHtml(target.username)}</b> promosso amministratore da ${escapeHtml(req.user!.username)}`);
     if (b.active !== undefined) db.prepare('UPDATE users SET active = ?, token_version = token_version + 1 WHERE id = ?').run(b.active ? 1 : 0, id);
     if (b.role !== undefined) db.prepare('UPDATE users SET role = ?, token_version = token_version + 1 WHERE id = ?').run(b.role, id);
+    // warehouse and bypass: no new login needed, the app reads them with «Le mie CPE»
+    if (b.warehouseSiteId !== undefined) db.prepare('UPDATE users SET warehouse_site_id = ?, warehouse_site = ? WHERE id = ?').run(b.warehouseSiteId, warehouseName(b.warehouseSiteId), id);
+    if (b.stockBypass !== undefined) db.prepare('UPDATE users SET stock_bypass = ? WHERE id = ?').run(b.stockBypass ? 1 : 0, id);
     recordEvent(db, actor(req), 'user.update', target.username, Object.keys(b).join(','));
     return { ok: true, id, username: target.username };
   });
