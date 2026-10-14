@@ -14,6 +14,8 @@ import { Calendar, type NewAt } from '../workorders/Calendar';
 
 type Tone = 'good' | 'warn' | 'bad' | 'neutral' | 'info';
 const KINDS: Record<string, string> = { new: 'Nuova installazione', repoint: 'Ripuntamento / cambio AP', repair: 'Guasto', survey: 'Sopralluogo' };
+/** The colour of each kind, the same as the app and the calendar. */
+const KIND_TONE: Record<string, 'brand' | 'info' | 'warn' | 'good'> = { new: 'brand', repoint: 'info', repair: 'warn', survey: 'good' };
 const STATUS: Record<string, [string, Tone]> = { open: ['da fare', 'neutral'], started: ['in corso', 'info'], done: ['fatto', 'good'], postponed: ['rimandato', 'warn'], cancelled: ['annullato', 'bad'] };
 
 interface Order {
@@ -261,7 +263,7 @@ function OrderList({ items, office, onEdit, onDelete }: { items: Order[]; office
                 <strong className="wo-customer">{o.customer}</strong>
                 <span className="ui-muted ui-small">{o.address || 'indirizzo non indicato'}</span>
                 <div className="ui-row wo-meta">
-                  <Badge tone="info">{KINDS[o.kind] ?? o.kind}</Badge>
+                  <Badge tone={KIND_TONE[o.kind] ?? 'neutral'}>{KINDS[o.kind] ?? o.kind}</Badge>
                   {office && (o.assignee ? <Badge>{o.assignee}</Badge> : <Badge tone="warn">da assegnare</Badge>)}
                 </div>
                 {o.contact && <span className="ui-small">Contatto: {o.contact}</span>}

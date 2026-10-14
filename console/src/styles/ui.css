@@ -120,6 +120,8 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .nt-body { margin: 0; color: var(--muted); font-size: var(--fs-sm); white-space: pre-line; }
 .nt-open { min-height: 32px; padding: 0 var(--sp-3); margin-left: calc(-1 * var(--sp-3)); text-decoration: none; color: var(--brand-ink); }
 .nt-item .ui-btn-ghost { min-height: 32px; font-size: var(--fs-sm); }
+.nt-delete { margin-left: auto; color: var(--muted); }
+.nt-delete:hover { color: var(--bad); }
 .nt-dot { position: absolute; top: var(--sp-3); right: var(--sp-3); width: 9px; height: 9px; border-radius: 50%; background: var(--brand); }
 .nt-item.unread .nt-head { padding-right: var(--sp-4); }
 .nt-kinds { display: grid; gap: var(--sp-2); grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); }
