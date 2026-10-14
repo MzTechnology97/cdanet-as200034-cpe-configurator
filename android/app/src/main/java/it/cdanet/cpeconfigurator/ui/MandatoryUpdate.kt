@@ -25,6 +25,7 @@ import it.cdanet.cpeconfigurator.R
 import it.cdanet.cpeconfigurator.core.AppContainer
 import it.cdanet.cpeconfigurator.update.UpdateInfo
 import it.cdanet.cpeconfigurator.update.UpdateState
+import kotlin.coroutines.cancellation.CancellationException
 import kotlinx.coroutines.launch
 
 /** Downloads the APK (SHA-256 checked) and opens the Android installer; reports each step. */
@@ -41,6 +42,7 @@ suspend fun startUpdate(c: AppContainer, info: UpdateInfo, onState: (UpdateState
             // a newer release was published after the check (the server always serves the latest
             // APK): the fingerprint of the old one cannot match. Ask again and download that one.
             .recoverCatching { e ->
+                if (e is CancellationException) throw e
                 val fresh = c.updater.check() ?: throw e
                 if (fresh.versionCode == target.versionCode && fresh.sha256.equals(target.sha256, ignoreCase = true)) throw e
                 target = fresh
@@ -52,7 +54,8 @@ suspend fun startUpdate(c: AppContainer, info: UpdateInfo, onState: (UpdateState
                     c.updater.install(apk)
                     UpdateState.ReadyToInstall(target)
                 },
-                onFailure = { UpdateState.Failed(it.message ?: "Download non riuscito") },
+                // stopped, not failed: no error banner for a download the app itself cancelled
+                onFailure = { if (it is CancellationException) throw it else UpdateState.Failed(it.message ?: "Download non riuscito") },
             ),
     )
 }
