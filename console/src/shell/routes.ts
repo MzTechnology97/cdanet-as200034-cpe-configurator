@@ -56,7 +56,7 @@ export const ROUTES: Array<Route | Group> = [
   { id: 'cpe', icon: 'monitor_heart', label: 'Gestione CPE', module: 'cpe_health', admin: true, hidden: true, parent: 'health', react: () => import('../pages/CpeAdmin').then((m) => m.CpeAdmin) },
   { id: 'customers', icon: 'my_location', label: 'Clienti', admin: true, react: () => import('../pages/Customers').then((m) => m.Customers) },
   { id: 'stats', icon: 'query_stats', label: 'Statistiche', admin: true, module: 'stats', legacy: () => import('../../../web/js/views/stats.js').then((m) => m.statsView) },
-  { id: 'outages', icon: 'power_off', label: 'Guasti Enel', module: 'power_outages', legacy: () => import('../../../web/js/views/outages.js').then((m) => m.outagesView) },
+  { id: 'outages', icon: 'power_off', label: 'Guasti Enel', module: 'power_outages', react: () => import('../pages/Outages').then((m) => m.Outages) },
   { id: 'network', icon: 'hub', label: 'Stato rete', module: 'network_status', react: () => import('../pages/Network').then((m) => m.Network) },
   { id: 'ia-ap', icon: 'troubleshoot', label: 'IA-AP', admin: true, legacy: () => import('../../../web/js/views/advisor.js').then((m) => m.advisorView) },
   { id: 'mytemplates', icon: 'memory', label: 'Template disponibili', installer: true, legacy: () => import('../../../web/js/views/mytemplates.js').then((m) => m.myTemplatesView) },

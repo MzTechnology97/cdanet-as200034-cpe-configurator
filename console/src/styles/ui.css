@@ -15,6 +15,8 @@
 /* card */
 .ui-card { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow); padding: var(--sp-5); display: grid; gap: var(--sp-3); align-content: start; min-width: 0; }
 .ui-card.flush { padding: 0; overflow: hidden; }
+.ui-card.flush > .ui-card-head { padding: var(--sp-4) var(--sp-4) var(--sp-3); border-bottom: 1px solid var(--line); }
+.ui-card.flush { gap: 0; }
 .ui-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-3); }
 .ui-card-head h2 { font-size: var(--fs-lg); margin: 0; }
 
@@ -236,3 +238,11 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .nw-sub { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-3); }
 .nw-sub:empty { display: none; }
 .nw-ap .hl-signal { min-width: 120px; }
+
+/* Guasti Enel */
+.og-sub { display: flex; flex-wrap: wrap; gap: 2px var(--sp-3); white-space: normal; }
+.og-zones { border: 1px solid var(--line); border-radius: var(--radius); }
+.og-zones .hl-actions { flex-wrap: wrap; justify-content: flex-end; }
+.og-form { border: 1px dashed var(--line-strong); border-radius: var(--radius); padding: var(--sp-3) var(--sp-4); display: grid; gap: var(--sp-3); }
+.og-form[open] > summary { margin-bottom: 0; }
+.og-h3 { margin: var(--sp-2) 0 0; font-size: 1rem; }
