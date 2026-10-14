@@ -29,7 +29,7 @@ const readHash = () => {
 function pick(path: string, user: User): Route {
   const routes = ROUTES.filter((r): r is Route => !isGroup(r));
   const id = path || (user.role === 'admin' ? 'dashboard' : 'jobs');
-  return routes.find((r) => r.id === id && (r.legacy || r.react) && allowed(r, user, isOn)) ?? routes.find((r) => r.id === 'jobs')!;
+  return routes.find((r) => r.id === id && r.react && allowed(r, user, isOn)) ?? routes.find((r) => r.id === 'jobs')!;
 }
 
 /**

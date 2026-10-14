@@ -7,24 +7,20 @@
     <meta name="theme-color" content="#f15a2c" />
     <title>CDA Net · CPE Admin</title>
     <link rel="icon" href="assets/icon.svg" type="image/svg+xml" />
-    <link rel="apple-touch-icon" href="assets/icon.svg" />
     <link rel="stylesheet" href="css/app.css" />
-    <!-- qrcode-generator 1.4.4 (MIT, Kazuhiko Arase): QR code for two-step verification -->
-    <script type="module" src="js/main.js"></script>
+    <!--
+      The console is the React app built from console/ into web/app (the server serves
+      web/app/index.html). This page is shown only when that build is missing: a development
+      checkout where `npm run build` has not been run in console/.
+    -->
   </head>
   <body>
-    <header class="topbar">
-      <button class="icon-btn" id="navToggle" aria-label="Menu" aria-controls="sidebar" aria-expanded="false" hidden>☰</button>
-      <img class="logo" src="assets/cda-net-logo.svg" alt="CDA Net" />
-      <span class="product">CPE Configurator</span>
-      <span class="spacer"></span>
-      <span class="session" id="session"></span>
-    </header>
-    <div class="layout">
-      <nav class="sidebar" id="sidebar" hidden></nav>
-      <div class="shade" id="shade" hidden></div>
-      <main id="view" class="view" aria-live="polite"></main>
-    </div>
-    <div id="toast" class="toast" role="status" hidden></div>
+    <main class="view">
+      <section class="card">
+        <h1>Console non compilata</h1>
+        <p>Su questo server manca la console web. Nella cartella <code>console/</code> esegui <code>npm ci</code> e <code>npm run build</code>, poi ricarica la pagina.</p>
+        <p class="small muted">Le installazioni con l’installer o l’immagine Docker la contengono già.</p>
+      </section>
+    </main>
   </body>
 </html>
