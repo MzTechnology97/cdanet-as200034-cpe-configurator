@@ -61,7 +61,7 @@ const envSchema = z.object({
   CPE_SSH_PORT: int(22, 1, 65535),
   CPE_DISCOVERY_PORT: int(10001, 1, 65535),
 
-  PROVISION_JOB_TTL_MINUTES: int(30, 5, 240),
+  PROVISION_JOB_TTL_MINUTES: int(30, 5, 2880),
   // thresholds of the acceptance test, the field diagnosis and Salute CPE (Impostazioni server)
   SIGNAL_GOOD_DBM: int(-65, -90, -40),
   SIGNAL_MIN_DBM: int(-75, -95, -45),

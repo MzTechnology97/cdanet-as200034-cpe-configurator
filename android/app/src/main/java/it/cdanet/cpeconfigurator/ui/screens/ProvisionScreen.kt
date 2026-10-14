@@ -244,7 +244,7 @@ fun ProvisionApplyStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
         if (pkg.summary.template.isNotBlank()) KeyValue("Template", pkg.summary.template)
         c.provisioning.form.collectAsState().value.location?.let { KeyValue("Posizione", "%.5f, %.5f".format(it.latitude, it.longitude)) }
         KeyValue("SSID", pkg.summary.ssid)
-        KeyValue("Valido ancora", if (left.isNegative) "SCADUTO" else "${left.toMinutes()} min ${left.seconds % 60} s")
+        KeyValue("Valido ancora", when { left.isNegative -> "SCADUTO"; left.toHours() >= 1 -> "${left.toHours()} h ${left.toMinutes() % 60} min"; else -> "${left.toMinutes()} min ${left.seconds % 60} s" })
         if (left.isNegative) Banner("Pacchetto scaduto: torna online e preparalo di nuovo.", MaterialTheme.colorScheme.error)
     }
 
