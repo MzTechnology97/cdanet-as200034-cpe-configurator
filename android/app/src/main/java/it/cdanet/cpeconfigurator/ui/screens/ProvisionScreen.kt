@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import androidx.compose.ui.res.painterResource
+import it.cdanet.cpeconfigurator.R
 import it.cdanet.cpeconfigurator.ui.Notice
 import it.cdanet.cpeconfigurator.ui.NoticeKind
 import it.cdanet.cpeconfigurator.ui.SecondaryButton
@@ -122,11 +124,30 @@ fun ProvisionFormStep(c: AppContainer) {
             }
             modelTemplates.size == 1 -> KeyValue("Template", modelTemplates.first().name + if (modelTemplates.first().personal) " (riservato)" else "")
         }
+        var scanMsg by remember { mutableStateOf<String?>(null) }
+        // one scan button per field: the code goes only where it belongs, checked at once
+        val scan: (onCode: (String) -> Unit) -> Unit = { onCode ->
+            GmsBarcodeScanning.getClient(context).startScan().addOnSuccessListener { b -> b.rawValue?.let(onCode) }
+        }
+        val scanIcon: @Composable (String, () -> Unit) -> Unit = { what, onClick ->
+            androidx.compose.material3.IconButton(onClick = onClick) {
+                androidx.compose.material3.Icon(painterResource(R.drawable.ic_qr_code_scanner), contentDescription = "Scansiona $what")
+            }
+        }
         Field(
             "MAC",
             form.mac,
             { v -> c.provisioning.updateForm { it.copy(mac = v) } },
             placeholder = "24A43C112233 o 24:A4:3C:11:22:33",
+            trailing = {
+                scanIcon("il MAC") {
+                    scan { raw ->
+                        val (mac, problem) = Validation.scanMac(raw)
+                        scanMsg = problem
+                        if (mac != null) c.provisioning.updateForm { it.copy(mac = mac) }
+                    }
+                }
+            },
             isError = (showErrors && parsedMac == null) || (parsedMac != null && !Validation.isDeviceMac(parsedMac)),
             supporting = when {
                 // checked as soon as it is typed or scanned: 81:78:… from the box is not a MAC of a device
@@ -140,6 +161,15 @@ fun ProvisionFormStep(c: AppContainer) {
             "Seriale",
             form.serial,
             { v -> c.provisioning.updateForm { it.copy(serial = v) } },
+            trailing = {
+                scanIcon("il seriale") {
+                    scan { raw ->
+                        val (serial, warning) = Validation.scanSerial(raw)
+                        scanMsg = warning
+                        c.provisioning.updateForm { it.copy(serial = serial) }
+                    }
+                }
+            },
             isError = Validation.serialLooksLikeMac(form.serial),
             // checked as soon as it is typed or scanned: MAC and serial must not be swapped
             supporting = when {
@@ -147,18 +177,8 @@ fun ProvisionFormStep(c: AppContainer) {
                 else -> Validation.serialMacMismatch(form)
             },
         )
-        var scanMsg by remember { mutableStateOf<String?>(null) }
-        SecondaryButton(onClick = {
-            GmsBarcodeScanning.getClient(context).startScan()
-                .addOnSuccessListener { b ->
-                    b.rawValue?.let { raw ->
-                        scanMsg = Validation.scanProblem(raw)
-                        c.provisioning.updateForm { Validation.applyScan(it, raw) }
-                    }
-                }
-        }) { Text("Scansiona etichetta (barcode/QR)") }
         scanMsg?.let { Notice(it, NoticeKind.Warn) }
-        Text("Scansiona sempre l'etichetta della CPE: prima di scrivere la configurazione l'app controlla che il MAC sia proprio quello della CPE collegata.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text("Scansiona MAC e seriale dall'etichetta della CPE con il tasto nel campo: prima di scrivere la configurazione l'app controlla che il MAC sia proprio quello della CPE collegata.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         // MAC and serial come only from the label: the MAC announced on the network can be the
         // wireless one, while the label (and UISP) carry the LAN one. The CPE only tells its model.
         var reading by remember { mutableStateOf(false) }
