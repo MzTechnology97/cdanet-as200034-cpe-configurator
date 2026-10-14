@@ -1,7 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { toast } from '../../../web/js/dom.js';
-import { myTelegramCard } from '../../../web/js/views/my-telegram.js';
+import { MyTelegram } from '../account/MyTelegram';
 import { api } from '../lib/api';
 import { keys } from '../lib/query';
 import type { PageContext } from '../shell/routes';
@@ -206,7 +206,7 @@ function TelegramPrefs({ admin }: { admin: boolean }) {
           </>
         )}
       </Card>
-      {p?.telegram.available && !p.telegram.linked && <Dom make={() => myTelegramCard({ title: 'Collega Telegram' })} />}
+      {p?.telegram.available && !p.telegram.linked && <MyTelegram title="Collega Telegram" />}
     </>
   );
 }

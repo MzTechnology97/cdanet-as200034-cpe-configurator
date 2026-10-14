@@ -3,18 +3,18 @@ import { type FormEvent, type ReactNode, useState } from 'react';
 import { download } from '../../../web/js/api.js';
 import { toast } from '../../../web/js/dom.js';
 import { isOn } from '../../../web/js/modules.js';
-import { acceptancePanel } from '../../../web/js/views/acceptance-panel.js';
-import { followUpCard, jobKoPanel, KO_REASONS, reviewPanel } from '../../../web/js/views/ko-panel.js';
-import { uispPanel } from '../../../web/js/views/uisp-panel.js';
+import { AcceptancePanel } from '../jobs/AcceptancePanel';
+import { FollowUp, JobKo, KO_REASONS, ReviewPanel } from '../jobs/KoPanels';
+import { UispPanel } from '../jobs/UispPanel';
 import { api } from '../lib/api';
 import { keys } from '../lib/query';
 import type { PageContext } from '../shell/routes';
-import { AsyncButton, Badge, Button, Card, Dom, Drawer, EmptyState, Field, Icon, Notice, PageHeader, Skeleton } from '../ui';
+import { AsyncButton, Badge, Button, Card, Drawer, EmptyState, Field, Icon, Notice, PageHeader, Skeleton } from '../ui';
 
 /**
  * Storico provisioning: every provisioning (admins) or the user's own (installers), metadata only,
  * never a password. Filters by text, outcome and dates; one job opens in a panel with its
- * acceptance test, KO, network state and stages (those panels are still the ones of web/js).
+ * acceptance test, KO, network state and stages.
  * #/jobs?q=… and ?status=… (links from Panoramica and from the Telegram notifications).
  */
 
@@ -64,7 +64,7 @@ function JobBadges({ j }: { j: Job }) {
     <>
       <Badge tone={stTone}>{st}</Badge>
       {(j.attempts ?? 0) > 1 && <span className="ui-muted ui-small">{j.attempts} tentativi</span>}
-      {j.ko && <Badge tone={tone(KO_KIND, j.ko.kind)[1]}>{`${tone(KO_KIND, j.ko.kind)[0]} · ${(KO_REASONS as Record<string, string>)[j.ko.reason] ?? j.ko.reason}`}</Badge>}
+      {j.ko && <Badge tone={tone(KO_KIND, j.ko.kind)[1]}>{`${tone(KO_KIND, j.ko.kind)[0]} · ${KO_REASONS[j.ko.reason] ?? j.ko.reason}`}</Badge>}
       {j.review && <Badge tone={tone(REVIEW, j.review)[1]}>{tone(REVIEW, j.review)[0]}</Badge>}
       {isOn('acceptance') && j.acceptance && <Badge tone={tone(ACCEPTANCE, j.acceptance)[1]}>{tone(ACCEPTANCE, j.acceptance)[0]}</Badge>}
     </>
@@ -123,7 +123,7 @@ export function Jobs({ user, params }: PageContext) {
           )
         }
       />
-      <Dom make={() => followUpCard(user, (j: Job) => setOpen(j))} deps={[followRev]} />
+      <FollowUp key={followRev} admin={admin} onOpenJob={(j) => setOpen(j as Job)} />
 
       <form className="jb-filters" onSubmit={submit}>
         <label className="hl-search">
@@ -237,16 +237,16 @@ function JobDrawer({ j, admin, onClose, onChange }: { j: Job; admin: boolean; on
       {j.status === 'success' && isOn('acceptance') && (
         <section className="jb-sec">
           <h3>Collaudo</h3>
-          <Dom make={() => acceptancePanel(j)} deps={[j]} />
-          <Dom make={() => reviewPanel(j, admin, () => void onChange())} deps={[j]} />
+          <AcceptancePanel j={j} />
+          <ReviewPanel job={j} admin={admin} onChange={() => void onChange()} />
         </section>
       )}
-      <Dom make={() => jobKoPanel(j, admin)} deps={[j]} />
+      <JobKo job={j} admin={admin} />
       {j.replacesJobId && <p className="ui-muted ui-small">Sostituisce la CPE del job {j.replacesJobId}</p>}
       {j.status === 'success' && (
         <section className="jb-sec">
           <h3>{admin ? 'UISP' : 'Stato in rete'}</h3>
-          <Dom make={() => uispPanel(j, admin)} deps={[j]} />
+          <UispPanel job={j} admin={admin} />
         </section>
       )}
       {!!j.stages?.length && (

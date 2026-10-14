@@ -1,16 +1,16 @@
 import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from '../../../web/js/dom.js';
-import { crmCard } from '../../../web/js/views/crm-card.js';
-import { imageryCard } from '../../../web/js/views/imagery-card.js';
-import { telegramCard } from '../../../web/js/views/telegram-card.js';
+import { type Crm, CrmCard } from '../connectors/CrmCard';
+import { type Imagery, ImageryCard } from '../connectors/ImageryCard';
+import { type Telegram, TelegramCard } from '../connectors/TelegramCard';
 import { api } from '../lib/api';
-import { AsyncButton, Badge, Card, Dom, Field, Notice, PageHeader, Skeleton, Stat } from '../ui';
+import { AsyncButton, Badge, Card, Field, Notice, PageHeader, Skeleton, Stat } from '../ui';
 
 /**
  * Connettori (admins): the external systems, configured and tested from the console. Credentials
  * stay on the server, encrypted, and are never shown again (only whether they are set). UISP and
- * the address search are here; CRM, Telegram and aerial imagery are still the cards of web/js.
+ * the address search, CRM (ISP Billing), Telegram and aerial imagery.
  */
 
 const ERRORS: Record<string, string> = {
@@ -44,10 +44,10 @@ interface Geocoder {
 }
 interface Data {
   uisp: Uisp;
-  crm: unknown;
-  telegram?: unknown;
+  crm: Crm;
+  telegram?: Telegram | null;
   geocoder: Geocoder;
-  imagery?: unknown;
+  imagery?: Imagery | null;
 }
 interface TestResult {
   ok: boolean;
@@ -84,10 +84,10 @@ export function Connectors() {
       {d && (
         <>
           <UispCard key={`${d.uisp.updatedAt ?? ''}-${d.uisp.source}`} u={d.uisp} onSaved={reload} />
-          <Dom make={() => crmCard(d.crm, reload)} deps={[d]} />
-          {d.telegram ? <Dom make={() => telegramCard(d.telegram, reload)} deps={[d]} /> : null}
+          <CrmCard key={`crm-${d.crm.updatedAt ?? ""}`} c={d.crm} onSaved={reload} />
+          {d.telegram ? <TelegramCard key={`tg-${d.telegram.updatedAt ?? ""}`} t={d.telegram} onSaved={reload} /> : null}
           <GeocoderCard g={d.geocoder} />
-          {d.imagery ? <Dom make={() => imageryCard(d.imagery, reload)} deps={[d]} /> : null}
+          {d.imagery ? <ImageryCard key={`im-${d.imagery.updatedAt ?? ""}`} v={d.imagery} onSaved={reload} /> : null}
         </>
       )}
     </div>
