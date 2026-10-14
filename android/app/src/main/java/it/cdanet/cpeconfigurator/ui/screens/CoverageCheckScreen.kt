@@ -436,7 +436,11 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                             }
                         }
                         FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp), modifier = Modifier.padding(start = 34.dp)) {
-                            TextButton(onClick = { page?.evaluateJavascript("window.cdaFocus(${JsonPrimitive(ap.id)})", null) }) { Text("Mappa") }
+                            TextButton(onClick = {
+                                page?.evaluateJavascript("window.cdaFocus(${JsonPrimitive(ap.id)})", null)
+                                // the map is above the list: the screen goes back to it, where the AP's popup is open
+                                scope.launch { mapPos.bringIntoView() }
+                            }) { Text("Mappa") }
                             if (modules["compass"] != false) SecondaryButton(onClick = { los = ap.id }) { Text("Collegamento") }
                             if (admin) SecondaryButton(onClick = { simulate(ap.id) }) { Text("Simula") }
                             if (onCompass != null) SecondaryButton(onClick = { onCompass(CompassTarget(ap.name.ifBlank { ap.id }, ap.bearing, ap.distanceM, p.lat, p.lon)) }) { Text("Bussola") }
