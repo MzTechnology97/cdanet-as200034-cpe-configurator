@@ -43,7 +43,7 @@ describe('Installazione guidata: cambio AP e CPE già installate', () => {
     const lookup = (tok: string, macs: string) => t.app.inject({ method: 'GET', url: `/api/field/cpe?macs=${encodeURIComponent(macs)}`, headers: t.auth(tok) });
     assert.equal((await lookup(tec, 'AA:BB:CC:DD:EE:FF')).json().job, null, 'not until the provisioning succeeded');
     await t.app.inject({ method: 'POST', url: `/api/provisioning/jobs/${job.jobId}/result`, headers: t.auth(tec), payload: { result: 'success', stages: ['ok'], detected: {} } });
-    const found = (await lookup(tec, '11:22:33:44:55:66,aabb.ccdd.eeff')).json().job;
+    const found = (await lookup(tec, '12:22:33:44:55:66,aabb.ccdd.eeff')).json().job;
     assert.equal(found.id, job.jobId);
     assert.equal(found.deviceName, 'ROSSI MARIO');
     assert.equal((await lookup(other, 'AABBCCDDEEFF')).json().job, null, 'other installers do not see it');

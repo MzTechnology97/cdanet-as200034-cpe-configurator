@@ -1,5 +1,7 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.ui.Notice
+import it.cdanet.cpeconfigurator.ui.NoticeKind
 import it.cdanet.cpeconfigurator.ui.SecondaryButton
 import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import it.cdanet.cpeconfigurator.ui.WifiRequired
@@ -75,6 +77,17 @@ fun ProvisionFormStep(c: AppContainer) {
             )
         }
     }
+    if (form.supersedes != null) {
+        SectionCard("Modifica e riprova") {
+            Text("Rifai: ${form.supersedesLabel}", fontWeight = FontWeight.SemiBold)
+            Text(
+                "I dati sono quelli dell'installazione non riuscita: correggi quello che serve (per esempio il MAC) e reinserisci la password PPPoE. " +
+                    "Quando prepari, quella vecchia esce da «Da completare».",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            SecondaryButton(onClick = { c.provisioning.reset() }) { Text("Annulla") }
+        }
+    }
     if (form.replaces != null) {
         SectionCard("Sostituzione CPE") {
             Text("CPE sostituita: ${form.replacesLabel}", fontWeight = FontWeight.SemiBold)
@@ -114,18 +127,37 @@ fun ProvisionFormStep(c: AppContainer) {
             form.mac,
             { v -> c.provisioning.updateForm { it.copy(mac = v) } },
             placeholder = "24A43C112233 o 24:A4:3C:11:22:33",
-            isError = showErrors && parsedMac == null,
+            isError = (showErrors && parsedMac == null) || (parsedMac != null && !Validation.isDeviceMac(parsedMac)),
             supporting = when {
+                // checked as soon as it is typed or scanned: 81:78:… from the box is not a MAC of a device
+                parsedMac != null && !Validation.isDeviceMac(parsedMac) -> "Non è il MAC di un apparato: usa il codice «MAC» dell'etichetta della CPE"
                 parsedMac != null && parsedMac != form.mac.trim() -> "Verrà usato $parsedMac"
                 showErrors && parsedMac == null -> "12 cifre esadecimali, con o senza : - ."
                 else -> null
             },
         )
-        Field("Seriale", form.serial, { v -> c.provisioning.updateForm { it.copy(serial = v) } })
+        Field(
+            "Seriale",
+            form.serial,
+            { v -> c.provisioning.updateForm { it.copy(serial = v) } },
+            isError = Validation.serialLooksLikeMac(form.serial),
+            // checked as soon as it is typed or scanned: MAC and serial must not be swapped
+            supporting = when {
+                Validation.serialLooksLikeMac(form.serial) -> "Questo è un MAC: va nel campo MAC"
+                else -> Validation.serialMacMismatch(form)
+            },
+        )
+        var scanMsg by remember { mutableStateOf<String?>(null) }
         SecondaryButton(onClick = {
             GmsBarcodeScanning.getClient(context).startScan()
-                .addOnSuccessListener { b -> b.rawValue?.let { raw -> c.provisioning.updateForm { Validation.applyScan(it, raw) } } }
+                .addOnSuccessListener { b ->
+                    b.rawValue?.let { raw ->
+                        scanMsg = Validation.scanProblem(raw)
+                        c.provisioning.updateForm { Validation.applyScan(it, raw) }
+                    }
+                }
         }) { Text("Scansiona etichetta (barcode/QR)") }
+        scanMsg?.let { Notice(it, NoticeKind.Warn) }
         Text("Scansiona sempre l'etichetta della CPE: prima di scrivere la configurazione l'app controlla che il MAC sia proprio quello della CPE collegata.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         // MAC and serial come only from the label: the MAC announced on the network can be the
         // wireless one, while the label (and UISP) carry the LAN one. The CPE only tells its model.
@@ -264,18 +296,22 @@ fun ProvisionApplyStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
         state.probe?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
     }
 
-    SectionCard("2 · Primo avvio airOS") {
-        Text("Se la CPE è appena resettata completa il primo accesso: Country Licensed, accetta i termini e imposta le credenziali CDA Net.",
-            style = MaterialTheme.typography.bodySmall)
-        SecondaryButton(onClick = onOpenCpeWeb, enabled = !applying) { Text("Apri interfaccia CPE nell'app") }
-    }
-
-    SectionCard("3 · Applica configurazione") {
-        Text("Verifica firmware 8.7.4, board e MAC, scrive system.cfg, salva con cfgmtd e riavvia.", style = MaterialTheme.typography.bodySmall)
-        BusyButton("Applica alla CPE", applying, Modifier.fillMaxWidth(), enabled = !left.isNegative && !state.busy) {
-            scope.launch { c.provisioning.apply() }
+    SectionCard("2 · Installa sulla CPE") {
+        Text(
+            "Un solo tocco: l'app entra nella CPE (anche nuova o resettata, con le credenziali di fabbrica), la porta al firmware ${pkg.checks.firmware} se ne ha un altro, verifica board e MAC, scrive la configurazione e la riavvia.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        BusyButton("Installa sulla CPE", applying, Modifier.fillMaxWidth(), enabled = !left.isNegative && !state.busy) {
+            // the app's scope: a firmware update must not stop when the screen changes
+            c.scope.launch { c.provisioning.install(c.firmware) }
         }
         state.stages.forEach { Text("✓ $it", style = MaterialTheme.typography.bodyMedium) }
+    }
+
+    SectionCard("Solo se l'app non entra nella CPE") {
+        Text("Primo accesso a mano dall'interfaccia della CPE: Country Licensed, accetta i termini e imposta le credenziali CDA Net. Poi torna qui e tocca di nuovo «Installa sulla CPE».",
+            style = MaterialTheme.typography.bodySmall)
+        SecondaryButton(onClick = onOpenCpeWeb, enabled = !applying) { Text("Apri interfaccia CPE nell'app") }
     }
 
     TextButton(onClick = { c.provisioning.reset() }, enabled = !applying) { Text("Annulla e cancella il pacchetto") }

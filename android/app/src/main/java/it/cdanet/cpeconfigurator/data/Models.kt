@@ -485,6 +485,8 @@ data class ProvisionRequest(
     val templateId: Int? = null,
     val location: CpeLocation? = null,
     val workOrderId: Long? = null,
+    /** A failed or never written installation this one redoes (it leaves "Da completare"). */
+    val supersedes: String? = null,
 )
 
 /** A work order of the office (agenda): never the PPPoE password, only whether it is set. */
@@ -764,6 +766,8 @@ data class JobDto(
     /** Latest open "postponed"/"KO" report of the installation. */
     val ko: KoOpenDto? = null,
     val koCount: Int = 0,
+    /** Redone with "Modifica e riprova": the new installation (this one no longer counts as open work). */
+    val supersededBy: String? = null,
 )
 
 @Serializable

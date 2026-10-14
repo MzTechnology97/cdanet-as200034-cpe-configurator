@@ -6,6 +6,7 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import it.cdanet.cpeconfigurator.data.AppJson
 import it.cdanet.cpeconfigurator.security.SecureStore
+import it.cdanet.cpeconfigurator.firmware.AirosBuild
 import java.io.IOException
 import it.cdanet.cpeconfigurator.ssh.SshConnection
 import it.cdanet.cpeconfigurator.firmware.FirmwareStore
@@ -51,10 +52,13 @@ data class ProvisionForm(
     /** Work order of the office this installation comes from (PPPoE password from the server). */
     val workOrderId: Long? = null,
     val workOrderLabel: String = "",
+    /** "Modifica e riprova": the failed or never written installation this one redoes. */
+    val supersedes: String? = null,
+    val supersedesLabel: String = "",
 ) {
     val ssid: String get() = "CDA-NET-N$node-D${district.toString().padStart(2, '0')}" + (relay?.let { "-R$it" } ?: "")
     val customerName: String get() = Validation.customerName(pppoeUser)
-    fun toRequest() = ProvisionRequest(model, Validation.normalizeMac(mac), serial.trim(), ssid, pppoeUser.trim(), pppoePassword.ifEmpty { null }, templateId, location, workOrderId)
+    fun toRequest() = ProvisionRequest(model, Validation.normalizeMac(mac), serial.trim(), ssid, pppoeUser.trim(), pppoePassword.ifEmpty { null }, templateId, location, workOrderId, supersedes)
     fun errors(): List<String> = Validation.formErrors(this)
 
     companion object {
@@ -172,10 +176,10 @@ class ProvisioningController(
         }?.let { msg -> _state.update { it.copy(probe = msg) } }
     }
 
-    suspend fun apply() {
+    suspend fun apply(prior: List<String> = emptyList()) {
         val pkg = _state.value.pkg ?: return
-        _state.update { it.copy(phase = Phase.Applying, busy = true, error = null, stages = emptyList()) }
-        val stages = mutableListOf<String>()
+        _state.update { it.copy(phase = Phase.Applying, busy = true, error = null, stages = prior) }
+        val stages = prior.toMutableList()
         val result = withContext(Dispatchers.IO) {
             try {
                 val detected = network.onWifi {
@@ -247,24 +251,72 @@ class ProvisioningController(
 
     suspend fun updateFirmware(store: FirmwareStore, onStage: (String) -> Unit): Pair<String, String> = withContext(Dispatchers.IO) {
         val pkg = _state.value.pkg ?: throw IllegalStateException("Configurazione non più disponibile: preparala di nuovo")
-        val list = store.savedList() ?: throw IOException("Elenco dei firmware non sul telefono: apri CPE collegata → Firmware con Internet")
-        val open: suspend () -> SshConnection = {
-            network.onWifi { SshConnection.connect(pkg.target.host, pkg.target.sshPort, pkg.credentials.username, pkg.credentials.password) }
-        }
-        val flasher = CpeFirmwareFlasher(onStage)
+        val open = opener(pkg, onStage)
         onStage("Lettura della versione della CPE")
-        val before = open().use { flasher.readVersion(it) } ?: throw IOException("Versione della CPE non leggibile")
+        val before = open().use { CpeFirmwareFlasher(onStage).readVersion(it) } ?: throw IOException("Versione della CPE non leggibile")
+        flash(pkg, store, before, open, onStage)
+    }
+
+    /**
+     * The one-tap installation: brings the CPE to the required firmware when it has another one
+     * (image already on the phone), then writes the configuration ([apply]). A firmware that cannot
+     * be flashed here does not stop it: the write's own check then explains what to do.
+     */
+    suspend fun install(store: FirmwareStore) {
+        val pkg = _state.value.pkg ?: return
+        _state.update { it.copy(phase = Phase.Applying, busy = true, error = null, stages = emptyList(), firmwareTarget = null) }
+        val stages = mutableListOf<String>()
+        val stage: (String) -> Unit = { s ->
+            stages += s
+            _state.update { it.copy(stages = stages.toList()) }
+        }
+        var flashing = false
+        withContext(Dispatchers.IO) {
+            runCatching {
+                val open = opener(pkg, stage)
+                stage("Lettura del firmware della CPE")
+                val before = open().use { CpeFirmwareFlasher(stage).readVersion(it) }
+                when {
+                    before == null -> Unit
+                    before.version == pkg.checks.firmware -> stage("Firmware ${before.version}: è quello richiesto")
+                    // the installer chose to keep it after failed updates: no new attempt
+                    _state.value.allowedFirmware != null -> stage("Firmware ${before.version} tenuto: aggiornamento non riuscito in precedenza")
+                    else -> {
+                        stage("Firmware ${before.version}: va portato alla ${pkg.checks.firmware}")
+                        flashing = true
+                        flash(pkg, store, before, open, stage)
+                        flashing = false
+                        stage("Firmware ${pkg.checks.firmware} installato")
+                    }
+                }
+            }.onFailure { e ->
+                stage("Firmware non aggiornato: ${e.message ?: e}")
+                // a failed update counts towards "Configura comunque" (FIRMWARE_TRIES)
+                if (flashing) firmwareFailed()
+            }
+        }
+        apply(stages.toList())
+    }
+
+    private fun opener(pkg: ProvisionPackage, onStage: (String) -> Unit): suspend () -> SshConnection = {
+        network.onWifi { CpeProvisioner.connect(pkg, onStage) }
+    }
+
+    /** Flashes the image of [before]'s platform and waits for the CPE to come back with it. */
+    private suspend fun flash(pkg: ProvisionPackage, store: FirmwareStore, before: AirosBuild, open: suspend () -> SshConnection, onStage: (String) -> Unit): Pair<String, String> {
+        val list = store.savedList() ?: throw IOException("Elenco dei firmware non sul telefono: apri CPE collegata → Firmware con Internet")
         val img = list.items.firstOrNull { it.platform == before.platform }
             ?: throw IOException("Nessun firmware ${list.target} per la piattaforma ${before.platform}: chiedi all'amministratore di caricarlo")
         if (!store.has(img)) {
             throw IOException("Il firmware ${img.platform} ${img.version} non è sul telefono: torna su Internet, aprilo da CPE collegata → Firmware e scaricalo, poi riprova")
         }
+        val flasher = CpeFirmwareFlasher(onStage)
         try {
             open().use { flasher.start(it, store.fileOf(img), img) }
         } catch (e: CpeFirmwareFlasher.AlreadyUpToDate) {
-            return@withContext before.build to e.build.build
+            return before.build to e.build.build
         }
-        // a CPE that went back to its factory settings answers but refuses the package's credentials
+        // the factory credentials are tried too: a CPE reset by the flash still answers
         val after = try {
             flasher.waitBack(open, stopOn = { it.message.orEmpty().startsWith("Autenticazione") })
         } catch (e: IOException) {
@@ -272,7 +324,30 @@ class ProvisioningController(
         }
             ?: throw IOException("La CPE non è tornata raggiungibile entro 9 minuti: non toglierle alimentazione, ricollegati alla sua Wi-Fi e riprova la scrittura")
         if (after.version != img.version) throw IOException("La CPE è ripartita con ${after.version} invece di ${img.version}: aggiornamento non applicato")
-        before.build to after.build
+        // activity log on the server, best effort: on the CPE's Wi-Fi there is often no Internet
+        runCatching { api.firmwareReport(pkg.summary.mac, before.build, img.version, true, null) }
+        return before.build to after.build
+    }
+
+    /**
+     * "Modifica e riprova" of a failed or never written installation: a new one with all its data
+     * (MAC and serial can be corrected); the PPPoE password is typed again unless it comes from a
+     * work order. The old one is closed by the server when the new one is prepared.
+     */
+    fun startRedo(j: it.cdanet.cpeconfigurator.data.JobDto) {
+        val m = SSID_PARTS.find(j.ssid)
+        _state.value = ProvisioningState()
+        _form.value = ProvisionForm(
+            model = j.model,
+            mac = j.mac,
+            serial = j.serial,
+            node = m?.groupValues?.get(1)?.toIntOrNull() ?: 2,
+            district = m?.groupValues?.get(2)?.toIntOrNull() ?: 1,
+            relay = m?.groupValues?.get(3)?.toIntOrNull(),
+            pppoeUser = j.pppoeUser,
+            supersedes = j.id,
+            supersedesLabel = "${j.deviceName.ifBlank { j.pppoeUser }} · ${j.mac}",
+        )
     }
 
     /** Starts the replacement of the CPE of a completed job (History → Sostituisci CPE). */

@@ -4,7 +4,7 @@ import { HttpError } from '../auth.ts';
 import type { Config } from '../config.ts';
 import { md5Crypt, sha256Hex, type Sealer } from '../crypto.ts';
 import { nowIso, type Db } from '../db.ts';
-import {
+import { isDeviceMac,
   MANAGEMENT_PORTS,
   PPPOE_USER_RX,
   SSID_RX,
@@ -26,7 +26,9 @@ export const provisionRequestSchema = z
       .transform((v, ctx) => {
         const mac = parseMac(v);
         if (!mac) ctx.addIssue({ code: 'custom', message: 'MAC non valido' });
-        return mac ?? z.NEVER;
+        // a device MAC is unicast (first byte even) and not all zeros: anything else is another code of the label
+        else if (!isDeviceMac(mac)) ctx.addIssue({ code: 'custom', message: 'Non è il MAC di un apparato' });
+        return mac && isDeviceMac(mac) ? mac : z.NEVER;
       }),
     serial: z.string().trim().min(1).max(128).regex(/^[\x20-\x7e]+$/),
     ssid: z.string().regex(SSID_RX),
@@ -35,6 +37,8 @@ export const provisionRequestSchema = z
     pppoePassword: z.string().min(1).max(200).optional(),
     /** Work order of the office this installation comes from. */
     workOrderId: z.number().int().positive().optional(),
+    /** A failed or never written installation of the same user that this one redoes ("Modifica e riprova"). */
+    supersedes: z.string().uuid().optional(),
     /** Named template of the model; omitted = the model's default template. */
     templateId: z.number().int().positive().optional(),
     /** CPE position: phone GPS, geocoded address or manual entry. */
@@ -254,6 +258,10 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
        VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?, 'prepared')`,
     ).run(id, created.toISOString(), expiresAt, userId, client, x.model, x.mac, x.serial, x.ssid, x.pppoeUser, name, profile.sha256, configSha256, profile.name,
       x.location?.latitude ?? null, x.location?.longitude ?? null, x.location?.accuracy ?? null, x.location?.source ?? '');
+    // "Modifica e riprova": the old attempt leaves the installer's open work (only theirs, only if not installed)
+    if (x0.supersedes) {
+      db.prepare("UPDATE provisioning_jobs SET superseded_by = ? WHERE id = ? AND user_id = ? AND status IN ('prepared', 'failed', 'expired') AND superseded_by IS NULL").run(id, x0.supersedes, userId);
+    }
     if (order) {
       db.prepare('UPDATE provisioning_jobs SET work_order_id = ? WHERE id = ?').run(order.id, id);
       db.prepare("UPDATE work_orders SET status = 'started', updated_at = ? WHERE id = ? AND status IN ('open','postponed')").run(nowIso(), order.id);
@@ -344,7 +352,7 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
     const rows = db
       .prepare(
         `SELECT j.id, j.created_at createdAt, j.expires_at expiresAt, j.completed_at completedAt, j.status, j.client,
-                j.model, j.template_name template, j.mac, j.serial, j.ssid, j.pppoe_user pppoeUser, j.device_name deviceName,
+                j.model, j.template_name template, j.mac, j.serial, j.ssid, j.pppoe_user pppoeUser, j.device_name deviceName, j.superseded_by supersededBy,
                 j.latitude, j.longitude, j.location_accuracy locationAccuracy, j.location_source locationSource,
                 j.uisp_device_id uispDeviceId, j.uisp_site uispSite, j.uisp_authorized_at uispAuthorizedAt,
                 j.stages, j.detected, j.error, u.username installer, j.replaces_job_id replacesJobId,

@@ -43,7 +43,7 @@ describe('Sostituzione CPE', () => {
   it('creates a new job with the data of the old one; PPPoE password from the UISP backup', async () => {
     const { app, tec, admin, old, H } = await setup(true);
     const url = `/api/provisioning/jobs/${old.jobId}/replace`;
-    const body = { mac: '11:22:33:44:55:66', serial: 'NEW1' };
+    const body = { mac: '12:22:33:44:55:66', serial: 'NEW1' };
     assert.equal((await app.inject({ method: 'POST', url, headers: H(tec), payload: body })).json().error, 'trusted_client_required');
     assert.equal((await app.inject({ method: 'POST', url, headers: H(tec, ANDROID), payload: body })).json().error, 'job_not_completed');
     await app.inject({ method: 'POST', url: `/api/provisioning/jobs/${old.jobId}/result`, headers: H(tec), payload: { result: 'success', stages: [], detected: {} } });
@@ -53,7 +53,7 @@ describe('Sostituzione CPE', () => {
     assert.equal(r.statusCode, 201, r.body);
     const pkg = r.json();
     assert.equal(pkg.replacesJobId, old.jobId);
-    assert.equal(pkg.summary.mac, '11:22:33:44:55:66');
+    assert.equal(pkg.summary.mac, '12:22:33:44:55:66');
     assert.equal(pkg.summary.pppoeUser, 'rossi.mario@cda-net.it');
     assert.equal(pkg.summary.ssid, 'CDA-NET-N2-D01');
     assert.equal(pkg.summary.template, 'Standard');
@@ -68,7 +68,7 @@ describe('Sostituzione CPE', () => {
     assert.ok(!JSON.stringify(ev).includes('Pppoe-From-Backup'));
 
     // a password typed by the installer wins
-    const typed = (await app.inject({ method: 'POST', url, headers: H(tec, ANDROID), payload: { mac: '11:22:33:44:55:77', serial: 'NEW2', pppoePassword: 'Typed-Pass' } })).json();
+    const typed = (await app.inject({ method: 'POST', url, headers: H(tec, ANDROID), payload: { mac: '12:22:33:44:55:77', serial: 'NEW2', pppoePassword: 'Typed-Pass' } })).json();
     assert.match(typed.config.text, /^ppp\.1\.password=Typed-Pass$/m);
     await app.close();
   });
@@ -76,7 +76,7 @@ describe('Sostituzione CPE', () => {
   it('asks for the password when UISP cannot provide it', async () => {
     const { app, tec, old, H } = await setup(false);
     await app.inject({ method: 'POST', url: `/api/provisioning/jobs/${old.jobId}/result`, headers: H(tec), payload: { result: 'success', stages: [], detected: {} } });
-    const r = await app.inject({ method: 'POST', url: `/api/provisioning/jobs/${old.jobId}/replace`, headers: H(tec, ANDROID), payload: { mac: '11:22:33:44:55:66', serial: 'NEW1' } });
+    const r = await app.inject({ method: 'POST', url: `/api/provisioning/jobs/${old.jobId}/replace`, headers: H(tec, ANDROID), payload: { mac: '12:22:33:44:55:66', serial: 'NEW1' } });
     assert.equal(r.statusCode, 409);
     assert.equal(r.json().error, 'pppoe_password_required');
     await app.close();

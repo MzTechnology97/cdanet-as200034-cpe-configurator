@@ -252,16 +252,21 @@ fun DevicesHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit) {
 /** Something left to do on an installation, with the action that closes it. */
 data class ToDo(val job: JobDto?, val title: String, val detail: String, val kind: NoticeKind, val chip: String, val action: String?)
 
+/** Action of a failed or never written installation: a new one with its data, to correct and write. */
+const val REDO = "Modifica e riprova"
+
 /** What is still open in the installer's own work (pure, also used for the Oggi counters). */
 fun toDoItems(jobs: List<JobDto>): List<ToDo> {
     val okMacs = jobs.filter { it.status == "success" }.map { it.mac }.toSet()
     return buildList {
-        jobs.forEach { j ->
+        jobs.filter { it.supersededBy == null }.forEach { j ->
             val name = j.deviceName.ifBlank { j.pppoeUser }
             when {
                 j.review == "rejected" -> add(ToDo(j, name, "Collaudo non accettato dal NOC: vedi Notifiche, poi ripunta o rifai il collaudo.", NoticeKind.Bad, "non accettato", "Collaudo"))
                 j.ko?.kind == "postponed" -> add(ToDo(j, name, "Installazione rimandata: da riprovare.", NoticeKind.Warn, "rimandata", null))
-                j.status == "failed" && j.mac !in okMacs -> add(ToDo(j, name, j.error.ifBlank { "Scrittura nella CPE non riuscita." }, NoticeKind.Bad, "fallita", null))
+                j.status == "failed" && j.mac !in okMacs -> add(ToDo(j, name, j.error.ifBlank { "Scrittura nella CPE non riuscita." }, NoticeKind.Bad, "fallita", REDO))
+                (j.status == "prepared" || j.status == "expired") && j.mac !in okMacs ->
+                    add(ToDo(j, name, "Configurazione preparata ma mai scritta nella CPE.", NoticeKind.Warn, "non scritta", REDO))
                 j.status == "success" && j.acceptance == null -> add(ToDo(j, name, "Installata: manca il collaudo con misure e foto.", NoticeKind.Warn, "collaudo da fare", "Collaudo"))
                 j.review == "pending" -> add(ToDo(j, name, "Collaudo in attesa dell'approvazione del NOC.", NoticeKind.Info, "in attesa NOC", null))
             }
@@ -271,6 +276,12 @@ fun toDoItems(jobs: List<JobDto>): List<ToDo> {
 
 @Composable
 private fun ToDoPanel(c: AppContainer, onResume: () -> Unit, onAcceptance: (JobDto) -> Unit) {
+    // "Modifica e riprova": a new installation with the data of the old one, then straight to it
+    val onRedo: (JobDto) -> Unit = { j ->
+        c.provisioning.startRedo(j)
+        c.install.start(it.cdanet.cpeconfigurator.install.InstallMode.New)
+        onResume()
+    }
     val scope = rememberCoroutineScope()
     val prov by c.provisioning.state.collectAsState()
     val install by c.install.state.collectAsState()
@@ -286,7 +297,8 @@ private fun ToDoPanel(c: AppContainer, onResume: () -> Unit, onAcceptance: (JobD
         busy = false
     }
     LaunchedEffect(c.refresh.collectAsState().value) { load() }
-    val items = jobs?.let { toDoItems(it) }.orEmpty()
+    // the installation open on this phone is shown once, as "in corso"
+    val items = jobs?.let { toDoItems(it) }.orEmpty().filter { it.job == null || it.job.id != prov.pkg?.jobId }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         ErrorBanner(error) { error = null }
         // results sent from the queue and refused by the server: never silently lost
@@ -306,7 +318,7 @@ private fun ToDoPanel(c: AppContainer, onResume: () -> Unit, onAcceptance: (JobD
         }
         if (pending.isNotEmpty()) Notice("${pending.size} esiti in attesa di invio: partiranno appena c'è rete.", NoticeKind.Info)
         if (acc.isNotEmpty()) Notice("${acc.size} collaudi in attesa di invio (foto comprese).", NoticeKind.Info)
-        items.forEach { t -> ToDoRow(t) { t.job?.let(onAcceptance) } }
+        items.forEach { t -> ToDoRow(t) { t.job?.let { if (t.action == REDO) onRedo(it) else onAcceptance(it) } } }
         if (jobs != null && items.isEmpty() && install.mode == null) {
             EmptyState(R.drawable.ic_check_circle, "Niente da completare", "Ogni installazione ha il suo collaudo e nessuna è in sospeso.")
         }

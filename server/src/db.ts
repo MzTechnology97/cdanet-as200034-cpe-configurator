@@ -453,6 +453,10 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX push_tokens_user ON push_tokens(user_id);
   `,
+  // 26: "Modifica e riprova": the new installation that redoes a failed or never written one
+  `
+  ALTER TABLE provisioning_jobs ADD COLUMN superseded_by TEXT;
+  `,
 ];
 
 export function openDatabase(path: string): Db {
