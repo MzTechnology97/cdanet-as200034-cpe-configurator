@@ -64,7 +64,7 @@ export const ROUTES: Array<Route | Group> = [
   { id: 'routeros', icon: 'router', label: 'MikroTik · RouterOS', module: 'routeros', react: () => import('../pages/RouterOs').then((m) => m.RouterOs) },
   { group: 'Amministrazione', admin: true },
   { id: 'users', icon: 'person', label: 'Account', admin: true, react: () => import('../pages/Users').then((m) => m.Users) },
-  { id: 'wireless', icon: 'wifi_find', label: 'Reti Wi-Fi (WPA2)', admin: true, legacy: () => import('../../../web/js/views/wireless.js').then((m) => m.wirelessView) },
+  { id: 'wireless', icon: 'wifi_find', label: 'Reti Wi-Fi (WPA2)', admin: true, react: () => import('../pages/Wireless').then((m) => m.Wireless) },
   { id: 'profiles', icon: 'settings_input_antenna', label: 'Profili airOS', admin: true, react: () => import('../pages/Profiles').then((m) => m.Profiles) },
   { id: 'firmware', icon: 'system_update', label: 'Firmware airOS', admin: true, module: 'firmware_upgrade', react: () => import('../pages/Firmware').then((m) => m.Firmware) },
   { id: 'connectors', icon: 'link', label: 'Connettori', admin: true, react: () => import('../pages/Connectors').then((m) => m.Connectors) },

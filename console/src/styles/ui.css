@@ -398,3 +398,20 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .pf-code { width: 100%; min-height: 420px; font-family: var(--font-mono); font-size: .82rem; line-height: 1.45; white-space: pre; overflow: auto; tab-size: 2; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); padding: var(--sp-3); resize: vertical; }
 .pf-code:focus { border-color: var(--brand); box-shadow: var(--focus); outline: none; }
 .pf-backup { justify-self: start; }
+
+/* Reti Wi-Fi */
+.wf-p { margin: 0; }
+.wf-form { display: flex; flex-wrap: wrap; gap: var(--sp-2) var(--sp-3); align-items: flex-end; }
+.wf-form .ui-field { flex: 1 1 140px; }
+.wf-form .ui-field:nth-child(4), .wf-form .ui-field:nth-child(5) { flex: 2 1 220px; }
+.wf-inline { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: flex-end; }
+.wf-inline .ui-field, .wf-inline .hl-search { flex: 1 1 240px; }
+.wf-pick { display: grid; gap: var(--sp-2); max-height: 360px; overflow-y: auto; padding: var(--sp-2); border: 1px solid var(--line); border-radius: var(--radius); }
+.wf-node { display: flex; gap: var(--sp-3); align-items: flex-start; }
+.wf-node > strong { min-width: 42px; padding-top: 4px; }
+.wf-ssids { display: flex; flex-wrap: wrap; gap: 4px 6px; }
+.wf-ssid { display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: var(--radius-full); border: 1px solid var(--line); font-family: var(--font-mono); font-size: var(--fs-xs); cursor: pointer; color: var(--ink); }
+.wf-ssid.on { border-color: var(--brand); background: var(--brand-soft); }
+.wf-ssid input { margin: 0; accent-color: var(--brand); }
+.wf-export { display: grid; gap: var(--sp-2); padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line); }
+.wf-selectall { padding: var(--sp-2) var(--sp-4); border-bottom: 1px solid var(--line); }
