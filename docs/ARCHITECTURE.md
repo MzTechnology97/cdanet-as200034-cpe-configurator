@@ -69,7 +69,7 @@ La console è un'applicazione React 19 in TypeScript (`console/`), compilata con
 - **Design system** (`console/src/styles/tokens.css`, `ui.css`, `console/src/ui`): colori, spaziature e tipografia come token, gli stessi nei due temi; componenti comuni (pulsanti, schede, tabelle che sul telefono diventano schede, pannelli laterali, segmenti, statistiche). Nessuna pagina definisce stili propri fuori da `ui.css`.
 - **Dati**: TanStack Query, condivisi tra le pagine e rinfrescati dagli eventi del server (`/api/events`, Server-Sent Events) in `console/src/lib/live.ts`. Il client API è quello di `web/js/api.js` (token, errori in italiano, scadenza della sessione).
 - **Mappe** (`console/src/map/MapView.tsx`): un solo componente sopra `web/js/map.js` (Leaflet, mappa di base locale, viste admin, 3D in `map3d.js`). La stessa `map.js` serve la mappa dentro l'app Android (`map-embed`).
-- **Pezzi ancora in `web/js`**: alcuni pannelli e schede scritti con DOM o htm (collaudo, KO, stato UISP, CRM, Telegram, immagini satellitari, strumenti di Copertura, profilo del collegamento) entrano nelle pagine React con `Dom` o come componenti. Nella build `web/js/react.js` è sostituito dal React della console (`console/src/lib/react-legacy.ts`): ce n'è uno solo.
+- **Librerie ancora in `web/js`**: `api.js`, `dom.js`, `map.js`, `map3d.js`, `map-embed.js` e pochi altri moduli JavaScript usati dalle pagine React (le pagine e i pannelli sono tutti componenti React in `console/src`).
 - Il testo passa sempre da React (o da `dom.js`), che lo protegge dall'inserimento di markup.
 
 ## App Android (`android/`)
