@@ -83,7 +83,7 @@ export function createConnectors(db: Db, sealer: Sealer, cfg: Config, opts: { fe
   }
 
   function build(s: Pick<UispSettings, 'url' | 'token' | 'ignoreTls' | 'cacheSeconds'>): Uisp {
-    return createUisp({ url: s.url, token: s.token, cacheSeconds: s.cacheSeconds, fetchImpl: s.ignoreTls ? insecureFetch() : opts.fetchImpl });
+    return createUisp({ url: s.url, token: s.token, cacheSeconds: s.cacheSeconds, fetchImpl: s.ignoreTls ? insecureFetch() : opts.fetchImpl, cacheDir: cfg.uispCacheDir });
   }
 
   return {

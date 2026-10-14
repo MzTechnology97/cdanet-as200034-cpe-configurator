@@ -122,7 +122,7 @@ export async function download(url, fallbackName) {
   setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
-export async function api(path, { method = 'GET', body, raw = false, headers = {} } = {}) {
+export async function api(path, { method = 'GET', body, raw = false, headers = {}, signal } = {}) {
   const s = session.get();
   const h = { ...headers };
   if (s?.token) h.Authorization = `Bearer ${s.token}`;
@@ -132,6 +132,7 @@ export async function api(path, { method = 'GET', body, raw = false, headers = {
     headers: h,
     body: body === undefined ? undefined : body instanceof Uint8Array ? body : JSON.stringify(body),
     cache: 'no-store',
+    signal,
   });
   if (raw) return r;
   const data = await r.json().catch(() => ({}));

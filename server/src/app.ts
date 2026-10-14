@@ -121,6 +121,7 @@ export async function buildApp(
     crm: createCrmSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
     imagery: createImagery(db, sealer, {
       fetchImpl: opts.fetchImpl,
+      dir: cfg.imageryDir,
       // the sea is at 0 m in the terrain model: 9×9 points of the tile, any of them on the sea
       touchesSea: async ([s, w, n, e]) => {
         const at = await dem.sampler(s, w, n, e);

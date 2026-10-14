@@ -1,4 +1,7 @@
 import assert from 'node:assert/strict';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { describe, it } from 'node:test';
 import { buildApp } from '../src/app.ts';
 import { createSealer } from '../src/crypto.ts';
@@ -50,6 +53,37 @@ describe('Mappe admin: immagini satellitari da più fonti', () => {
     assert.equal(seaChecks.length, 2);
   });
 
+  it('AGEA orthophotos kept on disk: asked once; a blank answer is no image and not asked again at once', async () => {
+    const db = openDatabase(':memory:');
+    const dir = mkdtempSync(join(tmpdir(), 'cdanet-imagery-'));
+    let asked = 0;
+    const photo = new Uint8Array(4000).fill(9);
+    photo.set([0xff, 0xd8, 0xff]);
+    const fetchImpl = (async (input: string | URL | Request) => {
+      asked++;
+      // the tile of row 3172 has a photo, any other one comes back blank (a white JPEG of 692 bytes)
+      const body = String(input).includes('BBOX=1584') ? photo : new Uint8Array(692).fill(255);
+      return new Response(body, { status: 200, headers: { 'content-type': 'image/jpeg' } });
+    }) as typeof fetch;
+    try {
+      const im = createImagery(db, createSealer(Buffer.alloc(32, 7)), { fetchImpl, dir });
+      im.save('wms', { enabled: true }, 1);
+      const bbox = (z: number, x: number, y: number) => wmsTileUrl('u', 'l', z, x, y).match(/BBOX=([^&]+)/)![1]!;
+      assert.ok(decodeURIComponent(bbox(13, 4420, 3172)).startsWith('1584'), 'test tile chosen by its bbox');
+      const a = await im.tile('wms', 'ortofoto', 13, 4420, 3172);
+      const b = await im.tile('wms', 'ortofoto', 13, 4420, 3172);
+      assert.equal(a?.body.length, 4000);
+      assert.equal(b?.body.length, 4000);
+      assert.equal(asked, 1, 'the second time from the disk');
+      assert.equal(await im.tile('wms', 'ortofoto', 13, 4421, 3172), null, 'blank: no image');
+      assert.equal(await im.tile('wms', 'ortofoto', 13, 4421, 3172), null);
+      assert.equal(asked, 2, 'a blank answer is not asked again at once');
+      assert.equal(im.layers().find((l) => l.id === 'wms')?.maxNativeZoom, 18);
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
   it('every provider switched on is offered to admins, through the server, keys never sent back', async () => {
     const calls: string[] = [];
     let sessions = 0;
@@ -66,7 +100,9 @@ describe('Mappe admin: immagini satellitari da più fonti', () => {
       if (url.startsWith('https://tile.googleapis.com/v1/2dtiles/')) return url.includes('session=sess-1') ? new Response('expired', { status: 400 }) : jpeg();
       if (url.includes('access_token=pk.bad')) return new Response('no', { status: 401 });
       if (url.startsWith('http://wms.example/err')) return new Response('<ServiceExceptionReport/>', { status: 200, headers: { 'content-type': 'text/xml' } });
-      if (url.startsWith('https://api.mapbox.com/') || url.startsWith('https://ibasemaps-api.arcgis.com/') || url.startsWith('http://wms.pcn.minambiente.it/')) return jpeg();
+      if (url.startsWith('https://api.mapbox.com/') || url.startsWith('https://ibasemaps-api.arcgis.com/')) return jpeg();
+      // a real orthophoto tile: bigger than a blank one
+      if (url.startsWith('http://wms.pcn.minambiente.it/')) return new Response(new Uint8Array(3000).fill(7), { status: 200, headers: { 'content-type': 'image/jpeg' } });
       return new Response('not found', { status: 404 });
     }) as typeof fetch;
     const db = openDatabase(':memory:');
