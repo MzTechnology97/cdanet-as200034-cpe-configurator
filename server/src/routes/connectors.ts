@@ -158,8 +158,19 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
     const token = b.token || ctx.connectors.savedUispToken();
     if (!b.url || !token) throw new HttpError(400, 'connector_incomplete');
     const client = ctx.connectors.build({ url: b.url, token, ignoreTls: b.ignoreTls ?? false, cacheSeconds: 5 });
+    // the CRM app key too, when typed or saved: the plans it can read (new subscribers at acceptance)
+    const crmKey = b.crmKey || ctx.connectors.uispSettings()?.crmKey || null;
+    const crmTest = async () => {
+      if (!crmKey) return null;
+      try {
+        const plans = await ctx.connectors.crmWith(b.url!, crmKey, b.ignoreTls ?? false).servicePlans();
+        return { ok: true, plans: plans.length };
+      } catch (e) {
+        return { ok: false, error: (e as HttpError).code ?? 'uisp_crm_error' };
+      }
+    };
     try {
-      return await client.test();
+      return { ...(await client.test()), crm: await crmTest() };
     } catch (e) {
       const err = e as HttpError;
       const detail = String(err.extra?.detail ?? '');

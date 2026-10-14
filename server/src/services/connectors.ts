@@ -156,6 +156,11 @@ export function createConnectors(db: Db, sealer: Sealer, cfg: Config, opts: { fe
       ).run(JSON.stringify(stored), nowIso(), userId);
     },
 
+    /** A UISP CRM client for given values (the connector test of the console). */
+    crmWith(url: string, appKey: string, ignoreTls: boolean): UispCrm {
+      return createUispCrm({ url, appKey, fetchImpl: ignoreTls ? insecureFetch() : opts.fetchImpl });
+    },
+
     /** The UISP CRM (new subscribers), when its app key is set. */
     crm(): UispCrm | null {
       const s = uispSettings();

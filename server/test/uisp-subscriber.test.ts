@@ -49,6 +49,10 @@ describe('Nuovo subscriber in UISP all\'accettazione', () => {
     const saved = (await call('PUT', '/api/admin/connectors/uisp', { ...uisp, token: '', crmKey: 'crm-key' })).json();
     assert.equal(saved.crmKeySet, true);
     assert.equal(JSON.stringify(saved).includes('crm-key'), false, 'the key never goes back to the browser');
+    // "Test connessione" checks the CRM key too (the plans it can read)
+    const tested = (await call('POST', '/api/admin/connectors/uisp/test', { url: 'https://uisp.test' })).json();
+    assert.equal(tested.ok, true);
+    assert.deepEqual(tested.crm, { ok: true, plans: 1 });
 
     await call('POST', '/api/admin/profiles/LiteBeam%205AC/templates', { name: 'Standard', template: SAMPLE_TEMPLATE, boardMatch: 'board\\.name=LiteBeam 5AC' });
     await call('PUT', '/api/admin/wireless-networks/CDA-NET-N2-D01', { wpa2Password: 'test-psk-12345' });
