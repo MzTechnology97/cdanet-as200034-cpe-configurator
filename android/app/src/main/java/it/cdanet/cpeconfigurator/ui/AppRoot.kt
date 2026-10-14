@@ -216,7 +216,9 @@ fun AppRoot(c: AppContainer) {
     }
     LaunchedEffect(update) {
         val u = update
-        if (u is UpdateState.Available) startUpdate(c, u.info) { update = it }
+        // in the scope of the app, not of this effect: the download changes [update], and the new
+        // key would cancel the effect and the download with it ("left the composition")
+        if (u is UpdateState.Available) scope.launch { startUpdate(c, u.info) { update = it } }
     }
     if (mandatory != null || required != null) {
         MandatoryUpdateScreen(c, mandatory, required, update, onState = { update = it }, onRecheck = { recheck++ })
