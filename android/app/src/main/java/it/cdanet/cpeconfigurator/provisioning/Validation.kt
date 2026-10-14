@@ -37,6 +37,7 @@ object Validation {
         if (!isMac(f.mac)) add("MAC non valido: 12 cifre esadecimali, con o senza separatori")
         else if (!isDeviceMac(f.mac)) add("Questo non è il MAC di un apparato (il primo numero è dispari): scansiona il codice «MAC» dell'etichetta o usa «Rileva il modello dalla CPE»")
         if (f.serial.isBlank()) add("Seriale obbligatorio")
+        else if (serialLooksLikeMac(f.serial)) add("Nel campo Seriale c'è un MAC: va nel campo MAC, nel Seriale il numero di serie (S/N) dell'etichetta")
         if (!PPPOE.matches(f.pppoeUser.trim())) add("Username RADIUS nel formato cognome.nome@cda-net.it")
         if (f.pppoePassword.isEmpty() && f.replaces == null && f.workOrderId == null) add("Password PPPoE obbligatoria")
     }
@@ -71,6 +72,22 @@ object Validation {
             candidates.isNotEmpty() -> f
             else -> f.copy(serial = v.take(128))
         }
+    }
+
+    /** A MAC written with separators (AA:BB:… or AA-BB-…) in the serial field: the two fields were swapped. */
+    fun serialLooksLikeMac(serial: String): Boolean {
+        val v = serial.trim()
+        return (v.contains(':') || v.contains('-')) && parseMac(v)?.let { isDeviceMac(it) } == true
+    }
+
+    /**
+     * On Ubiquiti CPEs the serial is usually the MAC (12 hex digits): two different device MACs in
+     * the two fields mean one of them comes from another code of the box. A warning, not an error.
+     */
+    fun serialMacMismatch(f: ProvisionForm): String? {
+        val mac = parseMac(f.mac) ?: return null
+        val serialMac = parseMac(f.serial)?.takeIf { MAC_HEX.matches(f.serial.trim()) && isDeviceMac(it) } ?: return null
+        return if (serialMac != mac) "Sulle CPE Ubiquiti seriale e MAC di solito coincidono: controlla di non aver scambiato i due codici dell'etichetta." else null
     }
 
     /** Why a scanned code was not used: it looks like a MAC but no device can have it. */

@@ -136,7 +136,17 @@ fun ProvisionFormStep(c: AppContainer) {
                 else -> null
             },
         )
-        Field("Seriale", form.serial, { v -> c.provisioning.updateForm { it.copy(serial = v) } })
+        Field(
+            "Seriale",
+            form.serial,
+            { v -> c.provisioning.updateForm { it.copy(serial = v) } },
+            isError = Validation.serialLooksLikeMac(form.serial),
+            // checked as soon as it is typed or scanned: MAC and serial must not be swapped
+            supporting = when {
+                Validation.serialLooksLikeMac(form.serial) -> "Questo è un MAC: va nel campo MAC"
+                else -> Validation.serialMacMismatch(form)
+            },
+        )
         var scanMsg by remember { mutableStateOf<String?>(null) }
         SecondaryButton(onClick = {
             GmsBarcodeScanning.getClient(context).startScan()
