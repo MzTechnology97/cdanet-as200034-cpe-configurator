@@ -37,6 +37,7 @@ interface JobRow {
   pppoe_user: string;
   device_name: string;
   work_order_id: number | null;
+  uisp_crm_service_id: number | null;
 }
 
 /** Wait between the checks of the subscriber's endpoint site (shorter in the tests). */
@@ -557,30 +558,47 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
    */
   app.post('/api/admin/provisioning/jobs/:id/uisp/subscriber', admin, async (req) => {
     const job = loadJob(req);
+    // a new subscriber, or (retry after "site pending") only { serviceId } of the one already made
     const b = z
-      .object({
-        firstName: z.string().trim().max(100).default(''),
-        lastName: z.string().trim().min(1).max(100),
-        street: z.string().trim().max(200).default(''),
-        servicePlanPeriodId: z.number().int().positive(),
-      })
-      .strict()
+      .union([
+        z.object({ serviceId: z.number().int().positive() }).strict(),
+        z
+          .object({
+            firstName: z.string().trim().max(100).default(''),
+            lastName: z.string().trim().min(1).max(100),
+            street: z.string().trim().max(200).default(''),
+            servicePlanPeriodId: z.number().int().positive(),
+          })
+          .strict(),
+      ])
       .parse(req.body);
     const u = uisp();
     const c = crm();
     const device = await deviceOf(job);
     if (!device) throw new HttpError(409, 'uisp_device_not_found');
     if (device.authorized) throw new HttpError(409, 'uisp_already_authorized', { site: device.siteName });
-    const sub = await c.createSubscriber({ ...b, lat: job.latitude, lon: job.longitude, note: `CPE ${job.model} ${job.mac} · ${job.ssid}` });
-    recordEvent(db, req.user!.id, 'uisp.subscriber', `${b.lastName} ${b.firstName}`.trim(), `${job.id} · cliente ${sub.clientId} · servizio ${sub.serviceId}`);
+    // the service already made for this job is reused: a retry never creates a second subscriber
+    const known = 'serviceId' in b ? b.serviceId : job.uisp_crm_service_id;
+    let serviceId: number;
+    let clientId: number | null = null;
+    let siteId: string | null = null;
+    if (known) {
+      serviceId = known;
+    } else {
+      if ('serviceId' in b) throw new HttpError(400, 'invalid_request');
+      const sub = await c.createSubscriber({ ...b, lat: job.latitude, lon: job.longitude, note: `CPE ${job.model} ${job.mac} · ${job.ssid}` });
+      ({ serviceId, clientId, siteId } = sub);
+      db.prepare('UPDATE provisioning_jobs SET uisp_crm_service_id = ? WHERE id = ?').run(serviceId, job.id);
+      recordEvent(db, req.user!.id, 'uisp.subscriber', `${b.lastName} ${b.firstName}`.trim(), `${job.id} · cliente ${sub.clientId} · servizio ${serviceId}`);
+    }
     // UISP makes the endpoint site of the service a moment later
-    let siteId = sub.siteId;
+    if (!siteId) siteId = await c.serviceSite(serviceId).catch(() => null);
     for (let i = 0; !siteId && i < 10; i++) {
       await new Promise((ok) => setTimeout(ok, subscriberTiming.pollMs));
-      siteId = await c.serviceSite(sub.serviceId).catch(() => null);
+      siteId = await c.serviceSite(serviceId).catch(() => null);
     }
-    if (!siteId) throw new HttpError(504, 'uisp_subscriber_site_pending', { clientId: sub.clientId, serviceId: sub.serviceId });
-    const siteName = `${b.lastName} ${b.firstName}`.trim();
+    if (!siteId) throw new HttpError(504, 'uisp_subscriber_site_pending', { clientId, serviceId });
+    const siteName = 'lastName' in b ? `${b.lastName} ${b.firstName}`.trim() : ((await u.sites()).find((s) => s.id === siteId)?.name ?? siteId);
     await u.authorize(device.id, siteId);
     db.prepare('UPDATE provisioning_jobs SET uisp_device_id = ?, uisp_site = ?, uisp_authorized_at = ?, uisp_authorized_by = ? WHERE id = ?').run(
       device.id,
@@ -598,7 +616,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
         .then(() => 'created' as const)
         .catch(() => 'failed' as const);
     }
-    return { ok: true, deviceId: device.id, site: siteName, clientId: sub.clientId, serviceId: sub.serviceId, backup };
+    return { ok: true, deviceId: device.id, site: siteName, clientId, serviceId, backup };
   });
 
   app.post('/api/admin/provisioning/jobs/:id/uisp/authorize', admin, async (req) => {

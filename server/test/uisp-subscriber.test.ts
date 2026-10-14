@@ -71,8 +71,48 @@ describe('Nuovo subscriber in UISP all\'accettazione', () => {
     assert.equal(client.firstName, 'Mario');
     assert.equal(client.addressGpsLat, 37.58);
     assert.equal((crm.find((c) => c.path === '/clients/501/services')!.body as Record<string, unknown>).servicePlanPeriodId, 31);
+    // the CRM made exactly one client and one service
+    assert.equal(crm.filter((c) => c.path === '/clients' && c.method === 'POST').length, 1)
+    assert.equal(crm.filter((c) => c.path.endsWith('/services') && c.method === 'POST').length, 1)
     const auth = fake.calls.find((c) => c.path === '/devices/cpe-1/authorize');
     assert.deepEqual(auth?.body, { siteId: 'site-sub-1' }, "the CPE goes into the subscriber's site, not the AP's");
+    await app.close();
+  });
+
+  it('after "site pending" the retry reuses the service: never a second subscriber', async () => {
+    subscriberTiming.pollMs = 1;
+    const fake = fakeUisp();
+    let siteReady = false;
+    let clients = 0;
+    const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (!url.pathname.startsWith('/crm/api/v1.0')) return fake.fetchImpl(input, init);
+      const path = url.pathname.replace('/crm/api/v1.0', '');
+      const method = init?.method ?? 'GET';
+      if (path === '/clients' && method === 'POST') {
+        clients++;
+        return new Response(JSON.stringify({ id: 501 }), { status: 201 });
+      }
+      if (path === '/clients/501/services') return new Response(JSON.stringify({ id: 701 }), { status: 201 });
+      if (path === '/clients/services/701') return new Response(JSON.stringify({ id: 701, unmsClientSiteId: siteReady ? 'site-sub-1' : null }));
+      return new Response('[]');
+    }) as typeof fetch;
+    const { app } = await buildApp(testConfig(), 'test', { db: openDatabase(':memory:'), logger: false, uisp: null, fetchImpl });
+    const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: ADMIN.username, password: ADMIN.password } });
+    const H = { authorization: `Bearer ${login.json().token}` };
+    const call = (method: 'GET' | 'POST' | 'PUT', url: string, payload?: object, extra: Record<string, string> = {}) => app.inject({ method, url, headers: { ...H, ...extra }, payload });
+    await call('PUT', '/api/admin/connectors/uisp', { enabled: true, url: 'https://uisp.test', token: 'tok-secret', crmKey: 'crm-key', ignoreTls: false, autoBackup: false, coverageMaxKm: 15, cacheSeconds: 60 });
+    await call('POST', '/api/admin/profiles/LiteBeam%205AC/templates', { name: 'Standard', template: SAMPLE_TEMPLATE, boardMatch: 'board\\.name=LiteBeam 5AC' });
+    await call('PUT', '/api/admin/wireless-networks/CDA-NET-N2-D01', { wpa2Password: 'test-psk-12345' });
+    const job = (await call('POST', '/api/provisioning/jobs', { model: 'LiteBeam 5AC', mac: 'AABBCCDDEEFF', serial: 'S1', ssid: 'CDA-NET-N2-D01', pppoeUser: 'rossi.mario@cda-net.it', pppoePassword: 'x' }, { 'x-cda-client': 'android/1.0.7' })).json();
+    const url = `/api/admin/provisioning/jobs/${job.jobId}/uisp/subscriber`;
+    const first = await call('POST', url, { lastName: 'Rossi', firstName: 'Mario', street: '', servicePlanPeriodId: 31 });
+    assert.equal(first.json().error, 'uisp_subscriber_site_pending');
+    assert.equal(first.json().serviceId, 701);
+    siteReady = true;
+    // the same form again (the console may resend it) or only the serviceId: one client in all
+    assert.equal((await call('POST', url, { lastName: 'Rossi', firstName: 'Mario', street: '', servicePlanPeriodId: 31 })).statusCode, 200);
+    assert.equal(clients, 1);
     await app.close();
   });
 });
