@@ -88,7 +88,7 @@ const apPopup = (a: Ap, popName: string | null) =>
 
 /** CPE online over total, as a small bar (green, amber below 70%, red below 40%). */
 function CpeBar({ a }: { a: Ap }) {
-  if (!a.cpe) return OFFLINE[a.cpeOffline ?? ''] ? <span className="ui-small">{OFFLINE[a.cpeOffline ?? '']}</span> : <span className="ui-muted">—</span>;
+  if (!a.cpe) return OFFLINE[a.cpeOffline ?? ''] ? <span className="ui-small">{OFFLINE[a.cpeOffline ?? '']}</span> : null;
   const online = a.cpe.total - a.cpe.offline;
   const ratio = a.cpe.total ? online / a.cpe.total : 1;
   const pppoe = pppoeText(a);
@@ -381,15 +381,17 @@ export function Network({ user }: PageContext) {
                                   <Badge tone={STATE[a.state][1]}>{STATE[a.state][0]}</Badge>
                                   {a.powerOutage && <Badge tone="bad">guasto Enel vicino</Badge>}
                                 </div>
-                                <div className="hl-sub">
+                                <div className="hl-sub nw-sub">
                                   <CpeBar a={a} />
-                                  {a.model && <span className="ui-muted ui-small"> · {a.model}</span>}
+                                  {a.model && <span className="ui-muted ui-small">{a.model}</span>}
                                 </div>
                               </div>
-                              <div className="hl-signal">
-                                <span className="ui-small">{a.lastSeen ? date(a.lastSeen) : '—'}</span>
-                                <span className="ui-muted ui-small">ultimo contatto</span>
-                              </div>
+                              {a.lastSeen && (
+                                <div className="hl-signal">
+                                  <span className="ui-small">{date(a.lastSeen)}</span>
+                                  <span className="ui-muted ui-small">ultimo contatto</span>
+                                </div>
+                              )}
                               {admin && (
                                 <div className="hl-actions">
                                   {hasPos ? (

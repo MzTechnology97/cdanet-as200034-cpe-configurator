@@ -233,4 +233,6 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .nw-bar > i { display: block; height: 100%; border-radius: var(--radius-full); }
 .nw-bad { color: var(--bad); font-weight: 600; }
 .nw-ap .hl-sub { white-space: normal; }
+.nw-sub { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-1) var(--sp-3); }
+.nw-sub:empty { display: none; }
 .nw-ap .hl-signal { min-width: 120px; }
