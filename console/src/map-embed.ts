@@ -71,7 +71,7 @@ const ready: Promise<LMap | null> = createMap(el, { zoom: 12, imagery: false, on
   return map;
 });
 
-const km = (m: number) => (m < 1000 ? `${m} m` : `${(m / 1000).toFixed(2)} km`);
+const km = (m: number) => (m < 1000 ? `${Math.round(m)} m` : `${(m / 1000).toFixed(2).replace('.', ',')} km`);
 
 interface FindAp {
   name: string;
