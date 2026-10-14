@@ -7,10 +7,10 @@ import { keys, queryClient } from '../lib/query';
 import { isOn, loadModules, modulesLoaded, resetModules } from '../../../web/js/modules.js';
 import { toast } from '../../../web/js/dom.js';
 import { setAdmin } from '../../../web/js/terms.js';
-import { unreadCount } from '../../../web/js/views/notifications.js';
 import { Icon } from '../ui/Icon';
 import { CommandPalette } from './CommandPalette';
-import { LegacyLogin, Page } from './Page';
+import { Login } from './Login';
+import { Page } from './Page';
 import { allowed, isGroup, labelOf, ROUTES, type Route, type User } from './routes';
 import { useTheme } from './theme';
 
@@ -87,7 +87,7 @@ export function App() {
   // unread notifications: at once when the server says so (live events), else every 5 minutes
   useLiveEvents(s?.token ?? null);
   const unread =
-    useQuery({ queryKey: keys.unread, queryFn: async () => (await unreadCount()) ?? 0, enabled: !!s?.token, refetchInterval: 5 * 60_000, staleTime: 60_000 }).data ?? 0;
+    useQuery({ queryKey: keys.unread, queryFn: () => api<{ unread: number }>('/api/notifications/count').then((r) => r.unread, () => 0), enabled: !!s?.token, refetchInterval: 5 * 60_000, staleTime: 60_000 }).data ?? 0;
 
   // Ctrl+K (or /) opens the pages, Escape closes the menu
   useEffect(() => {
@@ -133,7 +133,7 @@ export function App() {
   if (!s || !user) {
     return (
       <div className="cx-login">
-        <LegacyLogin
+        <Login
           onLogin={async (username: string, password: string) => {
             const d = await api('/api/auth/login', { method: 'POST', body: { username, password } });
             if (d.mfaRequired) return { mfaToken: d.mfaToken };

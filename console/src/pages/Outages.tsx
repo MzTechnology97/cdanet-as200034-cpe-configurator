@@ -2,8 +2,8 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type ChangeEvent, useMemo, useRef, useState } from 'react';
 import { toast } from '../../../web/js/dom.js';
 import { drawOutages as drawOutagesJs, MAP_COLORS as C } from '../../../web/js/map.js';
-import { itemLabel, itemNames, picker as pickerJs } from '../../../web/js/views/infra-picker.js';
-import { myTelegramCard } from '../../../web/js/views/my-telegram.js';
+import { MyTelegram } from '../account/MyTelegram';
+import { type Infra, itemLabel, itemNames, Picker } from '../infra/Picker';
 import { api } from '../lib/api';
 import { keys } from '../lib/query';
 import { type LMap, MapView } from '../map/MapView';
@@ -24,11 +24,9 @@ const dist = (m: number) => (m >= 1000 ? `${(m / 1000).toFixed(1)} km` : `${m} m
 const coords = (z: { lat: number; lon: number }) => `${z.lat.toFixed(4)}, ${z.lon.toFixed(4)}`;
 const date = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 const fail = (e: unknown) => toast((e as Error).message, 'bad');
-// the helpers of web/js, typed loosely (their default parameters would type as null)
+// the helper of web/js, typed loosely (its default parameters would type as null)
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const drawOutages = drawOutagesJs as (target: unknown, d: unknown, onOutage?: (o: { id: string }, marker: unknown) => void) => any[];
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const picker = pickerJs as unknown as (opts: Record<string, unknown>) => { el: HTMLElement; render: () => void; onChange: (() => void) | null };
 
 interface Impact {
   type: 'pop' | 'ap';
@@ -212,7 +210,7 @@ export function Outages({ user }: PageContext) {
           </ul>
         </Card>
       )}
-      <Dom make={() => myTelegramCard({ title: 'Notifiche', appHint: true })} />
+      <MyTelegram title="Notifiche" appHint />
       {!admin && <MyZones onMap={onMap} />}
       {admin && <InfraCard onSaved={reloadAll} />}
       {admin && <AdminZones onMap={onMap} onChecked={reloadAll} />}
@@ -485,8 +483,7 @@ function MyZones({ onMap }: { onMap: (z: Point) => void }) {
 }
 
 interface InfraData {
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  inf: any;
+  inf: Infra & { missing: { pops: string[]; aps: string[] } };
   sel: { selectionOnly: boolean; items: Array<{ key: string; name: string }> };
   cfg: { zones: Zone[] };
 }
@@ -502,19 +499,13 @@ function InfraCard({ onSaved }: { onSaved: () => Promise<unknown> }) {
     staleTime: 5 * 60_000,
   });
   const [mode, setMode] = useState<'all' | 'only' | null>(null);
-  const [count, setCount] = useState('');
+  const [edited, setEdited] = useState<Set<string> | null>(null);
   const d = q.data;
-  // the tree of checkboxes (shared with Account), its choice kept between the renders
-  const pick = useMemo(() => {
-    if (!d) return null;
-    const names: Map<string, string> = itemNames(d.inf, d.cfg.zones);
-    for (const it of d.sel.items) if (!names.has(it.key)) names.set(it.key, it.name);
-    const chosen = new Set<string>(d.sel.items.map((i) => i.key));
-    const p = picker({ inf: d.inf, chosen, cascade: true });
-    const upd = () => setCount(`${[...chosen].filter((k) => k.startsWith('pop:')).length} POP · ${[...chosen].filter((k) => k.startsWith('ap:')).length} AP selezionati`);
-    p.onChange = upd;
-    upd();
-    return { p, chosen, names, upd };
+  const names = useMemo(() => {
+    if (!d) return new Map<string, string>();
+    const m = itemNames(d.inf, d.cfg.zones);
+    for (const it of d.sel.items) if (!m.has(it.key)) m.set(it.key, it.name);
+    return m;
   }, [d]);
   if (q.error) {
     const e = q.error as Error & { body?: { error?: string } };
@@ -524,27 +515,23 @@ function InfraCard({ onSaved }: { onSaved: () => Promise<unknown> }) {
       </Card>
     );
   }
-  if (!d || !pick) return null;
+  if (!d) return null;
   const { inf, sel } = d;
+  // the choice being made (the saved one until a box is touched)
+  const chosen = edited ?? new Set(sel.items.map((i) => i.key));
+  const count = `${[...chosen].filter((k) => k.startsWith('pop:')).length} POP · ${[...chosen].filter((k) => k.startsWith('ap:')).length} AP selezionati`;
   const how = mode ?? (sel.selectionOnly ? 'only' : 'all');
   const live = new Set(itemNames(inf, []).keys());
   const gone = sel.items.filter((i) => !live.has(i.key));
   const apCount = inf.pops.reduce((t: number, p: { aps: unknown[] }) => t + p.aps.length, 0) + inf.apsWithoutPop.length;
-  const selectAll = () => {
-    for (const k of pick.names.keys()) if (!k.startsWith('z')) pick.chosen.add(k);
-    pick.p.render();
-    pick.upd();
-  };
-  const selectNone = () => {
-    pick.chosen.clear();
-    pick.p.render();
-    pick.upd();
-  };
+  const selectAll = () => setEdited(new Set([...names.keys()].filter((k) => !k.startsWith('z'))));
+  const selectNone = () => setEdited(new Set());
   const save = async () => {
-    if (how === 'only' && !pick.chosen.size) throw new Error('Seleziona almeno un POP o un AP, oppure scegli "tutti"');
-    await api('/api/admin/outages/selection', { method: 'PUT', body: { selectionOnly: how === 'only', items: [...pick.chosen].map((key) => ({ key, name: pick.names.get(key) ?? key })) } });
-    toast(how === 'only' ? `Monitorati solo i ${pick.chosen.size} POP/AP selezionati` : 'Monitorati tutti i POP/AP di UISP');
+    if (how === 'only' && !chosen.size) throw new Error('Seleziona almeno un POP o un AP, oppure scegli "tutti"');
+    await api('/api/admin/outages/selection', { method: 'PUT', body: { selectionOnly: how === 'only', items: [...chosen].map((key) => ({ key, name: names.get(key) ?? key })) } });
+    toast(how === 'only' ? `Monitorati solo i ${chosen.size} POP/AP selezionati` : 'Monitorati tutti i POP/AP di UISP');
     setMode(null);
+    setEdited(null);
     await onSaved();
   };
   return (
@@ -569,7 +556,7 @@ function InfraCard({ onSaved }: { onSaved: () => Promise<unknown> }) {
         <Button onClick={selectNone}>Nessuno</Button>
         <span className="ui-muted ui-small">{count}</span>
       </div>
-      <Dom make={() => pick.p.el} deps={[pick]} />
+      <Picker inf={inf} chosen={chosen} onChange={setEdited} cascade />
       <div className="ui-row">
         <AsyncButton variant="primary" onClick={save} onError={fail}>
           Salva selezione

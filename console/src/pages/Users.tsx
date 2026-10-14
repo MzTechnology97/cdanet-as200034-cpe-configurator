@@ -2,7 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useState } from 'react';
 import { toast } from '../../../web/js/dom.js';
 import { loadModules } from '../../../web/js/modules.js';
-import { assignmentsCard } from '../../../web/js/views/infra-picker.js';
+import { Assignments } from '../infra/Assignments';
 import { api } from '../lib/api';
 import type { PageContext, User } from '../shell/routes';
 import { AsyncButton, Badge, Button, Card, Dom, Drawer, Field, Icon, Notice, PageHeader, Skeleton, Table } from '../ui';
@@ -122,7 +122,7 @@ export function Users({ user: me }: PageContext) {
         </Card>
       )}
 
-      <Dom make={() => assignmentsCard()} />
+      <Assignments />
 
       {creating && (
         <NewAccount
