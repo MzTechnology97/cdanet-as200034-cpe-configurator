@@ -67,6 +67,7 @@ private val ERRORS = mapOf(
     "template_needs_mac" to "Questo template ha bisogno del MAC già in preparazione: prepara la configurazione sul posto",
     "user_not_found" to "Installatore non trovato o disattivato",
     "invalid_position" to "Posizione non valida",
+    "acceptance_not_found" to "Collaudo non ancora registrato: il rapporto c'è dopo l'invio del collaudo",
     "work_order_password_missing" to "L'intervento non ha la password PPPoE: chiedila all'ufficio",
     "too_many_zones" to "Hai già 20 zone: eliminane una",
     "zone_not_found" to "Zona non trovata",
@@ -161,6 +162,26 @@ class ApiClient(
                 text
             }
         }
+
+    /** The acceptance report of a job as a PDF (the same as the console's): the server checks who may. */
+    suspend fun acceptancePdf(jobId: String): ByteArray = withContext(Dispatchers.IO) {
+        val b = Request.Builder().url((base() + "/api/provisioning/jobs/$jobId/acceptance.pdf").toHttpUrl())
+            .header("Accept", "application/pdf").header("Cache-Control", "no-store")
+        session.token?.let { b.header("Authorization", "Bearer $it") }
+        try {
+            serverClient().newCall(b.build()).execute()
+        } catch (e: IOException) {
+            throw offline(e)
+        }.use { r ->
+            if (!r.isSuccessful) {
+                val err = runCatching { AppJson.decodeFromString(ApiErrorDto.serializer(), r.body?.string().orEmpty()) }.getOrNull()
+                val code = err?.error?.ifBlank { null } ?: "HTTP ${r.code}"
+                if (r.code == 401) session.clear()
+                throw ApiException(r.code, code, apiMessage(code))
+            }
+            r.body?.bytes() ?: ByteArray(0)
+        }
+    }
 
     /**
      * Plain GET of a page or file of our server for the embedded map (no session), with the same
