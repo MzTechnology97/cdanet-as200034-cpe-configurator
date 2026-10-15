@@ -311,6 +311,10 @@ button.small { padding: 2px 8px; font-size: .8rem; margin-top: 4px; }
 .guide figure { margin: 14px 0; }
 .guide figure img { display: block; width: 100%; min-height: 120px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-2); }
 .guide figcaption { color: var(--muted); font-size: 13px; margin-top: 6px; }
+/* screenshots of the phone app: side by side at phone size, not stretched to the page */
+.guide .phones { display: flex; flex-wrap: wrap; gap: 12px; }
+.guide .phones figure { flex: 0 1 260px; }
+.guide .phones img { width: 100%; height: auto; }
 .guide nav ol { columns: 2; column-gap: 28px; }
 @media (max-width: 760px) {
   .guide nav ol { columns: 1; }

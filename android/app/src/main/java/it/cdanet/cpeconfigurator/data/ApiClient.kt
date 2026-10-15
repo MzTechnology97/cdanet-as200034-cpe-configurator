@@ -65,6 +65,8 @@ private val ERRORS = mapOf(
     "work_order_closed" to "Intervento già chiuso o annullato",
     "cpe_not_in_stock" to "Questa CPE non risulta nel tuo magazzino: usa una CPE del tuo magazzino o chiedi all'ufficio",
     "template_needs_mac" to "Questo template ha bisogno del MAC già in preparazione: prepara la configurazione sul posto",
+    "user_not_found" to "Installatore non trovato o disattivato",
+    "invalid_position" to "Posizione non valida",
     "work_order_password_missing" to "L'intervento non ha la password PPPoE: chiedila all'ufficio",
     "too_many_zones" to "Hai già 20 zone: eliminane una",
     "zone_not_found" to "Zona non trovata",
@@ -343,6 +345,19 @@ class ApiClient(
     /** Calendario: the orders from [from] to [to] (YYYY-MM-DD, up to 62 days); [user] = one installer (NOC). */
     suspend fun workOrderCalendar(from: String, to: String, user: Long? = null): CalendarDto =
         AppJson.decodeFromString(CalendarDto.serializer(), request("GET", "/api/work-orders/calendar?from=$from&to=$to" + (user?.let { "&user=$it" } ?: "")))
+
+    /** NOC: a new work order from the app's calendar ([body] from OrderDraftMath.body). */
+    suspend fun createWorkOrder(body: JsonObject): WorkOrderDto =
+        AppJson.decodeFromString(WorkOrderItemDto.serializer(), request("POST", "/api/admin/work-orders", body)).item
+
+    /** NOC: changes (day, time, installer, details) of a work order: only the fields in [body]. */
+    suspend fun updateWorkOrder(id: Long, body: JsonObject): WorkOrderDto =
+        AppJson.decodeFromString(WorkOrderItemDto.serializer(), request("PUT", "/api/admin/work-orders/$id", body)).item
+
+    /** NOC: cancels a work order (one that led to an installation stays in the history). */
+    suspend fun deleteWorkOrder(id: Long) {
+        request("DELETE", "/api/admin/work-orders/$id")
+    }
 
     suspend fun setWorkOrderStatus(id: Long, status: String, note: String = "") {
         request("POST", "/api/work-orders/$id/status", buildJsonObject { put("status", status); put("note", note) })
