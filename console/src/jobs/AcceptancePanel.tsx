@@ -28,7 +28,7 @@ const n = (v: unknown, unit: string, digits = 0) => (v == null ? '—' : `${Numb
 
 export const AcceptanceBadge = ({ v }: { v?: string | null }) => (v ? <Badge tone={VERDICT[v]?.[1] ?? 'neutral'}>{VERDICT[v]?.[0] ?? v}</Badge> : null);
 
-function measures(a: Acceptance): Array<[string, string]> {
+export function measures(a: Acceptance): Array<[string, string]> {
   const r = a.radio ?? {};
   return [
     ['Segnale', r.signal != null ? `${r.signal} dBm${r.signalMin != null ? ` (min ${r.signalMin} / max ${r.signalMax})` : ''}` : '—'],
@@ -65,7 +65,7 @@ function measures(a: Acceptance): Array<[string, string]> {
 }
 
 /** A photo of the job as a data: URL (the request needs the session). */
-async function photoUrl(jobId: string, id: number): Promise<string> {
+export async function photoUrl(jobId: string, id: number): Promise<string> {
   const r = await api<Response>(`/api/provisioning/jobs/${jobId}/photos/${id}`, { raw: true });
   if (!r.ok) throw new Error(`foto ${id}: HTTP ${r.status}`);
   const blob = await r.blob();
