@@ -105,7 +105,9 @@ fun NetworkScreen(c: AppContainer) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SectionCard("Connessione") {
             ToolButton(r, "Stato connessione", primary = true) { c.tools.connection() }
-            ToolButton(r, "Speed test verso server CDA Net") { c.tools.speedTest() }
+        }
+        SectionCard("Speedtest (server CDA Net)") {
+            SpeedtestRunner(c, it.cdanet.cpeconfigurator.tools.speedtest.SpeedtestSubject("tool"), 0) { _, _, _ -> }
         }
         SectionCard("Host") {
             Field("Target (IP o nome)", target, { target = it.trim() }, keyboardType = KeyboardType.Uri)

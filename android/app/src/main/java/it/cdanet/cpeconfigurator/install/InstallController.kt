@@ -25,11 +25,51 @@ enum class InstallStep(val title: String) {
     Verify("Verifica della CPE"),
     Link("Aggancio all'AP"),
     Aim("Puntamento"),
+    Router("Router e velocità"),
     Final("Verifica finale e collaudo"),
     ;
 
     companion object {
-        fun of(mode: InstallMode): List<InstallStep> = if (mode == InstallMode.New) entries else listOf(Verify, Link, Aim, Final)
+        fun of(mode: InstallMode): List<InstallStep> = if (mode == InstallMode.New) entries else listOf(Verify, Link, Aim, Router, Final)
+    }
+}
+
+/**
+ * The «Router e velocità» step: router ready, its Wi-Fi as seen by the phone (and what was changed),
+ * the speed tests against the plan. [gaveUp] is the technician's reason for going on under the minimum.
+ */
+data class RouterCheck(
+    val ready: Boolean = false,
+    val wifi: it.cdanet.cpeconfigurator.tools.speedtest.RouterWifi? = null,
+    val changed: String? = null,
+    val last: it.cdanet.cpeconfigurator.tools.speedtest.SpeedResult? = null,
+    val target: it.cdanet.cpeconfigurator.tools.speedtest.SpeedTarget? = null,
+    val passed: Boolean? = null,
+    val attempts: Int = 0,
+    val gaveUp: String? = null,
+) {
+    /** The final step may start: a test that passed, or one without a plan to compare, or the technician gave up. */
+    val done: Boolean get() = last != null && (passed != false || gaveUp != null)
+
+    fun speedtest(): it.cdanet.cpeconfigurator.field.AcceptanceSpeedtest? = last?.let { r ->
+        it.cdanet.cpeconfigurator.field.AcceptanceSpeedtest(
+            downMbps = Math.round(r.downMbps * 10) / 10.0,
+            upMbps = Math.round(r.upMbps * 10) / 10.0,
+            pingMs = Math.round(r.pingMs * 10) / 10.0,
+            jitterMs = Math.round(r.jitterMs * 10) / 10.0,
+            server = r.server,
+            attempts = attempts.coerceAtLeast(1),
+            target = target,
+            passed = passed,
+        )
+    }
+
+    fun wifiReport(): it.cdanet.cpeconfigurator.field.AcceptanceWifi? = wifi?.let { w ->
+        it.cdanet.cpeconfigurator.field.AcceptanceWifi(
+            ssid = w.ssid, rssi = w.rssi, band = w.band, channel = w.channel, widthMhz = w.widthMhz, linkMbps = w.linkMbps,
+            neighborsSameChannel = w.neighborsSameChannel, neighborsOverlapping = w.neighborsOverlapping,
+            congested = w.neighborsSameChannel?.let { it >= 3 }, suggestedChannel = w.suggestedChannel, changed = changed,
+        )
     }
 }
 
@@ -56,6 +96,10 @@ data class InstallState(
     val expectedSsid: String? = null,
     /** The acceptance test was opened by itself at the last step (only once: back from it, the summary stays). */
     val acceptanceOpened: Boolean = false,
+    /** Customer's router and the speed test (before the final step). */
+    val router: RouterCheck = RouterCheck(),
+    /** The work order this installation comes from (speed test target and context). */
+    val workOrderId: Long? = null,
 )
 
 /**
@@ -93,6 +137,10 @@ class InstallController(
 
     fun acceptanceOpened() = _state.update { it.copy(acceptanceOpened = true) }
 
+    fun router(f: (RouterCheck) -> RouterCheck) = _state.update { it.copy(router = f(it.router)) }
+
+    fun workOrder(id: Long?) = _state.update { it.copy(workOrderId = id) }
+
     /** Nearby APs from the phone position (module "compass": UISP, DEM tilt, expected signal). */
     suspend fun locate(location: CpeLocation) {
         _state.update { it.copy(position = location, pointingError = null, pointingSaved = null) }
@@ -114,9 +162,16 @@ class InstallController(
     }
 
     /** Repointing: the job of the CPE, so the new acceptance test and photos go with it. */
-    suspend fun lookupJob(macs: List<String>) {
-        if (_state.value.jobLooked || macs.isEmpty()) return
-        val job = runCatching { api.cpeJob(macs) }.getOrNull()
+    suspend fun lookupJob(macs: List<String>, again: Boolean = false) {
+        if ((_state.value.jobLooked && !again) || macs.isEmpty() || _state.value.job != null) return
+        val job = try {
+            api.cpeJob(macs)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            // the step was left before the answer: not «looked», the next step tries again
+            throw e
+        } catch (_: Exception) {
+            null
+        }
         _state.update { it.copy(job = job ?: it.job, jobLooked = true) }
     }
 

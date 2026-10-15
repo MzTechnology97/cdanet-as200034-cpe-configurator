@@ -51,6 +51,35 @@ data class InternetTest(
 @Serializable
 data class AcceptanceCheck(val title: String, val verdict: String, val detail: String)
 
+/** The last speed test of the acceptance (customer's router Wi-Fi, OoklaServer), with the tries. */
+@Serializable
+data class AcceptanceSpeedtest(
+    val downMbps: Double? = null,
+    val upMbps: Double? = null,
+    val pingMs: Double? = null,
+    val jitterMs: Double? = null,
+    val server: String? = null,
+    val attempts: Int = 1,
+    val target: it.cdanet.cpeconfigurator.tools.speedtest.SpeedTarget? = null,
+    val passed: Boolean? = null,
+)
+
+/** The customer's router Wi-Fi as the phone saw it, and what the technician changed on it. */
+@Serializable
+data class AcceptanceWifi(
+    val ssid: String? = null,
+    val rssi: Int? = null,
+    val band: String? = null,
+    val channel: Int? = null,
+    val widthMhz: Int? = null,
+    val linkMbps: Int? = null,
+    val neighborsSameChannel: Int? = null,
+    val neighborsOverlapping: Int? = null,
+    val congested: Boolean? = null,
+    val suggestedChannel: Int? = null,
+    val changed: String? = null,
+)
+
 /** Body of PUT /api/provisioning/jobs/{id}/acceptance. */
 @Serializable
 data class AcceptanceReport(
@@ -68,6 +97,8 @@ data class AcceptanceReport(
     val cpeHeightM: Double? = null,
     /** Phone GPS when the test was saved: the server checks it against the work order's position. */
     val position: AcceptancePosition? = null,
+    val speedtest: AcceptanceSpeedtest? = null,
+    val wifi: AcceptanceWifi? = null,
 )
 
 @Serializable
@@ -88,6 +119,8 @@ object Acceptance {
         notes: String,
         now: Instant = Instant.now(),
         cpeHeightM: Double? = null,
+        speedtest: AcceptanceSpeedtest? = null,
+        wifi: AcceptanceWifi? = null,
     ): AcceptanceReport {
         require(samples.isNotEmpty()) { "Nessuna lettura della CPE" }
         val last = samples.last()
@@ -96,13 +129,18 @@ object Acceptance {
         // Checks on the averaged signal: a single lucky/unlucky reading must not decide the outcome.
         val ref = last.copy(signal = avg ?: last.signal)
         val checks = FieldDiagnosis.checks(ref, t, targetFirmware).toMutableList()
+        // the speed test on the customer's Wi-Fi is the Internet test when there is no other
+        val net = if (!internet.tested && speedtest?.downMbps != null) {
+            InternetTest(true, speedtest.pingMs, speedtest.jitterMs, speedtest.downMbps, speedtest.upMbps, note = "Speedtest")
+        } else internet
+        speedtest?.let { st -> checks += speedCheck(st) }
         checks += when {
-            internet.tested -> Check(
+            net.tested -> Check(
                 "Internet dal lato cliente",
                 Verdict.Ok,
-                "↓ %.1f · ↑ %.1f Mbit/s · ping %.0f ms".format(java.util.Locale.ITALY, internet.downloadMbps ?: 0.0, internet.uploadMbps ?: 0.0, internet.pingMs ?: 0.0),
+                "↓ %.1f · ↑ %.1f Mbit/s · ping %.0f ms".format(java.util.Locale.ITALY, net.downloadMbps ?: 0.0, net.uploadMbps ?: 0.0, net.pingMs ?: 0.0),
             )
-            else -> Check("Internet dal lato cliente", Verdict.Warn, internet.note ?: "Non misurato")
+            else -> Check("Internet dal lato cliente", Verdict.Warn, net.note ?: "Non misurato")
         }
         val verdict = when (FieldDiagnosis.summary(checks)) {
             Verdict.Bad -> "bad"
@@ -129,10 +167,26 @@ object Acceptance {
             ),
             lan = last.eth?.let { AcceptanceLan(it.plugged, it.speedMbps, it.fullDuplex, it.cableLenM) },
             pppoe = last.pppoeEnabled?.let { AcceptancePppoe(it, last.pppoeIp) },
-            internet = internet,
+            internet = net,
             checks = checks.take(30).map { AcceptanceCheck(it.title, it.verdict.name.lowercase(), it.detail.take(400)) },
             notes = notes.trim().take(1000),
             cpeHeightM = cpeHeightM,
+            speedtest = speedtest,
+            wifi = wifi,
         )
+    }
+
+    /**
+     * The plan's speed: passed, or under the minimum after the technician gave up (a reserve the NOC
+     * can still accept); without a known plan the result is only shown.
+     */
+    fun speedCheck(st: AcceptanceSpeedtest): Check {
+        val got = "↓ %.1f · ↑ %.1f Mbit/s".format(java.util.Locale.ITALY, st.downMbps ?: 0.0, st.upMbps ?: 0.0) +
+            if (st.attempts > 1) " · ${st.attempts} prove" else ""
+        val t = st.target ?: return Check("Velocità del profilo", Verdict.Info, "$got (profilo del cliente non noto: nessun confronto)")
+        val (minDown, minUp) = it.cdanet.cpeconfigurator.tools.speedtest.SpeedtestMath.minimum(t)
+        val need = "minimo ${t.minPct}%%: %.1f / %.1f Mbit/s".format(java.util.Locale.ITALY, minDown, minUp)
+        return if (st.passed == true) Check("Velocità del profilo", Verdict.Ok, "$got · $need")
+        else Check("Velocità del profilo", Verdict.Warn, "$got · $need: velocità sotto il minimo")
     }
 }

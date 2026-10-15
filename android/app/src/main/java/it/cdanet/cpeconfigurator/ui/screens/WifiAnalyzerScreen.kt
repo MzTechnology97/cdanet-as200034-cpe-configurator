@@ -84,6 +84,10 @@ private fun qualityColor(rssi: Int) = when {
 
 @SuppressLint("MissingPermission")
 @Suppress("DEPRECATION")
+internal fun readWifiScan(wm: WifiManager): List<WifiAp> = readScan(wm)
+
+@SuppressLint("MissingPermission")
+@Suppress("DEPRECATION")
 private fun readScan(wm: WifiManager): List<WifiAp> {
     val connected = runCatching { wm.connectionInfo?.bssid }.getOrNull()?.lowercase()
     return wm.scanResults.orEmpty().map { r: ScanResult ->

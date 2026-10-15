@@ -85,6 +85,7 @@ fun shortcutCatalog(m: Map<String, Boolean>, admin: Boolean, offline: Boolean): 
     if (tools) add(Shortcut("lan_discovery", "Discovery LAN", "Apparati riconosciuti per marca e modello", R.drawable.ic_device_hub, Area.Tools, Dest(Screen.Lan, LAN_TABS[1])))
     if (tools) add(Shortcut("ports", "Scanner porte", "Porte aperte di un host", R.drawable.ic_manage_search, Area.Tools, Dest(Screen.Lan, LAN_TABS[2])))
     if (tools) add(Shortcut("wifi", "Wi-Fi Analyzer", "Reti, canali e consiglio per il router", R.drawable.ic_wifi_find, Area.Tools, Dest(Screen.Wifi)))
+    if (tools && !offline) add(Shortcut("speedtest", "Speedtest", "Velocità sulla Wi-Fi del cliente", R.drawable.ic_speed, Area.Tools, Dest(Screen.Speedtest)))
     if (tools) add(Shortcut("net_diag", "Diagnostica di rete", "Ping, traceroute, speed test, MTU", R.drawable.ic_speed, Area.Tools, Dest(Screen.Diag, DIAG_TABS[0])))
     if (tools) add(Shortcut("net_diag_adv", "Diagnostica avanzata", "Ping continuo, DNS, HTTP, Wake-on-LAN", R.drawable.ic_query_stats, Area.Tools, Dest(Screen.Diag, DIAG_TABS[1])))
     if (tools) add(Shortcut("devices", "Apparati in LAN", "SNMP e telecamere", R.drawable.ic_memory, Area.Tools, Dest(Screen.Devices)))

@@ -176,6 +176,14 @@ class NetworkHelper(context: Context) {
 
     fun wifiLink(): LinkInfo? = wifiNetwork()?.let { describe(it) }
 
+    /**
+     * The customer's router Wi-Fi for the speed test: a Wi-Fi the phone joined itself (never the
+     * CPE's one joined from the app, never mobile data). Null when the phone is on no such Wi-Fi.
+     */
+    fun routerWifi(): Pair<Network, LinkInfo>? = cm.allNetworksCompat().firstOrNull {
+        it != cpeNet && cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+    }?.let { it to describe(it) }
+
     fun activeLink(): LinkInfo? = cm.activeNetwork?.let { describe(it) }
 
     @SuppressLint("MissingPermission")
