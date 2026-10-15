@@ -72,14 +72,25 @@ class AppContainer(context: Context) {
     /** «Nuovo intervento» from Oggi (NOC): the calendar opens with the editor. */
     var calendarNewOrder = false
 
-    val secureScreen = kotlinx.coroutines.flow.MutableStateFlow(screenPrefs.getBoolean("secure", false))
+    // blocked by default: a new install, a logged-out app or an account still being checked never
+    // gets the screenshots of the previous account (an admin who logged out, owner 15/10/2026)
+    val secureScreen = kotlinx.coroutines.flow.MutableStateFlow(screenPrefs.getBoolean("secure", true))
 
     /** Title of the screen on show (for the NOC's notice of a screenshot attempt). */
     val currentScreen = kotlinx.coroutines.flow.MutableStateFlow("")
 
-    /** Decides it from the account's features: admins never, others when «Screenshot nell'app» is off. */
-    fun updateSecureScreen(role: String?, modules: Map<String, Boolean>) {
-        val secure = role != "admin" && modules["screenshots"] == false
+    /**
+     * Decides it from the account: admins never blocked; the others blocked unless the server says
+     * their «Screenshot nell'app» is on. [modules] null = not known yet (login, offline): blocked.
+     */
+    fun updateSecureScreen(role: String?, modules: Map<String, Boolean>?) {
+        setSecureScreen(SecureScreen.blocked(role, modules))
+    }
+
+    /** Logged out (or the session expired): blocked until the next account is known. */
+    fun lockScreenCapture() = setSecureScreen(true)
+
+    private fun setSecureScreen(secure: Boolean) {
         secureScreen.value = secure
         runCatching { screenPrefs.edit().putBoolean("secure", secure).apply() }
     }

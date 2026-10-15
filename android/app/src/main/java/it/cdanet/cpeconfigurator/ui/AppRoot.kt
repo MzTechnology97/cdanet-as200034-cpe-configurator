@@ -229,6 +229,9 @@ fun AppRoot(c: AppContainer) {
         return
     }
     LaunchedEffect(session) {
+        // screenshots: blocked when nobody is logged in; with an account, at once by its role (an
+        // installer stays blocked until the server allows it, also when it cannot be reached)
+        if (session == null) c.lockScreenCapture() else c.updateSecureScreen(session?.user?.role, null)
         if (session != null) {
             // Features enabled by the admin: hidden screens and buttons follow this map.
             launch {
