@@ -602,6 +602,10 @@ const MIGRATIONS: string[] = [
     PRIMARY KEY(job_id, user_id)
   );
   `,
+  // the kind of each acceptance photo (antenna, bracket, cabling, router, other): the required ones per test
+  `
+  ALTER TABLE job_photos ADD COLUMN type TEXT NOT NULL DEFAULT 'other';
+  `,
 ];
 
 export function openDatabase(path: string): Db {
