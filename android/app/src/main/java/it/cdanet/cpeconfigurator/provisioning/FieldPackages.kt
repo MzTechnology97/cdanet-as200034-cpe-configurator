@@ -52,6 +52,9 @@ class FieldPackages(private val store: SecureStore?) {
     /** Expired ones go away (also when they were never used). */
     fun prune() = save(map)
 
+    /** Another account on the phone: the previous one's configurations go away. */
+    fun clear() = save(emptyMap())
+
     companion object {
         private const val KEY = "field-packages"
     }

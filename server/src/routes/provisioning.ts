@@ -64,7 +64,27 @@ export function provisioningRoutes(app: FastifyInstance, ctx: AppContext) {
     // audit of the CPEs: this one left its warehouse for a customer
     if (!r.duplicate && body.result === 'success') {
       const j = ctx.db.prepare('SELECT mac, device_name FROM provisioning_jobs WHERE id = ?').get(id) as { mac: string; device_name: string } | undefined;
-      if (j) ctx.warehouse.record('installata', j.mac, `installata da ${req.user!.username} per ${j.device_name}`, id);
+      if (j) {
+        // the CPE is already on the roof: the result is kept, but a CPE that the installer's warehouse
+        // no longer holds (installed offline after the office moved or unloaded it) is told to the NOC
+        const stock = j.mac ? stockCheck(ctx, req.user!.id, j.mac) : null;
+        if (stock && !stock.bypass && (stock.result === 'not_in_stock' || stock.result === 'other_warehouse')) {
+          const at = ctx.warehouse.whereIs(j.mac);
+          recordEvent(ctx.db, req.user!.id, 'warehouse.mismatch', id, `${j.mac} ${stock.result}`);
+          ctx.notify.inbox.push('noc', {
+            kind: 'stock_mismatch',
+            title: `CPE fuori dal magazzino: ${j.device_name || j.mac}`,
+            lines: [
+              `${req.user!.username} ha installato la CPE ${j.mac} per ${j.device_name || 'il cliente'}.`,
+              at ? `Risulta nel magazzino «${at.site}», non nel suo.` : 'Non risulta in nessun magazzino.',
+              "L'installazione è registrata: sistema il magazzino in ISP Billing.",
+            ],
+            jobId: id,
+            mac: j.mac,
+          });
+        }
+        ctx.warehouse.record('installata', j.mac, `installata da ${req.user!.username} per ${j.device_name}`, id);
+      }
     }
     return r;
   });

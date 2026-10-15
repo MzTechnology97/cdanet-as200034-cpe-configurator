@@ -133,6 +133,8 @@ fun ProvisionFormStep(c: AppContainer) {
         // only from the warehouse, MAC and serial cannot be typed or scanned (owner, 14/10/2026)
         val pickOnly = stock?.linked == true && stock?.bypass == false && form.replaces == null
         if (pickOnly && stock?.items.isNullOrEmpty()) Notice("Nessuna CPE nel tuo magazzino: chiedi all'ufficio di caricarne una.", NoticeKind.Bad)
+        // the list on the phone is old (offline for days): say when it was read
+        c.provisioning.stock.staleNote()?.let { Notice(it, NoticeKind.Warn) }
         // the installer's own CPEs: one tap fills model, MAC and serial (no scan, no typing errors)
         stock?.takeIf { it.linked && it.items.isNotEmpty() }?.let { s ->
             val none = it.cdanet.cpeconfigurator.data.StockItemDto(model = "", mac = "")
@@ -420,6 +422,8 @@ private fun SiteCpeCard(c: AppContainer, pkg: it.cdanet.cpeconfigurator.data.Pro
         // as at step 1: without the account's option the CPE comes only from the warehouse
         val pickOnly = stock?.linked == true && stock?.bypass == false
         if (pickOnly && stock?.items.isNullOrEmpty()) Notice("Nessuna CPE nel tuo magazzino: chiedi all'ufficio di caricarne una.", NoticeKind.Bad)
+        // the list on the phone is old (offline for days): say when it was read
+        c.provisioning.stock.staleNote()?.let { Notice(it, NoticeKind.Warn) }
         if (pickOnly) {
             KeyValue("MAC", mac.ifBlank { "scegli la CPE dal magazzino" })
             KeyValue("Seriale", serial.ifBlank { "—" })
