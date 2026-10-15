@@ -87,6 +87,7 @@ const LABELS: Record<string, string> = {
   'uisp.drift': 'Confronto configurazione con il template',
   'job.replace': 'Sostituzione CPE (nuovo job)',
   'job.acceptance': 'Collaudo registrato',
+  'feasibility.pdf': 'Fattibilità scaricata in PDF',
   'platform.backup': 'Backup del database scaricato',
   'platform.backup_verify': 'Backup verificato',
   'report.monthly_pdf': 'Report mensile scaricato',
