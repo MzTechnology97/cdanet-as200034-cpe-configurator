@@ -52,6 +52,8 @@ class AppContainer(context: Context) {
     val activeWorkOrder = kotlinx.coroutines.flow.MutableStateFlow<it.cdanet.cpeconfigurator.data.WorkOrderDto?>(null)
     @Volatile var backgroundSince = 0L
     val acceptanceQueue = it.cdanet.cpeconfigurator.field.AcceptanceQueue(appContext, api, session, resultQueue, scope)
+    /** Answers about the CPEs taken off in replacements, until the server has them. */
+    val rmaQueue = it.cdanet.cpeconfigurator.field.RmaQueue(appContext, api, session, resultQueue, scope)
 
     init {
         // test option "unverified server certificate": kept in sync for every client of our server

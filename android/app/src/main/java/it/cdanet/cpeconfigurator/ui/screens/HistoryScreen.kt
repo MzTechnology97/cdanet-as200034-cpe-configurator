@@ -82,6 +82,7 @@ fun HistoryScreen(c: AppContainer, onAcceptance: (JobDto) -> Unit, onReplace: (J
         item {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 ErrorBanner(error) { error = null }
+                RmaToReturnCard(c)
                 if (jobs.isEmpty() && busy) it.cdanet.cpeconfigurator.ui.SkeletonRows(4)
                 if (pending.isNotEmpty()) {
                     SectionCard("In attesa di invio (${pending.size})") {

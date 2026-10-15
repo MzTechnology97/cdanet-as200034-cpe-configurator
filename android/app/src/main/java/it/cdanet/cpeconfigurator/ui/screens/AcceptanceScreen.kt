@@ -181,6 +181,8 @@ fun AcceptanceScreen(c: AppContainer) {
         ErrorBanner(error) { error = null }
         done?.let { Banner(it, GoodGreen) }
         if (ready == false) Banner("Credenziali CPE non disponibili: accedi con Internet attivo e riapri il collaudo.", BadRed)
+        // a replacement: the removed CPE (also answered here when the write step was left early)
+        if (j.replacesJobId != null) RemovedCpeCard(c, j.id)
         SectionCard("Installazione") {
             // a test already registered (or just sent): its PDF report, as in the console
             if (j.acceptance != null || done != null) {
