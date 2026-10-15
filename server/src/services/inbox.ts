@@ -19,6 +19,7 @@ export const NOTIFY_KINDS = {
   screenshot_attempt: { label: 'Tentativi di screenshot nell’app da account che non possono farli', audience: 'noc', telegram: true },
   stock_mismatch: { label: 'CPE installata che non risulta nel magazzino dell’installatore', audience: 'noc', telegram: false },
   repoint_unplanned: { label: 'Ripuntamento senza intervento (anche di CPE installate da altri)', audience: 'noc', telegram: true },
+  platform: { label: 'Salute piattaforma: un servizio si è fermato o è ripartito (UISP, ISP Billing, guasti Enel, Victron, disco)', audience: 'noc', telegram: false },
 } as const;
 export type NotifyKind = keyof typeof NOTIFY_KINDS;
 export const isNotifyKind = (k: string): k is NotifyKind => k in NOTIFY_KINDS;

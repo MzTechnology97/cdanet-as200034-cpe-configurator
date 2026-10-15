@@ -87,6 +87,8 @@ const LABELS: Record<string, string> = {
   'uisp.drift': 'Confronto configurazione con il template',
   'job.replace': 'Sostituzione CPE (nuovo job)',
   'job.acceptance': 'Collaudo registrato',
+  'platform.backup': 'Backup del database scaricato',
+  'platform.backup_verify': 'Backup verificato',
   'job.acceptance_repoint': 'Collaudo di ripuntamento',
   'job.repoint_claim': 'CPE di un altro installatore presa per un ripuntamento',
   'job.repoint_revoke': 'Accesso al ripuntamento revocato',
