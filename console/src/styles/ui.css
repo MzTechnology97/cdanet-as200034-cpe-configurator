@@ -640,3 +640,4 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .crm-sites { margin: 2px 0 var(--sp-2) var(--sp-4); }
 .crm-row { all: unset; box-sizing: border-box; width: 100%; display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px var(--sp-2); padding: 6px var(--sp-2); border-radius: var(--radius-sm); cursor: pointer; background: var(--surface); }
 .crm-row:hover, .crm-row:focus-visible { outline: 1px solid var(--line-strong); }
+.pf-error { color: var(--bad); word-break: break-word; }

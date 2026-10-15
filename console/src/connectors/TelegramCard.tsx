@@ -8,7 +8,7 @@ import { AsyncButton, Badge, Button, Card, Field, Notice } from '../ui';
 const EVENTS: Array<[string, string, string]> = [
   ['provisioning_failed', 'Installazioni da seguire', 'provisioning fallito, installazione KO o rimandata (con motivo), collaudo con segnale pessimo da approvare'],
   ['uisp_pending', 'CPE da accettare in UISP', 'con il link allo storico per premere «Accetta in UISP»'],
-  ['uisp_status', 'UISP giù / di nuovo su', 'solo al cambio di stato, controllo ogni 5 minuti'],
+  ['uisp_status', 'Servizi giù / di nuovo su', 'UISP, ISP Billing, magazzino, guasti Enel, Victron e spazio su disco: solo al cambio di stato, controllo ogni 5 minuti'],
   ['security', 'Sicurezza', 'account bloccato per tentativi, admin da un indirizzo nuovo, password admin cambiate'],
   ['power_outage', 'Guasti Enel', 'guasti e lavori e-distribuzione nelle zone di interesse e vicino agli AP, e i ripristini'],
   ['daily_summary', 'Riepilogo serale', 'installazioni riuscite/fallite, collaudi, CPE ancora da accettare'],

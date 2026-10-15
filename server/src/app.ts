@@ -48,6 +48,8 @@ import { victronRoutes } from './routes/victron.ts';
 import { speedtestRoutes } from './routes/speedtest.ts';
 import { coverageOpsRoutes } from './routes/coverage-operators.ts';
 import { createCoverageOps, type CoverageOps } from './services/coverage-operators.ts';
+import { createPlatformHealth, type PlatformHealth } from './services/platform-health.ts';
+import { platformRoutes } from './routes/platform.ts';
 import { cpeAdminRoutes } from './routes/cpe-admin.ts';
 import { uispRoutes } from './routes/uisp.ts';
 import { mapRoutes } from './routes/map.ts';
@@ -148,6 +150,7 @@ export async function buildApp(
     crmSync: undefined as unknown as CrmSync,
     victronSync: undefined as unknown as VictronSync,
     coverageOps: undefined as unknown as CoverageOps,
+    platformHealth: undefined as unknown as PlatformHealth,
     warehouse: undefined as unknown as Warehouse,
     apLoad: undefined as unknown as ApLoadService,
     advisor: undefined as unknown as Advisor,
@@ -192,13 +195,40 @@ export async function buildApp(
     if (n.kind !== 'work_order_reminder') void ctx.push.send(ids, { title: n.title, body: n.lines.join('\n'), kind: n.kind });
   });
 
+  // what each source says about its last reading (null: not configured, never an alert)
+  ctx.platformHealth = createPlatformHealth(db, {
+    dbPath: cfg.dbPath,
+    version,
+    alert: (ok, title, lines) => ctx.notify.platform(ok, title, lines),
+    probes: () => [
+      {
+        id: 'uisp', label: 'UISP', everyMin: 5,
+        read: () => {
+          const h = ctx.uisp?.health?.();
+          return h ? { at: h.lastOkAt ?? h.dataAt, error: h.online ? null : h.lastError } : null;
+        },
+      },
+      { id: 'crm', label: 'ISP Billing (RADIUS e clienti)', everyMin: 10, read: () => (ctx.crm.client() ? ctx.crmSync.state() : null) },
+      { id: 'warehouse', label: 'Magazzino ISP Billing', everyMin: 60, read: () => (ctx.crm.client() ? ctx.warehouse.state() : null) },
+      {
+        id: 'outages', label: 'Guasti Enel', everyMin: 10,
+        read: () => {
+          if (!modules.enabled('power_outages')) return null;
+          const s = ctx.outages.status();
+          return s ? { at: s.ok ? s.at : null, error: s.ok ? null : (s.error ?? 'errore') } : { at: null, error: null };
+        },
+      },
+      { id: 'victron', label: 'Victron VRM (batterie dei POP)', everyMin: 5, read: () => (ctx.victron.client() ? ctx.victronSync.state() : null) },
+    ],
+  });
+
   const app = Fastify({
     logger:
       opts.logger === false
         ? false
         : {
             level: cfg.logLevel,
-            redact: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["x-cda-bridge-token"]'],
+            redact: ['req.headers.authorization', 'req.headers.cookie', 'req.headers["x-cda-bridge-token"]', 'req.headers["x-backup-password"]'],
           },
     bodyLimit: 512 * 1024,
     trustProxy: cfg.trustProxy,
@@ -285,6 +315,7 @@ export async function buildApp(
   victronRoutes(app, ctx);
   speedtestRoutes(app, ctx);
   coverageOpsRoutes(app, ctx);
+  platformRoutes(app, ctx);
 
   const hasWeb = existsSync(join(cfg.staticDir, 'index.html'));
   // The console built by Vite (console/ → web/app): its pages (the console, /map-embed.html for the
