@@ -244,6 +244,56 @@ export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
     return { id, items, job: job ? { id: job.id, status: job.status, acceptance: acc?.verdict ?? null } : null };
   });
 
+  /**
+   * «Nuovo intervento» from the CRM (ISP Billing, as the RADIUS sync copies it): customers found by
+   * name («COGNOME NOME» or company name), code, phone, address or PPPoE user, each with its sites
+   * (its PPPoE accounts and where they are). Never a password: ISP Billing does not give it.
+   */
+  app.get('/api/admin/work-orders/crm', admin, async (req) => {
+    const { q } = z.object({ q: z.string().trim().min(2).max(80) }).parse(req.query);
+    // % and _ typed are letters ('!' escapes them)
+    const like = `%${q.replace(/[!%_]/g, (c) => `!${c}`)}%`;
+    const cols = ['c.name', 'c.internal_code', 'c.phone', 'c.phone2', 'c.address_line1', 'c.city', 'r.username', 'r.customer_formal'];
+    const ids = db
+      .prepare(
+        `SELECT DISTINCT c.customer_id id FROM crm_customers c LEFT JOIN crm_radius r ON r.customer_id = c.customer_id
+          WHERE ${cols.map((c) => `${c} LIKE ? ESCAPE '!'`).join(' OR ')} LIMIT 12`,
+      )
+      .all(...cols.map(() => like)) as Array<{ id: string }>;
+    const text = (r: Record<string, unknown>) => {
+      const v = (k: string) => (typeof r[k] === 'string' ? (r[k] as string).trim() : '');
+      return [[v('address_line1'), v('address_line2')].filter(Boolean).join(' '), [v('postal_code'), v('city'), v('state_code') ? `(${v('state_code')})` : ''].filter(Boolean).join(' ')].filter(Boolean).join(', ');
+    };
+    const items = ids.map(({ id }) => {
+      const c = db.prepare('SELECT * FROM crm_customers WHERE customer_id = ?').get(id) as Record<string, string>;
+      const accounts = db
+        .prepare(
+          `SELECT r.username, r.account_status status, r.profile, r.customer_formal formal, a.address_line1, a.address_line2, a.city, a.postal_code, a.state_code, a.lat, a.lng
+             FROM crm_radius r LEFT JOIN crm_addresses a ON a.address_id = r.address_id
+            WHERE r.customer_id = ? AND r.account_status <> 'Terminato' ORDER BY r.username`,
+        )
+        .all(id) as Array<{ username: string; status: string; profile: string; formal: string; lat: number | null; lng: number | null } & Record<string, string | null>>;
+      const sites = accounts.map((a) => ({
+        pppoeUser: a.username,
+        status: a.status,
+        profile: a.profile.replace(/^[^@]*@/, ''),
+        address: text(a.address_line1 ? a : c),
+        lat: a.lat ?? null,
+        lon: a.lng ?? null,
+      }));
+      return {
+        customerId: id,
+        name: accounts.find((a) => a.formal)?.formal || c.name,
+        code: c.internal_code,
+        phone: c.phone || c.phone2,
+        status: c.status,
+        // a customer without a PPPoE account yet: its main address
+        sites: sites.length ? sites : [{ pppoeUser: '', status: '', profile: '', address: text(c), lat: null, lon: null }],
+      };
+    });
+    return { configured: ctx.crm.client() !== null, items };
+  });
+
   app.post('/api/admin/work-orders', admin, async (req, reply) => {
     const b = createBody.parse(req.body);
     installer(b.assignedTo);

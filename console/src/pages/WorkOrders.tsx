@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { CrmPicker } from '../workorders/CrmPicker';
 import { useMemo, useState } from 'react';
 import { toast } from '../lib/toast';
 import { api } from '../lib/api';
@@ -237,6 +238,21 @@ function OrderForm({ order: o, day, preset, installers, models, onClose, onSaved
       }
     >
       {error && <Notice tone="bad">{error}</Notice>}
+      <CrmPicker
+        onPick={(c, site) => {
+          setF((x) => ({
+            ...x,
+            customer: c.name,
+            address: site.address || x.address,
+            lat: site.lat != null ? String(site.lat) : '',
+            lon: site.lon != null ? String(site.lon) : '',
+            contact: c.phone || x.contact,
+            pppoeUser: site.pppoeUser || x.pppoeUser,
+          }));
+          setWhere(site.lat != null ? 'Posizione della sede in ISP Billing' : 'Sede senza posizione in ISP Billing: «Cerca indirizzo» la ricava dall’indirizzo');
+          toast(site.pppoeUser ? 'Dati del cliente compilati: la password PPPoE va scritta a mano' : 'Dati del cliente compilati');
+        }}
+      />
       <div className="ui-grid-form">
         <Field label="Installatore">
           <select value={f.assignedTo} onChange={set('assignedTo')}>

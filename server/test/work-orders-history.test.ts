@@ -91,4 +91,42 @@ describe('Interventi: storico, filtri e tracciamento', () => {
     assert.equal((await call('GET', '/api/admin/work-orders/99999/history')).statusCode, 404);
     await t.app.close();
   });
+
+  it('finds the customer in the CRM copy for a new order: formal name, sites, never a password', async () => {
+    const t = await testApp();
+    const A = t.auth(await t.login());
+    const get = (url: string, headers = A) => t.app.inject({ method: 'GET', url, headers });
+    const db = t.db;
+    db.prepare("INSERT INTO crm_customers(customer_id, name, internal_code, type, status, phone, address_line1, city, postal_code, state_code) VALUES('c1', 'Mario Rossi', 'CL001', 'private', 'active', '333 1111111', 'Via Roma 1', 'Enna', '94100', 'EN')").run();
+    db.prepare("INSERT INTO crm_customers(customer_id, name, internal_code, type, status, phone, address_line1, city) VALUES('c2', 'Demo Srl', 'CL002', 'business', 'active', '0935 000000', 'Zona Industriale', 'Dittaino')").run();
+    db.prepare("INSERT INTO crm_addresses(address_id, customer_id, address_line1, city, postal_code, state_code, lat, lng) VALUES('a1', 'c1', 'Contrada Demo 5', 'Enna', '94100', 'EN', 37.55, 14.3)").run();
+    const radius = db.prepare("INSERT INTO crm_radius(account_id, customer_id, username, account_status, profile, customer_name, address_id, customer_formal) VALUES(?, 'c1', ?, ?, 'ISP37@CDA-NET-HOME-30-6', 'Mario Rossi', ?, 'ROSSI MARIO')");
+    radius.run('r1', 'rossi.casa@cda-net.it', 'Attivo', 'a1');
+    radius.run('r2', 'rossi.vecchio@cda-net.it', 'Terminato', 'a1');
+    radius.run('r3', 'rossi.negozio@cda-net.it', 'Sospeso', '');
+
+    assert.equal((await get('/api/admin/work-orders/crm?q=r')).statusCode, 400, 'at least 2 characters');
+    const raw = await get('/api/admin/work-orders/crm?q=rossi');
+    assert.equal(raw.statusCode, 200, raw.body);
+    const byName = raw.json();
+    assert.equal(byName.items.length, 1);
+    const c = byName.items[0];
+    assert.equal(c.name, 'ROSSI MARIO', 'the formal name, «COGNOME NOME»');
+    assert.equal(c.phone, '333 1111111');
+    assert.deepEqual(
+      c.sites.map((x: { pppoeUser: string; address: string; lat: number | null; profile: string }) => [x.pppoeUser, x.address, x.lat, x.profile]),
+      [
+        ['rossi.casa@cda-net.it', 'Contrada Demo 5, 94100 Enna (EN)', 37.55, 'CDA-NET-HOME-30-6'],
+        ['rossi.negozio@cda-net.it', 'Via Roma 1, 94100 Enna (EN)', null, 'CDA-NET-HOME-30-6'],
+      ],
+      'terminated accounts left out; a site without its own address: the customer’s',
+    );
+    assert.equal((await get('/api/admin/work-orders/crm?q=negozio')).json().items[0].customerId, 'c1', 'by PPPoE user');
+    assert.equal((await get('/api/admin/work-orders/crm?q=0935')).json().items[0].name, 'Demo Srl', 'by phone; no accounts: the company name');
+    assert.equal((await get('/api/admin/work-orders/crm?q=0935')).json().items[0].sites[0].address, 'Zona Industriale, Dittaino');
+    assert.equal((await get('/api/admin/work-orders/crm?q=%25%25')).json().items.length, 0, '% is a letter');
+    await t.app.inject({ method: 'POST', url: '/api/admin/users', headers: A, payload: { username: 'tecnico', password: 'Installer-Pass-123' } });
+    assert.equal((await get('/api/admin/work-orders/crm?q=rossi', t.auth(await t.login('tecnico', 'Installer-Pass-123')))).statusCode, 403, 'admins only');
+    await t.app.close();
+  });
 });

@@ -191,8 +191,8 @@ export const SERVER_SETTINGS: Def[] = [
   },
   {
     key: 'coverageOps.vhcnTechs', env: 'COVERAGE_OPS_VHCN_TECHS', group: 'Copertura altri operatori', label: 'Tecnologie FWA con bollino blu VHCN', kind: 'text',
-    help: 'Codici delle tecnologie radio che hanno il bollino blu «FWA VHCN», separati da virgola (per esempio WIRELESS_28). Vuoto: nessuna; le altre reti radio restano FR o R secondo la velocità.',
-    get: (c) => c.coverageOps.vhcnTechs, set: (c, v) => (c.coverageOps.vhcnTechs = (v as string | undefined) ?? ''),
+    help: 'Codici delle tecnologie radio con il bollino blu «FWA VHCN», separati da virgola. Predefinite: WIRELESS_28 (radio a 28 GHz) e WIRELESS_P2P (radio punto-punto). Le altre reti radio restano FR o R secondo la velocità.',
+    get: (c) => c.coverageOps.vhcnTechs, set: (c, v) => (c.coverageOps.vhcnTechs = (v as string | undefined) ?? 'WIRELESS_28,WIRELESS_P2P'),
   },
   {
     key: 'coverageHideBelowDbm', env: 'COVERAGE_HIDE_BELOW_DBM', group: 'Copertura per gli installatori', label: 'Nascondi gli AP con segnale stimato più debole di (dBm)', kind: 'int', min: -100, max: -40,
