@@ -22,17 +22,29 @@ apt-get update -qq >/dev/null
 DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends ca-certificates curl >/dev/null
 
 cd /tmp
-curl -fsSL -o pmtiles.tgz "https://github.com/protomaps/go-pmtiles/releases/download/v${PMTILES_VERSION}/go-pmtiles_${PMTILES_VERSION}_Linux_${ARCH}.tar.gz"
+curl -fsSL --retry 3 --retry-delay 5 -o pmtiles.tgz "https://github.com/protomaps/go-pmtiles/releases/download/v${PMTILES_VERSION}/go-pmtiles_${PMTILES_VERSION}_Linux_${ARCH}.tar.gz"
 echo "$SUM  pmtiles.tgz" | sha256sum -c - >/dev/null
 tar -xzf pmtiles.tgz pmtiles
 
-# Latest daily build of the Protomaps basemap (OpenStreetMap data).
-BUILD=$(curl -fsSL https://build-metadata.protomaps.dev/builds.json | grep -o '"key":"[0-9]\{8\}\.pmtiles"' | cut -d'"' -f4 | sort | tail -1)
-[ -n "$BUILD" ] || { echo "Nessuna build Protomaps trovata" >&2; exit 1; }
+# The daily builds of the Protomaps basemap (OpenStreetMap data), newest first. The newest may be
+# still incomplete or a connection may drop: two tries each, then the build of the day before.
+BUILDS=$(curl -fsSL --retry 3 --retry-delay 5 https://build-metadata.protomaps.dev/builds.json | grep -o '"key":"[0-9]\{8\}\.pmtiles"' | cut -d'"' -f4 | sort -r | head -3)
+[ -n "$BUILDS" ] || { echo "Nessuna build Protomaps trovata" >&2; exit 1; }
 
-echo "Scarico la mappa ($BUILD, area $BBOX, zoom fino a $MAXZOOM)..."
 mkdir -p /data/maps
-./pmtiles extract "https://build.protomaps.com/$BUILD" /data/maps/basemap.tmp.pmtiles --bbox="$BBOX" --maxzoom="$MAXZOOM"
+BUILD=
+for b in $BUILDS; do
+  for try in 1 2; do
+    echo "Scarico la mappa ($b, area $BBOX, zoom fino a $MAXZOOM, tentativo $try)..."
+    rm -f /data/maps/basemap.tmp.pmtiles
+    if ./pmtiles extract "https://build.protomaps.com/$b" /data/maps/basemap.tmp.pmtiles --bbox="$BBOX" --maxzoom="$MAXZOOM"; then
+      BUILD=$b
+      break 2
+    fi
+    sleep 10
+  done
+done
+[ -n "$BUILD" ] || { echo "Download della mappa non riuscito con le ultime build: riprova più tardi" >&2; exit 1; }
 mv -f /data/maps/basemap.tmp.pmtiles /data/maps/basemap.pmtiles
 chmod 0644 /data/maps/basemap.pmtiles
 echo "Mappa pronta: $(du -h /data/maps/basemap.pmtiles | cut -f1) ($BUILD)"
