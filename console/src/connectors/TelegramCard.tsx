@@ -11,7 +11,7 @@ const EVENTS: Array<[string, string, string]> = [
   ['uisp_status', 'Servizi giù / di nuovo su', 'UISP, ISP Billing, magazzino, guasti Enel, Victron e spazio su disco: solo al cambio di stato, controllo ogni 5 minuti'],
   ['security', 'Sicurezza', 'account bloccato per tentativi, admin da un indirizzo nuovo, password admin cambiate'],
   ['power_outage', 'Guasti Enel', 'guasti e lavori e-distribuzione nelle zone di interesse e vicino agli AP, e i ripristini'],
-  ['daily_summary', 'Riepilogo serale', 'installazioni riuscite/fallite, collaudi, CPE ancora da accettare'],
+  ['daily_summary', 'Riepilogo serale e report mensile', 'ogni sera installazioni riuscite/fallite, collaudi, CPE ancora da accettare; il 1° del mese alle 8 il report del mese finito, testo e PDF'],
 ];
 const date = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 const fail = (e: unknown) => toast((e as Error).message, 'bad');

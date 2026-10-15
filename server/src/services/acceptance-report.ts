@@ -69,7 +69,7 @@ const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : '—
 const obj = (v: unknown) => (v && typeof v === 'object' ? (v as Record<string, unknown>) : {});
 
 /** The CDA Net logo from its SVG (viewBox 0 0 2000 712), [h] points tall. */
-function drawLogo(doc: PdfDoc, svg: string | null, x: number, top: number, h: number) {
+export function drawLogo(doc: PdfDoc, svg: string | null, x: number, top: number, h: number) {
   if (!svg) {
     doc.text(x, top + h / 4, 'CDA Net', { size: h / 2, font: 'bold', color: BRAND });
     return;

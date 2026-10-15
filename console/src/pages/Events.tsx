@@ -89,6 +89,7 @@ const LABELS: Record<string, string> = {
   'job.acceptance': 'Collaudo registrato',
   'platform.backup': 'Backup del database scaricato',
   'platform.backup_verify': 'Backup verificato',
+  'report.monthly_pdf': 'Report mensile scaricato',
   'job.acceptance_repoint': 'Collaudo di ripuntamento',
   'job.repoint_claim': 'CPE di un altro installatore presa per un ripuntamento',
   'job.repoint_revoke': 'Accesso al ripuntamento revocato',
