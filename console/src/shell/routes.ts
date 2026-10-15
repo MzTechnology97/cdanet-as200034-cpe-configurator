@@ -68,6 +68,7 @@ export const ROUTES: Array<Route | Group> = [
   { id: 'server', icon: 'dns', label: 'Impostazioni server', admin: true, react: () => import('../pages/ServerSettings').then((m) => m.ServerSettings) },
   { id: 'modules', icon: 'handyman', label: 'Funzionalità', admin: true, react: () => import('../pages/Modules').then((m) => m.Modules) },
   { id: 'privacy', icon: 'lock', label: 'Informativa privacy', admin: true, react: () => import('../pages/Privacy').then((m) => m.Privacy) },
+  { id: 'platform', icon: 'check_circle', label: 'Salute piattaforma', admin: true, react: () => import('../pages/Platform').then((m) => m.Platform) },
   { id: 'events', icon: 'manage_search', label: 'Registro attività', admin: true, react: () => import('../pages/Events').then((m) => m.Events) },
   { id: 'admin-guide', icon: 'menu_book', label: 'Guida amministratore', admin: true, react: () => import('../pages/Guide').then((m) => m.Guide) },
   // the components of the console in both themes (admins): to check the look at a glance

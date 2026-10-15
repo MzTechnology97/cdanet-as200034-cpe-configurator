@@ -198,6 +198,23 @@ export function createTelegram(db: Db, sealer: Sealer, opts: { fetchImpl?: typeo
       return enqueue(sealer.open(s.tokenSealed), s.chatId, html);
     },
 
+    /** A file to the group for an enabled event (the monthly report, as a PDF); never throws. */
+    async notifyDocument(event: TelegramEvent, filename: string, data: Buffer, caption: string) {
+      const s = read()?.stored;
+      if (!s?.enabled || !s.tokenSealed || !s.chatId || !s.events.includes(event)) return;
+      const form = new FormData();
+      form.set('chat_id', s.chatId);
+      form.set('caption', caption.slice(0, 1000));
+      form.set('parse_mode', 'HTML');
+      form.set('document', new Blob([new Uint8Array(data)], { type: 'application/pdf' }), filename);
+      try {
+        const r = await f(`${API}/bot${sealer.open(s.tokenSealed)}/sendDocument`, { method: 'POST', body: form, signal: AbortSignal.timeout(30_000) });
+        if (!r.ok) opts.log?.(`telegram sendDocument HTTP ${r.status}`);
+      } catch (e) {
+        opts.log?.(`telegram sendDocument: ${(e as Error).message}`);
+      }
+    },
+
     /** Resolves when every queued message has been sent (tests, shutdown). */
     idle: () => queue,
 
