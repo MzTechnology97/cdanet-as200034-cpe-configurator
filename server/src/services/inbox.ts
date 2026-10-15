@@ -20,6 +20,7 @@ export const NOTIFY_KINDS = {
   stock_mismatch: { label: 'CPE installata che non risulta nel magazzino dell’installatore', audience: 'noc', telegram: false },
   repoint_unplanned: { label: 'Ripuntamento senza intervento (anche di CPE installate da altri)', audience: 'noc', telegram: true },
   platform: { label: 'Salute piattaforma: un servizio si è fermato o è ripartito (UISP, ISP Billing, guasti Enel, Victron, disco)', audience: 'noc', telegram: false },
+  proactive: { label: 'Avvisi proattivi: segnale delle CPE in calo, AP vicini alla saturazione, POP a batteria', audience: 'noc', telegram: true },
 } as const;
 export type NotifyKind = keyof typeof NOTIFY_KINDS;
 export const isNotifyKind = (k: string): k is NotifyKind => k in NOTIFY_KINDS;

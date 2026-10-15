@@ -180,6 +180,16 @@ export const SERVER_SETTINGS: Def[] = [
     get: (c) => c.speedtest.streams, set: (c, v) => (c.speedtest.streams = (v as number | undefined) ?? 4),
   },
   {
+    key: 'proactive.apBusyPct', env: 'PROACTIVE_AP_BUSY_PCT', group: 'Avvisi proattivi', label: 'AP vicino alla saturazione da (% la sera)', kind: 'int', min: 50, max: 100,
+    help: 'Il NOC riceve un avviso (al massimo una volta a settimana per AP) quando l’airtime o l’occupazione del canale di un AP, all’ora di punta della sera, arriva a questa percentuale.',
+    get: (c) => c.proactive.apBusyPct, set: (c, v) => (c.proactive.apBusyPct = (v as number | undefined) ?? 80),
+  },
+  {
+    key: 'proactive.popLowHours', env: 'PROACTIVE_POP_LOW_HOURS', group: 'Avvisi proattivi', label: 'POP a batteria: avviso sotto (ore di autonomia)', kind: 'int', min: 1, max: 24,
+    help: 'Quando un POP va a batteria il NOC riceve l’autonomia stimata (da quanto scende la carica); un secondo avviso quando ne restano meno di queste ore, e uno quando torna in carica. Il calo di segnale delle CPE usa la soglia «Calo di segnale rispetto al collaudo».',
+    get: (c) => c.proactive.popLowHours, set: (c, v) => (c.proactive.popLowHours = (v as number | undefined) ?? 2),
+  },
+  {
     key: 'coverageOps.cacheDays', env: 'COVERAGE_OPS_CACHE_DAYS', group: 'Copertura altri operatori', label: 'Riusa una verifica per (giorni)', kind: 'int', min: 1, max: 90,
     help: 'La copertura degli altri operatori (fibra, FTTC, FWA) di un punto viene richiesta al servizio esterno una volta e poi riusata per questi giorni: meno richieste e risposte immediate. «Rileggi» la aggiorna subito.',
     get: (c) => c.coverageOps.cacheDays, set: (c, v) => (c.coverageOps.cacheDays = (v as number | undefined) ?? 7),
