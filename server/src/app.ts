@@ -36,12 +36,14 @@ import type { Uisp } from './services/uisp.ts';
 import { createConnectors } from './services/connectors.ts';
 import { createCrmSettings } from './services/crm.ts';
 import { createVrmSettings } from './services/victron.ts';
+import { createVictronSync, type VictronSync } from './services/victron-sync.ts';
 import { createImagery } from './services/imagery.ts';
 import { createCrmSync, type CrmSync } from './services/crm-sync.ts';
 import { createWarehouse, type Warehouse } from './services/warehouse.ts';
 import { warehouseRoutes } from './routes/warehouse.ts';
 import { crmRoutes } from './routes/crm.ts';
 import { connectorRoutes } from './routes/connectors.ts';
+import { victronRoutes } from './routes/victron.ts';
 import { speedtestRoutes } from './routes/speedtest.ts';
 import { cpeAdminRoutes } from './routes/cpe-admin.ts';
 import { uispRoutes } from './routes/uisp.ts';
@@ -138,6 +140,7 @@ export async function buildApp(
       },
     }),
     crmSync: undefined as unknown as CrmSync,
+    victronSync: undefined as unknown as VictronSync,
     warehouse: undefined as unknown as Warehouse,
     apLoad: undefined as unknown as ApLoadService,
     advisor: undefined as unknown as Advisor,
@@ -156,6 +159,7 @@ export async function buildApp(
     version,
   };
   ctx.crmSync = createCrmSync(db, ctx.crm);
+  ctx.victronSync = createVictronSync(db, ctx.victron);
   ctx.warehouse = createWarehouse(db, ctx.crm);
   ctx.advisor = createAdvisor(ctx);
   ctx.optimizer = createOptimizer(ctx);
@@ -172,6 +176,7 @@ export async function buildApp(
     },
     userOn: (id) => modules.stateFor(id).power_outages,
     onChange: () => ctx.live.publish('outages', 'all'),
+    offGridPops: () => ctx.victronSync?.offGridPops() ?? new Set(),
   });
   ctx.notify = createNotifier(db, cfg, telegram, () => ctx.uisp, version, () => modules.enabled('telegram'), undefined, (ids, n) => {
     ctx.live.publish('notifications', ids);
@@ -268,6 +273,7 @@ export async function buildApp(
   uispRoutes(app, ctx);
   cpeAdminRoutes(app, ctx);
   connectorRoutes(app, ctx);
+  victronRoutes(app, ctx);
   speedtestRoutes(app, ctx);
 
   const hasWeb = existsSync(join(cfg.staticDir, 'index.html'));

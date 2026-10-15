@@ -526,6 +526,34 @@ const MIGRATIONS: string[] = [
   CREATE INDEX speed_tests_mac ON speed_tests(mac, created_at);
   CREATE INDEX speed_tests_at ON speed_tests(created_at);
   `,
+  // Victron VRM: the POPs' solar and battery systems read at every sync, and the POP each one powers
+  // (chosen by an admin, kept when an installation is missing from a sync)
+  `
+  CREATE TABLE victron_sites(
+    id_site INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    lat REAL,
+    lon REAL,
+    last_ts INTEGER,
+    alarms INTEGER NOT NULL DEFAULT 0,
+    soc REAL,
+    voltage REAL,
+    current REAL,
+    battery_state TEXT,
+    low_soc TEXT,
+    pv_w REAL,
+    ac_input TEXT,
+    seen_at TEXT NOT NULL
+  );
+  CREATE TABLE victron_links(
+    id_site INTEGER PRIMARY KEY,
+    pop_id TEXT NOT NULL,
+    off_grid INTEGER NOT NULL DEFAULT 0,
+    linked_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    linked_at TEXT NOT NULL
+  );
+  CREATE INDEX victron_links_pop ON victron_links(pop_id);
+  `,
 ];
 
 export function openDatabase(path: string): Db {

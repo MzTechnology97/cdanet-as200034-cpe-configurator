@@ -95,7 +95,19 @@ data class MetaDto(
 data class OutageZoneDto(val name: String = "", val distanceM: Int = 0)
 
 @Serializable
-data class OutageImpactDto(val type: String = "", val name: String = "", val distanceM: Int = 0, val stations: Int? = null)
+data class OutageImpactDto(
+    val type: String = "",
+    val id: String = "",
+    val name: String = "",
+    val distanceM: Int = 0,
+    val stations: Int? = null,
+    val popId: String? = null,
+    /** The POP is off-grid (solar only): the outage hits its customers, not the POP. */
+    val clientsOnly: Boolean = false,
+) {
+    /** The POP this impact belongs to (an AP: its POP). */
+    val pop: String? get() = if (type == "pop") id else popId
+}
 
 @Serializable
 data class ReverseGeocodeDto(val label: String = "", val street: String = "", val houseNumber: String = "", val city: String = "", val province: String = "", val postcode: String = "")
@@ -262,10 +274,31 @@ data class NetApDto(
 )
 
 @Serializable
-data class NetPopDto(val id: String = "", val name: String = "", val state: String = "ok", val powerOutage: Boolean = false, val aps: List<NetApDto> = emptyList())
+data class NetPopDto(val id: String = "", val name: String = "", val state: String = "ok", val powerOutage: Boolean = false, val power: PopPowerDto? = null, val aps: List<NetApDto> = emptyList())
+
+/**
+ * The battery system of a POP. Installers get only state, charge and whether it is discharging;
+ * admins also voltage, photovoltaic power and alarms.
+ */
+@Serializable
+data class PopPowerDto(
+    /** ok, warn (low battery), alarm, silent (no data). */
+    val status: String = "ok",
+    val soc: Double? = null,
+    /** charging, discharging, idle. */
+    val batteryState: String? = null,
+    val voltage: Double? = null,
+    val pvW: Double? = null,
+    val alarms: Int = 0,
+    /** Unix seconds of the last data. */
+    val lastTs: Long? = null,
+    val sites: Int = 0,
+    /** Solar only, not on the Enel grid: an outage hits its customers, not the POP. */
+    val offGrid: Boolean = false,
+)
 
 @Serializable
-data class NetSummaryDto(val aps: Int = 0, val down: Int = 0, val degraded: Int = 0, val powerOutage: Int = 0)
+data class NetSummaryDto(val aps: Int = 0, val down: Int = 0, val degraded: Int = 0, val powerOutage: Int = 0, val powerAlarms: Int = 0)
 
 /** "Stato rete": state of the POPs/APs the user may see. */
 @Serializable
@@ -282,7 +315,14 @@ data class NetworkStatusDto(
 data class TelegramLinkDto(val bot: String = "", val code: String = "", val url: String = "", val expiresInMin: Int = 15)
 
 @Serializable
-data class OutagesDto(val active: List<OutageDto> = emptyList(), val lastRun: OutageRunDto? = null, val generatedAt: String? = null, val scope: OutageScopeDto = OutageScopeDto())
+data class OutagesDto(
+    val active: List<OutageDto> = emptyList(),
+    val lastRun: OutageRunDto? = null,
+    val generatedAt: String? = null,
+    val scope: OutageScopeDto = OutageScopeDto(),
+    /** Batteries of the POPs hit, by POP id (only those with a battery system). */
+    val popPower: Map<String, PopPowerDto> = emptyMap(),
+)
 
 @Serializable
 data class CpeNowDto(
