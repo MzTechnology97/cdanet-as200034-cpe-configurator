@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.tools.topology
 
+import it.cdanet.cpeconfigurator.tools.pro.MacHints
 import it.cdanet.cpeconfigurator.network.Ip
 import it.cdanet.cpeconfigurator.network.NetworkHelper
 import it.cdanet.cpeconfigurator.tools.discovery.Fingerprint
@@ -104,12 +105,13 @@ class TopologyScanner(private val network: NetworkHelper) {
             if (fs.isEmpty()) h else h.copy(
                 hostname = h.hostname ?: fs.firstNotNullOfOrNull { it.name },
                 mac = h.mac ?: fs.firstNotNullOfOrNull { it.mac },
+                macFrom = if (h.mac != null) h.macFrom else fs.firstOrNull { it.mac != null }?.protocol,
                 vendor = h.vendor ?: fs.firstOrNull { it.vendor !in setOf("UPnP", "mDNS", "ONVIF", "WS-Discovery") }?.vendor,
                 kind = h.kind.ifBlank { fs.map { kindOf(it) }.firstOrNull { it.isNotBlank() }.orEmpty() },
             )
         }
         val extra = byIp.filterKeys { it !in known && Ip.parse(it) != null }.map { (ip, fs) ->
-            ScanHost(ip, null, "discovery " + fs.joinToString("/") { it.protocol }, hostname = fs.firstNotNullOfOrNull { it.name }, mac = fs.firstNotNullOfOrNull { it.mac }, vendor = fs.first().vendor, kind = fs.map { kindOf(it) }.firstOrNull { it.isNotBlank() }.orEmpty())
+            ScanHost(ip, null, "discovery " + fs.joinToString("/") { it.protocol }, hostname = fs.firstNotNullOfOrNull { it.name }, mac = fs.firstNotNullOfOrNull { it.mac }, macFrom = fs.firstOrNull { it.mac != null }?.protocol, vendor = fs.first().vendor, kind = fs.map { kindOf(it) }.firstOrNull { it.isNotBlank() }.orEmpty())
         }
         return updated + extra
     }
@@ -159,7 +161,7 @@ class TopologyScanner(private val network: NetworkHelper) {
                     }
                     // MACs the phone could not read (Android hides the ARP table): from the routers' ARP tables
                     val arp = devices.flatMap { it.arp.entries }.associate { it.key to it.value.uppercase() }
-                    merged = merged.map { h -> if (h.mac == null && arp[h.ip] != null) h.copy(mac = arp[h.ip]) else h }
+                    merged = merged.map { h -> if (h.mac == null && arp[h.ip] != null) h.copy(mac = arp[h.ip], macFrom = "router") else h }
                     val prints = if (!fingerprints) emptyMap() else {
                         progress("Impronte dei servizi (web, SSH, RTSP, SIP) su ${merged.size} host…")
                         val gate = Semaphore(12)
@@ -175,8 +177,9 @@ class TopologyScanner(private val network: NetworkHelper) {
                 }
             }
         }
-        // vendors of the MACs without one (outside the Wi-Fi binding: the registry is on the server)
-        val missing = merged.filter { it.vendor == null && it.mac != null }.mapNotNull { it.mac }.distinct()
+        // vendors of the MACs without one (outside the Wi-Fi binding: the registry is on the server);
+        // a private (random) MAC has none
+        val missing = merged.filter { it.vendor == null && it.mac != null && !MacHints.isPrivate(it.mac) }.mapNotNull { it.mac }.distinct()
         val vendors = if (missing.isEmpty()) emptyMap() else {
             progress("Produttori dai MAC (${missing.size})…")
             runCatching { vendorOf(missing) }.getOrDefault(emptyMap())
@@ -201,6 +204,6 @@ fun hostsFromGraph(hosts: List<ScanHost>, graph: Graph): List<ScanHost> {
         val vendor = h.vendor ?: n.vendor?.takeIf { it !in ProductHints.GENERIC }
         // the type only: the vendor is shown next to it, and full IEEE names are long
         val kind = if (n.type == DeviceType.Unknown || n.type == DeviceType.Internet) h.kind else n.type.label
-        h.copy(vendor = vendor, mac = h.mac ?: n.mac, kind = kind)
+        h.copy(vendor = vendor, mac = h.mac ?: n.mac, macFrom = if (h.mac == null && n.mac != null) "router" else h.macFrom, kind = kind)
     }
 }

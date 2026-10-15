@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.tools.pro.MacHints
 import androidx.annotation.DrawableRes
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.LinearEasing
@@ -349,8 +350,22 @@ internal fun HostRow(h: ScanHost, expanded: Boolean, onToggle: () -> Unit, actio
             AnimatedVisibility(expanded) {
                 Column(verticalArrangement = Arrangement.spacedBy(4.dp), modifier = Modifier.padding(top = 4.dp)) {
                     HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.6f))
-                    DetailLine("MAC", h.mac ?: "non disponibile (Android limita l'ARP)", mono = h.mac != null)
-                    DetailLine("Produttore", h.vendor ?: if (h.mac != null) "sconosciuto (registro IEEE)" else "—")
+                    val private = MacHints.isPrivate(h.mac)
+                    DetailLine(
+                        "MAC",
+                        h.mac?.let { m -> m + if (private) " · privato" else "" }
+                            ?: "non ricevuto: il dispositivo non lo comunica e Android non dà la tabella ARP alle app (con SNMP sul router si legge da lì)",
+                        mono = h.mac != null,
+                    )
+                    h.macFrom?.let { DetailLine("MAC ricavato", MacHints.sourceLabel(it)) }
+                    DetailLine(
+                        "Produttore",
+                        h.vendor ?: when {
+                            private -> "nessuno: MAC privato (casuale), tipico di telefoni e computer"
+                            h.mac != null -> "sconosciuto (registro IEEE)"
+                            else -> "—"
+                        },
+                    )
                     DetailLine("Tipo", h.kind.ifBlank { type.label })
                     h.netbios?.takeIf { it != h.hostname }?.let { DetailLine("NetBIOS", it, mono = true) }
                     DetailLine("Rilevato con", h.how + (h.latencyMs?.let { " · $it ms" } ?: ""))

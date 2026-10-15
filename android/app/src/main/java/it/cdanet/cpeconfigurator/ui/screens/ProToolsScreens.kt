@@ -1,5 +1,6 @@
 package it.cdanet.cpeconfigurator.ui.screens
 
+import it.cdanet.cpeconfigurator.tools.pro.MacHints
 import it.cdanet.cpeconfigurator.ui.SecondaryButton
 import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import android.content.ClipData
@@ -161,7 +162,7 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
             val label = if (targets.size > 1) "Subnet ${i + 1}/${targets.size} ($t) · " else ""
             val found = IpScanner(net).scan(t, icmp, ubntList, wl?.gateway, selfIps, wl?.dns?.firstOrNull { it.contains('.') }, onAlive = { ip, ms -> live[ip] = ms }) { p -> progress = p.copy(phase = label + p.phase) }
             progress = IpScanner.Progress(1, 1, found.size, "Produttori (IEEE)")
-            val vendors = if (c.session.token != null) runCatching { c.api.macVendors(found.mapNotNull { it.mac }) }.getOrDefault(emptyMap()) else emptyMap()
+            val vendors = if (c.session.token != null) runCatching { c.api.macVendors(found.mapNotNull { it.mac }.filterNot { MacHints.isPrivate(it) }) }.getOrDefault(emptyMap()) else emptyMap()
             val known = hosts.map { it.ip }.toSet()
             hosts += found.filter { it.ip !in known }.map { h ->
                 val v = h.mac?.let { vendors[it] }
