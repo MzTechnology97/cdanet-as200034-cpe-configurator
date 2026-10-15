@@ -2,8 +2,9 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
-import { recordEvent } from '../db.ts';
-import { SSID_RX, TARGET_FIRMWARE, parseClientHeader, parseMac, versionAtLeast, macSiblings } from '../domain/policy.ts';
+import { nowIso, recordEvent } from '../db.ts';
+import { SSID_RX, TARGET_FIRMWARE, parseClientHeader, parseMac, versionAtLeast, macSiblings, REPOINT_GRANT_HOURS, REPOINT_CLAIM_MAX_M } from '../domain/policy.ts';
+import { distanceM, isValidLatLon } from '../domain/geo.ts';
 
 /**
  * Field tools (alignment, diagnosis, acceptance test) of the Android app: they talk to
@@ -105,5 +106,80 @@ export function fieldRoutes(app: FastifyInstance, ctx: AppContext) {
     // ownership rules; two different CPEs that could both be it: none (never a guess)
     const siblings = find([...new Set(macs.flatMap(macSiblings))].filter((m) => !macs.includes(m)));
     return { job: new Set(siblings.map((j) => j.mac)).size === 1 ? siblings[0] : null };
+  });
+
+  /**
+   * Re-pointing a CPE installed by someone else (another technician, not assigned to this one): the
+   * installation is found by MAC among all of them (exact MAC, else the only sibling) and handed over
+   * for its re-pointing tests, without taking the CPE from anyone. Only on site (the phone's GPS near
+   * the installation, when its position is known), for a day, revocable by the NOC, who hears of it
+   * at once. Customer name and PPPoE user only: never passwords or CPE credentials.
+   */
+  app.post('/api/field/cpe/claim', user, async (req) => {
+    const b = z
+      .object({
+        macs: z.array(z.string().max(40)).min(1).max(8),
+        position: z.object({ lat: z.number(), lon: z.number(), accuracyM: z.number().min(0).max(100_000).nullable().optional() }).strict().optional(),
+      })
+      .strict()
+      .parse(req.body);
+    const macs = [...new Set(b.macs.map((m) => parseMac(m)).filter((m): m is string => !!m))];
+    if (!macs.length) throw new HttpError(400, 'invalid_mac');
+    const jobsOn = (list: string[]) =>
+      list.length
+        ? (ctx.db
+            .prepare(
+              `SELECT j.id, j.created_at createdAt, j.status, j.model, j.template_name template, j.mac, j.serial, j.ssid, j.pppoe_user pppoeUser, j.device_name deviceName, j.user_id userId
+                 FROM provisioning_jobs j WHERE j.status = 'success' AND j.mac IN (${list.map(() => '?').join(',')}) ORDER BY j.created_at DESC`,
+            )
+            .all(...list) as Array<Record<string, unknown> & { id: string; mac: string; userId: number }>)
+        : [];
+    let found = jobsOn(macs);
+    if (!found.length) {
+      const sib = jobsOn([...new Set(macs.flatMap(macSiblings))].filter((m) => !macs.includes(m)));
+      found = new Set(sib.map((j) => j.mac)).size === 1 ? sib : [];
+    }
+    const job = found[0];
+    // none: a CPE installed before the app (nothing to attach the test to yet)
+    if (!job) return { job: null };
+    const { userId, ...view } = job;
+    const me = req.user!;
+    if (userId !== me.id && me.role !== 'admin') {
+      // on site only: the installation's position (or its work order's) against the phone's GPS
+      const at = ctx.db
+        .prepare('SELECT COALESCE(j.latitude, w.lat) lat, COALESCE(j.longitude, w.lon) lon FROM provisioning_jobs j LEFT JOIN work_orders w ON w.id = j.work_order_id WHERE j.id = ?')
+        .get(job.id) as { lat: number | null; lon: number | null };
+      let away: number | null = null;
+      if (isValidLatLon(at.lat, at.lon)) {
+        if (!b.position || !isValidLatLon(b.position.lat, b.position.lon)) throw new HttpError(400, 'position_required');
+        away = Math.round(distanceM({ lat: at.lat!, lon: at.lon! }, b.position));
+        // the GPS error is forgiven up to 200 m
+        if (away > REPOINT_CLAIM_MAX_M + Math.min(b.position.accuracyM ?? 0, 200)) throw new HttpError(403, 'too_far', { distanceM: away, maxM: REPOINT_CLAIM_MAX_M });
+      }
+      const now = nowIso();
+      const cutoff = new Date(Date.now() - REPOINT_GRANT_HOURS * 3_600_000).toISOString();
+      // a new grant, or an expired one renewed: the NOC hears of it at once
+      const fresh = ctx.db
+        .prepare('INSERT INTO repoint_grants(job_id, user_id, granted_at) VALUES(?, ?, ?) ON CONFLICT(job_id, user_id) DO UPDATE SET granted_at = excluded.granted_at WHERE repoint_grants.granted_at < ?')
+        .run(job.id, me.id, now, cutoff);
+      if (fresh.changes) {
+        recordEvent(ctx.db, me.id, 'job.repoint_claim', job.id, `ripuntamento della CPE ${job.mac} installata da un altro installatore${away != null ? ` · a ${away} m` : ' · posizione dell\'installazione sconosciuta'}`);
+        const installer = ctx.db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as { username: string } | undefined;
+        ctx.notify.inbox.push('noc', {
+          kind: 'repoint_unplanned',
+          title: `CPE di un altro installatore presa per un ripuntamento: ${String(job.deviceName || job.pppoeUser || job.mac)}`,
+          lines: [
+            `Tecnico: ${me.username}`,
+            `CPE: ${job.mac} · ${String(job.ssid)}`,
+            `Installata da ${installer?.username ?? 'un altro installatore'}`,
+            away != null ? `Telefono a ${away} m dall'installazione` : `Posizione dell'installazione sconosciuta: presenza non verificata`,
+            `Accesso al collaudo per ${REPOINT_GRANT_HOURS} ore, revocabile dalla console`,
+          ],
+          jobId: job.id,
+          mac: job.mac,
+        });
+      }
+    }
+    return { job: view };
   });
 }

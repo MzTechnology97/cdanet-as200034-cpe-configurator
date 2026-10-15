@@ -99,6 +99,12 @@ data class AcceptanceReport(
     val position: AcceptancePosition? = null,
     val speedtest: AcceptanceSpeedtest? = null,
     val wifi: AcceptanceWifi? = null,
+    /** "repoint": a re-pointing or AP change, a new test kept next to the earlier ones (null: the installation's). */
+    val kind: String? = null,
+    /** The same id when the same test is sent again (queue, retry): one test, not two. */
+    val testId: String? = null,
+    /** The work order of the re-pointing (none: the server makes one, already done, and tells the NOC). */
+    val workOrderId: Long? = null,
 )
 
 @Serializable

@@ -930,6 +930,30 @@ data class RelinkDto(val ssid: String, val psk: String, val sshPort: Int = 22) {
 @Serializable
 data class CpeJobDto(val job: JobDto? = null)
 
+/** An earlier acceptance test of an installation (the installation's own, or a re-pointing). */
+@Serializable
+data class AcceptanceHistoryDto(
+    val id: Long,
+    /** install, repoint. */
+    val kind: String = "install",
+    val createdAt: String,
+    val verdict: String,
+    val username: String? = null,
+    val review: String? = null,
+    val radio: HistoryRadioDto? = null,
+    val cpe: HistoryCpeDto? = null,
+    val photos: List<kotlinx.serialization.json.JsonObject> = emptyList(),
+)
+
+@Serializable
+data class HistoryRadioDto(val signal: Int? = null)
+
+@Serializable
+data class HistoryCpeDto(val essid: String? = null, val apName: String? = null)
+
+@Serializable
+data class AcceptanceHistoryResponse(val items: List<AcceptanceHistoryDto> = emptyList())
+
 @Serializable
 data class RosCommandDto(val command: String, val title: String)
 

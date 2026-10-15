@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
+import { REPOINT_GRANT_HOURS } from '../domain/policy.ts';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
@@ -70,6 +71,12 @@ export const acceptanceSchema = z
     position: z.object({ lat: z.number(), lon: z.number(), accuracyM: z.number().min(0).max(100_000).nullable().optional() }).strict().optional(),
     // height of the CPE above the ground, typed by the technician (older apps do not send it)
     cpeHeightM: z.number().min(0.5).max(100).nullable().optional(),
+    // a re-pointing or AP change: a new test, the earlier one kept in the history (older apps: install)
+    kind: z.enum(['install', 'repoint']).default('install'),
+    // one test sent twice (offline queue, retry) is the same test, never a second history entry
+    testId: z.string().uuid().optional(),
+    // the work order of a re-pointing (none: one is made, already done)
+    workOrderId: z.number().int().positive().optional(),
     // the speedtest of the acceptance (the last one, against the OoklaServer, over the customer's Wi-Fi)
     speedtest: z
       .object({
@@ -139,12 +146,46 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!job) throw new HttpError(404, 'job_not_found');
     // installers: their own installations and the CPEs assigned to them (re-pointing, maintenance)
     const assigned = () => !!db.prepare('SELECT 1 FROM cpe_assignments WHERE mac = ? AND user_id = ?').get(job.mac, req.user!.id);
-    if (job.user_id !== req.user!.id && req.user!.role !== 'admin' && !assigned()) throw new HttpError(403, 'forbidden');
+    // a technician who re-pointed this CPE (installed by someone else): its tests and photos
+    const granted = () =>
+      !!db
+        .prepare('SELECT 1 FROM repoint_grants WHERE job_id = ? AND user_id = ? AND granted_at >= ?')
+        .get(job.id, req.user!.id, new Date(Date.now() - REPOINT_GRANT_HOURS * 3_600_000).toISOString());
+    if (job.user_id !== req.user!.id && req.user!.role !== 'admin' && !assigned() && !granted()) throw new HttpError(403, 'forbidden');
     return job;
   };
 
+  /**
+   * The work order of a re-pointing: the technician's own order it came from is closed; without
+   * one, a «Ripuntamento» order is made for the record, already done (calendar, Interventi).
+   */
+  const repointOrder = (jobId: string, u: { id: number; role: string }, fromOrder: number | null): number => {
+    const now = nowIso();
+    if (fromOrder) {
+      const o = db.prepare('SELECT id, assigned_to FROM work_orders WHERE id = ?').get(fromOrder) as { id: number; assigned_to: number | null } | undefined;
+      if (o && (o.assigned_to === u.id || u.role === 'admin')) {
+        db.prepare("UPDATE work_orders SET status = 'done', done_at = COALESCE(done_at, ?), job_id = COALESCE(job_id, ?), updated_at = ? WHERE id = ?").run(now, jobId, now, o.id);
+        return o.id;
+      }
+    }
+    const j = db
+      .prepare(
+        `SELECT j.device_name, j.pppoe_user, j.model, j.latitude, j.longitude, w.address, w.contact
+           FROM provisioning_jobs j LEFT JOIN work_orders w ON w.id = j.work_order_id WHERE j.id = ?`,
+      )
+      .get(jobId) as { device_name: string; pppoe_user: string; model: string; latitude: number | null; longitude: number | null; address: string | null; contact: string | null };
+    const day = now.slice(0, 10);
+    const r = db
+      .prepare(
+        `INSERT INTO work_orders(created_at, created_by, updated_at, assigned_to, day, slot, kind, customer, address, lat, lon, contact, pppoe_user, model, notes, status, job_id, done_at, location_from)
+         VALUES(?,?,?,?,?,'','repoint',?,?,?,?,?,?,?,?,'done',?,?,?)`,
+      )
+      .run(now, u.id, now, u.id, day, j.device_name || j.pppoe_user || 'CPE', j.address ?? '', j.latitude, j.longitude, j.contact ?? '', j.pppoe_user, j.model, 'Ripuntamento senza intervento: creato dal collaudo.', jobId, now, j.latitude != null ? 'office' : '');
+    return Number(r.lastInsertRowid);
+  };
+
   const photos = (jobId: string) =>
-    db.prepare('SELECT id, created_at createdAt, caption, size FROM job_photos WHERE job_id = ? ORDER BY id').all(jobId);
+    db.prepare('SELECT id, created_at createdAt, caption, size FROM job_photos WHERE job_id = ? AND history_id IS NULL ORDER BY id').all(jobId);
 
   app.get('/api/provisioning/jobs/:id/acceptance', user, async (req) => {
     const job = loadJob(req);
@@ -170,6 +211,26 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
     };
   });
 
+  /** Every earlier test of the installation (re-pointings), newest first, with their photos. */
+  app.get('/api/provisioning/jobs/:id/acceptance/history', user, async (req) => {
+    const job = loadJob(req);
+    const rows = db
+      .prepare(
+        `SELECT h.id, h.kind, h.created_at createdAt, h.archived_at archivedAt, h.verdict, h.data, h.review, h.review_reason reviewReason, h.review_at reviewAt,
+                h.review_note reviewNote, h.work_order_id workOrderId, u.username, r.username reviewer
+           FROM acceptance_history h LEFT JOIN users u ON u.id = h.user_id LEFT JOIN users r ON r.id = h.review_by
+          WHERE h.job_id = ? ORDER BY h.created_at DESC`,
+      )
+      .all(job.id) as Array<Record<string, unknown> & { id: number; data: string }>;
+    return {
+      items: rows.map(({ data, ...h }) => ({
+        ...h,
+        ...JSON.parse(data),
+        photos: db.prepare('SELECT id, created_at createdAt, caption, size FROM job_photos WHERE job_id = ? AND history_id = ? ORDER BY id').all(job.id, h.id),
+      })),
+    };
+  });
+
   app.put('/api/provisioning/jobs/:id/acceptance', user, async (req) => {
     const job = loadJob(req);
     if (job.status !== 'success') throw new HttpError(409, 'job_not_completed');
@@ -186,16 +247,63 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
         }
       }
     }
-    const { verdict: v, position: _pos, ...data } = a;
+    const { verdict: v, position: _pos, kind, workOrderId, ...data } = a;
     // a new test replaces the previous decision: poor radio waits again for the NOC
     const reason = poorRadio(a, ctx.cfg.thresholds.signalMin);
-    db.prepare(
-      `INSERT INTO job_acceptance(job_id, created_at, user_id, verdict, data, review, review_reason, review_at, review_by, review_note) VALUES(?,?,?,?,?,?,?,NULL,NULL,'')
-       ON CONFLICT(job_id) DO UPDATE SET created_at = excluded.created_at, user_id = excluded.user_id, verdict = excluded.verdict, data = excluded.data,
-         review = excluded.review, review_reason = excluded.review_reason, review_at = NULL, review_by = NULL, review_note = ''`,
-    ).run(job.id, nowIso(), req.user!.id, v, JSON.stringify(data), reason ? 'pending' : null, reason);
-    recordEvent(db, req.user!.id, 'job.acceptance', job.id, `esito ${v}${a.radio.signal != null ? ` · ${a.radio.signal} dBm` : ''}${reason ? ' · da approvare dal NOC' : ''}`);
+    const cur = db.prepare('SELECT * FROM job_acceptance WHERE job_id = ?').get(job.id) as (Record<string, unknown> & { data: string; work_order_id: number | null }) | undefined;
+    const sameTest = !!cur && !!a.testId && (JSON.parse(cur.data) as { testId?: string }).testId === a.testId;
+    let orderId: number | null = sameTest ? (cur?.work_order_id ?? null) : null;
+    db.exec('BEGIN');
+    try {
+      // a re-pointing never overwrites the earlier test: it goes into the history with its photos
+      if (cur && kind === 'repoint' && !sameTest) {
+        const h = db
+          .prepare(
+            `INSERT INTO acceptance_history(job_id, kind, created_at, archived_at, user_id, verdict, data, review, review_reason, review_at, review_by, review_note, work_order_id)
+             SELECT job_id, kind, created_at, ?, user_id, verdict, data, review, review_reason, review_at, review_by, review_note, work_order_id FROM job_acceptance WHERE job_id = ?`,
+          )
+          .run(nowIso(), job.id);
+        db.prepare('UPDATE job_photos SET history_id = ? WHERE job_id = ? AND history_id IS NULL').run(Number(h.lastInsertRowid), job.id);
+      }
+      // the work order of the re-pointing: the one it came from, else a new one, already done
+      if (kind === 'repoint' && !sameTest) orderId = repointOrder(job.id, req.user!, workOrderId ?? null);
+      db.prepare(
+        `INSERT INTO job_acceptance(job_id, created_at, user_id, verdict, data, review, review_reason, review_at, review_by, review_note, kind, work_order_id) VALUES(?,?,?,?,?,?,?,NULL,NULL,'',?,?)
+         ON CONFLICT(job_id) DO UPDATE SET created_at = excluded.created_at, user_id = excluded.user_id, verdict = excluded.verdict, data = excluded.data,
+           review = excluded.review, review_reason = excluded.review_reason, review_at = NULL, review_by = NULL, review_note = '', kind = excluded.kind, work_order_id = excluded.work_order_id`,
+      ).run(job.id, nowIso(), req.user!.id, v, JSON.stringify(data), reason ? 'pending' : null, reason, kind, orderId);
+      db.exec('COMMIT');
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
+    recordEvent(
+      db,
+      req.user!.id,
+      kind === 'repoint' ? 'job.acceptance_repoint' : 'job.acceptance',
+      job.id,
+      `${kind === 'repoint' ? 'ripuntamento · ' : ''}esito ${v}${a.radio.signal != null ? ` · ${a.radio.signal} dBm` : ''}${reason ? ' · da approvare dal NOC' : ''}${orderId ? ` · intervento #${orderId}` : ''}`,
+    );
     if (reason) ctx.notify.reviewPending(job.id);
+    if (kind === 'repoint' && !sameTest && orderId !== null && (workOrderId == null || orderId !== workOrderId)) {
+      const info = db
+        .prepare('SELECT j.mac, j.ssid, j.device_name deviceName, j.pppoe_user pppoeUser, u.username installer FROM provisioning_jobs j LEFT JOIN users u ON u.id = j.user_id WHERE j.id = ?')
+        .get(job.id) as { mac: string; ssid: string; deviceName: string; pppoeUser: string; installer: string | null };
+      const ESITO: Record<string, string> = { ok: 'superato', warn: 'con riserva', bad: 'non superato' };
+      ctx.notify.inbox.push('noc', {
+        kind: 'repoint_unplanned',
+        title: `Ripuntamento senza intervento: ${info.deviceName || info.pppoeUser || info.mac}`,
+        lines: [
+          `Tecnico: ${req.user!.username}`,
+          `CPE: ${info.mac} · ${a.cpe?.essid ?? info.ssid}${a.radio.signal != null ? ` · ${a.radio.signal} dBm` : ''}`,
+          `Esito del collaudo: ${ESITO[v] ?? v}`,
+          ...(job.user_id !== req.user!.id ? [`Installata da ${info.installer ?? 'un altro installatore'}`] : []),
+          `Intervento #${orderId} creato, già fatto`,
+        ],
+        jobId: job.id,
+        mac: info.mac,
+      });
+    }
     // a passed test: the CPE is connected and online, the NOC may accept it in UISP
     if (v !== 'bad' && !reason) {
       ctx.notify.readyForUisp(job.id);
@@ -246,7 +354,7 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
       | { created_at: string; verdict: 'ok' | 'warn' | 'bad'; data: string; username: string; review: string | null; review_reason: string; review_at: string | null; review_note: string; reviewer: string | null }
       | undefined;
     if (!row) throw new HttpError(404, 'acceptance_not_found');
-    const list = db.prepare('SELECT id, created_at createdAt, caption FROM job_photos WHERE job_id = ? ORDER BY id').all(job.id) as Array<{ id: number; createdAt: string; caption: string }>;
+    const list = db.prepare('SELECT id, created_at createdAt, caption FROM job_photos WHERE job_id = ? AND history_id IS NULL ORDER BY id').all(job.id) as Array<{ id: number; createdAt: string; caption: string }>;
     const pdf = acceptanceReportPdf({
       job: {
         id: j.id,
@@ -320,6 +428,26 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
    * measures said, with the reason. The test becomes «superato» everywhere (history, warehouse,
    * statistics, the report, «pronta da accettare»); what the app had measured stays in [data.override].
    */
+  /** NOC: who may save re-pointing tests on this installation of someone else's (still valid or not). */
+  app.get('/api/admin/provisioning/jobs/:id/repoint-grants', { preHandler: [ctx.auth.requireAdmin] }, async (req) => {
+    const job = loadJob(req);
+    const from = new Date(Date.now() - REPOINT_GRANT_HOURS * 3_600_000).toISOString();
+    const rows = db
+      .prepare('SELECT g.user_id userId, u.username, g.granted_at grantedAt FROM repoint_grants g JOIN users u ON u.id = g.user_id WHERE g.job_id = ? ORDER BY g.granted_at DESC')
+      .all(job.id) as Array<{ userId: number; username: string; grantedAt: string }>;
+    return { hours: REPOINT_GRANT_HOURS, items: rows.map((r) => ({ ...r, active: r.grantedAt >= from })) };
+  });
+
+  /** NOC: ends a technician's access to the re-pointing tests of an installation of someone else's. */
+  app.delete('/api/admin/provisioning/jobs/:id/repoint-grants/:userId', { preHandler: [ctx.auth.requireAdmin] }, async (req) => {
+    const job = loadJob(req);
+    const userId = z.coerce.number().int().positive().parse((req.params as { userId: string }).userId);
+    const r = db.prepare('DELETE FROM repoint_grants WHERE job_id = ? AND user_id = ?').run(job.id, userId);
+    if (!r.changes) throw new HttpError(404, 'grant_not_found');
+    recordEvent(db, req.user!.id, 'job.repoint_revoke', job.id, `accesso al ripuntamento revocato (utente ${userId})`);
+    return { ok: true };
+  });
+
   app.post('/api/admin/provisioning/jobs/:id/acceptance/pass', { preHandler: [ctx.auth.requireAdmin] }, async (req) => {
     const job = loadJob(req);
     const b = z.object({ note: z.string().trim().min(3, 'Scrivi il motivo').max(500) }).strict().parse(req.body);
@@ -348,7 +476,7 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
     const body = req.body;
     if (!Buffer.isBuffer(body) || body.length < 1024) throw new HttpError(400, 'photo_invalid');
     if (!(body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff)) throw new HttpError(415, 'photo_not_jpeg');
-    const count = (db.prepare('SELECT count(*) n FROM job_photos WHERE job_id = ?').get(job.id) as { n: number }).n;
+    const count = (db.prepare('SELECT count(*) n FROM job_photos WHERE job_id = ? AND history_id IS NULL').get(job.id) as { n: number }).n;
     if (count >= MAX_PHOTOS) throw new HttpError(409, 'too_many_photos', { max: MAX_PHOTOS });
     const caption = z.string().trim().max(80).default('').parse((req.query as { caption?: string }).caption ?? '');
     const sha = createHash('sha256').update(body).digest('hex');

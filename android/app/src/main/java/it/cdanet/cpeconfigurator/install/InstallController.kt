@@ -115,6 +115,10 @@ data class InstallState(
     val jobLooked: Boolean = false,
     /** The lookup could not reach the server (no Internet here): not the same as «not found». */
     val jobLookupFailed: Boolean = false,
+    /** Repointing a CPE installed by another technician: handed over by the server, the NOC hears of the test. */
+    val jobClaimed: Boolean = false,
+    /** ...or not handed over: why (too far from the installation, no GPS). */
+    val jobClaimRefused: String? = null,
     /** SSID the CPE must be on (provisioned or chosen in the "Aggancio" step). */
     val expectedSsid: String? = null,
     /** The acceptance test was opened by itself at the last step (only once: back from it, the summary stays). */
@@ -189,10 +193,25 @@ class InstallController(
     }
 
     /** Repointing: the job of the CPE, so the new acceptance test and photos go with it. */
-    suspend fun lookupJob(macs: List<String>, again: Boolean = false) {
+    suspend fun lookupJob(macs: List<String>, again: Boolean = false, here: suspend () -> CpeLocation? = { null }) {
         if ((_state.value.jobLooked && !again) || macs.isEmpty() || _state.value.job != null) return
+        var claimed = false
         val job = try {
-            api.cpeJob(macs)
+            // not among this technician's installations: installed by someone else, handed over for the test
+            api.cpeJob(macs) ?: api.claimCpe(macs, here())?.also { claimed = true }
+        } catch (e: it.cdanet.cpeconfigurator.data.ApiException) {
+            if (e.status != 400 && e.status != 403) {
+                _state.update { it.copy(jobLooked = true, jobLookupFailed = true) }
+                return
+            }
+            // the server answered: not handed over (only from the customer's)
+            val why = when (e.code) {
+                "too_far" -> "Il telefono è lontano dall'indirizzo di questa installazione: il collaudo del ripuntamento si salva solo dal cliente."
+                "position_required" -> "Serve la posizione GPS per collegare il collaudo a questa installazione: attiva la localizzazione e torna a questo passo."
+                else -> e.message ?: e.code
+            }
+            _state.update { it.copy(jobLooked = true, jobLookupFailed = false, jobClaimRefused = why) }
+            return
         } catch (e: kotlinx.coroutines.CancellationException) {
             // the step was left before the answer: not «looked», the next step tries again
             throw e
@@ -201,7 +220,7 @@ class InstallController(
             _state.update { it.copy(jobLooked = true, jobLookupFailed = true) }
             return
         }
-        _state.update { it.copy(job = job ?: it.job, jobLooked = true, jobLookupFailed = false) }
+        _state.update { it.copy(job = job ?: it.job, jobLooked = true, jobLookupFailed = false, jobClaimed = claimed, jobClaimRefused = null) }
     }
 
     suspend fun survey() {

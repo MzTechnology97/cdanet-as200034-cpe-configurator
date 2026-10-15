@@ -497,6 +497,7 @@ private fun LinkSummary(s: AirosStatus, c: AppContainer) {
 
 @Composable
 private fun VerifyStep(c: AppContainer, mode: InstallMode) {
+    val context = LocalContext.current
     val f by c.field.state.collectAsState()
     val st by c.install.state.collectAsState()
     FieldConnection(c, FieldMode.Alignment)
@@ -505,7 +506,14 @@ private fun VerifyStep(c: AppContainer, mode: InstallMode) {
     // asked again when the phone gets Internet back after a failed lookup
     val internet by c.network.internet.collectAsState()
     LaunchedEffect(s.macs, internet) {
-        if (mode == InstallMode.Repoint) c.scope.launch { c.install.lookupJob(s.macs, again = st.jobLookupFailed && internet) }
+        if (mode == InstallMode.Repoint) {
+            c.scope.launch {
+                // the GPS goes only with a CPE of someone else's: handed over on site only
+                c.install.lookupJob(s.macs, again = (st.jobLookupFailed && internet) || st.jobClaimRefused != null) {
+                    runCatching { it.cdanet.cpeconfigurator.network.LocationHelper(context).current() }.getOrNull()
+                }
+            }
+        }
     }
 
     SectionCard("CPE collegata") {
@@ -547,15 +555,17 @@ private fun VerifyStep(c: AppContainer, mode: InstallMode) {
                     KeyValue("Cliente", job.deviceName.ifBlank { job.pppoeUser })
                     KeyValue("Installata il", job.createdAt.take(10).split('-').reversed().joinToString("/"))
                     KeyValue("SSID originale", job.ssid)
-                    Text("Collaudo e foto finali verranno aggiunti a questa installazione.", style = MaterialTheme.typography.bodySmall)
+                    Text("Il collaudo del ripuntamento si aggiunge a questa installazione: quello iniziale resta nello storico.", style = MaterialTheme.typography.bodySmall)
+                    if (st.jobClaimed) Text("CPE installata da un altro tecnico: il collaudo si salva comunque e il NOC viene avvisato.", style = MaterialTheme.typography.bodySmall, color = WarnAmber)
                 }
+                st.jobClaimRefused != null -> Text(st.jobClaimRefused!!, style = MaterialTheme.typography.bodySmall, color = WarnAmber)
                 st.jobLookupFailed -> Text(
                     "Server non raggiungibile da qui: non so ancora se questa CPE è tra le tue installazioni. Riprovo appena il telefono ha Internet; intanto puoi andare avanti.",
                     style = MaterialTheme.typography.bodySmall,
                     color = WarnAmber,
                 )
                 else -> Text(
-                    "CPE non presente tra le installazioni a te visibili (installata prima dell'app o da altri): ripuntamento e cambio AP funzionano, il collaudo finale si potrà condividere ma non salvare sul server.",
+                    "CPE installata prima dell'app: ripuntamento e cambio AP funzionano, il collaudo finale si potrà condividere ma non salvare sul server.",
                     style = MaterialTheme.typography.bodySmall,
                     color = WarnAmber,
                 )

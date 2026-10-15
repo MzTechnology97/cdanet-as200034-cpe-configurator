@@ -18,6 +18,7 @@ export const NOTIFY_KINDS = {
   network_optimizer: { label: 'IA-AP: esito delle ottimizzazioni automatiche degli AP (canale tenuto o ripristinato)', audience: 'noc', telegram: true },
   screenshot_attempt: { label: 'Tentativi di screenshot nell’app da account che non possono farli', audience: 'noc', telegram: true },
   stock_mismatch: { label: 'CPE installata che non risulta nel magazzino dell’installatore', audience: 'noc', telegram: false },
+  repoint_unplanned: { label: 'Ripuntamento senza intervento (anche di CPE installate da altri)', audience: 'noc', telegram: true },
 } as const;
 export type NotifyKind = keyof typeof NOTIFY_KINDS;
 export const isNotifyKind = (k: string): k is NotifyKind => k in NOTIFY_KINDS;

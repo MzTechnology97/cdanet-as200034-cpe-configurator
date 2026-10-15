@@ -269,6 +269,23 @@ class ApiClient(
     suspend fun cpeJob(macs: List<String>): JobDto? =
         AppJson.decodeFromString(CpeJobDto.serializer(), request("GET", "/api/field/cpe?macs=" + java.net.URLEncoder.encode(macs.take(8).joinToString(","), "UTF-8"))).job
 
+    /**
+     * Re-pointing a CPE installed by someone else: its installation (exact MAC, else the only sibling),
+     * handed over for the new acceptance test (on site only: the phone's GPS goes with it).
+     * null: a CPE installed before the app.
+     */
+    suspend fun claimCpe(macs: List<String>, at: CpeLocation?): JobDto? {
+        val body = buildJsonObject {
+            put("macs", kotlinx.serialization.json.JsonArray(macs.take(8).map { kotlinx.serialization.json.JsonPrimitive(it) }))
+            at?.let { l -> put("position", buildJsonObject { put("lat", l.latitude); put("lon", l.longitude); l.accuracy?.let { put("accuracyM", it) } }) }
+        }
+        return AppJson.decodeFromString(CpeJobDto.serializer(), request("POST", "/api/field/cpe/claim", body)).job
+    }
+
+    /** The earlier acceptance tests of an installation (re-pointings), newest first. */
+    suspend fun acceptanceHistory(jobId: String): List<AcceptanceHistoryDto> =
+        AppJson.decodeFromString(AcceptanceHistoryResponse.serializer(), request("GET", "/api/provisioning/jobs/$jobId/acceptance/history")).items
+
     /** Installation postponed or KO (reason always written by the technician). */
     suspend fun reportKo(req: KoRequest): Long =
         AppJson.decodeFromString(KoCreatedDto.serializer(), request("POST", "/api/installs/ko", AppJson.encodeToJsonElement(KoRequest.serializer(), req))).id
