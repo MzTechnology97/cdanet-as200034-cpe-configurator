@@ -42,6 +42,15 @@ object OoklaMath {
     /** The first part of each direction warms the TCP windows up: it is not counted. */
     fun warmupNanos(seconds: Int): Long = (seconds * 1_000_000_000L * 0.2).toLong().coerceIn(500_000_000L, 2_000_000_000L)
 
+    /**
+     * The next upload request: doubled while one takes less than [UPLOAD_ROUND_NANOS], so a request
+     * keeps a stream busy a fraction of a second on any line (a 4 MB one takes 30 s at 1 Mbit/s).
+     */
+    fun nextUploadSize(size: Int, nanos: Long): Int = if (nanos < UPLOAD_ROUND_NANOS) minOf(size * 2, OoklaClient.CHUNK) else size
+
+    const val UPLOAD_FIRST = 65_536
+    const val UPLOAD_ROUND_NANOS = 250_000_000L
+
     /** «UPLOAD <size> 0\n» and the payload length that makes [size] bytes in all (newline included). */
     fun uploadHeader(size: Int): Pair<ByteArray, Int> {
         val head = "UPLOAD $size 0\n".toByteArray(Charsets.US_ASCII)
@@ -106,7 +115,7 @@ class OoklaClient(
         }
         val (ping, jitter) = OoklaMath.pingJitter(rtts)
         val down = measure(SpeedProgress.Phase.Download, onProgress) { s, input, out, counted, stop -> download(input, out, counted, stop) }
-        val up = measure(SpeedProgress.Phase.Upload, onProgress) { s, input, out, counted, stop -> upload(input, out, counted, stop) }
+        val up = measure(SpeedProgress.Phase.Upload, onProgress) { s, input, out, counted, stop -> upload(s, input, out, counted, stop) }
         SpeedResult(down, up, ping, jitter, "$host:$port")
     }
 
@@ -173,10 +182,19 @@ class OoklaClient(
         }
     }
 
-    private fun upload(input: InputStream, out: OutputStream, counted: AtomicLong, stop: AtomicBoolean) {
+    /**
+     * Only what the server confirmed counts («OK <size>»): a write ends as soon as the data is in the
+     * phone's send buffer, which Android grows to megabytes, so counting writes measured the buffer
+     * and then nothing (field report, 15/10/2026: upload 0,0 on a real line).
+     */
+    private fun upload(s: Socket, input: InputStream, out: OutputStream, counted: AtomicLong, stop: AtomicBoolean) {
+        // the confirmation comes when the whole request has crossed the line, not within a read timeout
+        s.soTimeout = (seconds + 10) * 1000
         val block = ByteArray(65536) { ('A' + it % 26).code.toByte() }
+        var size = OoklaMath.UPLOAD_FIRST
         while (!stop.get()) {
-            val (head, payload) = OoklaMath.uploadHeader(CHUNK)
+            val t0 = System.nanoTime()
+            val (head, payload) = OoklaMath.uploadHeader(size)
             out.write(head)
             var left = payload
             while (left > 0 && !stop.get()) {
@@ -185,12 +203,13 @@ class OoklaClient(
                 if (left == n) block[n - 1] = '\n'.code.toByte()
                 out.write(block, 0, n)
                 left -= n
-                counted.addAndGet(n.toLong())
                 if (left == 0) block[n - 1] = ('A' + (n - 1) % 26).code.toByte()
             }
             if (stop.get()) return
             out.flush()
             if (!readLine(input).startsWith("OK")) throw IOException("Risposta inattesa all'upload")
+            counted.addAndGet(size.toLong())
+            size = OoklaMath.nextUploadSize(size, System.nanoTime() - t0)
         }
     }
 

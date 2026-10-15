@@ -24,21 +24,26 @@ class OoklaTest {
         assertEquals(3.0, jitter, 0.001)
         val (head, payload) = OoklaMath.uploadHeader(1000)
         assertEquals(1000, head.size + payload)
+        // upload requests grow while they are quick, up to the chunk
+        assertEquals(131_072, OoklaMath.nextUploadSize(65_536, 50_000_000))
+        assertEquals(65_536, OoklaMath.nextUploadSize(65_536, 400_000_000))
+        assertEquals(OoklaClient.CHUNK, OoklaMath.nextUploadSize(OoklaClient.CHUNK, 1_000_000))
     }
 
     /** A tiny OoklaServer: HI, PING, DOWNLOAD and UPLOAD as the real one answers them. */
-    private fun fakeServer(): ServerSocket {
+    private fun fakeServer(uploadBytesPerSec: Int = 0): ServerSocket {
         val ss = ServerSocket(0, 50, java.net.InetAddress.getLoopbackAddress())
         thread(isDaemon = true) {
             while (!ss.isClosed) {
                 val s = runCatching { ss.accept() }.getOrNull() ?: break
-                thread(isDaemon = true) { serve(s) }
+                thread(isDaemon = true) { serve(s, uploadBytesPerSec) }
             }
         }
         return ss
     }
 
-    private fun serve(s: Socket) = runCatching {
+    /** [uploadBytesPerSec] > 0: the upload is received at that rate, like a real line. */
+    private fun serve(s: Socket, uploadBytesPerSec: Int) = runCatching {
         s.use {
             val input = BufferedInputStream(s.getInputStream())
             val out = s.getOutputStream()
@@ -66,8 +71,13 @@ class OoklaTest {
                     cmd.startsWith("UPLOAD") -> {
                         val size = cmd.split(' ')[1].toInt()
                         var left = size - (cmd.length + 1)
-                        val buf = ByteArray(65536)
-                        while (left > 0) { val n = input.read(buf, 0, minOf(buf.size, left)); if (n < 0) return@use; left -= n }
+                        val buf = ByteArray(if (uploadBytesPerSec > 0) uploadBytesPerSec / 20 else 65536)
+                        while (left > 0) {
+                            val n = input.read(buf, 0, minOf(buf.size, left))
+                            if (n < 0) return@use
+                            left -= n
+                            if (uploadBytesPerSec > 0) Thread.sleep(n * 1000L / uploadBytesPerSec)
+                        }
                         out.write("OK $size 1\n".toByteArray())
                     }
                 }
@@ -85,5 +95,27 @@ class OoklaTest {
         assertTrue("upload ${r.upMbps}", r.upMbps > 1)
         assertTrue(r.pingMs >= 0)
         assertEquals("127.0.0.1:${ss.localPort}", r.server)
+    }
+
+    /**
+     * A line slower than the phone's buffers (field report, 15/10/2026: upload 0,0 on a real line):
+     * what counts is what the server confirmed, not what was written into the socket.
+     */
+    @Test
+    fun uploadOnASlowLine() = runBlocking {
+        val perStream = 250_000 // bytes/s: 2 Mbit/s each, 4 Mbit/s with two streams
+        val ss = fakeServer(uploadBytesPerSec = perStream)
+        // Android grows the send buffer to megabytes: writes end long before the data has left
+        val bigBuffers = object : SocketFactory() {
+            private fun big(s: Socket) = s.apply { sendBufferSize = 4 * 1024 * 1024 }
+            override fun createSocket() = big(Socket())
+            override fun createSocket(host: String, port: Int) = big(Socket(host, port))
+            override fun createSocket(host: String, port: Int, local: java.net.InetAddress, localPort: Int) = big(Socket(host, port, local, localPort))
+            override fun createSocket(host: java.net.InetAddress, port: Int) = big(Socket(host, port))
+            override fun createSocket(host: java.net.InetAddress, port: Int, local: java.net.InetAddress, localPort: Int) = big(Socket(host, port, local, localPort))
+        }
+        val r = OoklaClient(bigBuffers, "127.0.0.1", ss.localPort, seconds = 4, streams = 2, timeoutMs = 1000).run()
+        ss.close()
+        assertTrue("upload ${r.upMbps}", r.upMbps in 2.0..6.0)
     }
 }
