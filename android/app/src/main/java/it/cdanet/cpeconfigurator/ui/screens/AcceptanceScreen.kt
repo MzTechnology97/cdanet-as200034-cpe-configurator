@@ -131,9 +131,9 @@ fun AcceptanceScreen(c: AppContainer) {
         c.field.start(FieldMode.Alignment)
     }
 
+    // the router step of this installation: its speed test and the customer's Wi-Fi go into the report
+    val router = c.install.state.collectAsState().value.takeIf { it.job?.id == j.id }?.router
     val report: AcceptanceReport? = if (samples.size >= Acceptance.SAMPLES) {
-        // the router step of this installation: its speed test and the customer's Wi-Fi go into the report
-        val router = c.install.state.value.takeIf { it.job?.id == j.id }?.router
         Acceptance.build(
             samples.toList(), c.field.thresholds, c.field.targetFirmware, internet ?: InternetTest(false, note = "Non misurato"), notes,
             cpeHeightM = cpeHeight, speedtest = speed ?: router?.speedtest(), wifi = router?.wifiReport(),
@@ -185,7 +185,7 @@ fun AcceptanceScreen(c: AppContainer) {
 
         SectionCard("2 · Internet dal lato cliente") {
             Text("Speedtest verso il server CDA Net sulla Wi-Fi del router del cliente: mai con i dati mobili.", style = MaterialTheme.typography.bodySmall)
-            val routerDone = c.install.state.collectAsState().value.takeIf { it.job?.id == j.id }?.router?.last
+            val routerDone = router?.last
             if (routerDone != null && speed == null) {
                 Text("Speedtest già fatto al passo «Router e velocità»: lo trovi nel collaudo. Puoi ripeterlo qui.", style = MaterialTheme.typography.bodySmall)
             }
