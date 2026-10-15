@@ -353,6 +353,9 @@ private fun WriteStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
                 )
             }
             if (ok) {
+                // a replacement: the CPE just taken off, to bring back to the warehouse
+                val replacing = c.provisioning.form.collectAsState().value.replaces != null
+                prov.doneJobId?.takeIf { replacing }?.let { RemovedCpeCard(c, it) }
                 Text("Dopo il riavvio ricollegati alla Wi-Fi di management della CPE (o a quella del router del cliente) per le verifiche.", style = MaterialTheme.typography.bodySmall)
                 BusyButton("Avanti: verifica della CPE", false, Modifier.fillMaxWidth()) {
                     val s = prov.doneSummary

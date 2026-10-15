@@ -249,6 +249,7 @@ fun AppRoot(c: AppContainer) {
             }
             c.resultQueue.syncInBackground()
             c.acceptanceQueue.syncInBackground()
+            c.rmaQueue.syncInBackground()
             // the firmware the CPEs need stays on the phone, ready for the roof without Internet
             c.scope.launch { c.firmware.prefetch(c.api) }
             scope.launch { c.routerOs.refreshCatalog() }
@@ -261,6 +262,7 @@ fun AppRoot(c: AppContainer) {
                     runCatching { c.api.unreadNotifications() }.onSuccess { unread = it }
                     if (c.resultQueue.pending.value.isNotEmpty()) runCatching { c.resultQueue.sync() }
                     if (c.acceptanceQueue.pending.value.isNotEmpty()) runCatching { c.acceptanceQueue.sync() }
+                    if (c.rmaQueue.pending.value.isNotEmpty()) runCatching { c.rmaQueue.sync() }
                     session?.user?.id?.let { c.captureReports.send(it) }
                     runCatching { c.speedtests.sendPending() }
                     // back on the network after a roof without signal: the warehouse is read again
@@ -275,6 +277,7 @@ fun AppRoot(c: AppContainer) {
                         kotlinx.coroutines.delay(1500) // the new route settles
                         if (c.resultQueue.pending.value.isNotEmpty()) runCatching { c.resultQueue.sync() }
                         if (c.acceptanceQueue.pending.value.isNotEmpty()) runCatching { c.acceptanceQueue.sync() }
+                        if (c.rmaQueue.pending.value.isNotEmpty()) runCatching { c.rmaQueue.sync() }
                         runCatching { c.speedtests.sendPending() }
                         session?.user?.id?.let { runCatching { c.captureReports.send(it) } }
                     }

@@ -934,6 +934,23 @@ data class RelinkDto(val ssid: String, val psk: String, val sshPort: Int = 22) {
 @Serializable
 data class CpeJobDto(val job: JobDto? = null)
 
+/** A CPE the technician took off in a replacement: to bring back to the warehouse. */
+@Serializable
+data class RmaItemDto(
+    val id: Long = 0,
+    val createdAt: String = "",
+    val mac: String = "",
+    val model: String = "",
+    val customer: String = "",
+    /** working, broken, unknown (null: not said yet). */
+    val condition: String? = null,
+    val state: String = "",
+    val note: String = "",
+)
+
+@Serializable
+data class RmaListDto(val items: List<RmaItemDto> = emptyList())
+
 /** NOC: customers of the CRM for a new work order (name «COGNOME NOME» or company, phone, sites). */
 @Serializable
 data class WorkOrderCrmDto(val configured: Boolean = false, val items: List<WorkOrderCrmCustomer> = emptyList())

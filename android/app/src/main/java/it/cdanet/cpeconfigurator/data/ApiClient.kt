@@ -295,6 +295,14 @@ class ApiClient(
     suspend fun acceptanceHistory(jobId: String): List<AcceptanceHistoryDto> =
         AppJson.decodeFromString(AcceptanceHistoryResponse.serializer(), request("GET", "/api/provisioning/jobs/$jobId/acceptance/history")).items
 
+    /** The condition of the CPE taken off in the replacement [jobId] (the new job): overwritten if sent again. */
+    suspend fun reportRma(jobId: String, condition: String, note: String) {
+        request("POST", "/api/field/rma", buildJsonObject { put("jobId", jobId); put("condition", condition); if (note.isNotBlank()) put("note", note.take(500)) })
+    }
+
+    /** The CPEs this technician took off and still has to bring back. */
+    suspend fun myRma(): List<RmaItemDto> = AppJson.decodeFromString(RmaListDto.serializer(), request("GET", "/api/field/rma")).items
+
     /** Installation postponed or KO (reason always written by the technician). */
     suspend fun reportKo(req: KoRequest): Long =
         AppJson.decodeFromString(KoCreatedDto.serializer(), request("POST", "/api/installs/ko", AppJson.encodeToJsonElement(KoRequest.serializer(), req))).id
