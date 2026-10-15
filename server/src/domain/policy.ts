@@ -129,3 +129,8 @@ export function parseClientHeader(value: string | undefined): { platform: string
   const m = /^(android)\/(\d+\.\d+\.\d+)(?:[-+][A-Za-z0-9._-]+)?$/.exec(String(value ?? '').trim());
   return m ? { platform: m[1] as string, version: m[2] as string } : null;
 }
+
+/** Re-pointing a CPE installed by someone else: how long the technician may save its tests (hours). */
+export const REPOINT_GRANT_HOURS = 24;
+/** ...and how far from the installation the phone may be when it is handed over (metres, plus the GPS error). */
+export const REPOINT_CLAIM_MAX_M = 500;

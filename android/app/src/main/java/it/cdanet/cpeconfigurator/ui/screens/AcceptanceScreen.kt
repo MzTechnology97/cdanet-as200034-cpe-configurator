@@ -94,6 +94,11 @@ fun AcceptanceScreen(c: AppContainer) {
     var shot by remember { mutableStateOf<Pair<File, String>?>(null) }
     var ready by remember { mutableStateOf<Boolean?>(null) }
     var ko by remember { mutableStateOf(false) }
+    // one id per test: sent again from the queue it is the same test, never a second one
+    val testId = remember(j.id) { java.util.UUID.randomUUID().toString() }
+    // the earlier tests of this installation (re-pointings): never replaced, listed below
+    var history by remember(j.id) { mutableStateOf<List<it.cdanet.cpeconfigurator.data.AcceptanceHistoryDto>>(emptyList()) }
+    LaunchedEffect(j.id, done) { runCatching { c.api.acceptanceHistory(j.id) }.onSuccess { history = it } }
 
     it.cdanet.cpeconfigurator.ui.KeepScreenOn()
     DisposableEffect(Unit) {
@@ -136,6 +141,9 @@ fun AcceptanceScreen(c: AppContainer) {
     val wizard = c.install.state.collectAsState().value.takeIf { it.job?.id == j.id }
     val router = wizard?.router
     val roof = wizard?.roof
+    val activeOrder by c.activeWorkOrder.collectAsState()
+    // a re-pointing or AP change: a new test, the earlier one kept (the work order is closed with it)
+    val repoint = wizard?.mode == it.cdanet.cpeconfigurator.install.InstallMode.Repoint || activeOrder?.kind == "repoint"
     LaunchedEffect(roof) {
         if (roof == null) return@LaunchedEffect
         if (roof.radio != null && !measuring && samples.isEmpty()) samples.addAll(roof.radio)
@@ -146,7 +154,7 @@ fun AcceptanceScreen(c: AppContainer) {
         Acceptance.build(
             samples.toList(), c.field.thresholds, c.field.targetFirmware, internet ?: InternetTest(false, note = "Non misurato"), notes,
             cpeHeightM = cpeHeight, speedtest = speed ?: router?.speedtest(), wifi = router?.wifiReport(),
-        )
+        ).copy(kind = if (repoint) "repoint" else null, testId = testId, workOrderId = if (repoint) activeOrder?.id else null)
     } else {
         null
     }
@@ -252,7 +260,7 @@ fun AcceptanceScreen(c: AppContainer) {
                     c,
                     KoContext(
                         jobId = j.id,
-                        mode = "new",
+                        mode = if (repoint) "repoint" else "new",
                         step = "final",
                         mac = j.mac,
                         ssid = r.cpe.essid ?: j.ssid,
@@ -269,7 +277,26 @@ fun AcceptanceScreen(c: AppContainer) {
         if (queued.any { it.jobId == j.id }) {
             Banner("Collaudo salvato sul telefono: verrà inviato appena c'è rete (anche chiudendo questa schermata).", WarnAmber)
         }
-        val activeOrder by c.activeWorkOrder.collectAsState()
+        if (history.isNotEmpty()) {
+            SectionCard("Collaudi precedenti (${history.size})") {
+                history.forEach { h ->
+                    val esito = mapOf("ok" to "superato", "warn" to "con riserva", "bad" to "non superato")[h.verdict] ?: h.verdict
+                    Text(
+                        "${h.createdAt.take(10).split('-').reversed().joinToString("/")} · ${if (h.kind == "repoint") "ripuntamento" else "installazione"} · $esito",
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                    Text(
+                        listOfNotNull(
+                            h.username,
+                            h.radio?.signal?.let { "$it dBm" },
+                            h.cpe?.apName ?: h.cpe?.essid,
+                            h.photos.size.takeIf { it > 0 }?.let { "$it foto" },
+                        ).joinToString(" · "),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+            }
+        }
         activeOrder?.let { Text("Intervento: ${it.customer}${if (it.address.isNotBlank()) " · ${it.address}" else ""}. Il collaudo si salva solo entro ${WorkOrderPosition.MAX_M} m dall'indirizzo.", style = MaterialTheme.typography.bodySmall) }
         // the reason it was not saved, next to the button (also shown at the top)
         error?.let { msg -> it.cdanet.cpeconfigurator.ui.Notice(msg, it.cdanet.cpeconfigurator.ui.NoticeKind.Bad) }
@@ -299,7 +326,8 @@ fun AcceptanceScreen(c: AppContainer) {
                     done = if (c.acceptanceQueue.isPending(j.id)) {
                         "Senza rete: collaudo${if (n > 0) " e $n foto" else ""} in coda sul telefono, invio automatico appena torna la connessione."
                     } else {
-                        "Collaudo registrato${if (n > 0) " con $n foto" else ""}: il verbale si stampa dalla console web (Storico → job)." +
+                        "Collaudo${if (repoint) " del ripuntamento" else ""} registrato${if (n > 0) " con $n foto" else ""}: il verbale si stampa dalla console web (Storico → job)." +
+                            (if (repoint) " Il collaudo precedente resta nello storico." else "") +
                             if (report?.let { r -> nocApprovalReason(r.radio.signal, c.field.thresholds.signalMin, r.checks.filter { it.verdict == "bad" }.map { it.title }) } != null) " In attesa dell'approvazione del NOC: l'esito arriva nelle Notifiche." else ""
                     }
                 } catch (e: Exception) {

@@ -572,6 +572,36 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX coverage_ops_cache_at ON coverage_ops_cache(at);
   `,
+  // re-pointings: every test of an installation is kept (the current one in job_acceptance, the
+  // earlier ones here with their photos); a technician may re-point a CPE installed by someone else
+  `
+  CREATE TABLE acceptance_history(
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    job_id TEXT NOT NULL REFERENCES provisioning_jobs(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL DEFAULT 'install',
+    created_at TEXT NOT NULL,
+    archived_at TEXT NOT NULL,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    verdict TEXT NOT NULL,
+    data TEXT NOT NULL,
+    review TEXT,
+    review_reason TEXT NOT NULL DEFAULT '',
+    review_at TEXT,
+    review_by INTEGER,
+    review_note TEXT NOT NULL DEFAULT '',
+    work_order_id INTEGER
+  );
+  CREATE INDEX acceptance_history_job ON acceptance_history(job_id, created_at);
+  ALTER TABLE job_acceptance ADD COLUMN kind TEXT NOT NULL DEFAULT 'install';
+  ALTER TABLE job_acceptance ADD COLUMN work_order_id INTEGER;
+  ALTER TABLE job_photos ADD COLUMN history_id INTEGER;
+  CREATE TABLE repoint_grants(
+    job_id TEXT NOT NULL REFERENCES provisioning_jobs(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    granted_at TEXT NOT NULL,
+    PRIMARY KEY(job_id, user_id)
+  );
+  `,
 ];
 
 export function openDatabase(path: string): Db {
