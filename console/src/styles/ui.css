@@ -200,6 +200,35 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .wo-notes { margin: 4px 0 0; padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm); background: var(--surface-2); font-size: var(--fs-sm); white-space: pre-line; }
 .wo-card footer { margin-top: var(--sp-2); }
 .wo-card footer .ui-btn { min-height: 32px; }
+.wo-search { flex: 1 1 280px; }
+/* Interventi dell'ufficio: una riga compatta per intervento, raggruppate per giorno */
+.wo-table { background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius-lg); box-shadow: var(--shadow); overflow: hidden; }
+.wo-table ul { list-style: none; margin: 0; padding: 0; }
+.wo-table section + section .wo-table-day { border-top: 1px solid var(--line); }
+.wo-table-day { margin: 0; padding: 6px var(--sp-3); font-size: var(--fs-sm); background: var(--surface-2); border-bottom: 1px solid var(--line); }
+.wo-table-day::first-letter { text-transform: uppercase; }
+.wo-table-day.left { color: var(--bad); }
+.wo-more { justify-content: center; padding: var(--sp-2); border-top: 1px solid var(--line); }
+.wo-row { display: grid; grid-template-columns: 92px minmax(0, 1fr) 120px 120px auto 52px; align-items: center; gap: var(--sp-1) var(--sp-3); padding: 6px var(--sp-3); border-bottom: 1px solid var(--line); border-left: 3px solid transparent; cursor: pointer; }
+.wo-row:last-child { border-bottom: 0; }
+.wo-row:hover, .wo-row:focus-visible { background: var(--surface-2); outline: none; }
+.wo-row.overdue { border-left-color: var(--bad); }
+.wo-row.cancelled { opacity: .55; }
+.wo-row-slot { font-weight: 600; font-variant-numeric: tabular-nums; font-size: var(--fs-sm); }
+.wo-row-main { display: grid; min-width: 0; }
+.wo-row-main > * { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wo-row-who { font-size: var(--fs-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.wo-row-id { text-align: right; font-variant-numeric: tabular-nums; }
+.wo-badges { gap: 4px; flex-wrap: nowrap; }
+@media (max-width: 760px) {
+  .wo-row { grid-template-columns: 64px minmax(0, 1fr) auto; }
+  .wo-row-kind, .wo-row-id { display: none; }
+  .wo-row-who { grid-column: 2; }
+  .wo-badges { grid-column: 3; grid-row: 1; }
+}
+.wo-history { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--sp-2); }
+.wo-history li { display: grid; grid-template-columns: 110px 1fr; gap: var(--sp-2); align-items: baseline; padding-bottom: var(--sp-2); border-bottom: 1px dashed var(--line); }
+.wo-history li:last-child { border-bottom: 0; }
 .ui-field textarea { min-height: 72px; resize: vertical; }
 
 /* tabs */
