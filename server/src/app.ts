@@ -35,6 +35,7 @@ import { createTelegram } from './services/telegram.ts';
 import type { Uisp } from './services/uisp.ts';
 import { createConnectors } from './services/connectors.ts';
 import { createCrmSettings } from './services/crm.ts';
+import { createVrmSettings } from './services/victron.ts';
 import { createImagery } from './services/imagery.ts';
 import { createCrmSync, type CrmSync } from './services/crm-sync.ts';
 import { createWarehouse, type Warehouse } from './services/warehouse.ts';
@@ -124,6 +125,7 @@ export async function buildApp(
     uispSettings: { autoBackup: uispCfg?.autoBackup ?? cfg.uispAutoBackup, coverageMaxKm: uispCfg?.coverageMaxKm ?? cfg.coverageMaxKm },
     connectors,
     crm: createCrmSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
+    victron: createVrmSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
     imagery: createImagery(db, sealer, {
       fetchImpl: opts.fetchImpl,
       dir: cfg.imageryDir,
