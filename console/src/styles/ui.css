@@ -573,3 +573,6 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 /* Collaudo segnato come superato dal NOC */
 .jb-override { padding: var(--sp-2) var(--sp-3); border-radius: var(--radius-sm); background: var(--good-bg); border-left: 3px solid var(--good); }
 .jb-override-form { display: grid; gap: var(--sp-2); padding: var(--sp-3); border: 1px solid var(--line); border-radius: var(--radius); }
+
+/* Speedtest nel dettaglio del job */
+.jb-h4 { margin: var(--sp-3) 0 var(--sp-1); font-size: var(--fs-sm); color: var(--muted); }

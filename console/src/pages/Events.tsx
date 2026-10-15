@@ -9,6 +9,7 @@ import { Button, Card, Icon, Notice, PageHeader, Skeleton, Table } from '../ui';
  */
 
 const LABELS: Record<string, string> = {
+  speedtest: 'Speedtest dall’app',
   'job.acceptance_pass': 'Collaudo segnato come superato dal NOC',
   'advisor.dismiss': 'IA-AP: avviso ignorato',
   'advisor.optimize': 'IA-AP: ottimizzazione programmata',

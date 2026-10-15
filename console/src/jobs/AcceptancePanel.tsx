@@ -42,6 +42,22 @@ function measures(a: Acceptance): Array<[string, string]> {
     ['Distanza', a.cpe?.distanceM != null ? (a.cpe.distanceM >= 1000 ? `${(a.cpe.distanceM / 1000).toFixed(1)} km` : `${a.cpe.distanceM} m`) : '—'],
     ['Porta LAN', a.lan ? (a.lan.plugged ? `${a.lan.speedMbps} Mbit/s ${a.lan.fullDuplex ? 'full' : 'half'}` : 'scollegata') : '—'],
     ['PPPoE', a.pppoe?.enabled ? a.pppoe.ip || 'non attivo' : '—'],
+    ...(a.speedtest
+      ? ([
+          [
+            'Speedtest',
+            `${n(a.speedtest.downMbps, '↓ Mbit/s', 1)} · ${n(a.speedtest.upMbps, '↑ Mbit/s', 1)}${a.speedtest.target ? ` su ${a.speedtest.target.downMbps}/${a.speedtest.target.upMbps} (${a.speedtest.passed ? 'ok' : `sotto il ${a.speedtest.target.minPct}%`})` : ''}${(a.speedtest.attempts ?? 1) > 1 ? ` · ${a.speedtest.attempts} tentativi` : ''}`,
+          ],
+        ] as Array<[string, string]>)
+      : []),
+    ...(a.wifi
+      ? ([
+          [
+            'Wi-Fi del router',
+            [a.wifi.band ? `${a.wifi.band} GHz` : null, a.wifi.channel != null ? `canale ${a.wifi.channel}` : null, a.wifi.widthMhz != null ? `${a.wifi.widthMhz} MHz` : null, a.wifi.rssi != null ? `telefono ${a.wifi.rssi} dBm` : null, a.wifi.congested ? 'canale affollato' : null, a.wifi.changed ? `modificato: ${a.wifi.changed}` : null].filter(Boolean).join(' · ') || '—',
+          ],
+        ] as Array<[string, string]>)
+      : []),
     ['Internet (dal cliente)', a.internet?.tested ? `${n(a.internet.downloadMbps, '↓ Mbit/s', 1)} · ${n(a.internet.uploadMbps, '↑ Mbit/s', 1)} · ping ${n(a.internet.pingMs, 'ms')}` : a.internet?.note || 'non misurato'],
     ['Firmware', a.cpe?.firmware || '—'],
     ['Altezza CPE dal suolo', a.cpeHeightM != null ? `${String(a.cpeHeightM).replace('.', ',')} m` : '—'],

@@ -70,6 +70,37 @@ export const acceptanceSchema = z
     position: z.object({ lat: z.number(), lon: z.number(), accuracyM: z.number().min(0).max(100_000).nullable().optional() }).strict().optional(),
     // height of the CPE above the ground, typed by the technician (older apps do not send it)
     cpeHeightM: z.number().min(0.5).max(100).nullable().optional(),
+    // the speedtest of the acceptance (the last one, against the OoklaServer, over the customer's Wi-Fi)
+    speedtest: z
+      .object({
+        downMbps: num,
+        upMbps: num,
+        pingMs: num,
+        jitterMs: num,
+        server: z.string().max(260).optional(),
+        attempts: z.number().int().min(1).max(1000).default(1),
+        target: z.object({ profile: z.string().max(120), downMbps: z.number(), upMbps: z.number(), minPct: z.number() }).strict().nullable().optional(),
+        passed: z.boolean().nullable().optional(),
+      })
+      .strict()
+      .optional(),
+    // the Wi-Fi of the customer's router as the phone saw it (and what the technician changed)
+    wifi: z
+      .object({
+        ssid: z.string().max(64).optional(),
+        rssi: num,
+        band: z.enum(['2.4', '5', '6']).optional(),
+        channel: num,
+        widthMhz: num,
+        linkMbps: num,
+        neighborsSameChannel: num,
+        neighborsOverlapping: num,
+        congested: z.boolean().optional(),
+        suggestedChannel: num,
+        changed: z.string().max(200).optional(),
+      })
+      .strict()
+      .optional(),
   })
   .strict();
 

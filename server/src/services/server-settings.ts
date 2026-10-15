@@ -152,6 +152,34 @@ export const SERVER_SETTINGS: Def[] = [
     get: (c) => c.staleCpeMonths, set: (c, v) => (c.staleCpeMonths = (v as number | undefined) ?? 12),
   },
   {
+    key: 'speedtest.server', env: 'SPEEDTEST_SERVER', group: 'Collaudo: speedtest e Wi-Fi', label: 'Server di speedtest (host:porta)', kind: 'text',
+    help: 'Il server Ookla (OoklaServer) contro cui l’app misura la velocità, nel collaudo, negli interventi e tra gli strumenti di rete: per esempio speedtest.cda-net.it:8080. Il test si fa solo dalla Wi-Fi del router del cliente, mai con i dati mobili.',
+    get: (c) => c.speedtest.server, set: (c, v) => (c.speedtest.server = (v as string | undefined) ?? 'speedtest.cda-net.it:8080'),
+  },
+  {
+    key: 'speedtest.minPct', env: 'SPEEDTEST_MIN_PCT', group: 'Collaudo: speedtest e Wi-Fi', label: 'Velocità minima rispetto al profilo del cliente (%)', kind: 'int', min: 10, max: 100,
+    help: 'Lo speedtest passa se download e upload arrivano almeno a questa percentuale del profilo PPPoE del cliente (per esempio 80% di 30/5 = 24/4 Mbit/s). Sotto, l’app non segna subito un’anomalia: indica all’installatore cosa controllare (puntamento, altri dispositivi sul router, canale Wi-Fi) e fa ripetere il test.',
+    get: (c) => c.speedtest.minPct, set: (c, v) => (c.speedtest.minPct = (v as number | undefined) ?? 80),
+  },
+  {
+    key: 'speedtest.wifiWarnDbm', env: 'WIFI_WARN_DBM', group: 'Collaudo: speedtest e Wi-Fi', label: 'Segnale Wi-Fi del telefono: avviso sotto (dBm)', kind: 'int', min: -90, max: -30,
+    help: 'Segnale del telefono verso il router del cliente. Sotto questo valore lo speedtest parte, con l’avviso che il risultato può dipendere dalla Wi-Fi.',
+    get: (c) => c.speedtest.wifiWarnDbm, set: (c, v) => (c.speedtest.wifiWarnDbm = (v as number | undefined) ?? -65),
+  },
+  {
+    key: 'speedtest.wifiBlockDbm', env: 'WIFI_BLOCK_DBM', group: 'Collaudo: speedtest e Wi-Fi', label: 'Segnale Wi-Fi del telefono: test bloccato sotto (dBm)', kind: 'int', min: -95, max: -30,
+    help: 'Sotto questo valore l’app non fa partire lo speedtest e chiede all’installatore di avvicinarsi al router: misurerebbe la Wi-Fi, non la linea.',
+    get: (c) => c.speedtest.wifiBlockDbm, set: (c, v) => (c.speedtest.wifiBlockDbm = (v as number | undefined) ?? -70),
+  },
+  {
+    key: 'speedtest.seconds', env: 'SPEEDTEST_SECONDS', group: 'Collaudo: speedtest e Wi-Fi', label: 'Durata dello speedtest per verso (secondi)', kind: 'int', min: 5, max: 30,
+    get: (c) => c.speedtest.seconds, set: (c, v) => (c.speedtest.seconds = (v as number | undefined) ?? 10),
+  },
+  {
+    key: 'speedtest.streams', env: 'SPEEDTEST_STREAMS', group: 'Collaudo: speedtest e Wi-Fi', label: 'Connessioni in parallelo dello speedtest', kind: 'int', min: 1, max: 16,
+    get: (c) => c.speedtest.streams, set: (c, v) => (c.speedtest.streams = (v as number | undefined) ?? 4),
+  },
+  {
     key: 'coverageHideBelowDbm', env: 'COVERAGE_HIDE_BELOW_DBM', group: 'Copertura per gli installatori', label: 'Nascondi gli AP con segnale stimato più debole di (dBm)', kind: 'int', min: -100, max: -40,
     help: 'In ogni verifica di copertura (console e app, installatori e amministratori) gli AP con un segnale stimato più debole di questo valore non vengono elencati: la risposta dice quanti ne sono stati nascosti. Gli AP senza una stima restano. −100 = mostra tutti.',
     get: (c) => c.coverageHideBelowDbm, set: (c, v) => (c.coverageHideBelowDbm = (v as number | undefined) ?? -70),

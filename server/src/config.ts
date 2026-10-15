@@ -70,6 +70,13 @@ const envSchema = z.object({
   CAPACITY_MIN_MBPS: int(100, 1, 2000),
   ETH_MIN_MBPS: int(100, 10, 1000),
   SIGNAL_DROP_DB: int(6, 1, 30),
+  // speedtest of the acceptance test and of the network tools (the app, over the customer's Wi-Fi)
+  SPEEDTEST_SERVER: z.string().max(260).default('speedtest.cda-net.it:8080'),
+  SPEEDTEST_SECONDS: int(10, 5, 30),
+  SPEEDTEST_STREAMS: int(4, 1, 16),
+  SPEEDTEST_MIN_PCT: int(80, 10, 100),
+  WIFI_WARN_DBM: int(-65, -90, -30),
+  WIFI_BLOCK_DBM: int(-70, -95, -30),
   // CPEs offline for longer than this are left out of Salute CPE and Stato rete (0 = never)
   STALE_CPE_MONTHS: int(12, 0, 120),
   // nearest APs an installer gets from a coverage check (web and app alike)
@@ -171,6 +178,8 @@ export interface Config {
   /** Thresholds of the acceptance test, field diagnosis, Salute CPE and coverage ranking. */
   thresholds: { signalGood: number; signalMin: number; cinrMin: number; chainDelta: number; capacityMinMbps: number; ethMinMbps: number; signalDropDb: number };
   installerCoverageAps: number;
+  /** Speedtest (OoklaServer host:port) and the Wi-Fi of the phone towards the customer's router. */
+  speedtest: { server: string; seconds: number; streams: number; minPct: number; wifiWarnDbm: number; wifiBlockDbm: number };
   /** Months offline after which a CPE is considered gone (hidden in Salute CPE, not counted in Stato rete); 0 = never. */
   staleCpeMonths: number;
   installerDistanceStepM: number;
@@ -281,6 +290,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
       signalDropDb: e.SIGNAL_DROP_DB,
     },
     installerCoverageAps: e.INSTALLER_COVERAGE_APS,
+    speedtest: { server: e.SPEEDTEST_SERVER, seconds: e.SPEEDTEST_SECONDS, streams: e.SPEEDTEST_STREAMS, minPct: e.SPEEDTEST_MIN_PCT, wifiWarnDbm: e.WIFI_WARN_DBM, wifiBlockDbm: e.WIFI_BLOCK_DBM },
     staleCpeMonths: e.STALE_CPE_MONTHS,
     installerDistanceStepM: e.INSTALLER_DISTANCE_STEP_M,
     coverageEirpDbm: e.COVERAGE_AP_EIRP_DBM,

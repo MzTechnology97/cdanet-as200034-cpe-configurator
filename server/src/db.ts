@@ -499,6 +499,33 @@ const MIGRATIONS: string[] = [
   CREATE INDEX cpe_movements_mac ON cpe_movements(mac, at);
   CREATE INDEX cpe_movements_at ON cpe_movements(at);
   `,
+  // 30: every speedtest of the app (acceptance, interventions, network tools) with the Wi-Fi it ran on
+  `
+  CREATE TABLE speed_tests(
+    id INTEGER PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    measured_at TEXT NOT NULL,
+    client_id TEXT UNIQUE,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    context TEXT NOT NULL CHECK(context IN('acceptance','work_order','cpe','tool')),
+    job_id TEXT,
+    work_order_id INTEGER,
+    mac TEXT NOT NULL DEFAULT '',
+    pppoe_user TEXT NOT NULL DEFAULT '',
+    down_mbps REAL,
+    up_mbps REAL,
+    ping_ms REAL,
+    jitter_ms REAL,
+    server TEXT NOT NULL DEFAULT '',
+    wifi TEXT NOT NULL DEFAULT '{}',
+    target TEXT,
+    passed INTEGER,
+    attempt INTEGER NOT NULL DEFAULT 1
+  );
+  CREATE INDEX speed_tests_job ON speed_tests(job_id);
+  CREATE INDEX speed_tests_mac ON speed_tests(mac, created_at);
+  CREATE INDEX speed_tests_at ON speed_tests(created_at);
+  `,
 ];
 
 export function openDatabase(path: string): Db {

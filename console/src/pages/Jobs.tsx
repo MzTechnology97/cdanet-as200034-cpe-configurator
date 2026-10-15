@@ -4,6 +4,7 @@ import { toast } from '../lib/toast';
 import { isOn } from '../lib/modules';
 import { AcceptancePanel } from '../jobs/AcceptancePanel';
 import { FollowUp, JobKo, KO_REASONS, ReviewPanel } from '../jobs/KoPanels';
+import { SpeedTests } from '../jobs/SpeedTests';
 import { UispPanel } from '../jobs/UispPanel';
 import { api, download } from '../lib/api';
 import { keys } from '../lib/query';
@@ -275,6 +276,8 @@ function JobDrawer({ j, admin, onClose, onChange, onDeleted }: { j: Job; admin: 
         <section className="jb-sec">
           <h3>Collaudo</h3>
           <AcceptancePanel j={j} admin={admin} onChange={onChange} />
+          <h4 className="jb-h4">Speedtest</h4>
+          <SpeedTests jobId={j.id} />
           <ReviewPanel job={j} admin={admin} onChange={() => void onChange()} />
         </section>
       )}
