@@ -141,6 +141,8 @@ fun AcceptanceScreen(c: AppContainer) {
         done?.let { Banner(it, GoodGreen) }
         if (ready == false) Banner("Credenziali CPE non disponibili: accedi con Internet attivo e riapri il collaudo.", BadRed)
         SectionCard("Installazione") {
+            // a test already registered (or just sent): its PDF report, as in the console
+            if (j.acceptance != null || done != null) AcceptanceReportButtons(c, j.id, j.deviceName.ifBlank { j.pppoeUser })
             KeyValue("Cliente", j.deviceName.ifBlank { j.pppoeUser })
             KeyValue("CPE", "${j.model} · ${j.mac}")
             KeyValue("SSID", j.ssid)

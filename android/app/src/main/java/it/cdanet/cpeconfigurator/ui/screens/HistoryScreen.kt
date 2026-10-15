@@ -137,6 +137,8 @@ fun HistoryScreen(c: AppContainer, onAcceptance: (JobDto) -> Unit, onReplace: (J
                         }
                         if (c.moduleOn("replacement")) SecondaryButton(onClick = { onReplace(j) }) { Text("Sostituisci CPE") }
                     }
+                    // the same PDF report as the console, to show or save
+                    if (j.acceptance != null && c.moduleOn("acceptance")) AcceptanceReportButtons(c, j.id, j.deviceName.ifBlank { j.pppoeUser })
                 }
             }
         }
