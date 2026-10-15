@@ -49,6 +49,7 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
     telegram: ctx.modules.enabled('telegram') ? { ...ctx.telegram.view(), publicUrl: ctx.cfg.publicUrl ?? '' } : null,
     crm: ctx.crm.view(),
     victron: ctx.victron.view(),
+    mywic: ctx.mywic.view(),
     imagery: ctx.imagery.view(),
     firebase: ctx.push.view(),
   }));
@@ -247,6 +248,38 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!token) throw new HttpError(400, 'vrm_incomplete');
     const r = await ctx.victron.build(token).test();
     recordEvent(ctx.db, req.user!.id, 'connector.victron.test', 'Victron VRM', r.ok ? `${r.installations} impianti · ${r.withAlarms} con allarmi · ${r.silent} senza dati da oltre un'ora` : `errore ${r.error}`);
+    return r;
+  });
+
+  // ---- MyWic: coverage of the other operators (FTTH, FTTC, FWA), read only --------------------------
+  // An API token generated in the MyWic dashboard («Generate API token»).
+  const mywicBody = z
+    .object({
+      enabled: z.boolean(),
+      token: z.string().trim().max(500).regex(/^[!-~]*$/, 'Token non valido').optional(),
+    })
+    .strict();
+
+  app.put('/api/admin/connectors/mywic', admin, async (req) => {
+    const b = mywicBody.parse(req.body);
+    ctx.mywic.save({ enabled: b.enabled, token: b.token || undefined }, req.user!.id);
+    recordEvent(ctx.db, req.user!.id, 'connector.mywic.update', 'Copertura multi-operatore', `${b.enabled ? 'attivo' : 'disattivato'}${b.token ? ' · nuovo token' : ''}`);
+    return ctx.mywic.view();
+  });
+
+  app.delete('/api/admin/connectors/mywic', admin, async (req) => {
+    ctx.mywic.reset();
+    recordEvent(ctx.db, req.user!.id, 'connector.mywic.reset', 'Copertura multi-operatore', 'configurazione rimossa');
+    return ctx.mywic.view();
+  });
+
+  /** Tests the token in the form (or the saved one) without saving it: the operators and technologies it can check. */
+  app.post('/api/admin/connectors/mywic/test', admin, async (req) => {
+    const b = mywicBody.partial({ enabled: true }).parse(req.body ?? {});
+    const token = b.token || ctx.mywic.savedToken();
+    if (!token) throw new HttpError(400, 'mywic_incomplete');
+    const r = await ctx.mywic.build(token).test();
+    recordEvent(ctx.db, req.user!.id, 'connector.mywic.test', 'Copertura multi-operatore', r.ok ? `${r.providers?.length ?? 0} operatori leggibili` : `errore ${r.error}`);
     return r;
   });
 

@@ -6,6 +6,7 @@ import { type Firebase, FirebaseCard } from '../connectors/FirebaseCard';
 import { type Imagery, ImageryCard } from '../connectors/ImageryCard';
 import { type Telegram, TelegramCard } from '../connectors/TelegramCard';
 import { type Victron, VictronCard } from '../connectors/VictronCard';
+import { type MyWic, MyWicCard } from '../connectors/MyWicCard';
 import { api } from '../lib/api';
 import { AsyncButton, Badge, Card, Field, Notice, PageHeader, Skeleton, Stat } from '../ui';
 
@@ -53,6 +54,7 @@ interface Data {
   uisp: Uisp;
   crm: Crm;
   victron?: Victron | null;
+  mywic?: MyWic | null;
   telegram?: Telegram | null;
   geocoder: Geocoder;
   imagery?: Imagery | null;
@@ -97,6 +99,7 @@ export function Connectors() {
           <UispCard key={`${d.uisp.updatedAt ?? ''}-${d.uisp.source}`} u={d.uisp} onSaved={reload} />
           <CrmCard key={`crm-${d.crm.updatedAt ?? ""}`} c={d.crm} onSaved={reload} />
           {d.victron ? <VictronCard key={`vrm-${d.victron.updatedAt ?? ''}`} v={d.victron} onSaved={reload} /> : null}
+          {d.mywic ? <MyWicCard key={`mw-${d.mywic.updatedAt ?? ''}`} m={d.mywic} onSaved={reload} /> : null}
           {d.telegram ? <TelegramCard key={`tg-${d.telegram.updatedAt ?? ""}`} t={d.telegram} onSaved={reload} /> : null}
           {d.firebase ? <FirebaseCard key={`fb-${d.firebase.updatedAt ?? ''}-${d.firebase.configured}`} f={d.firebase} onSaved={reload} /> : null}
           <GeocoderCard g={d.geocoder} />
