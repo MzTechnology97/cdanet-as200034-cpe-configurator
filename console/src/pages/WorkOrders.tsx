@@ -3,50 +3,16 @@ import { useMemo, useState } from 'react';
 import { toast } from '../lib/toast';
 import { api } from '../lib/api';
 import type { PageContext } from '../shell/routes';
-import { AsyncButton, Badge, Button, Card, Drawer, EmptyState, Field, Notice, PageHeader, Segmented, Skeleton, Stat } from '../ui';
+import { AsyncButton, Badge, Button, Drawer, EmptyState, Field, Notice, PageHeader, Segmented, Skeleton } from '../ui';
 import { Calendar, type NewAt } from '../workorders/Calendar';
+import { OfficeList, StatusBadges } from '../workorders/Office';
+import { dayLabel, KIND_TONE, KINDS, type Order, romeDay } from '../workorders/shared';
 
 /**
  * Interventi: the office plans the day of each installer with the customer's data and the PPPoE
  * credentials (the password is sealed on the server, never shown); installers find them in the
  * app (Oggi) and here, read-only. Two views: the list and the calendar (workorders/Calendar.tsx).
  */
-
-type Tone = 'good' | 'warn' | 'bad' | 'neutral' | 'info';
-const KINDS: Record<string, string> = { new: 'Nuova installazione', repoint: 'Ripuntamento / cambio AP', repair: 'Guasto', survey: 'Sopralluogo' };
-/** The colour of each kind, the same as the app and the calendar. */
-const KIND_TONE: Record<string, 'brand' | 'info' | 'warn' | 'good'> = { new: 'brand', repoint: 'info', repair: 'warn', survey: 'good' };
-const STATUS: Record<string, [string, Tone]> = { open: ['da fare', 'neutral'], started: ['in corso', 'info'], done: ['fatto', 'good'], postponed: ['rimandato', 'warn'], cancelled: ['annullato', 'bad'] };
-
-interface Order {
-  id: number;
-  day: string;
-  slot: string;
-  kind: string;
-  customer: string;
-  address: string;
-  lat: number | null;
-  lon: number | null;
-  contact: string;
-  pppoeUser: string;
-  hasPassword: boolean;
-  model: string | null;
-  notes: string;
-  status: string;
-  statusNote?: string | null;
-  overdue: boolean;
-  assignedTo: number | null;
-  assignee?: string | null;
-  jobId?: string | null;
-}
-
-const romeDay = (offset = 0) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(Date.now() + offset * 86_400_000));
-const dayLabel = (d: string) => {
-  if (d === romeDay()) return 'Oggi';
-  if (d === romeDay(1)) return 'Domani';
-  if (d === romeDay(-1)) return 'Ieri';
-  return new Date(`${d}T12:00:00`).toLocaleDateString('it-IT', { weekday: 'long', day: 'numeric', month: 'long' });
-};
 
 /** List or calendar, remembered on this browser. */
 function useLayout(): ['list' | 'calendar', (v: 'list' | 'calendar') => void] {
@@ -73,15 +39,6 @@ const LAYOUTS = [
   { value: 'list' as const, label: 'Elenco' },
   { value: 'calendar' as const, label: 'Calendario' },
 ];
-
-function StatusBadges({ o }: { o: Order }) {
-  return (
-    <span className="ui-row">
-      <Badge tone={STATUS[o.status]?.[1] ?? 'neutral'}>{STATUS[o.status]?.[0] ?? o.status}</Badge>
-      {o.overdue && <Badge tone="bad">in ritardo</Badge>}
-    </span>
-  );
-}
 
 export function WorkOrders({ user }: PageContext) {
   return user.role === 'admin' ? <Office /> : <Mine />;
@@ -127,32 +84,20 @@ function Mine() {
 /** Office: the agenda of every installer, new orders and changes in a side panel. */
 function Office() {
   const qc = useQueryClient();
-  const [range, setRange] = useState<'today' | 'tomorrow' | 'week' | 'custom'>('today');
-  const [from, setFrom] = useState(romeDay());
-  const [to, setTo] = useState(romeDay());
-  const [who, setWho] = useState('');
   const [editing, setEditing] = useState<Order | 'new' | NewAt | null>(null);
   const [layout, setLayout] = useLayout();
 
-  const span = range === 'today' ? [romeDay(), romeDay()] : range === 'tomorrow' ? [romeDay(1), romeDay(1)] : range === 'week' ? [romeDay(), romeDay(6)] : [from, to < from ? from : to];
   const users = useQuery({ queryKey: ['admin', 'users'], queryFn: () => api<Array<{ id: number; username: string; role: string; active?: boolean }>>('/api/admin/users') });
   const models = useQuery({ queryKey: ['admin', 'profiles'], queryFn: () => api<Array<{ model: string }>>('/api/admin/profiles') });
   const installers = (users.data ?? []).filter((u) => u.active !== false && u.role !== 'admin');
-  const list = useQuery({
-    queryKey: ['work-orders', 'office', span[0], span[1], who],
-    queryFn: () => api<{ items: Order[] }>(`/api/admin/work-orders?${new URLSearchParams({ from: span[0]!, to: span[1]!, ...(who ? { user: who } : {}) })}`),
-    enabled: layout === 'list',
-  });
   const refresh = () => qc.invalidateQueries({ queryKey: ['work-orders'] });
-  const items = list.data?.items ?? [];
-  const n = (pred: (o: Order) => boolean) => items.filter(pred).length;
 
   return (
     <div className="ui-page">
       <PageHeader
         icon="pending_actions"
         title="Interventi"
-        subtitle="L’agenda degli installatori: ognuno trova i suoi in Oggi nell’app, con cliente, posizione e PPPoE già compilati."
+        subtitle="L’agenda degli installatori e lo storico: filtra per giorno, mese, anno, installatore e tipo; ogni intervento ha la sua cronologia."
         actions={
           <>
             <Segmented label="Vista" value={layout} onChange={setLayout} options={LAYOUTS} />
@@ -165,65 +110,21 @@ function Office() {
       {layout === 'calendar' ? (
         <Calendar admin onNew={(at) => setEditing(at)} onOpen={(o) => setEditing(o as unknown as Order)} />
       ) : (
-        <>
-          <div className="wo-toolbar">
-            <Segmented
-              label="Periodo"
-              value={range}
-              onChange={setRange}
-              options={[
-                { value: 'today', label: 'Oggi' },
-                { value: 'tomorrow', label: 'Domani' },
-                { value: 'week', label: '7 giorni' },
-                { value: 'custom', label: 'Date' },
-              ]}
-            />
-            {range === 'custom' && (
-              <>
-                <input type="date" className="wo-date" value={from} onChange={(e) => e.target.value && setFrom(e.target.value)} aria-label="Dal" />
-                <input type="date" className="wo-date" value={to} onChange={(e) => e.target.value && setTo(e.target.value)} aria-label="Al" />
-              </>
-            )}
-            <select className="wo-date" value={who} onChange={(e) => setWho(e.target.value)} aria-label="Installatore">
-              <option value="">Tutti gli installatori</option>
-              {installers.map((u) => (
-                <option key={u.id} value={u.id}>
-                  {u.username}
-                </option>
-              ))}
-            </select>
-          </div>
-          {list.data && (
-            <section className="ui-stats" aria-label="Riepilogo">
-              <Stat label="da fare" value={n((o) => o.status === 'open')} />
-              <Stat label="in corso" value={n((o) => o.status === 'started')} tone="info" />
-              <Stat label="fatti" value={n((o) => o.status === 'done')} tone="good" />
-              <Stat label="in ritardo" value={n((o) => o.overdue)} tone={n((o) => o.overdue) ? 'bad' : 'good'} />
-              <Stat label="da assegnare" value={n((o) => !o.assignedTo && o.status !== 'cancelled')} tone={n((o) => !o.assignedTo && o.status !== 'cancelled') ? 'warn' : 'good'} />
-            </section>
-          )}
-          {list.error ? (
-            <Notice tone="bad">{(list.error as Error).message}</Notice>
-          ) : !list.data ? (
-            <Skeleton lines={5} />
-          ) : (
-            <OrderList
-              items={items}
-              office
-              onEdit={(o) => setEditing(o)}
-              onDelete={async (o) => {
-                if (!confirm(`${o.jobId ? 'Annullare' : 'Eliminare'} l’intervento di ${o.customer}?`)) return;
-                await api(`/api/admin/work-orders/${o.id}`, { method: 'DELETE' });
-                await refresh();
-              }}
-            />
-          )}
-        </>
+        <OfficeList
+          installers={installers}
+          onEdit={(o) => setEditing(o)}
+          onDelete={async (o) => {
+            if (!confirm(`${o.jobId || o.status === 'done' ? 'Annullare' : 'Eliminare'} l’intervento di ${o.customer}?`)) return;
+            await api(`/api/admin/work-orders/${o.id}`, { method: 'DELETE' });
+            toast(o.jobId || o.status === 'done' ? 'Intervento annullato' : 'Intervento eliminato');
+            await refresh();
+          }}
+        />
       )}
       {editing && (
         <OrderForm
           order={editing === 'new' || !('id' in editing) ? null : editing}
-          day={editing !== 'new' && !('id' in editing) ? editing.day : span[0]!}
+          day={editing !== 'new' && !('id' in editing) ? editing.day : romeDay()}
           preset={editing !== 'new' && !('id' in editing) ? editing : undefined}
           installers={installers}
           models={(models.data ?? []).map((m) => m.model)}
@@ -239,13 +140,13 @@ function Office() {
 }
 
 /** Orders grouped by day (overdue ones under their own day), each a card. */
-function OrderList({ items, office, onEdit, onDelete }: { items: Order[]; office?: boolean; onEdit?: (o: Order) => void; onDelete?: (o: Order) => Promise<void> }) {
+function OrderList({ items }: { items: Order[] }) {
   const groups = useMemo(() => {
     const g = new Map<string, Order[]>();
     for (const o of items) g.set(o.day, [...(g.get(o.day) ?? []), o]);
     return [...g.entries()].sort((a, b) => a[0].localeCompare(b[0]));
   }, [items]);
-  if (!items.length) return <EmptyState icon="check_circle" title="Nessun intervento">Nel periodo scelto non ci sono interventi{office ? ': crealo con «Nuovo intervento»' : ''}.</EmptyState>;
+  if (!items.length) return <EmptyState icon="check_circle" title="Nessun intervento">Nel periodo scelto non ci sono interventi.</EmptyState>;
   return (
     <>
       {groups.map(([day, os]) => (
@@ -264,29 +165,10 @@ function OrderList({ items, office, onEdit, onDelete }: { items: Order[]; office
                 <span className="ui-muted ui-small">{o.address || 'indirizzo non indicato'}</span>
                 <div className="ui-row wo-meta">
                   <Badge tone={KIND_TONE[o.kind] ?? 'neutral'}>{KINDS[o.kind] ?? o.kind}</Badge>
-                  {office && (o.assignee ? <Badge>{o.assignee}</Badge> : <Badge tone="warn">da assegnare</Badge>)}
                 </div>
                 {o.contact && <span className="ui-small">Contatto: {o.contact}</span>}
-                {office && o.pppoeUser && (
-                  <span className="ui-small ui-mono">
-                    PPPoE {o.pppoeUser}
-                    {!o.hasPassword && <span className="ui-muted"> · senza password</span>}
-                  </span>
-                )}
                 {o.notes && <p className="wo-notes">{o.notes}</p>}
                 {o.statusNote && <p className="wo-notes">{o.statusNote}</p>}
-                {office && o.status !== 'cancelled' && (
-                  <footer className="ui-row">
-                    {o.status !== 'done' && (
-                      <Button variant="ghost" onClick={() => onEdit?.(o)}>
-                        Modifica
-                      </Button>
-                    )}
-                    <AsyncButton variant="ghost" onClick={() => onDelete!(o)} onError={(e) => toast((e as Error).message, 'bad')}>
-                      {o.jobId || o.status === 'done' ? 'Annulla' : 'Elimina'}
-                    </AsyncButton>
-                  </footer>
-                )}
               </article>
             ))}
           </div>

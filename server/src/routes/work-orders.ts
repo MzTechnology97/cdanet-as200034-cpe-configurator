@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
+import { toCsv } from '../domain/csv.ts';
 import { distanceM, isValidLatLon } from '../domain/geo.ts';
 
 /** The installer must be within this distance of the order's position to save the acceptance test. */
@@ -16,6 +17,8 @@ export const WORK_ORDER_KIND_LABEL: Record<(typeof KINDS)[number], string> = {
   repair: 'Guasto',
   survey: 'Sopralluogo',
 };
+
+export const STATUS_LABEL: Record<string, string> = { open: 'da fare', started: 'in corso', done: 'fatto', postponed: 'rimandato', cancelled: 'annullato' };
 
 /** Today in Italy (the office plans by local day). */
 export function todayRome(now = new Date()): string {
@@ -98,6 +101,30 @@ export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
     if (lat != null && lon != null && !isValidLatLon(lat, lon)) throw new HttpError(400, 'invalid_position');
   };
   const get = (id: number) => db.prepare(`${SELECT} WHERE w.id = ?`).get(id) as Row | undefined;
+  const username = (uid: number | null | undefined) => (uid == null ? 'nessuno' : ((db.prepare('SELECT username FROM users WHERE id = ?').get(uid) as { username: string } | undefined)?.username ?? `#${uid}`));
+
+  /** «giorno 2026-10-15 → 2026-10-16 · installatore mario → luca · password cambiata»: what an edit changed. */
+  function changes(cur: Row, b: Partial<Record<string, unknown>>): string {
+    const show = (v: unknown) => (v === '' || v == null ? '—' : String(v));
+    const out: string[] = [];
+    const diff = (label: string, before: unknown, after: unknown) => {
+      if (after !== undefined && show(before) !== show(after)) out.push(`${label} ${show(before)} → ${show(after)}`);
+    };
+    diff('giorno', cur.day, b.day);
+    diff('fascia', cur.slot, b.slot);
+    if (b.assignedTo !== undefined && b.assignedTo !== cur.assignedTo) out.push(`installatore ${username(cur.assignedTo)} → ${username(b.assignedTo as number | null)}`);
+    if (b.kind !== undefined && b.kind !== cur.kind) out.push(`tipo ${WORK_ORDER_KIND_LABEL[cur.kind]} → ${WORK_ORDER_KIND_LABEL[b.kind as (typeof KINDS)[number]]}`);
+    if (b.status !== undefined && b.status !== cur.status) out.push(`stato ${STATUS_LABEL[cur.status] ?? cur.status} → ${STATUS_LABEL[b.status as string] ?? b.status}`);
+    diff('cliente', cur.customer, b.customer);
+    diff('indirizzo', cur.address, b.address);
+    diff('contatto', cur.contact, b.contact);
+    diff('utente PPPoE', cur.pppoeUser, b.pppoeUser);
+    diff('modello', cur.model, b.model);
+    if ((b.lat !== undefined && b.lat !== cur.lat) || (b.lon !== undefined && b.lon !== cur.lon)) out.push('posizione cambiata');
+    if (b.notes !== undefined && b.notes !== cur.notes) out.push('note cambiate');
+    if (b.pppoePassword !== undefined) out.push(b.pppoePassword ? 'password cambiata' : 'password tolta');
+    return out.join(' · ') || 'nessuna modifica';
+  }
 
   /** An order with an address but no position gets the address's (the GPS check needs a point). */
   async function locate(id: number): Promise<{ lat: number; lon: number } | null> {
@@ -111,18 +138,110 @@ export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
     return { lat: hit.lat, lon: hit.lon };
   }
 
+  /**
+   * The office's list: a period, an installer (or «none»: not assigned), statuses, a kind and a text
+   * (customer, address, contact, PPPoE user or #number). [backlog] (default on) adds the open orders of
+   * past days; a month or a year of history leaves it off. The summary counts the whole selection.
+   */
+  const listQuery = z.object({
+    from: DAY.optional(),
+    to: DAY.optional(),
+    user: z.union([z.literal('none'), z.coerce.number().int().positive()]).optional(),
+    status: z.string().regex(/^[a-z,]+$/).max(80).optional(),
+    kind: z.enum(KINDS).optional(),
+    q: z.string().trim().max(80).optional(),
+    backlog: z.enum(['0', '1']).default('1'),
+    order: z.enum(['asc', 'desc']).default('asc'),
+    limit: z.coerce.number().int().min(1).max(5000).default(1000),
+    offset: z.coerce.number().int().min(0).default(0),
+  });
+  function select(raw: unknown) {
+    const q = listQuery.parse(raw);
+    const from = q.from ?? todayRome();
+    const to = q.to && q.to >= from ? q.to : from;
+    const common: string[] = [];
+    const args: Array<string | number> = [];
+    if (q.user === 'none') common.push('w.assigned_to IS NULL');
+    else if (q.user) (common.push('w.assigned_to = ?'), args.push(q.user));
+    const statuses = (q.status ?? '').split(',').filter(Boolean);
+    if (statuses.length) (common.push(`w.status IN (${statuses.map(() => '?').join(',')})`), args.push(...statuses));
+    if (q.kind) (common.push('w.kind = ?'), args.push(q.kind));
+    const text = (q.q ?? '').replace(/^#/, '');
+    if (text) {
+      const like = `%${text.replace(/[\\%_]/g, (c) => `\\${c}`)}%`;
+      common.push("(w.customer LIKE ? ESCAPE '\\' OR w.address LIKE ? ESCAPE '\\' OR w.contact LIKE ? ESCAPE '\\' OR w.pppoe_user LIKE ? ESCAPE '\\' OR CAST(w.id AS TEXT) = ?)");
+      args.push(like, like, like, like, text);
+    }
+    // open orders of past days stay on the board until someone closes them
+    const when = q.backlog === '1' ? "(w.day BETWEEN ? AND ? OR (w.day < ? AND w.status IN ('open','postponed')))" : 'w.day BETWEEN ? AND ?';
+    const whenArgs = q.backlog === '1' ? [from, to, from] : [from, to];
+    const where = [when, ...common].join(' AND ');
+    const dir = q.order === 'desc' ? 'DESC' : 'ASC';
+    const all = db.prepare(`SELECT w.status, w.day, w.assigned_to, w.kind FROM work_orders w WHERE ${where}`).all(...whenArgs, ...args) as Array<{ status: string; day: string; assigned_to: number | null; kind: string }>;
+    const today = todayRome();
+    const count = (f: (r: (typeof all)[number]) => boolean) => all.filter(f).length;
+    const summary = {
+      open: count((r) => r.status === 'open'),
+      started: count((r) => r.status === 'started'),
+      done: count((r) => r.status === 'done'),
+      postponed: count((r) => r.status === 'postponed'),
+      cancelled: count((r) => r.status === 'cancelled'),
+      overdue: count((r) => (r.status === 'open' || r.status === 'postponed') && r.day < today),
+      unassigned: count((r) => r.assigned_to == null && r.status !== 'cancelled'),
+      byKind: Object.fromEntries(KINDS.map((k) => [k, count((r) => r.kind === k)])),
+    };
+    const rows = db.prepare(`${SELECT} WHERE ${where} ORDER BY w.day ${dir}, w.slot, w.id LIMIT ? OFFSET ?`).all(...whenArgs, ...args, q.limit, q.offset) as unknown as Row[];
+    return { q, from, to, total: all.length, summary, rows };
+  }
+
   // ---- office (admins) ------------------------------------------------------------------------
   app.get('/api/admin/work-orders', admin, async (req) => {
-    const q = z.object({ from: DAY.optional(), to: DAY.optional(), user: z.coerce.number().int().optional(), status: z.string().optional() }).parse(req.query);
-    const from = q.from ?? todayRome();
-    const to = q.to ?? from;
-    const where = ['w.day BETWEEN ? AND ?'];
-    const args: Array<string | number> = [from, to];
-    if (q.user) (where.push('w.assigned_to = ?'), args.push(q.user));
-    if (q.status) (where.push('w.status = ?'), args.push(q.status));
-    // open orders of past days stay on the board until someone closes them
-    const rows = db.prepare(`${SELECT} WHERE (${where.join(' AND ')}) OR (w.day < ? AND w.status IN ('open','postponed')${q.user ? ' AND w.assigned_to = ?' : ''}) ORDER BY w.day, w.slot, w.id`).all(...args, from, ...(q.user ? [q.user] : [])) as unknown as Row[];
-    return { from, to, items: rows.map((r) => view(r)) };
+    const r = select(req.query);
+    return { from: r.from, to: r.to, total: r.total, summary: r.summary, items: r.rows.map((x) => view(x)) };
+  });
+
+  /** The same selection for Excel (';', UTF-8 BOM): never the PPPoE password. */
+  app.get('/api/admin/work-orders.csv', { preHandler: [ctx.auth.requireAdmin, ctx.modules.require('work_orders'), ctx.modules.require('csv_export')] }, async (req, reply) => {
+    const r = select({ ...(req.query as object), limit: '5000', offset: '0' });
+    const header = ['Numero', 'Giorno', 'Fascia', 'Tipo', 'Stato', 'Installatore', 'Cliente', 'Indirizzo', 'Contatto', 'Utente PPPoE', 'Modello', 'Note', 'Nota dello stato', 'Creato', 'Ultima modifica', 'Completato', 'Installazione'];
+    const lines = r.rows.map((o) => [o.id, o.day, o.slot, WORK_ORDER_KIND_LABEL[o.kind], STATUS_LABEL[o.status] ?? o.status, o.assignee ?? '', o.customer, o.address, o.contact, o.pppoeUser, o.model, o.notes, o.statusNote, o.createdAt, o.updatedAt, o.doneAt ?? '', o.jobId ?? '']);
+    recordEvent(db, req.user!.id, 'work_order.export', `${r.rows.length} righe`, `${r.from} → ${r.to}`);
+    reply.header('Content-Type', 'text/csv; charset=utf-8').header('Content-Disposition', `attachment; filename="interventi-${r.from}-${r.to}.csv"`);
+    return '﻿' + toCsv([header, ...lines]);
+  });
+
+  /**
+   * Everything that happened to an order, in order: created, every change (old → new), the alerts,
+   * the installer's steps, the installation and its acceptance test.
+   */
+  app.get('/api/admin/work-orders/:id/history', admin, async (req) => {
+    const id = z.coerce.number().int().positive().parse((req.params as { id: string }).id);
+    const o = get(id);
+    const evs = db
+      // a deleted order's number can be given again: only what happened since this one was created
+      .prepare("SELECT e.created_at at, e.action, e.detail, u.username FROM events e LEFT JOIN users u ON u.id = e.user_id WHERE e.target = ? AND e.action LIKE 'work_order.%' AND e.created_at >= ? ORDER BY e.id")
+      .all(`#${id}`, o?.createdAt ?? '') as Array<{ at: string; action: string; detail: string; username: string | null }>;
+    if (!o && !evs.length) throw new HttpError(404, 'work_order_not_found');
+    const alerts = o ? (db.prepare('SELECT late_at lateAt, missed_at missedAt FROM work_orders WHERE id = ?').get(id) as { lateAt: string | null; missedAt: string | null }) : null;
+    const job = o?.jobId
+      ? (db.prepare('SELECT j.id, j.created_at createdAt, j.status, j.mac, j.model, u.username installer FROM provisioning_jobs j LEFT JOIN users u ON u.id = j.user_id WHERE j.id = ?').get(o.jobId) as
+          | { id: string; createdAt: string; status: string; mac: string; model: string; installer: string | null }
+          | undefined)
+      : undefined;
+    const acc = job
+      ? (db.prepare('SELECT a.created_at at, a.verdict, a.review, u.username FROM job_acceptance a LEFT JOIN users u ON u.id = a.user_id WHERE a.job_id = ?').get(job.id) as
+          | { at: string; verdict: string; review: string | null; username: string | null }
+          | undefined)
+      : undefined;
+    const VERDICT: Record<string, string> = { ok: 'superato', warn: 'con riserva', bad: 'non superato' };
+    const items = [
+      ...evs.map((e) => ({ at: e.at, kind: e.action.slice('work_order.'.length), user: e.username, detail: e.detail })),
+      ...(alerts?.lateAt ? [{ at: alerts.lateAt, kind: 'late', user: null, detail: 'non iniziato all’ora prevista: avviso al NOC' }] : []),
+      ...(alerts?.missedAt ? [{ at: alerts.missedAt, kind: 'missed', user: null, detail: 'giornata finita senza intervento' }] : []),
+      ...(job ? [{ at: job.createdAt, kind: 'job', user: job.installer, detail: `${job.model} ${job.mac}`.trim() }] : []),
+      ...(acc ? [{ at: acc.at, kind: 'acceptance', user: acc.username, detail: `${VERDICT[acc.verdict] ?? acc.verdict}${acc.review === 'approved' ? ' · approvato dal NOC' : acc.review === 'pending' ? ' · da approvare' : ''}` }] : []),
+    ].sort((a, b) => a.at.localeCompare(b.at));
+    return { id, items, job: job ? { id: job.id, status: job.status, acceptance: acc?.verdict ?? null } : null };
   });
 
   app.post('/api/admin/work-orders', admin, async (req, reply) => {
@@ -166,7 +285,7 @@ export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
       cols.push(['reminders', ''], ['late_at', null], ['missed_at', null]);
     }
     db.prepare(`UPDATE work_orders SET ${cols.map(([c]) => `${c} = ?`).join(', ')} WHERE id = ?`).run(...cols.map(([, v]) => v), id);
-    recordEvent(db, req.user!.id, 'work_order.update', `#${id}`, cols.map(([c]) => (c === 'pppoe_ciphertext' ? 'password' : c)).filter((c) => !['updated_at', 'reminders', 'late_at', 'missed_at'].includes(c)).join(', '));
+    recordEvent(db, req.user!.id, 'work_order.update', `#${id}`, changes(cur, b));
     if (b.address !== undefined && b.lat === undefined && cur.locationFrom !== 'office') {
       // a new address replaces the position found from the old one
       db.prepare("UPDATE work_orders SET lat = NULL, lon = NULL, location_from = '' WHERE id = ?").run(id);
