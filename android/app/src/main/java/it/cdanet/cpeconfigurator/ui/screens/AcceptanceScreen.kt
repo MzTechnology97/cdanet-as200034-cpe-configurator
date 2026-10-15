@@ -45,6 +45,8 @@ import it.cdanet.cpeconfigurator.field.FieldDiagnosis
 import it.cdanet.cpeconfigurator.field.FieldMode
 import it.cdanet.cpeconfigurator.field.InternetTest
 import it.cdanet.cpeconfigurator.field.PhotoCapture
+import it.cdanet.cpeconfigurator.field.PhotoChecklist
+import it.cdanet.cpeconfigurator.field.PhotoType
 import it.cdanet.cpeconfigurator.ui.BadRed
 import it.cdanet.cpeconfigurator.ui.Banner
 import it.cdanet.cpeconfigurator.ui.BusyButton
@@ -94,11 +96,15 @@ fun AcceptanceScreen(c: AppContainer) {
     var shot by remember { mutableStateOf<Pair<File, String>?>(null) }
     var ready by remember { mutableStateOf<Boolean?>(null) }
     var ko by remember { mutableStateOf(false) }
+    // a photo held back by the checks: retaken or kept by the technician
+    var review by remember { mutableStateOf<PhotoToReview?>(null) }
     // one id per test: sent again from the queue it is the same test, never a second one
     val testId = remember(j.id) { java.util.UUID.randomUUID().toString() }
     // the earlier tests of this installation (re-pointings): never replaced, listed below
     var history by remember(j.id) { mutableStateOf<List<it.cdanet.cpeconfigurator.data.AcceptanceHistoryDto>>(emptyList()) }
     LaunchedEffect(j.id, done) { runCatching { c.api.acceptanceHistory(j.id) }.onSuccess { history = it } }
+    var serverPhotos by remember(j.id) { mutableStateOf<List<it.cdanet.cpeconfigurator.data.StoredPhotoDto>>(emptyList()) }
+    LaunchedEffect(j.id) { runCatching { c.api.storedAcceptance(j.id) }.onSuccess { serverPhotos = it.photos } }
 
     it.cdanet.cpeconfigurator.ui.KeepScreenOn()
     DisposableEffect(Unit) {
@@ -118,7 +124,14 @@ fun AcceptanceScreen(c: AppContainer) {
         }
         scope.launch {
             runCatching { withContext(Dispatchers.Default) { PhotoCapture.compress(file) } }
-                .onSuccess { photos += PendingPhoto(caption, it, PhotoCapture.thumbnail(it)) }
+                .onSuccess { jpeg ->
+                    val v = runCatching { vetPhoto(jpeg, photos.map { it.jpeg }) }.getOrNull()
+                    when {
+                        v?.duplicate == true -> error = "Questa foto è già stata aggiunta."
+                        !v?.problems.isNullOrEmpty() -> review = PhotoToReview(caption, jpeg, PhotoCapture.thumbnail(jpeg), v!!.problems)
+                        else -> photos += PendingPhoto(caption, jpeg, PhotoCapture.thumbnail(jpeg))
+                    }
+                }
                 .onFailure { error = it.message }
         }
     }
@@ -144,6 +157,11 @@ fun AcceptanceScreen(c: AppContainer) {
     val activeOrder by c.activeWorkOrder.collectAsState()
     // a re-pointing or AP change: a new test, the earlier one kept (the work order is closed with it)
     val repoint = wizard?.mode == it.cdanet.cpeconfigurator.install.InstallMode.Repoint || activeOrder?.kind == "repoint"
+    // the four photos are required for a new installation only (not re-pointings, not CPE replacements)
+    val newInstall = !repoint && j.replacesJobId == null
+    val photoTypes = photos.mapNotNull { ph -> PhotoType.ofCaption(ph.caption) } +
+        if (repoint) emptyList() else serverPhotos.mapNotNull { p -> PhotoType.ofKey(p.type) ?: PhotoType.ofCaption(p.caption) }
+    val missingPhotos = PhotoChecklist.missing(photoTypes, newInstall)
     LaunchedEffect(roof) {
         if (roof == null) return@LaunchedEffect
         if (roof.radio != null && !measuring && samples.isEmpty()) samples.addAll(roof.radio)
@@ -227,6 +245,10 @@ fun AcceptanceScreen(c: AppContainer) {
         }
 
         SectionCard("3 · Foto (${photos.size}/8)") {
+            if (newInstall) {
+                Text("Obbligatorie per la nuova installazione:", style = MaterialTheme.typography.bodySmall)
+                PhotoChecklistRow(PhotoChecklist.required(true), missingPhotos)
+            }
             // as many per row as fit: a caption never breaks mid-word on a narrow phone
             androidx.compose.foundation.layout.FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 CAPTIONS.forEach { cap -> SecondaryButton(onClick = { val (f, u) = PhotoCapture.newTarget(context); shot = f to cap; camera.launch(u) }, enabled = photos.size < 8) { Text(cap, maxLines = 1, softWrap = false) } }
@@ -238,6 +260,14 @@ fun AcceptanceScreen(c: AppContainer) {
                     TextButton(onClick = { photos.remove(p) }) { Text("Rimuovi") }
                 }
             }
+        }
+
+        review?.let { r ->
+            PhotoReviewCard(
+                r,
+                onRetake = { review = null; val (f, u) = PhotoCapture.newTarget(context); shot = f to r.caption; camera.launch(u) },
+                onKeep = { review = null; photos += PendingPhoto(r.caption, r.jpeg, r.thumb) },
+            )
         }
 
         SectionCard("4 · Note") {
@@ -300,12 +330,15 @@ fun AcceptanceScreen(c: AppContainer) {
         activeOrder?.let { Text("Intervento: ${it.customer}${if (it.address.isNotBlank()) " · ${it.address}" else ""}. Il collaudo si salva solo entro ${WorkOrderPosition.MAX_M} m dall'indirizzo.", style = MaterialTheme.typography.bodySmall) }
         // the reason it was not saved, next to the button (also shown at the top)
         error?.let { msg -> it.cdanet.cpeconfigurator.ui.Notice(msg, it.cdanet.cpeconfigurator.ui.NoticeKind.Bad) }
+        if (report != null && missingPhotos.isNotEmpty()) {
+            it.cdanet.cpeconfigurator.ui.Notice("Mancano le foto: ${missingPhotos.joinToString(", ") { t -> t.label }}. Senza non si salva il collaudo della nuova installazione.", it.cdanet.cpeconfigurator.ui.NoticeKind.Warn)
+        }
         if (report != null && cpeHeight == null) {
             it.cdanet.cpeconfigurator.ui.Notice("Inserisci l'altezza della CPE dal suolo (in alto, Installazione) per salvare il collaudo.", it.cdanet.cpeconfigurator.ui.NoticeKind.Warn)
         }
         // sent: said here too (the banner at the top is out of sight) and no second copy by mistake
         done?.let { Banner(it, GoodGreen) }
-        BusyButton(if (done != null) "Collaudo inviato" else "Salva e invia collaudo", sending, Modifier.fillMaxWidth(), enabled = done == null && ((report != null && cpeHeight != null) || (report == null && photos.isNotEmpty()))) {
+        BusyButton(if (done != null) "Collaudo inviato" else "Salva e invia collaudo", sending, Modifier.fillMaxWidth(), enabled = done == null && review == null && ((report != null && cpeHeight != null && missingPhotos.isEmpty()) || (report == null && photos.isNotEmpty()))) {
             scope.launch {
                 sending = true
                 error = null

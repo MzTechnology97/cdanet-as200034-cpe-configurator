@@ -569,7 +569,11 @@ data class AcceptanceOverrideDto(val from: String = "", val by: String = "", val
 data class StoredAcceptanceDto(val verdict: String = "", val createdAt: String? = null, val by: String? = null, val override: AcceptanceOverrideDto? = null)
 
 @Serializable
-data class StoredAcceptanceResponseDto(val acceptance: StoredAcceptanceDto? = null)
+data class StoredAcceptanceResponseDto(val acceptance: StoredAcceptanceDto? = null, val photos: List<StoredPhotoDto> = emptyList())
+
+/** A photo of the current acceptance test on the server. */
+@Serializable
+data class StoredPhotoDto(val id: Long = 0, val caption: String = "", val type: String? = null)
 
 @Serializable
 data class WorkOrdersDto(val day: String = "", val items: List<WorkOrderDto> = emptyList())

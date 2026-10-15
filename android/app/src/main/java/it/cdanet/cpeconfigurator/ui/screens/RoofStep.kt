@@ -60,6 +60,7 @@ fun RoofStep(c: AppContainer, onNext: () -> Unit) {
     val scope = rememberCoroutineScope()
     var shot by remember { mutableStateOf<Pair<File, String>?>(null) }
     var photoError by remember { mutableStateOf<String?>(null) }
+    var review by remember { mutableStateOf<PhotoToReview?>(null) }
     val camera = rememberLauncherForActivityResult(ActivityResultContracts.TakePicture()) { ok ->
         val (file, caption) = shot ?: return@rememberLauncherForActivityResult
         shot = null
@@ -69,7 +70,14 @@ fun RoofStep(c: AppContainer, onNext: () -> Unit) {
         }
         scope.launch {
             runCatching { withContext(Dispatchers.Default) { PhotoCapture.compress(file) } }
-                .onSuccess { jpeg -> c.install.roof { it.copy(photos = it.photos + RoofPhoto(caption, jpeg, PhotoCapture.thumbnail(jpeg))) } }
+                .onSuccess { jpeg ->
+                    val v = runCatching { vetPhoto(jpeg, roof.photos.map { it.jpeg }) }.getOrNull()
+                    when {
+                        v?.duplicate == true -> photoError = "Questa foto è già stata aggiunta."
+                        !v?.problems.isNullOrEmpty() -> review = PhotoToReview(caption, jpeg, PhotoCapture.thumbnail(jpeg), v!!.problems)
+                        else -> c.install.roof { it.copy(photos = it.photos + RoofPhoto(caption, jpeg, PhotoCapture.thumbnail(jpeg))) }
+                    }
+                }
                 .onFailure { photoError = it.message }
         }
     }
@@ -105,6 +113,13 @@ fun RoofStep(c: AppContainer, onNext: () -> Unit) {
             }
         }
         photoError?.let { Text(it, color = WarnAmber, style = MaterialTheme.typography.bodySmall) }
+    }
+    review?.let { r ->
+        PhotoReviewCard(
+            r,
+            onRetake = { review = null; val (f, u) = PhotoCapture.newTarget(context); shot = f to r.caption; camera.launch(u) },
+            onKeep = { review = null; c.install.roof { it.copy(photos = it.photos + RoofPhoto(r.caption, r.jpeg, r.thumb)) } },
+        )
     }
 
     if (!roof.done) Text("Fai le misure radio prima di scendere: dopo il telefono passa alla Wi-Fi del router.", color = WarnAmber, style = MaterialTheme.typography.bodySmall)

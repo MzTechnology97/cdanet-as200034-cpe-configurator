@@ -337,7 +337,10 @@ class ApiClient(
 
     /** Installation photo (JPEG) attached to a job. */
     suspend fun uploadPhoto(jobId: String, jpeg: ByteArray, caption: String) = withContext(Dispatchers.IO) {
-        val url = (base() + "/api/provisioning/jobs/$jobId/photos").toHttpUrl().newBuilder().addQueryParameter("caption", caption).build()
+        // what the photo shows (the server checks the required ones); none for a free caption
+        val type = it.cdanet.cpeconfigurator.field.PhotoType.ofCaption(caption)?.key
+        val url = (base() + "/api/provisioning/jobs/$jobId/photos").toHttpUrl().newBuilder().addQueryParameter("caption", caption)
+            .apply { type?.let { t -> addQueryParameter("type", t) } }.build()
         val b = Request.Builder().url(url).post(jpeg.toRequestBody("image/jpeg".toMediaType()))
         session.token?.let { b.header("Authorization", "Bearer $it") }
         serverClient().newCall(b.build()).execute().use { r ->
