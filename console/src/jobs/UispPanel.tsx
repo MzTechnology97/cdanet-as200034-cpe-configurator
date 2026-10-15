@@ -125,9 +125,10 @@ export function UispPanel({ job, admin }: { job: Job; admin: boolean }) {
             Nuovo subscriber
           </Button>
         )}
-        {admin && pending && !newSub && (
-          <AsyncButton variant={crm ? 'secondary' : 'primary'} onClick={accept} onError={fail}>
-            {sites && !s.proposedSite ? 'Accetta nel site scelto' : crm ? 'Accetta nel site dell’AP' : 'Accetta in UISP'}
+        {/* with the CRM the CPE is accepted by «Nuovo subscriber» (customer and service with it), never alone */}
+        {admin && pending && !crm && !newSub && (
+          <AsyncButton variant="primary" onClick={accept} onError={fail}>
+            {sites && !s.proposedSite ? 'Accetta nel site scelto' : 'Accetta in UISP'}
           </AsyncButton>
         )}
         {admin && !pending && (
