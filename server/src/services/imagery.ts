@@ -263,6 +263,17 @@ export function createImagery(db: Db, sealer: Sealer, opts: { fetchImpl?: typeof
     return !!s?.enabled && (p === 'wms' ? !!(s as WmsProvider).url : !!(s as KeyProvider).keySealed);
   };
 
+  /**
+   * A refusal of the provider: Google does not give the satellite tiles of the Map Tiles API to
+   * accounts of the European Economic Area (403 «… not available for your account and region»),
+   * whatever the key: that is not a wrong key.
+   */
+  async function refused(r: Response): Promise<HttpError> {
+    const text = r.status === 403 ? await r.text().catch(() => '') : '';
+    if (/not available for your account and region/i.test(text)) return new HttpError(502, 'imagery_region_unavailable');
+    return new HttpError(502, 'imagery_key_rejected');
+  }
+
   // Google: a session per view (satellite / satellite + roads), renewed before it expires
   const sessions = new Map<string, { id: string; until: number }>();
   async function googleSession(part: string, key: string, force = false): Promise<string> {
@@ -276,7 +287,7 @@ export function createImagery(db: Db, sealer: Sealer, opts: { fetchImpl?: typeof
       signal: AbortSignal.timeout(15_000),
     }).catch(() => null);
     if (!r) throw new HttpError(502, 'imagery_unreachable');
-    if (r.status === 400 || r.status === 401 || r.status === 403) throw new HttpError(502, 'imagery_key_rejected');
+    if (r.status === 400 || r.status === 401 || r.status === 403) throw await refused(r);
     if (!r.ok) throw new HttpError(502, 'imagery_error', { detail: `HTTP ${r.status}` });
     const j = (await r.json()) as { session?: string; expiry?: string };
     if (!j.session) throw new HttpError(502, 'imagery_error');
@@ -311,7 +322,7 @@ export function createImagery(db: Db, sealer: Sealer, opts: { fetchImpl?: typeof
   }
   async function answer(r: Response | null) {
     if (!r) throw new HttpError(502, 'imagery_unreachable');
-    if (r.status === 401 || r.status === 403) throw new HttpError(502, 'imagery_key_rejected');
+    if (r.status === 401 || r.status === 403) throw await refused(r);
     if (r.status === 404 || r.status === 204) return null;
     if (!r.ok) throw new HttpError(502, 'imagery_error', { detail: `HTTP ${r.status}` });
     const type = r.headers.get('content-type') ?? 'image/jpeg';

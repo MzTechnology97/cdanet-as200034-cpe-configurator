@@ -12,6 +12,8 @@ import { ADMIN, testConfig } from './helpers.ts';
 const MAPBOX = 'pk.eyJ1IjoiZGVtbyIsImEiOiJ0ZXN0In0.c2VncmV0b2RpcHJvdmE';
 const ESRI = 'AAPKdemo0123456789abcdefghijklmnopqrstuvwxyz';
 const GOOGLE = 'AIzaSyDemo0123456789abcdefghijklmnopq';
+/** A key of an account in the European Economic Area: valid, but no satellite tiles from Google. */
+const GOOGLE_EU = 'AIzaSyDemoEU23456789abcdefghijklmnopq';
 const jpeg = () => new Response(new Uint8Array([0xff, 0xd8, 0xff, 1, 2, 3]), { status: 200, headers: { 'content-type': 'image/jpeg' } });
 
 describe('Mappe admin: immagini satellitari da più fonti', () => {
@@ -90,6 +92,8 @@ describe('Mappe admin: immagini satellitari da più fonti', () => {
     const fetchImpl = (async (input: string | URL | Request, init?: RequestInit) => {
       const url = String(input);
       calls.push(url);
+      if (url.startsWith('https://tile.googleapis.com/v1/createSession') && url.includes(GOOGLE_EU))
+        return Response.json({ error: { code: 403, message: 'satellite tiles and 3D tiles are not available for your account and region.', status: 'PERMISSION_DENIED' } }, { status: 403 });
       if (url.startsWith('https://tile.googleapis.com/v1/createSession')) {
         sessions++;
         const body = JSON.parse(String(init?.body));
@@ -126,6 +130,8 @@ describe('Mappe admin: immagini satellitari da più fonti', () => {
     // wrong keys
     assert.equal((await put('google', { enabled: true, key: 'nope' })).statusCode, 400);
     assert.deepEqual((await app.inject({ method: 'POST', url: '/api/admin/connectors/imagery/mapbox/test', headers: H, payload: { key: 'pk.bad.token' } })).json(), { ok: false, error: 'imagery_key_rejected' });
+    // Google with a European account: the key is fine, the imagery is not given (not «key rejected»)
+    assert.deepEqual((await app.inject({ method: 'POST', url: '/api/admin/connectors/imagery/google/test', headers: H, payload: { key: GOOGLE_EU } })).json(), { ok: false, error: 'imagery_region_unavailable' });
 
     for (const [p, key] of [['esri', ESRI], ['google', GOOGLE]]) assert.equal((await put(p!, { enabled: true, key })).statusCode, 200);
     assert.equal((await put('wms', { enabled: true })).statusCode, 200, 'WMS: the AGEA defaults');
