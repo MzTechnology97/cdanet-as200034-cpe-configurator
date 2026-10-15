@@ -65,6 +65,23 @@ class AppContainer(context: Context) {
     private val screenPrefs = appContext.getSharedPreferences("screen", Context.MODE_PRIVATE)
 
     /**
+     * An account logged in: when it is not the one that used the phone last, the work left open by
+     * the previous one (the installation in progress with its configuration, the ones prepared for
+     * the field) is thrown away, so another installer never reopens it.
+     */
+    fun accountChanged(userId: Int) {
+        val last = screenPrefs.getInt("owner", -1)
+        if (last != userId) {
+            if (last != -1) {
+                provisioning.reset()
+                provisioning.field.clear()
+                install.close()
+            }
+            runCatching { screenPrefs.edit().putInt("owner", userId).apply() }
+        }
+    }
+
+    /**
      * Screenshots and screen recording blocked for this account (owner and NOC, 14/10/2026: only
      * admins, and the installers enabled one by one). The last answer stays on the phone, so the
      * block holds offline and from the very first frame.

@@ -107,4 +107,40 @@ describe('Magazzino (ISP Billing)', () => {
     void ctx;
     await app.close();
   });
+
+  it('a CPE installed offline that the warehouse no longer holds: the result is kept and the NOC told', async () => {
+    const db = openDatabase(':memory:');
+    const { app } = await buildApp(testConfig(), 'test', { db, logger: false, uisp: null, fetchImpl: fakeIspBilling() });
+    const login = async (username: string, password: string) => ({ authorization: `Bearer ${(await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username, password } })).json().token}` });
+    const A = await login(ADMIN.username, ADMIN.password);
+    const call = (method: 'GET' | 'POST' | 'PUT' | 'PATCH', url: string, payload?: object, headers: Record<string, string> = A) => app.inject({ method, url, headers, payload });
+    await call('PUT', '/api/admin/connectors/crm', { enabled: true, url: 'https://crm.test', apiId: 'cdanet-noc', apiKey: 'K3y-Segreta-IspBilling-0123456789' });
+    await call('POST', '/api/admin/profiles/LiteBeam%205AC/templates', { name: 'Standard', template: SAMPLE_TEMPLATE, boardMatch: 'board\.name=LiteBeam 5AC' });
+    await call('PUT', '/api/admin/wireless-networks/CDA-NET-N2-D01', { wpa2Password: 'test-psk-12345' });
+    await call('POST', '/api/admin/warehouse/refresh');
+    assert.equal((await call('POST', '/api/admin/users', { username: 'tecnico', password: 'Installer-Pass-123', warehouseSiteId: 211 })).statusCode, 201);
+    const tid = ((await call('GET', '/api/admin/users')).json() as Array<{ id: number; username: string }>).find((u) => u.username === 'tecnico')!.id;
+    const T = { ...(await login('tecnico', 'Installer-Pass-123')), ...ANDROID };
+
+    // prepared before the visit (no MAC), installed on a roof without network, sent later by the queue
+    const offline = async (mac: string) => {
+      const order = (await call('POST', '/api/admin/work-orders', { assignedTo: tid, day: '2026-10-15', kind: 'new', customer: 'Cliente Demo', lat: 37.57, lon: 14.28, pppoeUser: 'demo@cda-net.it', pppoePassword: 'p', model: 'LiteBeam 5AC' })).json().item;
+      const pkg = (await call('POST', '/api/provisioning/jobs', { model: 'LiteBeam 5AC', ssid: 'CDA-NET-N2-D01', pppoeUser: 'demo@cda-net.it', workOrderId: order.id }, T)).json();
+      return call('POST', `/api/provisioning/jobs/${pkg.jobId}/result`, { result: 'success', stages: [], cpe: { mac, serial: 'S1' } }, T);
+    };
+    const notices = async () => ((await call('GET', '/api/notifications')).json().items as Array<{ kind: string; title: string; body: string }>).filter((n) => n.kind === 'stock_mismatch');
+
+    assert.equal((await offline('AA:BB:CC:00:00:03')).statusCode, 200, 'from their own warehouse');
+    assert.equal((await notices()).length, 0);
+    const gone = await offline('AA:BB:CC:00:00:09');
+    assert.equal(gone.statusCode, 200, 'the CPE is on the roof: never refused');
+    const n = await notices();
+    assert.equal(n.length, 1);
+    assert.match(n[0]!.body, /Non risulta in nessun magazzino/);
+    // with the account's bypass it was allowed anyway: no notice
+    await call('PATCH', `/api/admin/users/${tid}`, { stockBypass: true });
+    assert.equal((await offline('AA:BB:CC:00:00:08')).statusCode, 200);
+    assert.equal((await notices()).length, 1);
+    await app.close();
+  });
 });

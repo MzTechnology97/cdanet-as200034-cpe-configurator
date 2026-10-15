@@ -274,6 +274,11 @@ class ProvisioningController(
         queue.enqueue(PendingResult(pkg.jobId, result, "${pkg.summary.deviceName} · ${pkg.summary.mac}"))
         queue.syncInBackground()
         val ok = result.result == "success"
+        // on the roof now: out of the warehouse on the phone at once (also offline), read again when online
+        if (ok) {
+            stock.installed(result.cpe?.mac ?: pkg.summary.mac)
+            scope.launch { stock.refresh(api) }
+        }
         val firmware = result.detected.firmware
         _state.update {
             it.copy(
