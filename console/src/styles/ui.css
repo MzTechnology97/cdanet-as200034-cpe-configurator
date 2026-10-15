@@ -649,3 +649,10 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .dg-item.ui-tone-warn { border-left-color: var(--warn); }
 .dg-item.ui-tone-good { border-left-color: var(--good); }
 .dg-action { font-weight: 600; }
+/* Fattibilità: l'esito della nostra copertura */
+.fz-verdict { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3); margin-bottom: var(--sp-3); border-radius: var(--radius); background: var(--surface-2); border-left: 4px solid var(--line-strong); }
+.fz-verdict.ui-tone-good { border-left-color: var(--good); }
+.fz-verdict.ui-tone-warn { border-left-color: var(--warn); }
+.fz-verdict.ui-tone-bad { border-left-color: var(--bad); }
+.rma-note { min-width: 160px; }
+.us-min { align-items: flex-end; margin-top: var(--sp-3); }

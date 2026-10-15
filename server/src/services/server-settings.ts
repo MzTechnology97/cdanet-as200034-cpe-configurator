@@ -190,6 +190,11 @@ export const SERVER_SETTINGS: Def[] = [
     get: (c) => c.proactive.popLowHours, set: (c, v) => (c.proactive.popLowHours = (v as number | undefined) ?? 2),
   },
   {
+    key: 'warehouseMinStock', env: 'WAREHOUSE_MIN_STOCK', group: 'Magazzino', label: 'CPE minime nel magazzino di un installatore', kind: 'int', min: 0, max: 50,
+    help: 'Sotto questo numero il NOC riceve l’avviso di rifornire l’installatore (una volta, quando ci scende) e la pagina Magazzino lo segnala. Ogni account può avere il suo minimo (Account → Magazzino). 0 = nessun avviso.',
+    get: (c) => c.warehouseMinStock, set: (c, v) => (c.warehouseMinStock = (v as number | undefined) ?? 2),
+  },
+  {
     key: 'coverageOps.cacheDays', env: 'COVERAGE_OPS_CACHE_DAYS', group: 'Copertura altri operatori', label: 'Riusa una verifica per (giorni)', kind: 'int', min: 1, max: 90,
     help: 'La copertura degli altri operatori (fibra, FTTC, FWA) di un punto viene richiesta al servizio esterno una volta e poi riusata per questi giorni: meno richieste e risposte immediate. «Rileggi» la aggiorna subito.',
     get: (c) => c.coverageOps.cacheDays, set: (c, v) => (c.coverageOps.cacheDays = (v as number | undefined) ?? 7),

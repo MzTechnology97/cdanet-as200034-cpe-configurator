@@ -58,6 +58,7 @@ export const ROUTES: Array<Route | Group> = [
   { id: 'ia-ap', icon: 'troubleshoot', label: 'IA-AP', admin: true, react: () => import('../pages/Advisor').then((m) => m.Advisor) },
   { id: 'mytemplates', icon: 'memory', label: 'Template disponibili', installer: true, react: () => import('../pages/MyTemplates').then((m) => m.MyTemplates) },
   { id: 'coverage', icon: 'explore', label: 'Copertura', module: 'coverage', bottom: true, react: () => import('../pages/Coverage').then((m) => m.Coverage) },
+  { id: 'feasibility', icon: 'my_location', label: 'Fattibilità', admin: true, module: 'coverage', react: () => import('../pages/Feasibility').then((m) => m.Feasibility) },
   { id: 'routeros', icon: 'router', label: 'MikroTik · RouterOS', module: 'routeros', react: () => import('../pages/RouterOs').then((m) => m.RouterOs) },
   { group: 'Amministrazione', admin: true },
   { id: 'users', icon: 'person', label: 'Account', admin: true, react: () => import('../pages/Users').then((m) => m.Users) },

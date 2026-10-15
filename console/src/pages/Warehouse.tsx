@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { RmaCard } from '../warehouse/Rma';
 import { useState } from 'react';
 import { api } from '../lib/api';
 import { toast } from '../lib/toast';
@@ -34,7 +35,7 @@ interface Overview {
   items: number;
   error: string | null;
   byModel: Array<{ siteId: number; site: string; model: string; n: number }>;
-  lowStock: Array<{ userId: number; username: string; site: string; cpe: number }>;
+  lowStock: Array<{ userId: number; username: string; site: string; cpe: number; min: number }>;
   lowStockBelow: number;
   toUnload: Array<{ site: string; model: string; mac: string; serial: string; jobId: string | null; customer: string; installedAt: string | null; accepted: boolean }>;
 }
@@ -80,7 +81,7 @@ function Office() {
           <section className="ui-stats" aria-label="Riepilogo">
             <Stat label="CPE in magazzino" value={(d.byModel ?? []).reduce((s, r) => s + r.n, 0)} />
             <Stat label="magazzini" value={sites.length} />
-            <Stat label={`con meno di ${d.lowStockBelow} CPE`} value={d.lowStock.length} tone={d.lowStock.length ? 'warn' : 'good'} />
+            <Stat label="sotto il minimo di CPE" value={d.lowStock.length} tone={d.lowStock.length ? 'warn' : 'good'} />
             <Stat label="da scaricare" value={d.toUnload.length} tone={d.toUnload.length ? 'warn' : 'good'} />
           </section>
 
@@ -113,7 +114,7 @@ function Office() {
             )}
           </Card>
 
-          <Card title={`Magazzini con meno di ${d.lowStockBelow} CPE`}>
+          <Card title="Magazzini sotto il minimo">
             {d.lowStock.length ? (
               <Table
                 rows={d.lowStock}
@@ -122,12 +123,15 @@ function Office() {
                   { label: 'Account', render: (r) => <strong>{r.username}</strong> },
                   { label: 'Magazzino', render: (r) => r.site },
                   { label: 'CPE', end: true, render: (r) => <Badge tone={r.cpe ? 'warn' : 'bad'}>{r.cpe}</Badge> },
+                  { label: 'Minimo', end: true, render: (r) => <span className="ui-small">{r.min}{r.min !== d.lowStockBelow ? ' (dell’account)' : ''}</span> },
                 ]}
               />
             ) : (
-              <EmptyState title="Scorte a posto">Ogni installatore o partner con un magazzino ha almeno {d.lowStockBelow} CPE.</EmptyState>
+              <EmptyState title="Scorte a posto">Ogni installatore o partner con un magazzino ha almeno il suo minimo di CPE (predefinito {d.lowStockBelow}, Impostazioni server).</EmptyState>
             )}
           </Card>
+
+          <RmaCard />
 
           <Card title="CPE per magazzino e modello">
             {sites.length ? (
