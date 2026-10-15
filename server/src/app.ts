@@ -117,10 +117,12 @@ export async function buildApp(
   const oui = createOui(cfg.ouiDir, { ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) });
   const telegram = createTelegram(db, sealer, { fetchImpl: opts.fetchImpl, ...(opts.telegramIntervalMs !== undefined ? { minIntervalMs: opts.telegramIntervalMs } : {}) });
   const dem = createDem({ dir: cfg.dem.dir, baseUrl: cfg.dem.url, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) });
+  // Firebase refusals go to the server log once Fastify (and its logger) exists
+  let pushLog: (m: string) => void = () => {};
   const ctx: AppContext = {
     cfg,
     live: createLive(),
-    push: createPush(db, sealer, { fetchImpl: opts.fetchImpl }),
+    push: createPush(db, sealer, { fetchImpl: opts.fetchImpl, log: (m) => pushLog(m) }),
     db,
     sealer,
     auth: createAuth(db, cfg.jwtSecret, cfg.jwtTtlHours),
@@ -201,6 +203,7 @@ export async function buildApp(
     bodyLimit: 512 * 1024,
     trustProxy: cfg.trustProxy,
   });
+  pushLog = (m) => app.log.warn(m);
 
   // Android app always on the latest release (Impostazioni server → "App sempre all'ultima
   // versione"): an older app gets 426 on every call, login included, and can only update itself.

@@ -18,8 +18,10 @@ class FcmService : FirebaseMessagingService() {
             PhoneAlerts.notify(applicationContext, (System.currentTimeMillis() % 100_000).toInt() + 200_000, title, message.data["body"].orEmpty())
             return
         }
-        val shown = runCatching { runBlocking { PhoneAlerts.check(applicationContext) } }.getOrDefault(false)
-        if (!shown) {
+        // nothing new in the feed (server not readable, already read on another phone, a feed
+        // position left by another account): the message itself, so a push is never silent
+        val shown = runCatching { runBlocking { PhoneAlerts.check(applicationContext) } }.getOrNull() ?: 0
+        if (shown == 0) {
             val title = message.data["title"] ?: return
             PhoneAlerts.notify(applicationContext, (System.currentTimeMillis() % 100_000).toInt() + 200_000, title, message.data["body"].orEmpty())
         }

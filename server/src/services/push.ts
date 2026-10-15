@@ -197,7 +197,7 @@ export function createPush(db: Db, sealer: Sealer, opts: { fetchImpl?: typeof fe
         const why = await r.text().catch(() => '');
         // the app was removed or the token renewed: FCM will not deliver to it again
         if (r.status === 404 || (r.status === 400 && /registration token|UNREGISTERED/i.test(why))) unregister(token);
-        else log(`fcm HTTP ${r.status}`);
+        else log(`fcm HTTP ${r.status}: ${why.replace(/\s+/g, ' ').slice(0, 300)}`);
       }
     } catch (err) {
       log(`fcm: ${(err as Error).message}`);
