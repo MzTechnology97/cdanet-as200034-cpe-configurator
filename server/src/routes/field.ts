@@ -86,18 +86,24 @@ export function fieldRoutes(app: FastifyInstance, ctx: AppContext) {
     const macs = [...new Set(q.macs.split(',').map((m) => parseMac(m)).filter((m): m is string => !!m))].slice(0, 8);
     if (!macs.length) throw new HttpError(400, 'invalid_mac');
     const admin = req.user!.role === 'admin';
-    // the same CPE seen from another interface (LAN vs radio MAC): found too, its exact MAC first
-    const all = [...new Set([...macs, ...macs.flatMap(macSiblings)])];
-    const marks = all.map(() => '?').join(',');
-    const job = ctx.db
-      .prepare(
-        `SELECT j.id, j.created_at createdAt, j.status, j.model, j.template_name template, j.mac, j.serial, j.ssid, j.pppoe_user pppoeUser, j.device_name deviceName
-           FROM provisioning_jobs j
-          WHERE j.status = 'success' AND j.mac IN (${marks})
-            ${admin ? '' : 'AND (j.user_id = ? OR EXISTS (SELECT 1 FROM cpe_assignments a WHERE a.mac = j.mac AND a.user_id = ?))'}
-          ORDER BY (j.mac IN (${macs.map(() => '?').join(',')})) DESC, j.created_at DESC LIMIT 1`,
-      )
-      .get(...all, ...(admin ? [] : [req.user!.id, req.user!.id]), ...macs);
-    return { job: job ?? null };
+    // the user's own installations (or the CPEs assigned to them) on these MACs, newest first
+    const find = (list: string[]) =>
+      list.length
+        ? (ctx.db
+            .prepare(
+              `SELECT j.id, j.created_at createdAt, j.status, j.model, j.template_name template, j.mac, j.serial, j.ssid, j.pppoe_user pppoeUser, j.device_name deviceName
+                 FROM provisioning_jobs j
+                WHERE j.status = 'success' AND j.mac IN (${list.map(() => '?').join(',')})
+                  ${admin ? '' : 'AND (j.user_id = ? OR EXISTS (SELECT 1 FROM cpe_assignments a WHERE a.mac = j.mac AND a.user_id = ?))'}
+                ORDER BY j.created_at DESC`,
+            )
+            .all(...list, ...(admin ? [] : [req.user!.id, req.user!.id])) as Array<Record<string, unknown> & { mac: string }>)
+        : [];
+    const exact = find(macs);
+    if (exact.length) return { job: exact[0] };
+    // the same CPE seen from another interface (LAN vs radio MAC, fourth byte ±1), with the same
+    // ownership rules; two different CPEs that could both be it: none (never a guess)
+    const siblings = find([...new Set(macs.flatMap(macSiblings))].filter((m) => !macs.includes(m)));
+    return { job: new Set(siblings.map((j) => j.mac)).size === 1 ? siblings[0] : null };
   });
 }
