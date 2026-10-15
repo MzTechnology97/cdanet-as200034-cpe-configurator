@@ -148,27 +148,115 @@ export function createCoverageOps(db: Db, cfg: Config, client: () => MyWicClient
     calls.push(now);
   };
 
+  const ready = () => {
+    const c = client();
+    if (!c) throw new HttpError(409, 'operators_not_configured');
+    return c;
+  };
+
+  /** One coverage reading ([path] of /coverage/check), kept under [keys] and the GeoID it found. */
+  async function check(keys: string[], path: string, refresh: boolean) {
+    const hit = refresh ? null : keys.map(cached).find(Boolean);
+    if (hit) return { at: hit.at, cached: true, fresh: false, address: hit.address, ...groupOps(hit.rows, rules()), stickers: STICKERS };
+    const c = ready();
+    take();
+    const j = (await c.get(path)) as { coverage?: unknown; geodata?: Record<string, unknown> };
+    const list = Array.isArray(j?.coverage) ? (j.coverage as Array<Record<string, unknown>>) : [];
+    const look: Lookup = { address: opsAddress(j?.geodata), rows: list.map(opsRow).filter((r): r is OpsRow => !!r) };
+    const at = keep([...keys, ...(look.address?.geoid ? [`geo:${look.address.geoid}`] : [])], look);
+    return { at, cached: false, fresh: true, address: look.address, ...groupOps(look.rows, rules()), stickers: STICKERS };
+  }
+
+  // the steps of the address search change little: an hour in memory
+  const places = new Map<string, { until: number; items: unknown[] }>();
+  const enc = encodeURIComponent;
+
   return {
     /** The coverage at a point (the service finds the address and its GeoID there). */
-    async atPoint(lat: number, lon: number, opts: { refresh?: boolean } = {}) {
-      const key = `ll:${lat.toFixed(5)},${lon.toFixed(5)}`;
+    atPoint(lat: number, lon: number, opts: { refresh?: boolean } = {}) {
+      return check([`ll:${lat.toFixed(5)},${lon.toFixed(5)}`], `/coverage/check?lat=${lat.toFixed(6)}&lng=${lon.toFixed(6)}`, !!opts.refresh);
+    },
+
+    /**
+     * The coverage of an exact address (town → street → house number → stair, as the steps of
+     * [place] give them): its GeoID, then the coverage of that building.
+     */
+    async atAddress(a: { city: string; street: string; streetType: string; number: string; stair?: string | null }, opts: { refresh?: boolean } = {}) {
+      const key = `addr:${[a.city, a.streetType, a.street, a.number, a.stair ?? ''].map((x) => x.trim().toUpperCase()).join('|')}`;
       const hit = opts.refresh ? null : cached(key);
-      let l: Lookup & { at: string };
-      let fresh = false;
-      if (hit) l = hit;
-      else {
-        const c = client();
-        if (!c) throw new HttpError(409, 'operators_not_configured');
-        take();
-        const j = (await c.get(`/coverage/check?lat=${lat.toFixed(6)}&lng=${lon.toFixed(6)}`)) as { coverage?: unknown; geodata?: Record<string, unknown> };
-        const list = Array.isArray(j?.coverage) ? (j.coverage as Array<Record<string, unknown>>) : [];
-        const look: Lookup = { address: opsAddress(j?.geodata), rows: list.map(opsRow).filter((r): r is OpsRow => !!r) };
-        const at = keep([key, ...(look.address?.geoid ? [`geo:${look.address.geoid}`] : [])], look);
-        l = { ...look, at };
-        fresh = true;
+      if (hit?.address?.geoid) return check([key], '', false);
+      const c = ready();
+      take();
+      let g: Record<string, unknown>;
+      try {
+        g = (await c.get(`/geo/find?city=${enc(a.city)}&street=${enc(a.street)}${a.streetType.trim() ? `&street_type=${enc(a.streetType)}` : ''}&number=${enc(a.number)}${a.stair ? `&stair=${enc(a.stair)}` : ''}`)) as Record<string, unknown>;
+      } catch (e) {
+        if ((e as HttpError).extra?.status === 404) throw new HttpError(404, 'operators_address_not_found');
+        throw e;
       }
-      return { at: l.at, cached: !fresh, fresh, address: l.address, ...groupOps(l.rows, rules()), stickers: STICKERS };
+      const geoid = str(g?.id);
+      if (!geoid) throw new HttpError(404, 'operators_address_not_found');
+      return check([key, `geo:${geoid}`], `/coverage/check?geoid=${enc(geoid)}${a.stair ? `&scala=${enc(a.stair)}` : ''}`, !!opts.refresh);
+    },
+
+    /**
+     * One step of the address search: no town yet → towns for [q]; a town → its streets for [q]; a
+     * street → its house numbers starting with [q]; a house number → its stairs (null: none).
+     */
+    async place(p: { city?: string; street?: string; streetType?: string; number?: string; q?: string }) {
+      const q = (p.q ?? '').trim();
+      const step = !p.city ? 'city' : !p.street ? 'street' : !p.number ? 'number' : 'stair';
+      if ((step === 'city' || step === 'street') && q.length < 2) return { step, items: [] };
+      if (step === 'number' && q.length < 1) return { step, items: [] };
+      const street = p.street ? `&street=${enc(p.street)}${p.streetType?.trim() ? `&street_type=${enc(p.streetType)}` : ''}` : '';
+      const path =
+        step === 'city'
+          ? `/geo/search?q=${enc(q)}&limit=10`
+          : step === 'street'
+            ? `/geo/search?city=${enc(p.city!)}&q=${enc(q)}&limit=15`
+            : step === 'number'
+              ? `/geo/search?city=${enc(p.city!)}${street}&q=${enc(q)}&limit=30`
+              : `/geo/search?city=${enc(p.city!)}${street}&number=${enc(p.number!)}&limit=20`;
+      const memo = places.get(path);
+      if (memo && memo.until > Date.now()) return { step, items: memo.items };
+      const c = ready();
+      take();
+      const raw = (await c.get(path)) as unknown;
+      const list = (Array.isArray(raw) ? raw : []) as Array<Record<string, unknown>>;
+      const items =
+        step === 'city'
+          ? list.map((x) => ({ city: str(x.name), label: `${str(x.name_utf8) || str(x.name)}${str(x.prov_abbr) ? ` (${str(x.prov_abbr)})` : ''}`, zip: str(x.zip) })).filter((x) => x.city)
+          : step === 'street'
+            ? list.map((x) => ({ street: str(x.street), streetType: str(x.street_type), label: [str(x.street_type), str(x.street)].filter(Boolean).join(' ') })).filter((x) => x.street)
+            : step === 'number'
+              ? [...new Set(list.map((x) => str(x.number)).filter(Boolean))].map((number) => ({ number }))
+              : list.map((x) => ({ stair: str(x.stair) || null }));
+      if (places.size > 500) places.clear();
+      places.set(path, { until: Date.now() + 3_600_000, items });
+      return { step, items };
     },
   };
 }
 export type CoverageOps = ReturnType<typeof createCoverageOps>;
+
+/**
+ * The answer for installers: no operator names and no GeoID; the rows of the same sticker,
+ * technology, state and speed merged with their count, so the names cannot be told apart (pure).
+ */
+type ShownRow = Omit<OpsRow, 'sourceSticker'> & { kind: OpsKind };
+export function forInstaller<T extends { address: OpsAddress | null; groups: Array<{ rows: ShownRow[] }> }>(a: T) {
+  return {
+    ...a,
+    address: a.address ? { ...a.address, geoid: null } : null,
+    groups: a.groups.map((g) => {
+      const merged = new Map<string, Omit<ShownRow, 'operator' | 'downMbps' | 'upMbps'> & { count: number }>();
+      for (const { operator: _o, downMbps: _d, upMbps: _u, ...r } of g.rows) {
+        const k = [r.technology, r.state, r.maxMbps ?? ''].join('|');
+        const m = merged.get(k);
+        if (m) m.count++;
+        else merged.set(k, { ...r, count: 1 });
+      }
+      return { ...g, rows: [...merged.values()] };
+    }),
+  };
+}

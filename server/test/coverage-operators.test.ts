@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
 import { buildApp } from '../src/app.ts';
 import { openDatabase } from '../src/db.ts';
-import { groupOps, opsAddress, opsRow, stickerOf } from '../src/services/coverage-operators.ts';
+import { forInstaller, groupOps, opsAddress, opsRow, stickerOf } from '../src/services/coverage-operators.ts';
 import { ADMIN, testConfig } from './helpers.ts';
 
 const TOKEN = '42|Ab1Cd2Ef3Gh4Ij5Kl6Mn7Op8Qr9St0UvWxYz123456';
@@ -126,5 +126,68 @@ describe('Copertura degli altri operatori', () => {
     assert.ok(!JSON.stringify(ev).includes('DEMO 1'));
     assert.equal((await get('/api/admin/coverage/operators?lat=200&lon=14')).statusCode, 400);
     await app.close();
+  });
+
+  it('finds the exact address step by step and shows installers no operator names', async () => {
+    const calls: string[] = [];
+    const fetchImpl = (async (input: string | URL) => {
+      const url = new URL(String(input));
+      calls.push(url.pathname + url.search);
+      const p = url.searchParams;
+      if (url.pathname === '/api/v1/geo/search') {
+        if (!p.get('city')) return Response.json([{ istat: '086009', name: 'ENNA', name_utf8: 'Enna', prov_abbr: 'EN', zip: '94100' }]);
+        if (!p.get('street')) return Response.json([{ city: 'ENNA', street: 'DEMO', street_type: 'VIA' }]);
+        if (!p.get('number')) return Response.json(p.get('q') ? [{ city: 'ENNA', street: null, street_type: null, number: '1' }, { city: 'ENNA', street: null, street_type: null, number: '10' }] : []);
+        return Response.json([{ city: 'ENNA', street: 'DEMO', street_type: 'VIA', number: p.get('number'), stair: null }]);
+      }
+      if (url.pathname === '/api/v1/geo/find') return p.get('number') === '99' ? Response.json({ message: 'No records found' }, { status: 404 }) : Response.json(ANSWER.geodata);
+      if (url.pathname === '/api/v1/coverage/check') return Response.json(ANSWER);
+      return Response.json({ message: 'Not found' }, { status: 404 });
+    }) as typeof fetch;
+    const db = openDatabase(':memory:');
+    const { app } = await buildApp(testConfig(), 'test', { db, logger: false, uisp: null, fetchImpl });
+    const login = async (u: string, p: string) => ({ authorization: `Bearer ${(await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: u, password: p } })).json().token}` });
+    const A = await login(ADMIN.username, ADMIN.password);
+    await app.inject({ method: 'PUT', url: '/api/admin/connectors/mywic', headers: A, payload: { enabled: true, token: TOKEN } });
+    await app.inject({ method: 'POST', url: '/api/admin/users', headers: A, payload: { username: 'tecnico', password: 'Installer-Pass-123' } });
+    const T = await login('tecnico', 'Installer-Pass-123');
+    const get = (url: string, headers = A) => app.inject({ method: 'GET', url, headers });
+    const places = '/api/admin/coverage/operators/places';
+
+    assert.deepEqual((await get(`${places}?q=E`)).json(), { step: 'city', items: [] }, 'at least 2 letters');
+    assert.deepEqual((await get(`${places}?q=En`)).json().items, [{ city: 'ENNA', label: 'Enna (EN)', zip: '94100' }]);
+    assert.deepEqual((await get(`${places}?city=ENNA&q=de`)).json().items, [{ street: 'DEMO', streetType: 'VIA', label: 'VIA DEMO' }]);
+    assert.equal((await get(`${places}?city=ENNA&street=DEMO&streetType=VIA&q=1`, T)).statusCode, 403, "the admin route is not for installers");
+    assert.deepEqual((await get(`/api/field/coverage/operators/places?city=ENNA&street=DEMO&streetType=VIA&q=1`, T)).json().items, [{ number: '1' }, { number: '10' }], 'installers too');
+    assert.deepEqual((await get(`${places}?city=ENNA&street=DEMO&streetType=VIA&number=1`)).json(), { step: 'stair', items: [{ stair: null }] });
+    const before = calls.length;
+    await get(`${places}?q=En`);
+    assert.equal(calls.length, before, 'a step asked again: from memory');
+
+    const at = '/api/admin/coverage/operators?city=ENNA&street=DEMO&streetType=VIA&number=1';
+    const r = (await get(at)).json();
+    assert.equal(r.address.geoid, '380100000000001');
+    assert.ok(calls.some((c) => c === '/api/v1/geo/find?city=ENNA&street=DEMO&street_type=VIA&number=1'));
+    assert.ok(calls.some((c) => c === '/api/v1/coverage/check?geoid=380100000000001'), 'by GeoID, not by coordinates');
+    assert.equal((await get(at)).json().cached, true);
+    assert.equal((await get('/api/admin/coverage/operators?city=ENNA&street=DEMO&streetType=VIA&number=99')).json().error, 'operators_address_not_found');
+    assert.equal((await get('/api/admin/coverage/operators')).statusCode, 400);
+
+    // installers: the same answer, without names, without the GeoID, never a forced reading
+    const checks = calls.filter((c) => c.startsWith('/api/v1/coverage/check')).length;
+    const f = await get('/api/field/coverage/operators?city=ENNA&street=DEMO&streetType=VIA&number=1&refresh=1', T);
+    assert.equal(f.statusCode, 200, f.body);
+    assert.equal(calls.filter((c) => c.startsWith('/api/v1/coverage/check')).length, checks, 'refresh ignored for installers');
+    for (const n of ['TIM', 'Eolo', 'fastweb', 'openfiber', 'fibreconnect', 'wic', '380100000000001']) assert.ok(!f.body.includes(n), `never «${n}» to installers`);
+    const fj = f.json();
+    assert.equal(fj.best, 'F');
+    assert.equal(fj.address.label, 'VIA DEMO 1, 94100 Enna (EN)');
+    await app.close();
+  });
+
+  it('merges the rows installers see, so the operators cannot be counted', () => {
+    const g = groupOps(['tim', 'fastweb'].map((c) => opsRow(row(c, 'FTTH', 'f', 'FTTX', true, 'ATTIVO', { max_speed: 2500 }))!), RULES);
+    const shown = forInstaller({ address: null, ...g });
+    assert.deepEqual(shown.groups[0]!.rows, [{ technology: 'FTTH', technologyLabel: 'FTTHome', family: 'FTTX', state: 'available', maxMbps: 2500, kind: 'fibra', count: 2 }]);
   });
 });

@@ -614,3 +614,10 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .op-head { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3); }
 .op-group { margin-top: var(--sp-3); }
 .op-title { display: flex; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-1); font-size: var(--fs-sm); }
+.op-exact { margin-top: var(--sp-3); }
+.op-steps { display: grid; gap: var(--sp-2); max-width: 520px; margin-top: var(--sp-2); }
+.op-choices { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.op-choice { font: inherit; font-size: var(--fs-sm); padding: 4px var(--sp-2); border-radius: var(--radius-full); border: 1px solid var(--line-strong); background: var(--surface); color: var(--ink); cursor: pointer; }
+.op-choice:hover { background: var(--surface-2); }
+.op-picked { display: flex; align-items: baseline; gap: var(--sp-2); }
+.op-bad { color: var(--bad); }
