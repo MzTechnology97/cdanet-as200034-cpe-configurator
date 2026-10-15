@@ -63,6 +63,22 @@ export function customerNameFromRadius(username: string): string {
   return local.replace(/[._-]+/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
 }
 
+/**
+ * A customer's name as the CPE's device name: «Messina Mellina» → «MESSINA MELLINA» (uppercase, no
+ * accents, words kept apart; the PPPoE user has no spaces: «messinamellina» stays one word).
+ */
+export function deviceNameFromCustomer(name: string): string {
+  return String(name)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^A-Za-z0-9 '.&-]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase()
+    .slice(0, 60)
+    .trim();
+}
+
 /** Template keys that would reintroduce the legacy WAN VLAN (forbidden by current policy). */
 export function containsLegacyVlan(cfg: string): boolean {
   return /^(?:vlan\.|ebtables\.sys\.vlan\.)/im.test(cfg) || /^ppp\.\d+\.devname=ath0\.\d+/im.test(cfg);

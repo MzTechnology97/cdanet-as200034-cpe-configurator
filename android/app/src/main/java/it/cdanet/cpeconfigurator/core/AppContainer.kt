@@ -99,6 +99,16 @@ class AppContainer(context: Context) {
     /** Speed tests on the customer's Wi-Fi: server settings, the test, results kept until sent. */
     val speedtests = it.cdanet.cpeconfigurator.tools.speedtest.Speedtests(appContext.getSharedPreferences("speedtest", Context.MODE_PRIVATE), api, network)
 
+    init {
+        // the plan of a just prepared installation, saved on the phone for the speed test offline
+        scope.launch {
+            provisioning.state.collect { st ->
+                val id = st.pkg?.jobId ?: return@collect
+                runCatching { speedtests.prefetch(listOf(it.cdanet.cpeconfigurator.tools.speedtest.SpeedtestSubject("acceptance", jobId = id, workOrderId = provisioning.form.value.workOrderId))) }
+            }
+        }
+    }
+
     /** Screenshots and recordings seen on a blocked account, kept until the NOC has them. */
     val captureReports = CaptureReports(screenPrefs, api)
 

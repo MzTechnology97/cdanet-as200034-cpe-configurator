@@ -138,6 +138,7 @@ fun InstallScreen(
             InstallStep.Verify -> CpeStep(c) { VerifyStep(c, mode) }
             InstallStep.Link -> CpeStep(c) { LinkStep(c) }
             InstallStep.Aim -> CpeStep(c) { AimStep(c, onAim, onCompass, onPointing, onAlignment) }
+            InstallStep.Roof -> CpeStep(c) { RoofStep(c) { c.install.next() } }
             InstallStep.Router -> RouterSpeedStep(c) { c.install.next() }
             InstallStep.Final -> FinalStep(c, onAcceptance)
         }
@@ -737,7 +738,7 @@ private fun AimStep(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: 
         if (c.moduleOn("field_alignment")) TextButton(onClick = onAlignment) { Text("Puntamento a schermo intero") }
     }
     SecondaryButton(onClick = { c.field.resetPeak() }) { Text("Azzera picco e grafico") }
-    NextButton(c, "Avanti: router e velocità")
+    NextButton(c, "Avanti: fine lavori sul tetto")
 }
 
 // ---- 6 · Verifica finale e collaudo ---------------------------------------------------------

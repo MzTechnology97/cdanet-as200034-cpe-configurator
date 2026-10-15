@@ -18,6 +18,16 @@ class PopPowerTextTest {
     }
 
     @Test
+    fun theCpeManagementWifiIsNotARouter() {
+        // airOS management networks: «<model>:<end of the MAC>»
+        assertEquals(true, it.cdanet.cpeconfigurator.network.isCpeSsid("Loco5AC:1C6A1BCA95C3"))
+        assertEquals(true, it.cdanet.cpeconfigurator.network.isCpeSsid("LBE-5AC-Gen2:A1B2C3"))
+        assertEquals(false, it.cdanet.cpeconfigurator.network.isCpeSsid("Cda Net Di SalvoA_5"))
+        assertEquals(false, it.cdanet.cpeconfigurator.network.isCpeSsid("Casa: ospiti"))
+        assertEquals(false, it.cdanet.cpeconfigurator.network.isCpeSsid(null))
+    }
+
+    @Test
     fun theImpactKnowsItsPop() {
         assertEquals("site-n2", OutageImpactDto(type = "pop", id = "site-n2").pop)
         assertEquals("site-n2", OutageImpactDto(type = "ap", id = "ap-1", popId = "site-n2").pop)

@@ -267,6 +267,20 @@ fun AppRoot(c: AppContainer) {
                     if (c.provisioning.stock.olderThan(java.time.Duration.ofMinutes(30))) runCatching { c.provisioning.stock.refresh(c.api) }
                 }
             }
+            // back online (out of a roof without signal, the customer's line up): the queues go at once
+            launch {
+                var wasOnline = c.network.internet.value
+                c.network.internet.collect { online ->
+                    if (online && !wasOnline) {
+                        kotlinx.coroutines.delay(1500) // the new route settles
+                        if (c.resultQueue.pending.value.isNotEmpty()) runCatching { c.resultQueue.sync() }
+                        if (c.acceptanceQueue.pending.value.isNotEmpty()) runCatching { c.acceptanceQueue.sync() }
+                        runCatching { c.speedtests.sendPending() }
+                        session?.user?.id?.let { runCatching { c.captureReports.send(it) } }
+                    }
+                    wasOnline = online
+                }
+            }
             // CPE credentials for alignment/diagnosis, so they also work later without Internet.
             scope.launch { if (listOf("field_alignment", "field_diagnosis", "acceptance").any { c.moduleOn(it) }) c.field.prefetch() }
         } else {

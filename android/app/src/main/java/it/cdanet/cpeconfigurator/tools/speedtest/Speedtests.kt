@@ -36,6 +36,9 @@ data class SpeedtestSaved(val id: String = "", val passed: Boolean? = null, val 
 @Serializable
 data class SpeedtestTargetDto(val target: SpeedTarget? = null)
 
+/** The plan of a test: [reached] false when the server could not be asked (no Internet). */
+data class TargetLookup(val target: SpeedTarget?, val reached: Boolean)
+
 /** A test saved on the server (Storico, Gestione CPE). */
 @Serializable
 data class SpeedtestRow(
@@ -77,10 +80,51 @@ class Speedtests(private val prefs: SharedPreferences, private val api: ApiClien
     }
 
     /** The plan's speeds for [s] (null: plan unknown, the test still counts without a comparison). */
-    suspend fun target(s: SpeedtestSubject): SpeedTarget? {
-        val q = listOfNotNull(s.jobId?.let { "jobId=$it" }, s.workOrderId?.let { "workOrderId=$it" }, s.mac?.let { "mac=$it" }).firstOrNull() ?: return null
-        return runCatching { AppJson.decodeFromString(SpeedtestTargetDto.serializer(), api.request("GET", "/api/speedtest/target?$q")).target }.getOrNull()
+    suspend fun target(s: SpeedtestSubject): SpeedTarget? = targetLookup(s).target
+
+    /**
+     * The plan's speeds for [s], telling «the server said it does not know the plan» apart from
+     * «the server could not be reached» (customer's Wi-Fi without Internet yet, weak mobile data).
+     */
+    suspend fun targetLookup(s: SpeedtestSubject): TargetLookup {
+        val q = listOfNotNull(s.jobId?.let { "jobId=$it" }, s.workOrderId?.let { "workOrderId=$it" }, s.mac?.let { "mac=$it" }).firstOrNull() ?: return TargetLookup(null, reached = true)
+        return runCatching { AppJson.decodeFromString(SpeedtestTargetDto.serializer(), api.request("GET", "/api/speedtest/target?$q")).target }
+            .fold(
+                { t ->
+                    if (t != null) remember(s, t)
+                    TargetLookup(t ?: cached(s), reached = true)
+                },
+                // no Internet here (customer's Wi-Fi not online yet, weak mobile data): the plan saved on the phone
+                { TargetLookup(cached(s), reached = false) },
+            )
     }
+
+    /** Keys a plan is saved under: the installation, the work order, the CPE. */
+    private fun keys(s: SpeedtestSubject) = listOfNotNull(s.jobId?.let { "job:$it" }, s.workOrderId?.let { "wo:$it" }, s.mac?.let { "mac:${it.uppercase()}" })
+
+    private fun targets(): Map<String, SpeedTarget> =
+        runCatching { AppJson.decodeFromString(targetsSer, prefs.getString(TARGETS, null) ?: "{}") }.getOrDefault(emptyMap())
+
+    /** The plan saved on the phone for [s] (asked while online: at the preparation or from Oggi). */
+    fun cached(s: SpeedtestSubject): SpeedTarget? = targets().let { m -> keys(s).firstNotNullOfOrNull { m[it] } }
+
+    @Synchronized
+    private fun remember(s: SpeedtestSubject, t: SpeedTarget) {
+        // the last 200 plans are enough for a technician's days
+        val m = (targets() + keys(s).associateWith { t }).entries.toList().takeLast(200).associate { it.key to it.value }
+        prefs.edit().putString(TARGETS, AppJson.encodeToString(targetsSer, m)).apply()
+    }
+
+    /**
+     * Asks the server for the plans of the installations and work orders ahead, while online, so the
+     * speed test compares with the plan on a roof or at a customer without Internet yet.
+     */
+    suspend fun prefetch(subjects: List<SpeedtestSubject>) {
+        for (s in subjects) if (cached(s) == null) targetLookup(s).also { if (!it.reached) return }
+    }
+
+    /** Results waiting on the phone for the server. */
+    fun pendingCount(): Int = pending().size
 
     /** One test with the server's settings, over [net] (the router Wi-Fi). */
     suspend fun measure(cfg: SpeedtestConfig, net: android.net.Network, onProgress: (SpeedProgress) -> Unit): SpeedResult =
@@ -135,6 +179,8 @@ class Speedtests(private val prefs: SharedPreferences, private val api: ApiClien
     companion object {
         private const val CONFIG = "speedtest-config"
         private const val PENDING = "speedtest-pending"
+        private const val TARGETS = "targets"
+        private val targetsSer = kotlinx.serialization.builtins.MapSerializer(kotlinx.serialization.serializer<String>(), SpeedTarget.serializer())
 
         /** No network or a server error: try again; a refusal (4xx) is final. */
         fun retry(e: Throwable): Boolean = when (e) {

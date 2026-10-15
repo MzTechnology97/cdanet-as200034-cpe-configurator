@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { describe, it } from 'node:test';
 import { createSealer, hashPassword, md5Crypt, verifyPassword } from '../src/crypto.ts';
-import { customerNameFromRadius, parseClientHeader, parseMac, ssidFor, versionAtLeast, SSID_RX } from '../src/domain/policy.ts';
+import { customerNameFromRadius, deviceNameFromCustomer, parseClientHeader, parseMac, ssidFor, versionAtLeast, SSID_RX } from '../src/domain/policy.ts';
 import { parseKeyValues, readonlyCommand, redactRouterOs, summarize } from '../src/domain/routeros.ts';
 import { inspectTemplate, renderSystemCfg, setKey } from '../src/domain/systemcfg.ts';
 import { parseScanCidr, isPrivateIPv4 } from '../src/net/ip.ts';
@@ -38,6 +38,10 @@ describe('policy', () => {
   it('derives COGNOME NOME from the RADIUS username', () => {
     assert.equal(customerNameFromRadius('rossi.mario@cda-net.it'), 'ROSSI MARIO');
     assert.equal(customerNameFromRadius('De_Luca-Anna@CDA-NET.IT'), 'DE LUCA ANNA');
+    // the customer's name keeps the words apart (the PPPoE user often has none)
+    assert.equal(deviceNameFromCustomer('Messina Mellina'), 'MESSINA MELLINA');
+    assert.equal(deviceNameFromCustomer('  Nicolò  D’Àngelo / Bar Sport '), 'NICOLO D ANGELO BAR SPORT');
+    assert.equal(deviceNameFromCustomer('???'), '');
   });
   it('accepts MAC addresses with or without separators', () => {
     for (const v of ['24A43C112233', '24a43c112233', '24:a4:3c:11:22:33', '24-A4-3C-11-22-33', '24a4.3c11.2233', ' 24 A4 3C 11 22 33 ']) {

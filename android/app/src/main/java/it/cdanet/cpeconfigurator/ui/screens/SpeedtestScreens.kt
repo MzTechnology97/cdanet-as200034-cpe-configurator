@@ -72,13 +72,23 @@ fun SpeedtestRunner(c: AppContainer, subject: SpeedtestSubject, attempts: Int, o
     val scope = rememberCoroutineScope()
     var cfg by remember { mutableStateOf(c.speedtests.config()) }
     var target by remember { mutableStateOf<SpeedTarget?>(null) }
+    // false: the server could not be asked for the plan (no Internet yet): asked again every 20 s
+    var serverReached by remember { mutableStateOf(true) }
+    // the last result could not reach the server: kept on the phone, sent when online
+    var queued by remember { mutableStateOf(false) }
     var progress by remember { mutableStateOf<SpeedProgress?>(null) }
     var result by remember { mutableStateOf<SpeedResult?>(null) }
     var passed by remember { mutableStateOf<Boolean?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     LaunchedEffect(subject) {
         cfg = c.speedtests.refreshConfig()
-        target = c.speedtests.target(subject)
+        while (true) {
+            val t = c.speedtests.targetLookup(subject)
+            serverReached = t.reached
+            if (t.target != null) target = t.target
+            if (t.reached) break
+            delay(20_000)
+        }
     }
     val link = rememberRouterLink(c)
     val signal = SpeedtestMath.signal(link?.wifiRssi, cfg)
@@ -87,7 +97,11 @@ fun SpeedtestRunner(c: AppContainer, subject: SpeedtestSubject, attempts: Int, o
         target?.let { t ->
             val (d, u) = SpeedtestMath.minimum(t)
             KeyValue("Profilo del cliente", "${mbit(t.downMbps)} / ${mbit(t.upMbps)} Mbit/s · minimo ${t.minPct}%: ${mbit(d)} / ${mbit(u)}")
-        } ?: if (subject.context != "tool") Text("Profilo del cliente non noto: la prova vale, senza confronto.", style = MaterialTheme.typography.bodySmall) else Unit
+        } ?: when {
+            subject.context == "tool" -> Unit
+            !serverReached -> Notice("Server non raggiungibile da qui: il profilo del cliente arriva appena il telefono ha Internet. Puoi fare lo speedtest lo stesso: la prova resta sul telefono e parte da sola.", NoticeKind.Warn)
+            else -> Text("Profilo del cliente non noto: la prova vale, senza confronto.", style = MaterialTheme.typography.bodySmall)
+        }
         when {
             link == null -> Notice("Il telefono non è sulla Wi-Fi del router: lo speedtest si fa solo sulla Wi-Fi, mai con i dati mobili.", NoticeKind.Warn)
             signal == SpeedtestMath.Signal.TooWeak -> Notice("Avvicinati al router: segnale ${link.wifiRssi} dBm, serve almeno ${cfg.wifiBlockDbm} dBm.", NoticeKind.Bad)
@@ -110,6 +124,7 @@ fun SpeedtestRunner(c: AppContainer, subject: SpeedtestSubject, attempts: Int, o
                 }
                 null -> Unit
             }
+            if (queued) Notice("Prova salvata sul telefono: il server non è raggiungibile da qui. La invio da sola appena c'è Internet (anche dopo, dalla schermata Oggi).", NoticeKind.Warn)
         }
         error?.let { Notice(it, NoticeKind.Bad) }
         BusyButton(
@@ -129,6 +144,8 @@ fun SpeedtestRunner(c: AppContainer, subject: SpeedtestSubject, attempts: Int, o
                     val local = SpeedtestMath.passed(r.downMbps, r.upMbps, target)
                     val saved = c.speedtests.save(c.speedtests.post(subject, r, w, attempts + 1))
                     saved?.target?.let { target = it }
+                    queued = saved == null
+                    if (saved != null) serverReached = true
                     result = r
                     passed = saved?.passed ?: local
                     onResult(r, target, passed)
@@ -177,6 +194,7 @@ fun RouterSpeedStep(c: AppContainer, onNext: () -> Unit) {
         Text("Collega il telefono alla Wi-Fi del router del cliente: serve Internet su quella rete, non la Wi-Fi della CPE.", style = MaterialTheme.typography.bodySmall)
         if (cpeWifi == CpeWifi.Connected) TextButton(onClick = { c.network.leaveCpeWifi() }) { Text("Scollega dalla Wi-Fi della CPE") }
         when {
+            link == null && c.network.onCpeSsid() -> Notice("Il telefono è sulla Wi-Fi della CPE: passa a quella del router del cliente.", NoticeKind.Warn)
             link == null -> Notice("Il telefono non è collegato a una Wi-Fi.", NoticeKind.Warn)
             !link.validated -> Notice("${link.wifiSsid ?: "Questa Wi-Fi"}: nessun accesso a Internet. Controlla il router.", NoticeKind.Warn)
             else -> KeyValue("Wi-Fi", "${link.wifiSsid ?: "rete collegata"} · ${link.wifiRssi ?: "—"} dBm · Internet ok")
