@@ -13,6 +13,7 @@ const ERRORS: Record<string, string> = {
   imagery_incomplete: 'Manca la chiave (o l’indirizzo del servizio).',
   imagery_unreachable: 'Servizio non raggiungibile dal server (DNS o firewall).',
   imagery_key_rejected: 'Chiave rifiutata: controlla che sia attiva, con il servizio abilitato e senza restrizioni di indirizzo.',
+  imagery_region_unavailable: 'La chiave è valida, ma Google non fornisce le immagini satellitari della Map Tiles API agli account europei: usa Esri, Mapbox o l’ortofoto WMS.',
   imagery_error: 'Il servizio ha risposto con un errore.',
   imagery_empty: 'Nessuna immagine in quel punto (Sicilia centrale): controlla i layer.',
   imagery_not_configured: 'Non configurato.',
@@ -21,7 +22,7 @@ const ERRORS: Record<string, string> = {
 const KEYED: Array<['mapbox' | 'esri' | 'google', string, string, string]> = [
   ['mapbox', 'Mapbox', 'Token da account.mapbox.com → Tokens (il token pubblico predefinito va bene). Piano gratuito con un limite mensile di immagini.', 'pk.…'],
   ['esri', 'Esri (ArcGIS)', 'Chiave API da location.arcgis.com (ArcGIS Location Platform) → Developer credentials, con il privilegio «Basemaps». Piano gratuito con un limite mensile.', 'AAPK… / AAPT…'],
-  ['google', 'Google', 'Chiave API da Google Cloud con la «Map Tiles API» attiva e un account di fatturazione. Le condizioni di Google chiedono di mostrare il logo e l’attribuzione.', 'AIza…'],
+  ['google', 'Google', 'Chiave API da Google Cloud con la «Map Tiles API» attiva e un account di fatturazione. Attenzione: Google non fornisce le immagini satellitari di questa API agli account dello Spazio economico europeo (anche se la stessa chiave funziona in UISP, che usa un’altra API). Le condizioni di Google chiedono di mostrare il logo e l’attribuzione.', 'AIza…'],
 ];
 const date = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 const apiError = (e: unknown) => {
