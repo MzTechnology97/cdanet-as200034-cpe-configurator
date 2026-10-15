@@ -4,6 +4,7 @@ import androidx.compose.ui.graphics.lerp
 import it.cdanet.cpeconfigurator.ui.SecondaryButton
 import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import it.cdanet.cpeconfigurator.ui.cardBorder
+import it.cdanet.cpeconfigurator.ui.StatusChip
 import it.cdanet.cpeconfigurator.ui.ConsoleTokens
 import it.cdanet.cpeconfigurator.ui.Tone
 import it.cdanet.cpeconfigurator.ui.StatTile
@@ -160,6 +161,7 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
         )
 
         if (!offline && modules["work_orders"] != false) {
+            if (admin) Enter(order++) { TeamOrdersToday(c, onOpen) }
             Enter(order++) { WorkOrdersToday(c, onOpen) }
         }
 
@@ -393,6 +395,54 @@ private fun Enter(index: Int, content: @Composable () -> Unit) {
         p.animateTo(1f, tween(420, easing = FastOutSlowInEasing))
     }
     Box(Modifier.graphicsLayer { alpha = p.value; translationY = (1f - p.value) * 28.dp.toPx() }) { content() }
+}
+
+/**
+ * The NOC's day: how many orders the team has today, how many still without an installer or late,
+ * and the way into the calendar to plan, move or create them. Always shown to admins, also with
+ * no orders of their own.
+ */
+@Composable
+private fun TeamOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
+    var day by remember { mutableStateOf<it.cdanet.cpeconfigurator.data.CalendarDto?>(null) }
+    LaunchedEffect(c.refresh.collectAsState().value) {
+        val today = java.time.LocalDate.now().toString()
+        day = runCatching { c.api.workOrderCalendar(today, today) }.getOrNull() ?: day
+    }
+    val items = day?.items.orEmpty()
+    val open = items.count { it.status != "done" }
+    val unassigned = items.count { it.assignedTo == null && it.status != "done" }
+    val late = items.count { it.overdue }
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        GroupHeader("Interventi della squadra", Area.Work)
+        Card(
+            shape = MaterialTheme.shapes.large,
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerLow),
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            border = cardBorder(),
+            modifier = Modifier.fillMaxWidth(),
+        ) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    when {
+                        day == null -> "Lettura degli interventi…"
+                        items.isEmpty() -> "Nessun intervento in programma oggi."
+                        else -> "Oggi: ${items.size} interventi, $open da fare" + if (items.size > open) ", ${items.size - open} fatti" else ""
+                    },
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = androidx.compose.ui.text.font.FontWeight.SemiBold,
+                )
+                if (unassigned > 0 || late > 0) Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    if (unassigned > 0) StatusChip("$unassigned da assegnare", NoticeKind.Warn)
+                    if (late > 0) StatusChip("$late in ritardo", NoticeKind.Bad)
+                }
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    PrimaryButton(onClick = { onOpen(Dest(Screen.Calendar)) }, modifier = Modifier.weight(1f)) { Text("Calendario") }
+                    SecondaryButton(onClick = { c.calendarNewOrder = true; onOpen(Dest(Screen.Calendar)) }, modifier = Modifier.weight(1f)) { Text("Nuovo intervento") }
+                }
+            }
+        }
+    }
 }
 
 /**

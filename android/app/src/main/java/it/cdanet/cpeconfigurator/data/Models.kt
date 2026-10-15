@@ -519,6 +519,9 @@ data class WorkOrderDto(
 )
 
 @Serializable
+data class WorkOrderItemDto(val item: WorkOrderDto)
+
+@Serializable
 data class WorkOrdersDto(val day: String = "", val items: List<WorkOrderDto> = emptyList())
 
 /** A CPE in the installer's own warehouse. */
