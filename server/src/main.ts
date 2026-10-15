@@ -29,6 +29,7 @@ ctx.crmSync.start();
 ctx.victronSync.start();
 ctx.warehouse.start();
 ctx.platformHealth.start();
+ctx.proactive.start();
 ctx.apLoad.start();
 ctx.optimizer.start();
 // the orthophotos of the area of the network kept ready on disk (UISP read at each run: it may be set later)

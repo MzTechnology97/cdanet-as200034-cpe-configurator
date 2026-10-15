@@ -47,9 +47,11 @@ import { connectorRoutes } from './routes/connectors.ts';
 import { victronRoutes } from './routes/victron.ts';
 import { speedtestRoutes } from './routes/speedtest.ts';
 import { coverageOpsRoutes } from './routes/coverage-operators.ts';
+import { diagnosisRoutes } from './routes/diagnosis.ts';
 import { createCoverageOps, type CoverageOps } from './services/coverage-operators.ts';
 import { createPlatformHealth, type PlatformHealth } from './services/platform-health.ts';
 import { platformRoutes } from './routes/platform.ts';
+import { createProactiveAlerts, type ProactiveAlerts } from './services/proactive-alerts.ts';
 import { cpeAdminRoutes } from './routes/cpe-admin.ts';
 import { uispRoutes } from './routes/uisp.ts';
 import { mapRoutes } from './routes/map.ts';
@@ -151,6 +153,7 @@ export async function buildApp(
     victronSync: undefined as unknown as VictronSync,
     coverageOps: undefined as unknown as CoverageOps,
     platformHealth: undefined as unknown as PlatformHealth,
+    proactive: undefined as unknown as ProactiveAlerts,
     warehouse: undefined as unknown as Warehouse,
     apLoad: undefined as unknown as ApLoadService,
     advisor: undefined as unknown as Advisor,
@@ -221,6 +224,7 @@ export async function buildApp(
       { id: 'victron', label: 'Victron VRM (batterie dei POP)', everyMin: 5, read: () => (ctx.victron.client() ? ctx.victronSync.state() : null) },
     ],
   });
+  ctx.proactive = createProactiveAlerts(ctx, (m) => app.log.warn(m));
 
   const app = Fastify({
     logger:
@@ -316,6 +320,7 @@ export async function buildApp(
   speedtestRoutes(app, ctx);
   coverageOpsRoutes(app, ctx);
   platformRoutes(app, ctx);
+  diagnosisRoutes(app, ctx);
 
   const hasWeb = existsSync(join(cfg.staticDir, 'index.html'));
   // The console built by Vite (console/ → web/app): its pages (the console, /map-embed.html for the

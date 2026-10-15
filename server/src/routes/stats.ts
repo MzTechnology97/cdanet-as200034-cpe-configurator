@@ -1,6 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { AppContext } from '../context.ts';
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
+import { recordEvent } from '../db.ts';
+import { monthlyDue, monthlyReport, monthlyReportPdf, monthlyText } from '../services/monthly-report.ts';
 import { KO_REASONS } from './ko.ts';
 
 /** Installation statistics for the management: per month and per installer. */
@@ -54,4 +58,44 @@ export function statsRoutes(app: FastifyInstance, ctx: AppContext) {
     const koReasons = [...reasons.values()].sort((a, b) => b.postponed + b.definitive - (a.postponed + a.definitive));
     return { from, months: monthsList, installers: byInstaller, models: byModel, koReasons };
   });
+
+  // ---- Monthly report (console, PDF, and the group on the 1st of the month) --------------------
+  let logo: string | null | undefined;
+  const logoSvg = () => {
+    if (logo === undefined) {
+      try {
+        logo = readFileSync(join(ctx.cfg.staticDir, 'assets', 'cda-net-logo.svg'), 'utf8');
+      } catch {
+        logo = null;
+      }
+    }
+    return logo;
+  };
+  const romeMonth = (d = new Date()) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Rome', year: 'numeric', month: '2-digit' }).format(d).slice(0, 7);
+  const monthQ = z.object({ month: z.string().regex(/^\d{4}-(0[1-9]|1[0-2])$/).optional() });
+
+  app.get('/api/admin/reports/monthly', admin, async (req) => monthlyReport(ctx.db, monthQ.parse(req.query).month ?? romeMonth()));
+  app.get('/api/admin/reports/monthly.pdf', admin, async (req, reply) => {
+    const month = monthQ.parse(req.query).month ?? romeMonth();
+    const pdf = monthlyReportPdf(monthlyReport(ctx.db, month), logoSvg());
+    recordEvent(ctx.db, req.user!.id, 'report.monthly_pdf', month);
+    reply.header('Content-Type', 'application/pdf').header('Content-Disposition', `attachment; filename="report-cdanet-${month}.pdf"`);
+    return reply.send(pdf);
+  });
+
+  /** On the 1st of the month from 8:00 (Rome) the report of the month just ended goes to the group, once. */
+  const sendMonthly = async (now = new Date()) => {
+    const month = monthlyDue(now);
+    if (!month) return;
+    const sent = ctx.db.prepare("SELECT value FROM settings WHERE key = 'report.monthly.sent'").get() as { value: string } | undefined;
+    if (sent?.value === JSON.stringify(month) || !ctx.modules.enabled('telegram')) return;
+    ctx.db.prepare("INSERT INTO settings(key, value, updated_at) VALUES('report.monthly.sent', ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at").run(JSON.stringify(month), now.toISOString());
+    const r = monthlyReport(ctx.db, month);
+    await ctx.telegram.notify('daily_summary', monthlyText(r));
+    await ctx.telegram.notifyDocument('daily_summary', `report-cdanet-${month}.pdf`, monthlyReportPdf(r, logoSvg()), `Report di ${r.label} in PDF`);
+  };
+  const timer = setInterval(() => void sendMonthly().catch((e) => app.log.warn(`report mensile: ${(e as Error).message}`)), 30 * 60_000);
+  timer.unref();
+  app.addHook('onClose', async () => clearInterval(timer));
+  return { sendMonthly };
 }

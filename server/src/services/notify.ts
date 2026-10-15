@@ -188,6 +188,13 @@ export function createNotifier(
     void telegram.notify('uisp_status', `${ok ? '✅' : '⚠️'} <b>${e(title)}</b>${lines.length ? `\n${lines.map(e).join('\n')}` : ''}`);
   }
 
+  // ---- Proactive alerts (signal drops, busy APs, POPs on battery) ----------------------------
+  /** [power]: also to the group's Telegram, with the Enel outages. */
+  function proactive(title: string, lines: string[], power = false) {
+    inbox.push('noc', { kind: 'proactive', title, lines });
+    if (power) void telegram.notify('power_outage', `<b>${e(title)}</b>${lines.length ? `\n${lines.map(e).join('\n')}` : ''}`);
+  }
+
   // ---- Evening summary ------------------------------------------------------------------
   const romeHour = (d: Date) => Number(new Intl.DateTimeFormat('it-IT', { timeZone: 'Europe/Rome', hour: '2-digit', hour12: false }).format(d));
   const romeDay = (d: Date) => new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Rome' }).format(d);
@@ -299,6 +306,7 @@ export function createNotifier(
     adminLogin,
     checkUisp,
     platform,
+    proactive,
     summaryText,
     maybeSummary,
     start() {

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { MonthlyReportCard } from './MonthlyReport';
 import { useState } from 'react';
 import { api } from '../lib/api';
 import { Card, Field, Notice, PageHeader, Skeleton, Stat, Table } from '../ui';
@@ -101,6 +102,7 @@ export function Stats() {
           </Field>
         }
       />
+      <MonthlyReportCard />
       {q.error && <Notice tone="bad">{(q.error as Error).message}</Notice>}
       {!d && !q.error && <Skeleton lines={8} />}
       {d && tot && (

@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { DiagnosisPanel } from './DiagnosisPanel';
 import { useEffect, useMemo, useState } from 'react';
 import { api, download } from '../lib/api';
 import { isOn } from '../lib/modules';
@@ -303,6 +304,12 @@ function OrderDetails({ o, onClose, onEdit, onDelete }: { o: Order; onClose: () 
       </dl>
       {o.notes && <p className="wo-notes">{o.notes}</p>}
       {o.statusNote && <p className="wo-notes">{o.statusNote}</p>}
+      {o.status !== 'cancelled' && (
+        <>
+          <h4 className="jb-h4">Diagnosi a distanza</h4>
+          <DiagnosisPanel params={{ workOrderId: String(o.id) }} auto={o.kind === 'repair' || o.kind === 'repoint'} />
+        </>
+      )}
       <h4 className="jb-h4">Storico</h4>
       {h.error ? (
         <Notice tone="bad">{(h.error as Error).message}</Notice>

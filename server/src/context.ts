@@ -11,6 +11,7 @@ import type { CrmSettings } from './services/crm.ts';
 import type { VrmSettings } from './services/victron.ts';
 import type { MyWicSettings } from './services/mywic.ts';
 import type { PlatformHealth } from './services/platform-health.ts';
+import type { ProactiveAlerts } from './services/proactive-alerts.ts';
 import type { CoverageOps } from './services/coverage-operators.ts';
 import type { VictronSync } from './services/victron-sync.ts';
 import type { Imagery } from './services/imagery.ts';
@@ -55,6 +56,8 @@ export interface AppContext {
   mywic: MyWicSettings;
   /** «Salute piattaforma»: the state of every source, alerts to the NOC and the encrypted backup. */
   platformHealth: PlatformHealth;
+  /** Alerts to the NOC before the customers call: signal drops, busy APs, POPs on battery. */
+  proactive: ProactiveAlerts;
   /** The other operators' coverage at a point, grouped by AGCOM sticker, with its cache. */
   coverageOps: CoverageOps;
   /** The POPs' Victron systems read every 5 minutes and the POP each one powers. */
