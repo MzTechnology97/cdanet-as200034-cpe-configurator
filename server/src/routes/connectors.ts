@@ -48,6 +48,7 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
     },
     telegram: ctx.modules.enabled('telegram') ? { ...ctx.telegram.view(), publicUrl: ctx.cfg.publicUrl ?? '' } : null,
     crm: ctx.crm.view(),
+    victron: ctx.victron.view(),
     imagery: ctx.imagery.view(),
     firebase: ctx.push.view(),
   }));
@@ -214,6 +215,38 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!b.url || !b.apiId || !apiKey) throw new HttpError(400, 'crm_incomplete');
     const r = await ctx.crm.build({ url: b.url, apiId: b.apiId, apiKey }).test();
     recordEvent(ctx.db, req.user!.id, 'connector.crm.test', b.url, 'modules' in r ? `${r.modules.filter((m) => m.ok).length}/${r.modules.length} moduli leggibili` : `errore ${r.error}`);
+    return r;
+  });
+
+  // ---- Victron VRM: the solar and battery systems of the POPs (read only) --------------------------
+  // A personal access token of a VRM user (VRM → Preferences → Integrations → Access tokens).
+  const vrmBody = z
+    .object({
+      enabled: z.boolean(),
+      token: z.string().trim().max(500).regex(/^[!-~]*$/, 'Token non valido').optional(),
+    })
+    .strict();
+
+  app.put('/api/admin/connectors/victron', admin, async (req) => {
+    const b = vrmBody.parse(req.body);
+    ctx.victron.save({ enabled: b.enabled, token: b.token || undefined }, req.user!.id);
+    recordEvent(ctx.db, req.user!.id, 'connector.victron.update', 'Victron VRM', `${b.enabled ? 'attivo' : 'disattivato'}${b.token ? ' · nuovo token' : ''}`);
+    return ctx.victron.view();
+  });
+
+  app.delete('/api/admin/connectors/victron', admin, async (req) => {
+    ctx.victron.reset();
+    recordEvent(ctx.db, req.user!.id, 'connector.victron.reset', 'Victron VRM', 'configurazione rimossa');
+    return ctx.victron.view();
+  });
+
+  /** Tests the token in the form (or the saved one) without saving it: counts only, nothing written to VRM. */
+  app.post('/api/admin/connectors/victron/test', admin, async (req) => {
+    const b = vrmBody.partial({ enabled: true }).parse(req.body ?? {});
+    const token = b.token || ctx.victron.savedToken();
+    if (!token) throw new HttpError(400, 'vrm_incomplete');
+    const r = await ctx.victron.build(token).test();
+    recordEvent(ctx.db, req.user!.id, 'connector.victron.test', 'Victron VRM', r.ok ? `${r.installations} impianti · ${r.withAlarms} con allarmi · ${r.silent} senza dati da oltre un'ora` : `errore ${r.error}`);
     return r;
   });
 
