@@ -60,7 +60,35 @@ export function isDeviceMac(mac: string): boolean {
 /** `ROSSI.MARIO@cda-net.it` -> `ROSSI MARIO` (SNMP location and Device Name). */
 export function customerNameFromRadius(username: string): string {
   const local = String(username).trim().replace(/@cda-net\.it$/i, '').split('@')[0] ?? '';
-  return local.replace(/[._-]+/g, ' ').replace(/\s+/g, ' ').trim().toUpperCase();
+  return deviceNameFromCustomer(local);
+}
+
+/**
+ * A name as the CPE's device name (system name): uppercase letters, digits and single spaces only,
+ * since airOS takes nothing else there. «D'Angelo & Figli S.r.l.» → «D ANGELO FIGLI S R L»,
+ * «Niccolò Cutrò» → «NICCOLO CUTRO».
+ */
+export function deviceNameFromCustomer(name: string): string {
+  return String(name)
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, ' ')
+    .trim()
+    .slice(0, 60)
+    .trim();
+}
+
+/**
+ * The customer's formal name from the CRM (ISP Billing): «Cognome Nome» for a private customer,
+ * the company name (ragione sociale) for a business or an association. ISP Billing's own
+ * customer_name is «Nome Cognome», so it is only the last resort.
+ */
+export function formalCustomerName(c: { type?: unknown; first_name?: unknown; last_name?: unknown; business_name?: unknown; customer_name?: unknown }): string {
+  const s = (v: unknown) => (typeof v === 'string' ? v.trim() : '');
+  const person = [s(c.last_name), s(c.first_name)].filter(Boolean).join(' ');
+  if (s(c.type) !== 'private' && s(c.business_name)) return s(c.business_name);
+  return person || s(c.business_name) || s(c.customer_name);
 }
 
 /** Template keys that would reintroduce the legacy WAN VLAN (forbidden by current policy). */

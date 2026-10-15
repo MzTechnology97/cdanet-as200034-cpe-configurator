@@ -21,6 +21,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
@@ -131,8 +132,16 @@ fun AcceptanceScreen(c: AppContainer) {
         c.field.start(FieldMode.Alignment)
     }
 
-    // the router step of this installation: its speed test and the customer's Wi-Fi go into the report
-    val router = c.install.state.collectAsState().value.takeIf { it.job?.id == j.id }?.router
+    // this installation's roof (readings, height, photos) and router step (speed test, customer's Wi-Fi)
+    val wizard = c.install.state.collectAsState().value.takeIf { it.job?.id == j.id }
+    val router = wizard?.router
+    val roof = wizard?.roof
+    LaunchedEffect(roof) {
+        if (roof == null) return@LaunchedEffect
+        if (roof.radio != null && !measuring && samples.isEmpty()) samples.addAll(roof.radio)
+        if (heightText.isBlank() && roof.heightText.isNotBlank()) heightText = roof.heightText
+        if (photos.isEmpty() && roof.photos.isNotEmpty()) photos.addAll(roof.photos.map { PendingPhoto(it.caption, it.jpeg, it.thumb) })
+    }
     val report: AcceptanceReport? = if (samples.size >= Acceptance.SAMPLES) {
         Acceptance.build(
             samples.toList(), c.field.thresholds, c.field.targetFirmware, internet ?: InternetTest(false, note = "Non misurato"), notes,
@@ -170,6 +179,7 @@ fun AcceptanceScreen(c: AppContainer) {
         WifiRequired(c, "alla Wi-Fi della CPE (management, es. \"LBE-5AC-Gen2:xxxx\") oppure a quella del router del cliente", "Misure e test Internet richiedono la rete locale; foto e note funzionano comunque.") {
         SectionCard("1 · Misure radio") {
             Text("${Acceptance.SAMPLES} letture in ${Acceptance.SAMPLES} secondi dalla CPE: il segnale viene mediato.", style = MaterialTheme.typography.bodySmall)
+            if (roof?.radio != null && !measuring && samples.toList() == roof.radio) Text("Misure fatte sul tetto, dopo il puntamento.", style = MaterialTheme.typography.bodySmall)
             if (measuring) {
                 LinearProgressIndicator(progress = { samples.size / Acceptance.SAMPLES.toFloat() }, modifier = Modifier.fillMaxWidth())
                 Text(st.error ?: (st.status?.signal?.let { "Segnale $it dBm · lettura ${samples.size}/${Acceptance.SAMPLES}" } ?: "Ricerca della CPE…"))
@@ -185,11 +195,17 @@ fun AcceptanceScreen(c: AppContainer) {
 
         SectionCard("2 · Internet dal lato cliente") {
             Text("Speedtest verso il server CDA Net sulla Wi-Fi del router del cliente: mai con i dati mobili.", style = MaterialTheme.typography.bodySmall)
-            val routerDone = router?.last
-            if (routerDone != null && speed == null) {
-                Text("Speedtest già fatto al passo «Router e velocità»: lo trovi nel collaudo. Puoi ripeterlo qui.", style = MaterialTheme.typography.bodySmall)
-            }
-            it.cdanet.cpeconfigurator.ui.screens.SpeedtestRunner(c, it.cdanet.cpeconfigurator.tools.speedtest.SpeedtestSubject("acceptance", jobId = j.id, mac = j.mac.ifBlank { null }), speedAttempts) { r, target, passed ->
+            val routerDone = router?.speedtest()
+            if (routerDone != null) {
+                KeyValue("Download / upload", "${routerDone.downMbps} / ${routerDone.upMbps} Mbit/s")
+                KeyValue("Ping / jitter", "${routerDone.pingMs?.toInt() ?: "—"} / ${routerDone.jitterMs?.toInt() ?: "—"} ms")
+                routerDone.target?.let { t -> KeyValue("Profilo del cliente", "${t.downMbps} / ${t.upMbps} Mbit/s · minimo ${t.minPct}%") }
+                Text(
+                    "Speedtest fatto al passo «Router e velocità» (${routerDone.attempts} ${if (routerDone.attempts == 1) "prova" else "prove"})" +
+                        when (routerDone.passed) { true -> ": nei parametri del profilo."; false -> ": sotto il minimo del profilo."; null -> "." },
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            } else it.cdanet.cpeconfigurator.ui.screens.SpeedtestRunner(c, it.cdanet.cpeconfigurator.tools.speedtest.SpeedtestSubject("acceptance", jobId = j.id, mac = j.mac.ifBlank { null }), speedAttempts) { r, target, passed ->
                 speedAttempts++
                 speed = it.cdanet.cpeconfigurator.field.AcceptanceSpeedtest(
                     downMbps = Math.round(r.downMbps * 10) / 10.0, upMbps = Math.round(r.upMbps * 10) / 10.0,

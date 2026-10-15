@@ -1,4 +1,4 @@
-import { parseMac } from '../domain/policy.ts';
+import { formalCustomerName, parseMac } from '../domain/policy.ts';
 import { nowIso, type Db } from '../db.ts';
 import type { CrmClient, CrmSettings } from './crm.ts';
 
@@ -177,8 +177,8 @@ export function createCrmSync(db: Db, crm: CrmSettings, opts: { concurrency?: nu
       const now = nowIso();
       const ins = db.prepare(
         `INSERT INTO crm_radius(account_id, customer_id, username, account_status, profile, static_ip, cpe_type, customer_name, customer_status,
-           customer_group, services_suspended, online, mac, client_ip, session_seconds, checked_at, address_id)
-         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           customer_group, services_suspended, online, mac, client_ip, session_seconds, checked_at, address_id, customer_formal)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       );
       const insCustomer = db.prepare(
         `INSERT INTO crm_customers(customer_id, name, internal_code, type, status, group_name, phone, phone2, email, address_line1, address_line2, city, postal_code, state_code)
@@ -216,6 +216,7 @@ export function createCrmSync(db: Db, crm: CrmSettings, opts: { concurrency?: nu
             st ? (typeof st.session_duration === 'number' ? st.session_duration : null) : ((prev?.session_seconds as number | null) ?? null),
             st ? now : ((prev?.checked_at as string | null) ?? null),
             s(a.address_id),
+            formalCustomerName(c ?? a),
           );
         }
         db.exec('DELETE FROM crm_customers');

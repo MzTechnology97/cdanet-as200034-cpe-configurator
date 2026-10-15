@@ -76,6 +76,9 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
         client = null
     }
     private var client: AirosClient? = null
+        get() = field?.takeIf { network.isAlive(clientNet) }.also { if (it == null && field != null) field = null }
+    /** The Wi-Fi [client] was made on: when it goes (CPE Wi-Fi joined again), a new client on the current one. */
+    @Volatile private var clientNet: android.net.Network? = null
     private var job: Job? = null
     var onSample: ((AirosStatus) -> Unit)? = null
 
@@ -248,6 +251,7 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
                 for ((cr, label) in creds) {
                     try {
                         val cl = AirosClient(url, wifi.socketFactory).apply { login(cr.username, cr.password) }
+                        clientNet = wifi
                         working = cr
                         _state.update { it.copy(authFailed = false, credentialsUsed = label) }
                         return@withContext cl

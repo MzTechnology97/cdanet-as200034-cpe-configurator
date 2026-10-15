@@ -25,13 +25,34 @@ enum class InstallStep(val title: String) {
     Verify("Verifica della CPE"),
     Link("Aggancio all'AP"),
     Aim("Puntamento"),
+    Roof("Fine lavori sul tetto"),
     Router("Router e velocità"),
     Final("Verifica finale e collaudo"),
     ;
 
     companion object {
-        fun of(mode: InstallMode): List<InstallStep> = if (mode == InstallMode.New) entries else listOf(Verify, Link, Aim, Router, Final)
+        fun of(mode: InstallMode): List<InstallStep> = if (mode == InstallMode.New) entries else listOf(Verify, Link, Aim, Roof, Router, Final)
     }
+}
+
+/** A photo taken on the roof, kept for the acceptance test until it is sent. */
+class RoofPhoto(val caption: String, val jpeg: ByteArray, val thumb: android.graphics.Bitmap?)
+
+/**
+ * «Fine lavori sul tetto», right after the pointing: everything the acceptance test needs from the
+ * roof, so the technician comes down once. The acceptance test takes it as it is (and can redo it).
+ */
+data class RoofCheck(
+    /** The ten radio readings, taken while the phone is still on the CPE's Wi-Fi. */
+    val radio: List<it.cdanet.cpeconfigurator.field.AirosStatus>? = null,
+    /** The technician left the radio readings to the acceptance test. */
+    val radioSkipped: Boolean = false,
+    /** Height of the CPE above the ground, as typed («7,5»). */
+    val heightText: String = "",
+    val photos: List<RoofPhoto> = emptyList(),
+) {
+    /** Down from the roof: the readings taken (or left to the acceptance test). */
+    val done: Boolean get() = radio != null || radioSkipped
 }
 
 /**
@@ -96,6 +117,8 @@ data class InstallState(
     val expectedSsid: String? = null,
     /** The acceptance test was opened by itself at the last step (only once: back from it, the summary stays). */
     val acceptanceOpened: Boolean = false,
+    /** What is done on the roof after the pointing: radio readings, height, photos of the antenna. */
+    val roof: RoofCheck = RoofCheck(),
     /** Customer's router and the speed test (before the final step). */
     val router: RouterCheck = RouterCheck(),
     /** The work order this installation comes from (speed test target and context). */
@@ -138,6 +161,8 @@ class InstallController(
     fun acceptanceOpened() = _state.update { it.copy(acceptanceOpened = true) }
 
     fun router(f: (RouterCheck) -> RouterCheck) = _state.update { it.copy(router = f(it.router)) }
+
+    fun roof(f: (RoofCheck) -> RoofCheck) = _state.update { it.copy(roof = f(it.roof)) }
 
     fun workOrder(id: Long?) = _state.update { it.copy(workOrderId = id) }
 

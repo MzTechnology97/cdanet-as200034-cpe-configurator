@@ -467,6 +467,16 @@ private fun WorkOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
             c.scope.launch { c.pointingCache.prefetch(c.api, user, places) }
         }
         // the configuration of each new installation goes on the phone now, ready for a roof without Internet
+        orders?.let { list ->
+            c.scope.launch {
+                runCatching {
+                    c.speedtests.prefetch(
+                        list.filter { it.status in setOf("open", "postponed", "started") && it.pppoeUser.isNotBlank() }
+                            .map { o -> it.cdanet.cpeconfigurator.tools.speedtest.SpeedtestSubject("work_order", workOrderId = o.id) },
+                    )
+                }
+            }
+        }
         orders?.let { list -> c.scope.launch { runCatching { c.provisioning.prepareForField(list) } } }
         // and the CPEs of the installer's warehouse, to pick and check them offline
         c.scope.launch { c.provisioning.stock.refresh(c.api) }

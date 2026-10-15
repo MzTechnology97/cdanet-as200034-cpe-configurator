@@ -11,6 +11,7 @@ import { isDeviceMac,
   SUPPORTED_MODELS,
   TARGET_FIRMWARE,
   customerNameFromRadius,
+  deviceNameFromCustomer,
   parseMac,
 } from '../domain/policy.ts';
 import { renderSystemCfg, type PlaceholderName } from '../domain/systemcfg.ts';
@@ -124,8 +125,23 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
   }
 
   /** Non-secret description of what will be written, for the dry-run/plan screen. */
+  /**
+   * The CPE's device name, uppercase: the CRM customer of the PPPoE account («COGNOME NOME» or the
+   * company name), else the customer of the work order as the office wrote it, else the PPPoE user
+   * (which has no spaces between the words). Only A-Z, 0-9 and spaces: airOS takes nothing else.
+   */
+  function deviceNameFor(x: { pppoeUser: string; workOrderId?: number | undefined }): string {
+    const crm = db.prepare("SELECT customer_formal, customer_name FROM crm_radius WHERE username = ? COLLATE NOCASE").get(x.pppoeUser) as
+      | { customer_formal: string; customer_name: string }
+      | undefined;
+    const fromCrm = deviceNameFromCustomer(crm?.customer_formal || crm?.customer_name || '');
+    if (fromCrm) return fromCrm;
+    const order = x.workOrderId ? (db.prepare('SELECT customer FROM work_orders WHERE id = ?').get(x.workOrderId) as { customer: string } | undefined) : undefined;
+    return deviceNameFromCustomer(order?.customer ?? '') || customerNameFromRadius(x.pppoeUser);
+  }
+
   function plan(x: ProvisionRequest, viewer: Viewer) {
-    const name = customerNameFromRadius(x.pppoeUser);
+    const name = deviceNameFor(x);
     const n = cfg.network;
     const tpl = templates.resolve(x.model, x.templateId, viewer);
     return {
@@ -151,10 +167,10 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
   }
 
   /** Placeholder values of a job (same for the rendered config and the drift check). */
-  function jobValues(x: Pick<ProvisionRequest, 'ssid' | 'pppoeUser' | 'mac' | 'serial'> & { pppoePassword?: string }, wpa2: string) {
+  function jobValues(x: Pick<ProvisionRequest, 'ssid' | 'pppoeUser' | 'mac' | 'serial' | 'workOrderId'> & { pppoePassword?: string }, wpa2: string) {
     const s = cfg.cpeSecrets;
     const n = cfg.network;
-    const name = customerNameFromRadius(x.pppoeUser);
+    const name = deviceNameFor(x);
     const values: Partial<Record<PlaceholderName, string>> = {
       SSID: x.ssid,
       WPA2_PSK: wpa2,

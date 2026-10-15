@@ -101,7 +101,7 @@ class InstallWizardTest {
     @Test
     fun repointingSkipsTheConfiguration() {
         assertEquals(InstallStep.entries, InstallStep.of(InstallMode.New))
-        assertEquals(listOf(InstallStep.Verify, InstallStep.Link, InstallStep.Aim, InstallStep.Router, InstallStep.Final), InstallStep.of(InstallMode.Repoint))
+        assertEquals(listOf(InstallStep.Verify, InstallStep.Link, InstallStep.Aim, InstallStep.Roof, InstallStep.Router, InstallStep.Final), InstallStep.of(InstallMode.Repoint))
     }
 
     @Test

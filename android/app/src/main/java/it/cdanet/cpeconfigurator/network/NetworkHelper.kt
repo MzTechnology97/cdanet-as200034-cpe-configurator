@@ -33,6 +33,9 @@ data class LinkInfo(
  * while mobile data is on, Android keeps cellular as the default network: local
  * operations must therefore be explicitly bound to the Wi-Fi network.
  */
+/** airOS management Wi-Fi: «<model>:<end of the MAC>», e.g. «Loco5AC:1C6A1BCA95C3», «LBE-5AC-Gen2:A1B2C3». */
+internal fun isCpeSsid(ssid: String?): Boolean = ssid != null && Regex("^[A-Za-z0-9._ -]+:[0-9A-Fa-f]{6,12}$").matches(ssid.trim('"'))
+
 class NetworkHelper(context: Context) {
     private val cm = context.getSystemService(ConnectivityManager::class.java)
     private val wifi = context.applicationContext.getSystemService(WifiManager::class.java)
@@ -41,6 +44,26 @@ class NetworkHelper(context: Context) {
     /** True while the phone is connected to a Wi-Fi network (with or without Internet). */
     private val _wifiConnected = kotlinx.coroutines.flow.MutableStateFlow(false)
     val wifiConnected: kotlinx.coroutines.flow.StateFlow<Boolean> = _wifiConnected
+
+    /**
+     * True while some network of the phone reaches Internet (validated). Back to true after a roof
+     * without signal or the customer's line coming up: the queues are sent at once.
+     */
+    private val _internet = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val internet: kotlinx.coroutines.flow.StateFlow<Boolean> = _internet
+
+    init {
+        runCatching {
+            _internet.value = !noInternet()
+            cm.registerNetworkCallback(
+                android.net.NetworkRequest.Builder().addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET).build(),
+                object : ConnectivityManager.NetworkCallback() {
+                    override fun onCapabilitiesChanged(network: Network, caps: NetworkCapabilities) { _internet.value = !noInternet() }
+                    override fun onLost(network: Network) { _internet.value = cm.allNetworksCompat().any { it != network && reachesInternet(it) } }
+                },
+            )
+        }
+    }
 
     init {
         _wifiConnected.value = wifiNetwork() != null
@@ -180,9 +203,17 @@ class NetworkHelper(context: Context) {
      * The customer's router Wi-Fi for the speed test: a Wi-Fi the phone joined itself (never the
      * CPE's one joined from the app, never mobile data). Null when the phone is on no such Wi-Fi.
      */
-    fun routerWifi(): Pair<Network, LinkInfo>? = cm.allNetworksCompat().firstOrNull {
+    fun routerWifi(): Pair<Network, LinkInfo>? = cm.allNetworksCompat().filter {
         it != cpeNet && cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
-    }?.let { it to describe(it) }
+    }.map { it to describe(it) }.firstOrNull { !isCpeSsid(it.second.wifiSsid) }
+
+    /** The phone is on a CPE's management Wi-Fi joined from the settings (not from the app). */
+    fun onCpeSsid(): Boolean = cm.allNetworksCompat().any {
+        cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true && isCpeSsid(describe(it).wifiSsid)
+    }
+
+    /** True while [net] is still one of the phone's networks (a released one makes sockets fail with EPERM). */
+    fun isAlive(net: Network?): Boolean = net != null && cm.getNetworkCapabilities(net) != null
 
     fun activeLink(): LinkInfo? = cm.activeNetwork?.let { describe(it) }
 
