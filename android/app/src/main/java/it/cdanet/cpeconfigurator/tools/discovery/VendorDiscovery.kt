@@ -141,7 +141,7 @@ object VendorDiscovery {
 
     /** UPnP device description (friendlyName, manufacturer, modelName…). */
     fun parseUpnp(xml: String): Map<String, String> =
-        listOf("friendlyName", "manufacturer", "modelName", "modelNumber", "serialNumber", "deviceType", "modelDescription")
+        listOf("friendlyName", "manufacturer", "modelName", "modelNumber", "serialNumber", "deviceType", "modelDescription", "UDN")
             .mapNotNull { t -> Regex("<$t>([^<]*)</$t>").find(xml)?.groupValues?.get(1)?.trim()?.ifBlank { null }?.let { t to it } }.toMap()
 
     private fun fetch(url: String, timeoutMs: Int = 2000): String? = runCatching {
@@ -217,6 +217,8 @@ object VendorDiscovery {
                 1 -> (0 until 4).joinToString(".") { u8(rd + it).toString() }
                 12 -> name(rd).first
                 33 -> "${u16(rd + 4)} ${name(rd + 6).first}"
+                // AAAA: its link-local address can carry the MAC (EUI-64)
+                28 -> if (rdLen == 16) (0 until 8).joinToString(":") { Integer.toHexString(u16(rd + it * 2)) } else ""
                 16 -> buildList {
                     var i = rd
                     while (i < rd + rdLen) { val l = u8(i); add(String(msg, i + 1, minOf(l, rd + rdLen - i - 1), Charsets.UTF_8)); i += l + 1 }
@@ -248,7 +250,8 @@ object VendorDiscovery {
             services.any { it.startsWith("_qdiscover") } -> "QNAP"
             else -> "mDNS"
         }
-        return Found(a, "mDNS", vendor, name = name, model = model, details = mapOf("Servizi" to services.joinToString(", ")))
+        val mac = it.cdanet.cpeconfigurator.tools.pro.MacHints.fromMdns(txt, instances, recs.filter { it.type == 28 }.map { it.data })
+        return Found(a, "mDNS", vendor, name = name, model = model, mac = mac, details = mapOf("Servizi" to services.joinToString(", ")))
     }
 
     // ---- Netgear NSDP (UDP 63322 → 63321) ---------------------------------------------------
@@ -353,6 +356,7 @@ object VendorDiscovery {
                 vendor = desc["manufacturer"] ?: h["server"]?.substringBefore(' ') ?: "UPnP",
                 name = desc["friendlyName"],
                 model = listOfNotNull(desc["modelName"], desc["modelNumber"]).distinct().joinToString(" ").ifBlank { null },
+                mac = it.cdanet.cpeconfigurator.tools.pro.MacHints.fromUpnp(desc),
                 details = listOfNotNull(h["server"]?.let { "Server" to it }, desc["deviceType"]?.let { "Tipo" to it.substringAfter("device:").substringBefore(':') }, desc["serialNumber"]?.let { "Seriale" to it }).toMap(),
             )
         }
