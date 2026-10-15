@@ -606,6 +606,27 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE job_photos ADD COLUMN type TEXT NOT NULL DEFAULT 'other';
   `,
+  // the CPEs taken off in a replacement (RMA: to bring back, back, in repair, scrapped, used again)
+  // and the minimum of CPEs each account should keep (null: the one of Impostazioni server)
+  `
+  CREATE TABLE cpe_rma(
+    id INTEGER PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    removed_job_id TEXT NOT NULL UNIQUE,
+    replaced_by_job_id TEXT NOT NULL,
+    mac TEXT NOT NULL,
+    model TEXT NOT NULL DEFAULT '',
+    customer TEXT NOT NULL DEFAULT '',
+    removed_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    condition TEXT NOT NULL DEFAULT 'unknown' CHECK(condition IN('unknown','working','broken')),
+    state TEXT NOT NULL DEFAULT 'to_return' CHECK(state IN('to_return','returned','repair','scrapped','reused')),
+    note TEXT NOT NULL DEFAULT '',
+    updated_at TEXT NOT NULL,
+    updated_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+  );
+  CREATE INDEX cpe_rma_state ON cpe_rma(state);
+  ALTER TABLE users ADD COLUMN warehouse_min_stock INTEGER;
+  `,
 ];
 
 export function openDatabase(path: string): Db {

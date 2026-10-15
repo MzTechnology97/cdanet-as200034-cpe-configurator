@@ -25,6 +25,7 @@ interface Account {
   jobs: number;
   /** Warehouse of the stock (ISP Billing site) and whether CPEs outside it may be installed. */
   warehouseSiteId?: number | null;
+  warehouseMinStock?: number | null;
   warehouseSite?: string | null;
   stockBypass?: boolean;
 }
@@ -469,6 +470,11 @@ function WarehouseFields({ value, onChange }: { value: { siteId: number | null; 
 
 function AccountWarehouse({ u, onSave }: { u: Account; onSave: (body: { warehouseSiteId: number | null; stockBypass: boolean }) => Promise<void> }) {
   const [v, setV] = useState({ siteId: u.warehouseSiteId ?? null, bypass: !!u.stockBypass });
+  const [min, setMin] = useState(u.warehouseMinStock == null ? '' : String(u.warehouseMinStock));
+  const saveMin = async () => {
+    const r = await api<{ min: number | null; defaultMin: number }>(`/api/admin/users/${u.id}/min-stock`, { method: 'PUT', body: { min: min.trim() === '' ? null : Number(min) } });
+    toast(r.min === null ? `Minimo predefinito: ${r.defaultMin} CPE` : `Minimo di ${u.username}: ${r.min} CPE`);
+  };
   const changed = v.siteId !== (u.warehouseSiteId ?? null) || v.bypass !== !!u.stockBypass;
   return (
     <div className="us-warehouse">
@@ -478,6 +484,16 @@ function AccountWarehouse({ u, onSave }: { u: Account; onSave: (body: { warehous
           Salva magazzino
         </AsyncButton>
       </div>
+      {v.siteId != null && (
+        <div className="ui-row us-min">
+          <Field label="CPE minime in magazzino" hint="Sotto questo numero il NOC riceve l’avviso di rifornirlo. Vuoto: il minimo di Impostazioni server.">
+            <input type="number" min={0} max={50} inputMode="numeric" value={min} onChange={(e) => setMin(e.target.value)} placeholder="predefinito" />
+          </Field>
+          <AsyncButton onClick={saveMin} onError={fail}>
+            Salva minimo
+          </AsyncButton>
+        </div>
+      )}
     </div>
   );
 }

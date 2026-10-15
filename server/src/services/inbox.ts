@@ -18,6 +18,7 @@ export const NOTIFY_KINDS = {
   network_optimizer: { label: 'IA-AP: esito delle ottimizzazioni automatiche degli AP (canale tenuto o ripristinato)', audience: 'noc', telegram: true },
   screenshot_attempt: { label: 'Tentativi di screenshot nell’app da account che non possono farli', audience: 'noc', telegram: true },
   stock_mismatch: { label: 'CPE installata che non risulta nel magazzino dell’installatore', audience: 'noc', telegram: false },
+  stock_low: { label: 'Magazzino di un installatore sotto il minimo di CPE', audience: 'noc', telegram: true },
   repoint_unplanned: { label: 'Ripuntamento senza intervento (anche di CPE installate da altri)', audience: 'noc', telegram: true },
   platform: { label: 'Salute piattaforma: un servizio si è fermato o è ripartito (UISP, ISP Billing, guasti Enel, Victron, disco)', audience: 'noc', telegram: false },
   proactive: { label: 'Avvisi proattivi: segnale delle CPE in calo, AP vicini alla saturazione, POP a batteria', audience: 'noc', telegram: true },

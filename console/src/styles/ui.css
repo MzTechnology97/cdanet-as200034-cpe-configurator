@@ -654,3 +654,5 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .fz-verdict.ui-tone-good { border-left-color: var(--good); }
 .fz-verdict.ui-tone-warn { border-left-color: var(--warn); }
 .fz-verdict.ui-tone-bad { border-left-color: var(--bad); }
+.rma-note { min-width: 160px; }
+.us-min { align-items: flex-end; margin-top: var(--sp-3); }
