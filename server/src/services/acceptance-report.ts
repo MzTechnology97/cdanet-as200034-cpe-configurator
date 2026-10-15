@@ -3,7 +3,8 @@ import { A4, PdfDoc, wrap, type Rgb } from './pdf.ts';
 /**
  * «Rapporto di collaudo» of an installation as a PDF, laid out like an intervention report: CDA Net
  * logo, outcome, customer and CPE, radio link, network, the app's checks, notes, the NOC's
- * decision and the installer's photos. For the NOC; never the PPPoE password.
+ * decision and the installer's photos. For the NOC, and for the installer of the job (without the
+ * name of the data source); never the PPPoE password.
  */
 
 export interface ReportData {
@@ -34,6 +35,8 @@ export interface ReportData {
   /** SVG of the CDA Net logo (circles, lines, lettering paths); null = the name in text. */
   logoSvg: string | null;
   generatedAt: Date;
+  /** For an installer: no name of the data source (the site of UISP becomes «in rete»). */
+  forInstaller?: boolean;
 }
 
 const BRAND: Rgb = [241, 90, 44];
@@ -162,7 +165,7 @@ export function acceptanceReportPdf(r: ReportData): Buffer {
     ['Posizione', r.job.latitude != null && r.job.longitude != null ? `${r.job.latitude.toFixed(5)}, ${r.job.longitude.toFixed(5)}` : '—'],
     ['Installatore', r.job.installer || '—'],
     ['Installata il', rome(r.job.installedAt)],
-    ['Sito UISP', r.job.uispSite || 'non ancora accettata'],
+    r.forInstaller ? ['In rete', r.job.uispSite ? 'attiva' : 'in attesa di attivazione'] : ['Sito UISP', r.job.uispSite || 'non ancora accettata'],
     ['Altezza CPE', num(a.cpeHeightM, 'm dal suolo', 1)],
   ]);
 
