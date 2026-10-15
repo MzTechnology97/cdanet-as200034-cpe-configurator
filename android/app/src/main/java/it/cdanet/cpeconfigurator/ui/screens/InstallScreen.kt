@@ -502,7 +502,11 @@ private fun VerifyStep(c: AppContainer, mode: InstallMode) {
     FieldConnection(c, FieldMode.Alignment)
     val s = f.status ?: return
     // in the app's scope: leaving the step quickly must not cancel the lookup
-    LaunchedEffect(s.macs) { if (mode == InstallMode.Repoint) c.scope.launch { c.install.lookupJob(s.macs) } }
+    // asked again when the phone gets Internet back after a failed lookup
+    val internet by c.network.internet.collectAsState()
+    LaunchedEffect(s.macs, internet) {
+        if (mode == InstallMode.Repoint) c.scope.launch { c.install.lookupJob(s.macs, again = st.jobLookupFailed && internet) }
+    }
 
     SectionCard("CPE collegata") {
         KeyValue("Nome", s.hostname ?: "—")
@@ -545,6 +549,11 @@ private fun VerifyStep(c: AppContainer, mode: InstallMode) {
                     KeyValue("SSID originale", job.ssid)
                     Text("Collaudo e foto finali verranno aggiunti a questa installazione.", style = MaterialTheme.typography.bodySmall)
                 }
+                st.jobLookupFailed -> Text(
+                    "Server non raggiungibile da qui: non so ancora se questa CPE è tra le tue installazioni. Riprovo appena il telefono ha Internet; intanto puoi andare avanti.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = WarnAmber,
+                )
                 else -> Text(
                     "CPE non presente tra le installazioni a te visibili (installata prima dell'app o da altri): ripuntamento e cambio AP funzionano, il collaudo finale si potrà condividere ma non salvare sul server.",
                     style = MaterialTheme.typography.bodySmall,

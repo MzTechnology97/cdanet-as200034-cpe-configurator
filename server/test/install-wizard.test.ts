@@ -48,6 +48,22 @@ describe('Installazione guidata: cambio AP e CPE già installate', () => {
     assert.equal(found.deviceName, 'ROSSI MARIO');
     assert.equal((await lookup(other, 'AABBCCDDEEFF')).json().job, null, 'other installers do not see it');
     assert.equal((await lookup(admin, 'AABBCCDDEEFF')).json().job.id, job.jobId);
+    // the CPE answers with its LAN MAC (fourth byte + 1): the installation of its label MAC is found
+    assert.equal((await lookup(tec, 'AA:BB:CC:DE:EE:FF')).json().job.id, job.jobId);
+    assert.equal((await lookup(tec, 'AA:BB:CC:DF:EE:FF')).json().job, null, 'two bytes apart: another CPE');
+    assert.equal((await lookup(other, 'AA:BB:CC:DE:EE:FF')).json().job, null, 'a sibling MAC follows the same ownership rules');
+    // another CPE of this installer two steps away: …DE:EE:FF now has one sibling on each side, no guess
+    const job2 = (
+      await t.app.inject({
+        method: 'POST',
+        url: '/api/provisioning/jobs',
+        headers: { ...t.auth(tec), 'x-cda-client': 'android/1.0.7' },
+        payload: { model: 'LiteBeam 5AC', mac: 'AA:BB:CC:DF:EE:FF', serial: 'S2', ssid: 'CDA-NET-N2-D01', pppoeUser: 'bianchi.anna@cda-net.it', pppoePassword: 'x' },
+      })
+    ).json();
+    await t.app.inject({ method: 'POST', url: `/api/provisioning/jobs/${job2.jobId}/result`, headers: t.auth(tec), payload: { result: 'success', stages: ['ok'], detected: {} } });
+    assert.equal((await lookup(tec, 'AA:BB:CC:DE:EE:FF')).json().job, null, 'two candidates (…DD and …DF): none');
+    assert.equal((await lookup(tec, 'AA:BB:CC:DF:EE:FF')).json().job.id, job2.jobId, 'the exact MAC always wins');
     assert.equal((await lookup(tec, 'nonunmac')).statusCode, 400);
 
     // assigned to another installer: lookup and new acceptance test allowed

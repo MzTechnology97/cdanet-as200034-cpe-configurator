@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
-import { SSID_RX, TARGET_FIRMWARE, parseClientHeader, parseMac, versionAtLeast } from '../domain/policy.ts';
+import { SSID_RX, TARGET_FIRMWARE, parseClientHeader, parseMac, versionAtLeast, macSiblings } from '../domain/policy.ts';
 
 /**
  * Field tools (alignment, diagnosis, acceptance test) of the Android app: they talk to
@@ -86,16 +86,24 @@ export function fieldRoutes(app: FastifyInstance, ctx: AppContext) {
     const macs = [...new Set(q.macs.split(',').map((m) => parseMac(m)).filter((m): m is string => !!m))].slice(0, 8);
     if (!macs.length) throw new HttpError(400, 'invalid_mac');
     const admin = req.user!.role === 'admin';
-    const marks = macs.map(() => '?').join(',');
-    const job = ctx.db
-      .prepare(
-        `SELECT j.id, j.created_at createdAt, j.status, j.model, j.template_name template, j.mac, j.serial, j.ssid, j.pppoe_user pppoeUser, j.device_name deviceName
-           FROM provisioning_jobs j
-          WHERE j.status = 'success' AND j.mac IN (${marks})
-            ${admin ? '' : 'AND (j.user_id = ? OR EXISTS (SELECT 1 FROM cpe_assignments a WHERE a.mac = j.mac AND a.user_id = ?))'}
-          ORDER BY j.created_at DESC LIMIT 1`,
-      )
-      .get(...macs, ...(admin ? [] : [req.user!.id, req.user!.id]));
-    return { job: job ?? null };
+    // the user's own installations (or the CPEs assigned to them) on these MACs, newest first
+    const find = (list: string[]) =>
+      list.length
+        ? (ctx.db
+            .prepare(
+              `SELECT j.id, j.created_at createdAt, j.status, j.model, j.template_name template, j.mac, j.serial, j.ssid, j.pppoe_user pppoeUser, j.device_name deviceName
+                 FROM provisioning_jobs j
+                WHERE j.status = 'success' AND j.mac IN (${list.map(() => '?').join(',')})
+                  ${admin ? '' : 'AND (j.user_id = ? OR EXISTS (SELECT 1 FROM cpe_assignments a WHERE a.mac = j.mac AND a.user_id = ?))'}
+                ORDER BY j.created_at DESC`,
+            )
+            .all(...list, ...(admin ? [] : [req.user!.id, req.user!.id])) as Array<Record<string, unknown> & { mac: string }>)
+        : [];
+    const exact = find(macs);
+    if (exact.length) return { job: exact[0] };
+    // the same CPE seen from another interface (LAN vs radio MAC, fourth byte ±1), with the same
+    // ownership rules; two different CPEs that could both be it: none (never a guess)
+    const siblings = find([...new Set(macs.flatMap(macSiblings))].filter((m) => !macs.includes(m)));
+    return { job: new Set(siblings.map((j) => j.mac)).size === 1 ? siblings[0] : null };
   });
 }
