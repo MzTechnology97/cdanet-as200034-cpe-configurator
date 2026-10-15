@@ -115,6 +115,13 @@ export const acceptanceSchema = z
 const RADIO_CHECKS = new Set(['Segnale ricevuto', 'Segnale lato AP', 'CINR (qualità)', 'Capacità airMAX', 'Catene (polarizzazioni)', "Collegamento all'AP"]);
 
 /** Why the acceptance test needs the NOC's approval ('' = it does not). */
+
+/** The kinds of photo of an acceptance test, and the ones each test needs. */
+export const PHOTO_TYPES = ['antenna', 'bracket', 'cabling', 'router', 'other'] as const;
+export const PHOTO_LABEL: Record<string, string> = { antenna: 'Antenna', bracket: 'Staffa', cabling: 'Cablaggio', router: 'Router', other: '' };
+/** Only new installations: re-pointings and replacements need none (the owner's choice). */
+export const REQUIRED_PHOTOS: Record<string, string[]> = { install: ['antenna', 'bracket', 'cabling', 'router'] };
+
 export function poorRadio(a: z.infer<typeof acceptanceSchema>, signalMin: number = FIELD_THRESHOLDS.signalMin): string {
   const why: string[] = [];
   if (a.radio.signal != null && a.radio.signal < signalMin) why.push(`segnale ${a.radio.signal} dBm (minimo ${signalMin})`);
@@ -185,17 +192,29 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
   };
 
   const photos = (jobId: string) =>
-    db.prepare('SELECT id, created_at createdAt, caption, size FROM job_photos WHERE job_id = ? AND history_id IS NULL ORDER BY id').all(jobId);
+    db.prepare('SELECT id, created_at createdAt, caption, size, type FROM job_photos WHERE job_id = ? AND history_id IS NULL ORDER BY id').all(jobId);
+  /**
+   * The required photos the current test still lacks: only a new installation needs them (not a
+   * re-pointing, not the replacement of a CPE). The queue of the phone may send them after the
+   * test: a test is never refused for them, the NOC and the report see what is missing.
+   */
+  const photosMissing = (jobId: string, kind: string) => {
+    const replaces = (db.prepare('SELECT replaces_job_id r FROM provisioning_jobs WHERE id = ?').get(jobId) as { r: string | null } | undefined)?.r;
+    const need = kind === 'install' && !replaces ? REQUIRED_PHOTOS.install! : [];
+    if (!need.length) return [];
+    const have = new Set((db.prepare('SELECT DISTINCT type FROM job_photos WHERE job_id = ? AND history_id IS NULL').all(jobId) as Array<{ type: string }>).map((r) => r.type));
+    return need.filter((t) => !have.has(t));
+  };
 
   app.get('/api/provisioning/jobs/:id/acceptance', user, async (req) => {
     const job = loadJob(req);
     const row = db
       .prepare(
-        `SELECT a.created_at, a.verdict, a.data, u.username, a.review, a.review_reason, a.review_at, a.review_note, r.username reviewer
+        `SELECT a.created_at, a.verdict, a.data, a.kind, u.username, a.review, a.review_reason, a.review_at, a.review_note, r.username reviewer
            FROM job_acceptance a JOIN users u ON u.id = a.user_id LEFT JOIN users r ON r.id = a.review_by WHERE a.job_id = ?`,
       )
       .get(job.id) as
-      | { created_at: string; verdict: string; data: string; username: string; review: string | null; review_reason: string; review_at: string | null; review_note: string; reviewer: string | null }
+      | { created_at: string; verdict: string; data: string; kind: string; username: string; review: string | null; review_reason: string; review_at: string | null; review_note: string; reviewer: string | null }
       | undefined;
     return {
       acceptance: row
@@ -208,6 +227,7 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
           }
         : null,
       photos: photos(job.id),
+      photosMissing: row ? photosMissing(job.id, row.kind) : [],
     };
   });
 
@@ -226,7 +246,7 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
       items: rows.map(({ data, ...h }) => ({
         ...h,
         ...JSON.parse(data),
-        photos: db.prepare('SELECT id, created_at createdAt, caption, size FROM job_photos WHERE job_id = ? AND history_id = ? ORDER BY id').all(job.id, h.id),
+        photos: db.prepare('SELECT id, created_at createdAt, caption, size, type FROM job_photos WHERE job_id = ? AND history_id = ? ORDER BY id').all(job.id, h.id),
       })),
     };
   });
@@ -354,7 +374,8 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
       | { created_at: string; verdict: 'ok' | 'warn' | 'bad'; data: string; username: string; review: string | null; review_reason: string; review_at: string | null; review_note: string; reviewer: string | null }
       | undefined;
     if (!row) throw new HttpError(404, 'acceptance_not_found');
-    const list = db.prepare('SELECT id, created_at createdAt, caption FROM job_photos WHERE job_id = ? AND history_id IS NULL ORDER BY id').all(job.id) as Array<{ id: number; createdAt: string; caption: string }>;
+    const list = db.prepare('SELECT id, created_at createdAt, caption, type FROM job_photos WHERE job_id = ? AND history_id IS NULL ORDER BY id').all(job.id) as Array<{ id: number; createdAt: string; caption: string; type: string }>;
+    const kind = (db.prepare('SELECT kind FROM job_acceptance WHERE job_id = ?').get(job.id) as { kind: string } | undefined)?.kind ?? 'install';
     const pdf = acceptanceReportPdf({
       job: {
         id: j.id,
@@ -386,8 +407,9 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
         } catch {
           data = null;
         }
-        return { caption: p.caption, createdAt: p.createdAt, data };
+        return { caption: p.caption || PHOTO_LABEL[p.type] || '', createdAt: p.createdAt, data };
       }),
+      photosMissing: photosMissing(job.id, kind).map((t) => PHOTO_LABEL[t] ?? t),
       logoSvg: logoSvg(),
       generatedAt: new Date(),
       forInstaller,
@@ -476,18 +498,22 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
     const body = req.body;
     if (!Buffer.isBuffer(body) || body.length < 1024) throw new HttpError(400, 'photo_invalid');
     if (!(body[0] === 0xff && body[1] === 0xd8 && body[2] === 0xff)) throw new HttpError(415, 'photo_not_jpeg');
+    const q = z.object({ caption: z.string().trim().max(80).default(''), type: z.enum(PHOTO_TYPES).default('other') }).parse(req.query);
+    const caption = q.caption;
+    const sha = createHash('sha256').update(body).digest('hex');
+    // the same picture twice (a retry of the queue, or the same shot chosen again): kept once
+    const same = db.prepare('SELECT id FROM job_photos WHERE job_id = ? AND history_id IS NULL AND sha256 = ?').get(job.id, sha) as { id: number } | undefined;
+    if (same) throw new HttpError(409, 'photo_duplicate', { id: same.id });
     const count = (db.prepare('SELECT count(*) n FROM job_photos WHERE job_id = ? AND history_id IS NULL').get(job.id) as { n: number }).n;
     if (count >= MAX_PHOTOS) throw new HttpError(409, 'too_many_photos', { max: MAX_PHOTOS });
-    const caption = z.string().trim().max(80).default('').parse((req.query as { caption?: string }).caption ?? '');
-    const sha = createHash('sha256').update(body).digest('hex');
     const r = db
-      .prepare('INSERT INTO job_photos(job_id, created_at, user_id, caption, size, sha256) VALUES(?,?,?,?,?,?)')
-      .run(job.id, nowIso(), req.user!.id, caption, body.length, sha);
+      .prepare('INSERT INTO job_photos(job_id, created_at, user_id, caption, size, sha256, type) VALUES(?,?,?,?,?,?,?)')
+      .run(job.id, nowIso(), req.user!.id, caption, body.length, sha, q.type);
     const id = Number(r.lastInsertRowid);
     const dir = photoDir(root, job.id);
     mkdirSync(dir, { recursive: true });
     writeFileSync(join(dir, `${id}.jpg`), body);
-    recordEvent(db, req.user!.id, 'job.photo', job.id, caption || `foto ${id}`);
+    recordEvent(db, req.user!.id, 'job.photo', job.id, caption || PHOTO_LABEL[q.type] || `foto ${id}`);
     return reply.code(201).send({ id, size: body.length });
   });
 

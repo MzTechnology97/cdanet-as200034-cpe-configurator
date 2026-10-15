@@ -11,6 +11,7 @@ import { AsyncButton, Badge, Button, Field, Skeleton } from '../ui';
 
 type Tone = 'good' | 'warn' | 'bad' | 'neutral';
 const VERDICT: Record<string, [string, Tone]> = { ok: ['superato', 'good'], warn: ['con riserva', 'warn'], bad: ['non superato', 'bad'] };
+const PHOTO_LABEL: Record<string, string> = { antenna: 'antenna', bracket: 'staffa', cabling: 'cablaggio', router: 'router' };
 const MARK: Record<string, string> = { ok: '✔', warn: '⚠', bad: '✖', info: '•' };
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -153,10 +154,10 @@ function JobPhoto({ jobId, p }: { jobId: string; p: Photo }) {
 }
 
 export function AcceptancePanel({ j, admin = false, onChange }: { j: Job; admin?: boolean; onChange?: () => Promise<unknown> | void }) {
-  const q = useQuery({ queryKey: ['jobs', j.id, 'acceptance'], queryFn: () => api<{ acceptance: Acceptance | null; photos: Photo[] }>(`/api/provisioning/jobs/${j.id}/acceptance`) });
+  const q = useQuery({ queryKey: ['jobs', j.id, 'acceptance'], queryFn: () => api<{ acceptance: Acceptance | null; photos: Photo[]; photosMissing?: string[] }>(`/api/provisioning/jobs/${j.id}/acceptance`) });
   if (q.error) return <p className="ui-muted ui-small">Collaudo non disponibile: {(q.error as Error).message}</p>;
   if (!q.data) return <Skeleton lines={3} />;
-  const { acceptance: a, photos } = q.data;
+  const { acceptance: a, photos, photosMissing = [] } = q.data;
   if (!a && !photos.length) return <p className="ui-muted ui-small">Collaudo non ancora eseguito: si fa dall’app (Storico → job → Collaudo).</p>;
   return (
     <div className="jb-acceptance">
@@ -204,6 +205,11 @@ export function AcceptancePanel({ j, admin = false, onChange }: { j: Job; admin?
         </>
       ) : (
         <p className="ui-muted ui-small">Misure non ancora inviate.</p>
+      )}
+      {photosMissing.length > 0 && (
+        <p className="ui-small jb-missing">
+          <Badge tone="warn">foto mancanti</Badge> {photosMissing.map((t) => PHOTO_LABEL[t] ?? t).join(', ')}
+        </p>
       )}
       {photos.length > 0 && (
         <div className="jb-photos">
