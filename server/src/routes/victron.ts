@@ -115,6 +115,8 @@ export function victronRoutes(app: FastifyInstance, ctx: AppContext) {
     const pop = popId ? (await pops()).find((p) => p.id === popId) : null;
     if (popId && !pop) throw new HttpError(404, 'pop_not_found');
     ctx.victronSync.link(idSite, popId, req.user!.id, offGrid);
+    // a newly linked system gets its photovoltaic power now, not at the next sync
+    if (popId && !site.popId) void ctx.victronSync.syncNow().catch(() => {});
     const now = ctx.victronSync.sites().find((s) => s.idSite === idSite);
     recordEvent(ctx.db, req.user!.id, 'victron.link', site.name, pop ? `alimenta ${pop.name}${now?.offGrid ? ' · off-grid' : ''}` : 'non collegato a un POP');
     return { idSite, popId, popName: pop?.name ?? null, offGrid: now?.offGrid ?? false };
