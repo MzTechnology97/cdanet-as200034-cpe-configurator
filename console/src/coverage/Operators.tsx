@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
-import { AsyncButton, Badge, Button, Card, Field, Notice } from '../ui';
+import { AsyncButton, Badge, Button, Card, Field, Notice, Skeleton } from '../ui';
 import type { Point } from './parts';
 
 /**
  * Copertura → «Altri operatori»: who else covers the point checked, or an exact address found step by
  * step (town → street → house number → stair): fibre, FTTC, radio and mobile, grouped by the AGCOM
  * sticker we compute from technology and speed. Admins see the operators; installers the same
- * answer without their names. Read on request (each reading goes to an external service), then
- * reused for some days.
+ * answer without names or counts. Read on its own with every coverage check (reused for some days).
  */
 
 type Sticker = 'F' | 'FWA' | 'FR' | 'R';
@@ -16,8 +15,6 @@ type State = 'available' | 'planned' | 'none';
 interface Row {
   /** Admins only. */
   operator?: string;
-  /** Installers: how many operators offer it. */
-  count?: number;
   technology: string;
   technologyLabel: string;
   family: string;
@@ -186,6 +183,14 @@ export function OperatorsCard({ point, admin = true }: { point: Point | null; ad
   const atAddress = (x: Address) =>
     load(new URLSearchParams({ city: x.city, street: x.street, streetType: x.streetType, number: x.number, ...(x.stair ? { stair: x.stair } : {}) }).toString());
   const hidden = a ? a.groups.reduce((n, g) => n + g.rows.filter((r) => r.state === 'none').length, 0) : 0;
+  const [loading, setLoading] = useState(false);
+  // every coverage check reads the other operators too, at the same point
+  useEffect(() => {
+    if (!point) return;
+    setLoading(true);
+    void load(`lat=${point.la}&lon=${point.lo}`).finally(() => setLoading(false));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [point?.la, point?.lo]);
 
   return (
     <Card
@@ -198,23 +203,16 @@ export function OperatorsCard({ point, admin = true }: { point: Point | null; ad
                 Rileggi
               </AsyncButton>
             )}
-            <Button onClick={() => (setA(null), setLast(null))}>Altro indirizzo</Button>
+            <Button onClick={() => (setA(null), setLast(null))}>Indirizzo esatto</Button>
           </>
         ) : null
       }
     >
-      {!a && (
+      {!a && loading && <Skeleton lines={3} />}
+      {!a && !loading && (
         <>
-          <p className="ui-muted ui-small">Fibra, FTTC, radio e rete mobile degli altri operatori, con il bollino AGCOM. La verifica usa un servizio esterno: parte solo quando la chiedi.</p>
-          {point && (
-            <AsyncButton variant="primary" icon="search" onClick={() => load(`lat=${point.la}&lon=${point.lo}`)}>
-              Verifica nel punto scelto
-            </AsyncButton>
-          )}
-          <details className="ui-details op-exact" open={!point}>
-            <summary>{point ? 'Oppure l’indirizzo esatto (comune, via, civico)' : 'Indirizzo esatto (comune, via, civico)'}</summary>
-            <AddressSteps base={base} onCheck={atAddress} />
-          </details>
+          <p className="ui-muted ui-small">Fibra, FTTC, radio e rete mobile degli altri operatori all’indirizzo esatto, con il bollino AGCOM.</p>
+          <AddressSteps base={base} onCheck={atAddress} />
         </>
       )}
       {error && <Notice tone="bad">{error}</Notice>}
@@ -245,7 +243,6 @@ export function OperatorsCard({ point, admin = true }: { point: Point | null; ad
                           {r.operator ? <strong>{r.operator}</strong> : null}
                           <span>{r.technologyLabel}</span>
                           <Badge tone={STATE[r.state][1]}>{STATE[r.state][0]}</Badge>
-                          {r.count != null && <span className="ui-muted ui-small">{r.count === 1 ? '1 operatore' : `${r.count} operatori`}</span>}
                         </div>
                         <div className="hl-sub ui-small">
                           {[KIND[r.kind], r.downMbps ? `stimati ${Math.round(r.downMbps)}/${Math.round(r.upMbps ?? 0)} Mbit/s` : r.maxMbps ? `fino a ${speed(r.maxMbps)}` : null].filter(Boolean).join(' · ')}
