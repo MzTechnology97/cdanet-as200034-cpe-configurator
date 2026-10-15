@@ -50,4 +50,22 @@ object PhotoCapture {
     }
 
     fun thumbnail(jpeg: ByteArray): Bitmap? = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size, BitmapFactory.Options().apply { inSampleSize = 8 })
+
+    /** Blur, darkness and fingerprints of a compressed photo, on its grey image of at most 512 px. */
+    fun check(jpeg: ByteArray): PhotoQuality.Check {
+        val sha = java.security.MessageDigest.getInstance("SHA-256").digest(jpeg).joinToString("") { "%02x".format(it) }
+        val bounds = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+        BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size, bounds)
+        var sample = 1
+        while (maxOf(bounds.outWidth, bounds.outHeight) / (sample * 2) >= 512) sample *= 2
+        val bmp = BitmapFactory.decodeByteArray(jpeg, 0, jpeg.size, BitmapFactory.Options().apply { inSampleSize = sample })
+            ?: return PhotoQuality.Check(sha, Double.MAX_VALUE, 255.0, 0L)
+        val w = bmp.width
+        val h = bmp.height
+        val px = IntArray(w * h)
+        bmp.getPixels(px, 0, w, 0, 0, w, h)
+        bmp.recycle()
+        val g = IntArray(px.size) { i -> val c = px[i]; ((c shr 16 and 0xff) * 299 + (c shr 8 and 0xff) * 587 + (c and 0xff) * 114) / 1000 }
+        return PhotoQuality.Check(sha, PhotoQuality.laplacianVariance(g, w, h), PhotoQuality.brightness(g), PhotoQuality.dHash(g, w, h))
+    }
 }

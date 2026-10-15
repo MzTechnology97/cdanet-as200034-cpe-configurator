@@ -113,8 +113,14 @@ class AcceptanceQueue(
                         try {
                             api.uploadPhoto(item.jobId, withContext(Dispatchers.IO) { f.readBytes() }, p.caption)
                         } catch (e: ApiException) {
-                            // 409 = job result still queued: retry later, like the report
-                            if (e.status == 409 || e.status == 401 || e.status == 429 || e.status >= 500) throw e
+                            // already on the server (sent before the answer got lost): nothing to do
+                            if (e.code == "photo_duplicate") {
+                                f.delete()
+                                photosLeft.remove(p)
+                                continue
+                            }
+                            // 409 = job result still queued: retry later, like the report (not the photo limit: never accepted)
+                            if ((e.status == 409 && e.code != "too_many_photos") || e.status == 401 || e.status == 429 || e.status >= 500) throw e
                             // refused for good (too big, not a JPEG…): say so instead of losing it silently
                             val why = "foto «${p.caption}» non accettata (${e.message ?: e.code})"
                             _rejected.value = _rejected.value + (item.jobId to listOfNotNull(_rejected.value[item.jobId], why).joinToString("; "))
