@@ -101,12 +101,21 @@ fun apiMessage(code: String): String = ERRORS[code] ?: if (SOURCE_CODE.containsM
 
 /** Thin JSON client for the CDA Net server. */
 class ApiClient(
-    private val settings: Settings,
+    /** The server address (Settings in the app, a local test server in the flow tests). */
+    private val backendUrl: suspend () -> String,
     private val session: Session,
     private val clientHeader: String,
     private val http: OkHttpClient = defaultHttp(),
     private val network: it.cdanet.cpeconfigurator.network.NetworkHelper? = null,
 ) {
+    constructor(
+        settings: Settings,
+        session: Session,
+        clientHeader: String,
+        http: OkHttpClient = defaultHttp(),
+        network: it.cdanet.cpeconfigurator.network.NetworkHelper? = null,
+    ) : this({ settings.backendUrlNow() }, session, clientHeader, http, network)
+
     /** The client routed through [routedNet] (built once per network). */
     @Volatile private var routed: Triple<android.net.Network, OkHttpClient, OkHttpClient>? = null
 
@@ -137,7 +146,7 @@ class ApiClient(
     /** Set when the server refuses this app version (426): the app then blocks until updated. */
     val updateRequired = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
 
-    suspend fun base(): String = settings.backendUrlNow()
+    suspend fun base(): String = backendUrl()
 
     suspend fun request(method: String, path: String, body: JsonElement? = null, auth: Boolean = true, client: Boolean = false): String =
         withContext(Dispatchers.IO) {

@@ -16,19 +16,22 @@ import java.io.File
  * CPE management Wi-Fi). Contains metadata only: never passwords or configs.
  */
 class ResultQueue(
-    context: Context,
+    /** Where the queue lives: the app's private files (a temporary folder in the flow tests). */
+    dir: File,
     private val api: ApiClient,
     private val session: Session,
     private val scope: CoroutineScope,
 ) {
-    private val file = File(context.filesDir, "pending-results.json")
+    constructor(context: Context, api: ApiClient, session: Session, scope: CoroutineScope) : this(context.filesDir, api, session, scope)
+
+    private val file = File(dir, "pending-results.json")
     private val mutex = Mutex()
     private val serializer = ListSerializer(PendingResult.serializer())
     private val _pending = MutableStateFlow(load())
     val pending: StateFlow<List<PendingResult>> = _pending.asStateFlow()
 
     /** Results the server refused for good (validation, job unknown or not yours): shown until dismissed. */
-    private val rejectedFile = File(context.filesDir, "rejected-results.json")
+    private val rejectedFile = File(dir, "rejected-results.json")
     private val rejectedSerializer = ListSerializer(RejectedResult.serializer())
     private val _rejected = MutableStateFlow(
         runCatching { AppJson.decodeFromString(rejectedSerializer, rejectedFile.readText()) }.getOrDefault(emptyList()),
