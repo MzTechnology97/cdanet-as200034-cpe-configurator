@@ -621,3 +621,16 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .op-choice:hover { background: var(--surface-2); }
 .op-picked { display: flex; align-items: baseline; gap: var(--sp-2); }
 .op-bad { color: var(--bad); }
+/* Collaudi precedenti (ripuntamenti) nel dettaglio del job */
+.ah-list { list-style: none; margin: 0 0 var(--sp-2); padding: 0; border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.ah-item + .ah-item, .ah-grant + .ah-grant { border-top: 1px solid var(--line); }
+.ah-head { all: unset; box-sizing: border-box; width: 100%; display: flex; flex-wrap: wrap; align-items: center; gap: 6px var(--sp-2); padding: var(--sp-2) var(--sp-3); cursor: pointer; }
+.ah-head:hover, .ah-head:focus-visible { background: var(--surface-2); }
+.ah-date { font-variant-numeric: tabular-nums; min-width: 100px; }
+.ah-sum { flex: 1 1 160px; min-width: 0; color: var(--muted); }
+.ah-body { padding: 0 var(--sp-3) var(--sp-3); display: grid; gap: var(--sp-2); }
+.ah-checks { margin: 0; padding-left: 1.2em; }
+.ah-photos { display: flex; flex-wrap: wrap; gap: 6px; }
+.ah-photos img, .ah-ph { width: 96px; height: 72px; object-fit: cover; border-radius: var(--radius-sm); background: var(--surface-2); }
+.ah-grant { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); }
+.ah-head > :last-child { margin-left: auto; }
