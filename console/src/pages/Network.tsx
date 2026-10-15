@@ -3,6 +3,7 @@ import { type Dispatch, type ReactNode, type SetStateAction, useEffect, useMemo,
 import { toast } from '../lib/toast';
 import { towards } from '../map/leaflet';
 import { api } from '../lib/api';
+import { type PopPower, PowerBadge, powerAlarm, powerText } from '../infra/PopPower';
 import { keys } from '../lib/query';
 import { type Leaflet, type LMap, MapView, mapPopup } from '../map/MapView';
 import type { PageContext } from '../shell/routes';
@@ -46,11 +47,13 @@ interface Pop {
   lat?: number | null;
   lon?: number | null;
   powerOutage?: boolean;
+  /** Its battery (solar and battery systems), null without one; installers get the essentials. */
+  power?: PopPower | null;
   aps: Ap[];
 }
 interface Data {
   generatedAt: string;
-  summary: { aps: number; down: number; degraded: number; powerOutage: number };
+  summary: { aps: number; down: number; degraded: number; powerOutage: number; powerAlarms?: number };
   pops: Pop[];
   apsWithoutPop: Ap[];
   restricted?: boolean;
@@ -208,7 +211,7 @@ function NetworkMap({ data, shown, q, open, setOpen, apiRef, tools }: { data: Da
           .on('click', () => showPopup(id))
           .on('dblclick', (e: unknown) => L.DomEvent.stop(e))
           .addTo(target);
-        byId.current.set(id, { latlng: m.getLatLng(), served: false, content: () => mapPopup(`POP ${p.name}`, `${p.aps.length} AP`, p.state ? STATE[p.state][0] : null, p.powerOutage && 'guasto Enel vicino') });
+        byId.current.set(id, { latlng: m.getLatLng(), served: false, content: () => mapPopup(`POP ${p.name}`, `${p.aps.length} AP`, p.state ? STATE[p.state][0] : null, p.power ? powerText(p.power) : null, p.power?.offGrid ? 'off-grid' : null, p.powerOutage && 'guasto Enel vicino') });
         pts.push(m);
       }
       for (const a of p.aps) ap(a, p.name);
@@ -275,6 +278,8 @@ export function Network({ user }: PageContext) {
   const [shown, setShown] = useState<Set<State>>(() => new Set(ALL));
   const [text, setText] = useState('');
   const [open, setOpen] = useState<Set<string>>(() => new Set());
+  // only the POPs whose battery needs a look (alarm, or no data)
+  const [powerOnly, setPowerOnly] = useState(false);
   const mapApi = useRef<MapApi | null>(null);
   const q = text.trim().toLowerCase();
   const data = query.data;
@@ -307,13 +312,14 @@ export function Network({ user }: PageContext) {
     if (!data) return [];
     const list: Pop[] = [...data.pops, ...(data.apsWithoutPop.length ? [{ id: null, name: 'AP senza POP', state: null, powerOutage: false, aps: data.apsWithoutPop }] : [])];
     return list
+      .filter((p) => !powerOnly || powerAlarm(p.power))
       .map((p) => {
         const popHit = !!q && `pop ${p.name}`.toLowerCase().includes(q);
         const aps = p.aps.filter((a) => shown.has(a.state) && (!q || popHit || apText(a, p.name).includes(q))).sort(byState);
         return { p, aps, popHit };
       })
-      .filter(({ p, aps, popHit }) => aps.length || (!p.aps.length && (!q || popHit)));
-  }, [data, shown, q]);
+      .filter(({ p, aps, popHit }) => aps.length || ((!p.aps.length || powerOnly) && (!q || popHit)));
+  }, [data, shown, q, powerOnly]);
   const total = groups.reduce((n, g) => n + g.aps.length, 0);
 
   const tools = (
@@ -348,6 +354,9 @@ export function Network({ user }: PageContext) {
             <Stat label="non raggiungibili" value={s.down} tone={s.down ? 'bad' : 'good'} active={isOnly('down')} onClick={() => only('down')} />
             <Stat label="con molte CPE offline" value={s.degraded} tone={s.degraded ? 'warn' : 'good'} active={isOnly('degraded')} onClick={() => only('degraded')} />
             <Stat label="con guasto Enel vicino" value={s.powerOutage} tone={s.powerOutage ? 'bad' : 'neutral'} />
+            {data.pops.some((p) => p.power) && (
+              <Stat label="POP con batteria da controllare" value={s.powerAlarms ?? data.pops.filter((p) => powerAlarm(p.power)).length} tone={(s.powerAlarms ?? 0) ? 'bad' : 'good'} active={powerOnly} onClick={() => setPowerOnly((v) => !v)} />
+            )}
           </section>
           {isStale(data.dataAt) ? (
             <Notice tone="warn">
@@ -375,6 +384,7 @@ export function Network({ user }: PageContext) {
                         {p.state && <Badge tone={STATE[p.state][1]}>{STATE[p.state][0]}</Badge>}
                         <span className="ui-muted ui-small">{[`${p.aps.length} AP`, down ? `${down} non raggiungibili` : null, degraded ? `${degraded} con molte CPE offline` : null].filter(Boolean).join(' · ')}</span>
                         {p.powerOutage && <Badge tone="bad">guasto Enel vicino</Badge>}
+                        <PowerBadge p={p.power} />
                       </div>
                       <ul className="hl-list">
                         {aps.map((a) => {
@@ -428,7 +438,7 @@ export function Network({ user }: PageContext) {
                 })
               ) : (
                 <Card>
-                  <p className="ui-muted">{data.pops.length || data.apsWithoutPop.length ? 'Nessun AP con questi filtri.' : 'Nessun POP o AP.'}</p>
+                  <p className="ui-muted">{powerOnly ? 'Nessun POP con la batteria da controllare.' : data.pops.length || data.apsWithoutPop.length ? 'Nessun AP con questi filtri.' : 'Nessun POP o AP.'}</p>
                 </Card>
               )}
               <p className="ui-muted ui-small">{total} AP mostrati. "Molte CPE offline": almeno il 30% delle CPE dell’AP non è raggiungibile (probabile problema di settore, non del singolo cliente).</p>
