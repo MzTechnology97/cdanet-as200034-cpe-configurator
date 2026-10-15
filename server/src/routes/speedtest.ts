@@ -100,6 +100,12 @@ export function speedtestRoutes(app: FastifyInstance, ctx: AppContext) {
         db.prepare('SELECT 1 FROM cpe_assignments WHERE mac = ? AND user_id = ?').get(mac, me);
       if (!mine) throw new HttpError(403, 'forbidden');
     }
+    // only the MAC (replacements, the network tools): the customer of the latest installation of that
+    // CPE. The MAC of the RADIUS session is not enough: empty while offline, or another device's.
+    if (mac && !pppoeUser) {
+      const last = db.prepare("SELECT pppoe_user FROM provisioning_jobs WHERE mac = ? AND pppoe_user <> '' ORDER BY created_at DESC LIMIT 1").get(mac) as { pppoe_user: string } | undefined;
+      pppoeUser = last?.pppoe_user ?? '';
+    }
     return { mac: mac ?? '', pppoeUser };
   };
 

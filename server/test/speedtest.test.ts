@@ -38,6 +38,8 @@ describe('Speedtest del collaudo e degli interventi', () => {
     const target = (await call('GET', `/api/speedtest/target?jobId=${job}`, undefined, T)).json().target;
     assert.deepEqual(target, { profile: 'CDA-NET-HOME-30-6', downMbps: 30, upMbps: 6, minPct: 80 });
     assert.equal((await call('GET', `/api/speedtest/target?jobId=${job}`, undefined, O)).statusCode, 403, 'not the job of another installer');
+    // only the MAC (replacement, network tools), with no RADIUS session MAC: the customer of the last installation
+    assert.deepEqual((await call('GET', '/api/speedtest/target?mac=aa-bb-cc-00-00-09', undefined, T)).json().target, target);
 
     const send = (down: number, up: number, attempt: number) =>
       call('POST', '/api/speedtests', { context: 'acceptance', jobId: job, downMbps: down, upMbps: up, pingMs: 12, jitterMs: 2, server: 'speedtest.cda-net.it:8080', wifi: { rssi: -58, band: '5', channel: 36, widthMhz: 80 }, attempt }, T);
