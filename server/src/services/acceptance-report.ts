@@ -32,6 +32,8 @@ export interface ReportData {
     review: { state: string; reason: string; at: string | null; by: string | null; note: string } | null;
   };
   photos: Array<{ caption: string; createdAt: string; data: Buffer | null }>;
+  /** The required photos the test lacks (labels), shown to the NOC and in the report. */
+  photosMissing?: string[];
   /** SVG of the CDA Net logo (circles, lines, lettering paths); null = the name in text. */
   logoSvg: string | null;
   generatedAt: Date;
@@ -271,6 +273,8 @@ export function acceptanceReportPdf(r: ReportData): Buffer {
     ]);
     if (review.note) grid([['Nota del NOC', review.note]]);
   }
+
+  if (r.photosMissing?.length) grid([['Foto obbligatorie mancanti', r.photosMissing.join(', ')]]);
 
   // ---- photos, two per row ----------------------------------------------------------------------
   const photos = r.photos.filter((p) => p.data);
