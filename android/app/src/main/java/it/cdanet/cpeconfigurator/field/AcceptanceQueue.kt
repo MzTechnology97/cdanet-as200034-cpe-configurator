@@ -37,13 +37,16 @@ data class QueuedAcceptance(
  * live in the app's private storage and are sent (after the provisioning result) when back online.
  */
 class AcceptanceQueue(
-    context: Context,
+    /** The app's private files (a temporary folder in the flow tests). */
+    filesDir: File,
     private val api: ApiClient,
     private val session: Session,
     private val results: ResultQueue,
     private val scope: CoroutineScope,
 ) {
-    private val dir = File(context.filesDir, "acceptance").apply { mkdirs() }
+    constructor(context: Context, api: ApiClient, session: Session, results: ResultQueue, scope: CoroutineScope) : this(context.filesDir, api, session, results, scope)
+
+    private val dir = File(filesDir, "acceptance").apply { mkdirs() }
     private val index = File(dir, "queue.json")
     private val mutex = Mutex()
     private val serializer = ListSerializer(QueuedAcceptance.serializer())

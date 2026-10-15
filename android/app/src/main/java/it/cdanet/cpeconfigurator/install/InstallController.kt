@@ -195,32 +195,15 @@ class InstallController(
     /** Repointing: the job of the CPE, so the new acceptance test and photos go with it. */
     suspend fun lookupJob(macs: List<String>, again: Boolean = false, here: suspend () -> CpeLocation? = { null }) {
         if ((_state.value.jobLooked && !again) || macs.isEmpty() || _state.value.job != null) return
-        var claimed = false
-        val job = try {
-            // not among this technician's installations: installed by someone else, handed over for the test
-            api.cpeJob(macs) ?: api.claimCpe(macs, here())?.also { claimed = true }
-        } catch (e: it.cdanet.cpeconfigurator.data.ApiException) {
-            if (e.status != 400 && e.status != 403) {
-                _state.update { it.copy(jobLooked = true, jobLookupFailed = true) }
-                return
+        // leaving the step before the answer cancels it: not «looked», the next step tries again
+        val found = RepointLookup.find({ api.cpeJob(macs) }, { api.claimCpe(macs, here()) })
+        _state.update {
+            when (found) {
+                is RepointLookup.Found -> it.copy(job = found.job ?: it.job, jobLooked = true, jobLookupFailed = false, jobClaimed = found.claimed, jobClaimRefused = null)
+                is RepointLookup.Refused -> it.copy(jobLooked = true, jobLookupFailed = false, jobClaimRefused = found.why)
+                RepointLookup.Unreachable -> it.copy(jobLooked = true, jobLookupFailed = true)
             }
-            // the server answered: not handed over (only from the customer's)
-            val why = when (e.code) {
-                "too_far" -> "Il telefono è lontano dall'indirizzo di questa installazione: il collaudo del ripuntamento si salva solo dal cliente."
-                "position_required" -> "Serve la posizione GPS per collegare il collaudo a questa installazione: attiva la localizzazione e torna a questo passo."
-                else -> e.message ?: e.code
-            }
-            _state.update { it.copy(jobLooked = true, jobLookupFailed = false, jobClaimRefused = why) }
-            return
-        } catch (e: kotlinx.coroutines.CancellationException) {
-            // the step was left before the answer: not «looked», the next step tries again
-            throw e
-        } catch (_: Exception) {
-            // no answer (customer's Wi-Fi without Internet, weak mobile data): asked again when online
-            _state.update { it.copy(jobLooked = true, jobLookupFailed = true) }
-            return
         }
-        _state.update { it.copy(job = job ?: it.job, jobLooked = true, jobLookupFailed = false, jobClaimed = claimed, jobClaimRefused = null) }
     }
 
     suspend fun survey() {
@@ -265,5 +248,38 @@ class InstallController(
             heightM = p.from.height,
             beacons = p.aps.map { it.toBeacon() },
         )
+    }
+}
+
+/**
+ * Re-pointing: the installation of the CPE. Among the technician's own first; else one of someone
+ * else's, handed over by the server only on site; refused (too far, no GPS) or unreachable.
+ */
+object RepointLookup {
+    sealed interface Outcome
+    /** [job] null: a CPE installed before the app. */
+    data class Found(val job: JobDto?, val claimed: Boolean) : Outcome
+    data class Refused(val why: String) : Outcome
+    data object Unreachable : Outcome
+
+    suspend fun find(mine: suspend () -> JobDto?, claim: suspend () -> JobDto?): Outcome = try {
+        mine()?.let { Found(it, false) } ?: claim().let { Found(it, it != null) }
+    } catch (e: kotlinx.coroutines.CancellationException) {
+        throw e
+    } catch (e: it.cdanet.cpeconfigurator.data.ApiException) {
+        when {
+            // the server answered: not handed over (only from the customer's)
+            e.status == 400 || e.status == 403 -> Refused(
+                when (e.code) {
+                    "too_far" -> "Il telefono è lontano dall'indirizzo di questa installazione: il collaudo del ripuntamento si salva solo dal cliente."
+                    "position_required" -> "Serve la posizione GPS per collegare il collaudo a questa installazione: attiva la localizzazione e torna a questo passo."
+                    else -> e.message ?: e.code
+                },
+            )
+            else -> Unreachable
+        }
+    } catch (_: Exception) {
+        // no answer (customer's Wi-Fi without Internet, weak mobile data): asked again when online
+        Unreachable
     }
 }
