@@ -439,6 +439,7 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
     db.prepare('DELETE FROM audits WHERE created_at < ?').run(cutoff);
     db.prepare('DELETE FROM events WHERE created_at < ?').run(cutoff);
     db.prepare('DELETE FROM install_ko WHERE created_at < ?').run(cutoff);
+    db.prepare('DELETE FROM speed_tests WHERE created_at < ?').run(cutoff);
     sweepPhotos(db, cfg.photosDir);
     return now;
   }
@@ -458,6 +459,7 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
     try {
       db.prepare('UPDATE provisioning_jobs SET superseded_by = NULL WHERE superseded_by = ?').run(jobId);
       db.prepare('UPDATE provisioning_jobs SET replaces_job_id = NULL WHERE replaces_job_id = ?').run(jobId);
+      db.prepare('DELETE FROM speed_tests WHERE job_id = ?').run(jobId);
       db.prepare('DELETE FROM notifications WHERE job_id = ?').run(jobId);
       db.prepare('DELETE FROM provisioning_jobs WHERE id = ?').run(jobId);
       db.exec('COMMIT');

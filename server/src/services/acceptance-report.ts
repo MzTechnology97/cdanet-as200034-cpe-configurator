@@ -210,6 +210,33 @@ export function acceptanceReportPdf(r: ReportData): Buffer {
     y += doc.paragraph(M, y, CW, `Nota: ${internet.note.trim()}`, { size: 8.5, color: MUTED }) + 2;
   }
 
+  // ---- speedtest and the Wi-Fi of the customer's router -------------------------------------
+  const st = obj(a.speedtest);
+  if (Object.keys(st).length) {
+    const tg = obj(st.target);
+    section('Speedtest');
+    grid([
+      ['Velocità misurata', `${num(st.downMbps, 'Mbps', 1)} giù · ${num(st.upMbps, 'Mbps', 1)} su`],
+      ['Ping / jitter', `${num(st.pingMs, 'ms')} / ${num(st.jitterMs, 'ms')}`],
+      ['Profilo del cliente', Object.keys(tg).length ? `${str(tg.profile)} · ${num(tg.downMbps, 'Mbps')} giù · ${num(tg.upMbps, 'Mbps')} su` : 'non noto'],
+      ['Esito', st.passed === true ? `superato (almeno ${num(tg.minPct, '%')} del profilo)` : st.passed === false ? `sotto il ${num(tg.minPct, '%')} del profilo` : 'senza confronto'],
+      ['Tentativi', num(st.attempts, '')],
+      ['Server', str(st.server)],
+    ]);
+  }
+  const wf = obj(a.wifi);
+  if (Object.keys(wf).length) {
+    section('Wi-Fi del router del cliente');
+    grid([
+      ['Rete', str(wf.ssid)],
+      ['Banda / canale', `${wf.band ? `${String(wf.band)} GHz` : '—'} · canale ${num(wf.channel, '')}${wf.widthMhz != null ? ` · ${num(wf.widthMhz, 'MHz')}` : ''}`],
+      ['Segnale del telefono', `${num(wf.rssi, 'dBm')}${wf.linkMbps != null ? ` · collegamento ${num(wf.linkMbps, 'Mbps')}` : ''}`],
+      ['Reti vicine', `${num(wf.neighborsSameChannel, 'sullo stesso canale')} · ${num(wf.neighborsOverlapping, 'sovrapposte')}${wf.congested === true ? ' · canale affollato' : ''}`],
+      ['Canale consigliato', wf.suggestedChannel != null ? num(wf.suggestedChannel, '') : '—'],
+      ['Modifiche fatte', str(wf.changed)],
+    ]);
+  }
+
   // ---- the app's checks ---------------------------------------------------------------------
   const checks = Array.isArray(a.checks) ? (a.checks as Array<{ title: string; verdict: string; detail: string }>) : [];
   if (checks.length) {

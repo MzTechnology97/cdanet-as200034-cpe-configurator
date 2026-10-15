@@ -41,6 +41,7 @@ import { createWarehouse, type Warehouse } from './services/warehouse.ts';
 import { warehouseRoutes } from './routes/warehouse.ts';
 import { crmRoutes } from './routes/crm.ts';
 import { connectorRoutes } from './routes/connectors.ts';
+import { speedtestRoutes } from './routes/speedtest.ts';
 import { cpeAdminRoutes } from './routes/cpe-admin.ts';
 import { uispRoutes } from './routes/uisp.ts';
 import { mapRoutes } from './routes/map.ts';
@@ -273,6 +274,7 @@ export async function buildApp(
   uispRoutes(app, ctx);
   cpeAdminRoutes(app, ctx);
   connectorRoutes(app, ctx);
+  speedtestRoutes(app, ctx);
 
   const hasWeb = existsSync(join(cfg.staticDir, 'index.html'));
   // The console built by Vite (console/ → web/app): its pages (the console, /map-embed.html for the

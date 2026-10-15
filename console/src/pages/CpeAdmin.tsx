@@ -3,6 +3,7 @@ import { type ReactNode, useEffect, useState } from 'react';
 import { toast } from '../lib/toast';
 import { SignalChart } from '../jobs/SignalChart';
 import { api, download } from '../lib/api';
+import { SpeedTests } from '../jobs/SpeedTests';
 import type { PageContext } from '../shell/routes';
 import { AsyncButton, Badge, Card, Field, Icon, Notice, PageHeader, Segmented, Skeleton, Tabs } from '../ui';
 
@@ -95,7 +96,7 @@ const dur = (s?: number | null) => {
 };
 const plan = (x?: { speed?: { down: number; up: number } | null; profile?: string }) => (x?.speed ? `${x.speed.down}M/${x.speed.up}M` : v(x?.profile));
 
-type Tab = 'overview' | 'radio' | 'customer' | 'history' | 'interfaces' | 'firmware' | 'uisp';
+type Tab = 'overview' | 'radio' | 'customer' | 'history' | 'speed' | 'interfaces' | 'firmware' | 'uisp';
 
 export function CpeAdmin({ params }: PageContext) {
   const id = params.get('id') ?? '';
@@ -179,6 +180,7 @@ export function CpeAdmin({ params }: PageContext) {
           { value: 'radio', label: 'Radio' },
           ...(d.crm !== undefined ? [{ value: 'customer' as Tab, label: 'Cliente' }] : []),
           { value: 'history', label: 'Storico segnale' },
+          { value: 'speed', label: 'Speedtest' },
           { value: 'interfaces', label: 'Interfacce' },
           { value: 'firmware', label: 'Firmware e backup', badge: c.online && fw.canUpgrade && fw.upgradeTo ? <Badge tone="warn">1</Badge> : undefined },
           { value: 'uisp', label: 'Gestione in UISP' },
@@ -234,6 +236,12 @@ export function CpeAdmin({ params }: PageContext) {
       {tab === 'customer' && <CustomerCard crm={d.crm} />}
 
       {tab === 'history' && <SignalHistory id={id} />}
+
+      {tab === 'speed' && (
+        <Card>
+          <SpeedTests mac={c.mac} />
+        </Card>
+      )}
 
       {tab === 'interfaces' && (
         <Card padded={false}>
