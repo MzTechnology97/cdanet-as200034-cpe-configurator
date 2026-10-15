@@ -24,6 +24,9 @@ describe('Speedtest del collaudo e degli interventi', () => {
     assert.equal((await call('PUT', '/api/admin/server-settings', { values: { 'speedtest.minPct': 70 } })).statusCode, 200);
     assert.equal((await call('GET', '/api/speedtest/config')).json().minPct, 70);
     await call('PUT', '/api/admin/server-settings', { values: { 'speedtest.minPct': null } });
+    // the app measures against the OoklaServer: this server is no longer a speedtest server
+    for (const url of ['/api/tools/speed/ping', '/api/tools/speed/download?bytes=262144']) assert.equal((await call('GET', url)).statusCode, 404, url);
+    assert.equal((await t.app.inject({ method: 'POST', url: '/api/tools/speed/upload', headers: { ...A, 'content-type': 'application/octet-stream' }, payload: Buffer.alloc(1024) })).statusCode, 404);
 
     await call('POST', '/api/admin/users', { username: 'tecnico', password: 'Installer-Pass-123' });
     await call('POST', '/api/admin/users', { username: 'altro', password: 'Installer-Pass-456' });

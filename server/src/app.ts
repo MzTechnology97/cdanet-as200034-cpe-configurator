@@ -189,14 +189,6 @@ export async function buildApp(
     trustProxy: cfg.trustProxy,
   });
 
-  // Speed-test uploads: count bytes without buffering them.
-  app.addContentTypeParser('application/octet-stream', { bodyLimit: 50 * 1024 * 1024 }, (_req, payload, done) => {
-    let bytes = 0;
-    payload.on('data', (c: Buffer) => (bytes += c.length));
-    payload.on('end', () => done(null, { bytes }));
-    payload.on('error', (e) => done(e, undefined));
-  });
-
   // Android app always on the latest release (Impostazioni server → "App sempre all'ultima
   // versione"): an older app gets 426 on every call, login included, and can only update itself.
   // Apps before v1.31 send their version only on some calls: their OkHttp user agent gives them away.
