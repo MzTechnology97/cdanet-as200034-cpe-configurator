@@ -558,6 +558,10 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE crm_radius ADD COLUMN customer_formal TEXT NOT NULL DEFAULT '';
   `,
+  // the UISP CRM client made by a «Nuovo subscriber» whose service failed: the retry reuses it
+  `
+  ALTER TABLE provisioning_jobs ADD COLUMN uisp_crm_client_id INTEGER;
+  `,
 ];
 
 export function openDatabase(path: string): Db {

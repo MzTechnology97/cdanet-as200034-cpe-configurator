@@ -22,6 +22,8 @@ export interface NewSubscriber {
   lon: number | null;
   servicePlanPeriodId: number;
   note?: string | undefined;
+  /** A client already made by an attempt whose service failed: only the service is created. */
+  clientId?: number | null | undefined;
 }
 
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
@@ -73,24 +75,35 @@ export function createUispCrm(opts: { url: string; appKey: string; fetchImpl?: t
   /** Client and service of a new subscriber; [siteId] is the endpoint site when UISP already made it. */
   async function createSubscriber(s: NewSubscriber): Promise<{ clientId: number; serviceId: number; siteId: string | null }> {
     const gps = s.lat !== null && s.lon !== null ? { addressGpsLat: s.lat, addressGpsLon: s.lon } : {};
-    const client = (await call('POST', '/clients', {
-      clientType: 1,
-      isLead: false,
-      firstName: s.firstName,
-      lastName: s.lastName,
-      street1: s.street,
-      ...gps,
-      ...(s.note ? { note: s.note } : {}),
-    })) as { id?: unknown };
-    const clientId = num(client?.id);
-    if (clientId === null) throw new HttpError(502, 'uisp_crm_error', { detail: 'cliente senza id' });
-    const service = (await call('POST', `/clients/${clientId}/services`, {
-      servicePlanPeriodId: s.servicePlanPeriodId,
-      activeFrom: new Date().toISOString(),
-      street1: s.street,
-      ...gps,
-      ...(s.lat !== null && s.lon !== null ? { isAddressGpsCustom: true } : {}),
-    })) as { id?: unknown; unmsClientSiteId?: unknown };
+    let clientId = s.clientId ?? null;
+    if (clientId === null) {
+      const client = (await call('POST', '/clients', {
+        clientType: 1,
+        isLead: false,
+        firstName: s.firstName,
+        lastName: s.lastName,
+        street1: s.street,
+        ...gps,
+        ...(s.note ? { note: s.note } : {}),
+      })) as { id?: unknown };
+      clientId = num(client?.id);
+      if (clientId === null) throw new HttpError(502, 'uisp_crm_error', { detail: 'cliente senza id' });
+    }
+    // the CRM rejects isAddressGpsCustom on a new service (422 «This field is not allowed», 15/10/2026):
+    // the coordinates alone are enough
+    let service: { id?: unknown; unmsClientSiteId?: unknown };
+    try {
+      service = (await call('POST', `/clients/${clientId}/services`, {
+        servicePlanPeriodId: s.servicePlanPeriodId,
+        activeFrom: new Date().toISOString(),
+        street1: s.street,
+        ...gps,
+      })) as { id?: unknown; unmsClientSiteId?: unknown };
+    } catch (e) {
+      // the client stays (nothing is deleted in the CRM): its id goes back so a retry adds only the service
+      const err = e as HttpError;
+      throw new HttpError(err.status ?? 502, err.code ?? 'uisp_crm_error', { ...(err.extra ?? {}), clientId });
+    }
     const serviceId = num(service?.id);
     if (serviceId === null) throw new HttpError(502, 'uisp_crm_error', { detail: 'servizio senza id' });
     return { clientId, serviceId, siteId: typeof service.unmsClientSiteId === 'string' ? service.unmsClientSiteId : null };

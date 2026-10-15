@@ -38,6 +38,7 @@ interface JobRow {
   device_name: string;
   work_order_id: number | null;
   uisp_crm_service_id: number | null;
+  uisp_crm_client_id: number | null;
 }
 
 /** Wait between the checks of the subscriber's endpoint site (shorter in the tests). */
@@ -601,7 +602,15 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       serviceId = known;
     } else {
       if ('serviceId' in b) throw new HttpError(400, 'invalid_request');
-      const sub = await c.createSubscriber({ ...b, lat: job.latitude, lon: job.longitude, note: `CPE ${job.model} ${job.mac} · ${job.ssid}` });
+      let sub: Awaited<ReturnType<typeof c.createSubscriber>>;
+      try {
+        sub = await c.createSubscriber({ ...b, lat: job.latitude, lon: job.longitude, note: `CPE ${job.model} ${job.mac} · ${job.ssid}`, clientId: job.uisp_crm_client_id ?? null });
+      } catch (e) {
+        // the client was made, its service not: kept on the job, the retry adds only the service
+        const made = (e as HttpError).extra?.clientId;
+        if (typeof made === 'number') db.prepare('UPDATE provisioning_jobs SET uisp_crm_client_id = ? WHERE id = ?').run(made, job.id);
+        throw e;
+      }
       ({ serviceId, clientId, siteId } = sub);
       db.prepare('UPDATE provisioning_jobs SET uisp_crm_service_id = ? WHERE id = ?').run(serviceId, job.id);
       recordEvent(db, req.user!.id, 'uisp.subscriber', `${b.lastName} ${b.firstName}`.trim(), `${job.id} · cliente ${sub.clientId} · servizio ${serviceId}`);
