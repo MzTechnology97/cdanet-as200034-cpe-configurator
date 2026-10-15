@@ -121,10 +121,11 @@ object PhoneAlerts {
         else -> "tra $off minuti"
     }
 
-    internal suspend fun check(c: Context): Boolean = withContext(Dispatchers.IO) {
+    /** Shows the new notifications: how many (null: the server could not be read, try again later). */
+    internal suspend fun check(c: Context): Int? = withContext(Dispatchers.IO) {
         val p = prefs(c)
-        val token = p.getString("token", null) ?: return@withContext true
-        val backend = p.getString("backend", null) ?: return@withContext true
+        val token = p.getString("token", null) ?: return@withContext 0
+        val backend = p.getString("backend", null) ?: return@withContext 0
         TestTls.enabled = Settings(c).insecureTlsNow()
         val http = TestTls.apply(OkHttpClient.Builder()).connectTimeout(10, TimeUnit.SECONDS).readTimeout(20, TimeUnit.SECONDS).build()
         val after = p.getLong("after", 0L)
@@ -132,15 +133,16 @@ object PhoneAlerts {
             if (r.code == 401 || r.code == 404) {
                 // token revoked (password changed, logged out everywhere): the app asks again at the next login
                 disable(c)
-                return@withContext true
+                return@withContext 0
             }
-            if (!r.isSuccessful) return@withContext false
+            if (!r.isSuccessful) return@withContext null
             val feed = json.decodeFromString(PhoneFeed.serializer(), r.body?.string().orEmpty())
             // reminders are scheduled here at the minute: the server's ones would arrive twice
-            feed.items.filter { it.kind != "work_order_reminder" }.take(6).forEach { notify(c, (it.id % 100_000).toInt() + 1000, it.title, it.body) }
+            val shown = feed.items.filter { it.kind != "work_order_reminder" }.take(6)
+            shown.forEach { notify(c, (it.id % 100_000).toInt() + 1000, it.title, it.body) }
             feed.items.maxOfOrNull { it.id }?.let { p.edit().putLong("after", maxOf(after, it)).apply() }
             schedule(c, feed.workOrders)
-            true
+            shown.size
         }
     }
 
@@ -183,7 +185,7 @@ object PhoneAlerts {
 
 class PhoneFeedWorker(context: Context, params: WorkerParameters) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result = runCatching { PhoneAlerts.check(applicationContext) }.fold(
-        onSuccess = { if (it) Result.success() else Result.retry() },
+        onSuccess = { if (it != null) Result.success() else Result.retry() },
         onFailure = { Result.retry() },
     )
 }
