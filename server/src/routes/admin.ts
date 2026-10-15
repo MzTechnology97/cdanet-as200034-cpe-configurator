@@ -75,7 +75,7 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
     db
       .prepare(
         `SELECT u.id, u.username, u.role, u.active, u.created_at createdAt, u.last_login_at lastLoginAt, u.totp_enabled totpEnabled,
-                u.warehouse_site_id warehouseSiteId, u.warehouse_site warehouseSite, u.stock_bypass stockBypass,
+                u.warehouse_site_id warehouseSiteId, u.warehouse_site warehouseSite, u.stock_bypass stockBypass, u.warehouse_min_stock warehouseMinStock,
                 (SELECT count(*) FROM provisioning_jobs j WHERE j.user_id = u.id) jobs
          FROM users u ORDER BY u.role, u.username`,
       )

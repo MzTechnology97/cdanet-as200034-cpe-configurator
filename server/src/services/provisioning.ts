@@ -374,6 +374,15 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
       db.prepare(
         "UPDATE work_orders SET status = 'done', done_at = ?, job_id = ?, updated_at = ? WHERE id = (SELECT work_order_id FROM provisioning_jobs WHERE id = ?) AND status <> 'cancelled'",
       ).run(nowIso(), jobId, nowIso(), jobId);
+      // a replacement: the CPE taken off goes back to the warehouse (RMA), once per old installation
+      const old = db
+        .prepare('SELECT o.id, o.mac, o.model, o.device_name name FROM provisioning_jobs n JOIN provisioning_jobs o ON o.id = n.replaces_job_id WHERE n.id = ?')
+        .get(jobId) as { id: string; mac: string; model: string; name: string } | undefined;
+      if (old?.mac) {
+        db.prepare(
+          `INSERT OR IGNORE INTO cpe_rma(created_at, removed_job_id, replaced_by_job_id, mac, model, customer, removed_by, updated_at, updated_by) VALUES(?,?,?,?,?,?,?,?,?)`,
+        ).run(nowIso(), old.id, jobId, old.mac, old.model, old.name, job.user_id, nowIso(), job.user_id);
+      }
     }
     return { ok: true, duplicate: false, ...(retry ? { retry: true } : {}) };
   }

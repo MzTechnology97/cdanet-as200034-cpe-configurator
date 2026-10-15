@@ -48,6 +48,7 @@ import { victronRoutes } from './routes/victron.ts';
 import { speedtestRoutes } from './routes/speedtest.ts';
 import { coverageOpsRoutes } from './routes/coverage-operators.ts';
 import { diagnosisRoutes } from './routes/diagnosis.ts';
+import { feasibilityRoutes } from './routes/feasibility.ts';
 import { createCoverageOps, type CoverageOps } from './services/coverage-operators.ts';
 import { createPlatformHealth, type PlatformHealth } from './services/platform-health.ts';
 import { platformRoutes } from './routes/platform.ts';
@@ -321,6 +322,7 @@ export async function buildApp(
   coverageOpsRoutes(app, ctx);
   platformRoutes(app, ctx);
   diagnosisRoutes(app, ctx);
+  feasibilityRoutes(app, ctx);
 
   const hasWeb = existsSync(join(cfg.staticDir, 'index.html'));
   // The console built by Vite (console/ → web/app): its pages (the console, /map-embed.html for the
