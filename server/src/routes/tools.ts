@@ -9,7 +9,6 @@ const host = z.object({ host: z.string().trim().min(1).max(253) });
 
 export function toolRoutes(app: FastifyInstance, ctx: AppContext) {
   const user = { preHandler: [ctx.auth.requireUser, ctx.modules.require('network_tools')] };
-  const speed = { preHandler: [ctx.auth.requireUser, ctx.modules.require('network_tools', 'acceptance')] };
   const ros = { preHandler: [ctx.auth.requireUser, ctx.modules.require('routeros')] };
 
   app.get('/api/tools/interfaces', user, () => tools.interfaces());
@@ -52,29 +51,6 @@ export function toolRoutes(app: FastifyInstance, ctx: AppContext) {
     const { macs } = z.object({ macs: z.array(z.string().trim().max(32)).max(1024) }).parse(req.body);
     return ctx.oui.lookup([...new Set(macs)]);
   });
-
-  // Throughput test between the client and the CDA Net server.
-  app.get('/api/tools/speed/ping', speed, async () => ({ ok: true, ts: Date.now() }));
-  app.get('/api/tools/speed/download', speed, async (req, reply) => {
-    const bytes = z.coerce.number().int().min(256 * 1024).max(50 * 1024 * 1024).default(8 * 1024 * 1024).parse((req.query as { bytes?: string }).bytes);
-    const chunk = Buffer.alloc(64 * 1024, 0x5a);
-    const { Readable } = await import('node:stream');
-    let left = bytes;
-    const stream = new Readable({
-      read() {
-        if (left <= 0) return this.push(null);
-        const part = left >= chunk.length ? chunk : chunk.subarray(0, left);
-        left -= part.length;
-        this.push(part);
-      },
-    });
-    reply.header('Cache-Control', 'no-store').header('Content-Type', 'application/octet-stream').header('Content-Length', String(bytes));
-    return reply.send(stream);
-  });
-  app.post('/api/tools/speed/upload', { ...speed, bodyLimit: 50 * 1024 * 1024 }, async (req) => ({
-    ok: true,
-    bytes: (req.body as { bytes?: number } | undefined)?.bytes ?? 0,
-  }));
 
   // RouterOS (read-only) from the server.
   app.get('/api/routeros/catalog', ros, async () => ({

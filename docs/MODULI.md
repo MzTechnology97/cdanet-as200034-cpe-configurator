@@ -39,4 +39,4 @@ Il server applica il risultato per utente: API, `/api/meta`, menu web e app. Nel
 
 Restano sempre attivi: provisioning, storico, profili airOS, reti Wi-Fi, account, connettori, registro attività.
 
-Le credenziali CPE per gli strumenti di campo vengono consegnate all'app solo se è attivo almeno uno tra Puntamento, Diagnosi e Collaudo. Lo speed test resta disponibile per il collaudo anche con gli Strumenti di rete spenti.
+Le credenziali CPE per gli strumenti di campo vengono consegnate all'app solo se è attivo almeno uno tra Puntamento, Diagnosi e Collaudo. Lo speedtest usa il server Ookla di CDA Net (Impostazioni server → «Collaudo: speedtest e Wi-Fi») e resta disponibile nel collaudo e negli interventi anche con gli Strumenti di rete spenti; il server dell'app non fa più da server di speedtest.
