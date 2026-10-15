@@ -67,6 +67,7 @@ private val ERRORS = mapOf(
     "template_needs_mac" to "Questo template ha bisogno del MAC già in preparazione: prepara la configurazione sul posto",
     "user_not_found" to "Installatore non trovato o disattivato",
     "invalid_position" to "Posizione non valida",
+    "acceptance_already_passed" to "Il collaudo risulta già superato",
     "acceptance_not_found" to "Collaudo non ancora registrato: il rapporto c'è dopo l'invio del collaudo",
     "work_order_password_missing" to "L'intervento non ha la password PPPoE: chiedila all'ufficio",
     "too_many_zones" to "Hai già 20 zone: eliminane una",
@@ -162,6 +163,15 @@ class ApiClient(
                 text
             }
         }
+
+    /** The acceptance test registered for a job (null when none), with the NOC's override if any. */
+    suspend fun storedAcceptance(jobId: String): StoredAcceptanceResponseDto =
+        AppJson.decodeFromString(StoredAcceptanceResponseDto.serializer(), request("GET", "/api/provisioning/jobs/$jobId/acceptance"))
+
+    /** NOC: a test «non superato» or «con riserva» becomes «superato», with the reason. */
+    suspend fun passAcceptance(jobId: String, note: String) {
+        request("POST", "/api/admin/provisioning/jobs/$jobId/acceptance/pass", buildJsonObject { put("note", note) })
+    }
 
     /** The acceptance report of a job as a PDF (the same as the console's): the server checks who may. */
     suspend fun acceptancePdf(jobId: String): ByteArray = withContext(Dispatchers.IO) {

@@ -521,6 +521,16 @@ data class WorkOrderDto(
 @Serializable
 data class WorkOrderItemDto(val item: WorkOrderDto)
 
+/** The NOC's decision that made a failed acceptance test pass. */
+@Serializable
+data class AcceptanceOverrideDto(val from: String = "", val by: String = "", val at: String = "", val note: String = "")
+
+@Serializable
+data class StoredAcceptanceDto(val verdict: String = "", val createdAt: String? = null, val by: String? = null, val override: AcceptanceOverrideDto? = null)
+
+@Serializable
+data class StoredAcceptanceResponseDto(val acceptance: StoredAcceptanceDto? = null)
+
 @Serializable
 data class WorkOrdersDto(val day: String = "", val items: List<WorkOrderDto> = emptyList())
 
