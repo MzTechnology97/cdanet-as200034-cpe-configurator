@@ -5,6 +5,7 @@ import { drawOutages, MAP_COLORS as C } from '../map/leaflet';
 import { MyTelegram } from '../account/MyTelegram';
 import { type Infra, itemLabel, itemNames, Picker } from '../infra/Picker';
 import { api } from '../lib/api';
+import { type PopPower, PowerBadge } from '../infra/PopPower';
 import { keys } from '../lib/query';
 import { type LMap, MapView } from '../map/MapView';
 import type { PageContext } from '../shell/routes';
@@ -31,6 +32,10 @@ interface Impact {
   name: string;
   distanceM: number;
   stations?: number | null;
+  /** The POP of an AP (the POP itself for a POP). */
+  popId?: string | null;
+  /** Off-grid POP (solar only): the outage hits its customers, not the POP. */
+  clientsOnly?: boolean;
 }
 interface Outage {
   id: string;
@@ -53,6 +58,22 @@ interface List {
   generatedAt?: string | null;
   lastRun?: { at: string; ok: boolean; error?: string } | null;
   scope?: { assigned: Array<{ key: string; name: string }> } | null;
+  /** The batteries of the POPs hit, only those with one (installers: the essentials). */
+  popPower?: Record<string, PopPower>;
+}
+
+/** The POPs hit by an outage that have a battery: name (the POP's, or the POP of an AP) and its state. */
+function hitBatteries(o: Outage, power: Record<string, PopPower> | undefined) {
+  const out = new Map<string, { name: string; p: PopPower }>();
+  if (!power) return [];
+  for (const i of o.impact) {
+    const pop = i.type === 'pop' ? i.id : i.popId;
+    const p = pop ? power[pop] : undefined;
+    if (!pop || !p) continue;
+    const prev = out.get(pop);
+    if (i.type === 'pop' || !prev) out.set(pop, { name: i.type === 'pop' ? `POP ${i.name}` : (prev?.name ?? `POP dell’AP ${i.name}`), p });
+  }
+  return [...out.values()];
 }
 interface Zone {
   id: string;
@@ -161,12 +182,20 @@ export function Outages({ user }: PageContext) {
                     {seesImpact && o.impact.length > 0 && (
                       <div className="ui-row hl-badges">
                         {o.impact.slice(0, 4).map((i) => (
-                          <Badge key={`${i.type}:${i.id}`} tone="bad">
+                          <Badge key={`${i.type}:${i.id}`} tone={i.clientsOnly ? 'warn' : 'bad'}>
                             {i.type === 'pop' ? 'POP' : 'AP'} {i.name} · {dist(i.distanceM)}
                             {i.stations != null ? ` · ${i.stations} CPE` : ''}
+                            {i.clientsOnly ? ' · off-grid: solo i clienti' : ''}
                           </Badge>
                         ))}
                         {o.impact.length > 4 && <span className="ui-small">+{o.impact.length - 4}</span>}
+                      </div>
+                    )}
+                    {seesImpact && hitBatteries(o, d.popPower).length > 0 && (
+                      <div className="ui-row hl-badges">
+                        {hitBatteries(o, d.popPower).map((b) => (
+                          <PowerBadge key={b.name} p={b.p} prefix={b.name} />
+                        ))}
                       </div>
                     )}
                   </div>
