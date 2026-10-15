@@ -94,6 +94,7 @@ describe('Nuovo subscriber in UISP all\'accettazione', () => {
     assert.equal(service.servicePlanPeriodId, 31);
     assert.equal(service.addressGpsLat, 37.58);
     assert.equal('isAddressGpsCustom' in service, false, 'the CRM rejects it on a new service (422)');
+    assert.match(String(service.activeFrom), /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d\+0000$/, 'Y-m-d\\TH:i:sO, no milliseconds (400 otherwise)');
     // the CRM made exactly one client and one service
     assert.equal(crm.filter((c) => c.path === '/clients' && c.method === 'POST').length, 1)
     assert.equal(crm.filter((c) => c.path.endsWith('/services') && c.method === 'POST').length, 1)

@@ -26,6 +26,12 @@ export interface NewSubscriber {
   clientId?: number | null | undefined;
 }
 
+/**
+ * A date-time as the UISP CRM takes it: «Y-m-d\\TH:i:sO», e.g. 2026-10-15T16:58:52+0000 (it rejects
+ * the ISO form with milliseconds and «Z», field report 15/10/2026).
+ */
+export const crmDateTime = (d: Date) => d.toISOString().replace(/\.\d{3}Z$/, '+0000');
+
 const num = (v: unknown) => (typeof v === 'number' && Number.isFinite(v) ? v : null);
 
 export function createUispCrm(opts: { url: string; appKey: string; fetchImpl?: typeof fetch | undefined }) {
@@ -95,7 +101,7 @@ export function createUispCrm(opts: { url: string; appKey: string; fetchImpl?: t
     try {
       service = (await call('POST', `/clients/${clientId}/services`, {
         servicePlanPeriodId: s.servicePlanPeriodId,
-        activeFrom: new Date().toISOString(),
+        activeFrom: crmDateTime(new Date()),
         street1: s.street,
         ...gps,
       })) as { id?: unknown; unmsClientSiteId?: unknown };
