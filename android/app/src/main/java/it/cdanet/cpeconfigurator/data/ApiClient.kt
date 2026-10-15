@@ -398,6 +398,10 @@ class ApiClient(
     suspend fun workOrderCalendar(from: String, to: String, user: Long? = null): CalendarDto =
         AppJson.decodeFromString(CalendarDto.serializer(), request("GET", "/api/work-orders/calendar?from=$from&to=$to" + (user?.let { "&user=$it" } ?: "")))
 
+    /** NOC: customers of the CRM matching [q] (name, code, phone, address or PPPoE user). */
+    suspend fun workOrderCrm(q: String): WorkOrderCrmDto =
+        AppJson.decodeFromString(WorkOrderCrmDto.serializer(), request("GET", "/api/admin/work-orders/crm?q=" + java.net.URLEncoder.encode(q.trim().take(80), "UTF-8")))
+
     /** NOC: a new work order from the app's calendar ([body] from OrderDraftMath.body). */
     suspend fun createWorkOrder(body: JsonObject): WorkOrderDto =
         AppJson.decodeFromString(WorkOrderItemDto.serializer(), request("POST", "/api/admin/work-orders", body)).item
