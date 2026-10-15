@@ -232,6 +232,8 @@ fun AppRoot(c: AppContainer) {
         // screenshots: blocked when nobody is logged in; with an account, at once by its role (an
         // installer stays blocked until the server allows it, also when it cannot be reached)
         if (session == null) c.lockScreenCapture() else c.updateSecureScreen(session?.user?.role, null)
+        // the attempts this account left waiting (no network at the time) go to the NOC now
+        session?.user?.id?.let { id -> c.scope.launch { c.captureReports.send(id) } }
         // the warehouse on the phone is the logged-in account's (also offline), read again at once
         session?.user?.id?.let { c.accountChanged(it) }
         c.provisioning.stock.useAccount(session?.user?.id)
@@ -258,6 +260,7 @@ fun AppRoot(c: AppContainer) {
                     runCatching { c.api.unreadNotifications() }.onSuccess { unread = it }
                     if (c.resultQueue.pending.value.isNotEmpty()) runCatching { c.resultQueue.sync() }
                     if (c.acceptanceQueue.pending.value.isNotEmpty()) runCatching { c.acceptanceQueue.sync() }
+                    session?.user?.id?.let { c.captureReports.send(it) }
                     // back on the network after a roof without signal: the warehouse is read again
                     if (c.provisioning.stock.olderThan(java.time.Duration.ofMinutes(30))) runCatching { c.provisioning.stock.refresh(c.api) }
                 }

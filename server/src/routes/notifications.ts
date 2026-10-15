@@ -117,13 +117,24 @@ export function notificationRoutes(app: FastifyInstance, ctx: AppContext) {
    * tells it; the image is black): the NOC is told, the activity log keeps it.
    */
   app.post('/api/security/screenshot-attempt', user, async (req) => {
-    const b = z.object({ screen: z.string().trim().max(80).default(''), at: z.string().datetime().optional() }).strict().parse(req.body);
+    const b = z
+      .object({ screen: z.string().trim().max(80).default(''), at: z.string().datetime().optional(), kind: z.enum(['screenshot', 'recording']).default('screenshot') })
+      .strict()
+      .parse(req.body);
     if (req.user!.role === 'admin' || ctx.modules.stateFor(req.user!.id).screenshots) return { ok: true, notified: false };
-    recordEvent(ctx.db, req.user!.id, 'security.screenshot', req.user!.username, b.screen || 'app');
+    const recording = b.kind === 'recording';
+    // sent later by the phone's queue (no network at the time): the notice says when it happened
+    const when = b.at && Date.now() - Date.parse(b.at) > 5 * 60_000
+      ? ` il ${new Date(b.at).toLocaleString('it-IT', { timeZone: 'Europe/Rome', dateStyle: 'short', timeStyle: 'short' })}`
+      : '';
+    recordEvent(ctx.db, req.user!.id, 'security.screenshot', req.user!.username, `${recording ? 'registrazione' : 'screenshot'} · ${b.screen || 'app'}${b.at ? ` · ${b.at}` : ''}`);
     inbox().push('noc', {
       kind: 'screenshot_attempt',
-      title: `Tentativo di screenshot: ${req.user!.username}`,
-      lines: [`${req.user!.username} ha provato a fare uno screenshot o a registrare lo schermo nell'app${b.screen ? ` (schermata «${b.screen}»)` : ''}.`, "L'immagine è uscita nera: il suo account non può farne."],
+      title: `${recording ? 'Registrazione dello schermo' : 'Tentativo di screenshot'}: ${req.user!.username}`,
+      lines: [
+        `${req.user!.username} ha ${recording ? 'registrato lo schermo' : 'provato a fare uno screenshot'} nell'app${b.screen ? ` (schermata «${b.screen}»)` : ''}${when}.`,
+        `${recording ? 'La registrazione è uscita nera' : "L'immagine è uscita nera"}: il suo account non può farne.`,
+      ],
     });
     return { ok: true, notified: true };
   });
