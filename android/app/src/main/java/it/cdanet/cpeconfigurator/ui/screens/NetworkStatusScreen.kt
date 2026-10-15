@@ -35,6 +35,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import it.cdanet.cpeconfigurator.core.AppContainer
 import it.cdanet.cpeconfigurator.data.NetApDto
+import it.cdanet.cpeconfigurator.data.PopPowerDto
 import it.cdanet.cpeconfigurator.data.NetworkStatusDto
 import it.cdanet.cpeconfigurator.ui.BadRed
 import it.cdanet.cpeconfigurator.ui.BusyButton
@@ -96,7 +97,7 @@ fun NetworkStatusScreen(c: AppContainer) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text(
-                    listOfNotNull("${s.aps} AP", s.down.takeIf { it > 0 }?.let { "$it giù" }, s.degraded.takeIf { it > 0 }?.let { "$it con molte CPE offline" }, s.powerOutage.takeIf { it > 0 }?.let { "$it con guasto Enel vicino" }).joinToString(" · "),
+                    listOfNotNull("${s.aps} AP", s.down.takeIf { it > 0 }?.let { "$it giù" }, s.degraded.takeIf { it > 0 }?.let { "$it con molte CPE offline" }, s.powerOutage.takeIf { it > 0 }?.let { "$it con guasto Enel vicino" }, s.powerAlarms.takeIf { it > 0 }?.let { "$it con batteria in allarme o senza dati" }).joinToString(" · "),
                     fontWeight = FontWeight.SemiBold,
                 )
                 Text("Aggiornato ${ts(d.generatedAt)} · ogni minuto", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
@@ -108,7 +109,7 @@ fun NetworkStatusScreen(c: AppContainer) {
             return@Column
         }
         // POPs (and the APs without a POP as one more group), problems first
-        val groups = d.pops.map { Group(it.id, "POP ${it.name}", it.state, it.powerOutage, it.aps) } +
+        val groups = d.pops.map { Group(it.id, "POP ${it.name}", it.state, it.powerOutage, it.aps, it.power) } +
             listOfNotNull(d.apsWithoutPop.takeIf { it.isNotEmpty() }?.let { Group("-", "AP senza POP", worst(it), it.any { a -> a.powerOutage }, it) })
         val anyProblem = groups.any { it.problem }
         val onlyProblems = problemsOnly ?: anyProblem
@@ -138,8 +139,36 @@ fun NetworkStatusScreen(c: AppContainer) {
     }
 }
 
-private data class Group(val id: String, val name: String, val state: String, val powerOutage: Boolean, val aps: List<NetApDto>) {
-    val problem: Boolean get() = state != "ok" || powerOutage || aps.any { it.state != "ok" || it.powerOutage }
+private data class Group(val id: String, val name: String, val state: String, val powerOutage: Boolean, val aps: List<NetApDto>, val power: PopPowerDto? = null) {
+    val problem: Boolean get() = state != "ok" || powerOutage || (power != null && power.status != "ok") || aps.any { it.state != "ok" || it.powerOutage }
+}
+
+/** «Batteria 24% · in scarica · bassa»: what a technician needs; admins also volts and photovoltaic. */
+internal fun powerText(p: PopPowerDto, nowSec: Long = System.currentTimeMillis() / 1000): String = listOfNotNull(
+    "Batteria" + (p.soc?.let { " ${Math.round(it)}%" } ?: ""),
+    "off-grid".takeIf { p.offGrid },
+    when (p.batteryState) { "discharging" -> "in scarica"; "charging" -> "in carica"; else -> null },
+    p.voltage?.let { "%.1f V".format(it) },
+    p.pvW?.let { "FV ${Math.round(it)} W" },
+    when (p.status) {
+        "warn" -> "bassa"
+        "alarm" -> if (p.alarms > 1) "${p.alarms} allarmi" else "allarme"
+        "silent" -> p.lastTs?.let { "nessun dato da ${ago(nowSec - it)}" } ?: "nessun dato"
+        else -> null
+    },
+).joinToString(" · ")
+
+private fun ago(sec: Long): String = when {
+    sec < 3600 -> "${sec / 60} min"
+    sec < 48 * 3600 -> "${sec / 3600} h"
+    else -> "${sec / 86400} giorni"
+}
+
+@Composable
+internal fun powerColor(p: PopPowerDto): Color = when (p.status) {
+    "alarm" -> BadRed
+    "warn" -> WarnAmber
+    else -> MaterialTheme.colorScheme.onSurfaceVariant
 }
 
 private val RANK = mapOf("down" to 0, "degraded" to 1, "ok" to 2)
@@ -158,6 +187,7 @@ private fun PopRow(g: Group, expanded: Boolean, onToggle: () -> Unit) {
             Text(g.name + if (g.powerOutage) " ⚡" else "", fontWeight = FontWeight.SemiBold, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f).padding(horizontal = 10.dp))
             Text("$ok/${g.aps.size} AP", style = MaterialTheme.typography.bodySmall, color = if (ok == g.aps.size) MaterialTheme.colorScheme.onSurfaceVariant else stateColor(worst(g.aps)))
         }
+        g.power?.let { p -> Text(powerText(p), style = MaterialTheme.typography.bodySmall, color = powerColor(p), modifier = Modifier.padding(start = 20.dp, bottom = 4.dp)) }
         if (expanded) g.aps.sortedBy { RANK[it.state] ?: 3 }.forEach { a -> ApRow(a) }
     }
 }

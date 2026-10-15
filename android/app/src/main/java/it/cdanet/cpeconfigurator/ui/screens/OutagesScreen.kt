@@ -29,6 +29,7 @@ import androidx.compose.material3.HorizontalDivider
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextOverflow
 import it.cdanet.cpeconfigurator.data.OutageDto
+import it.cdanet.cpeconfigurator.data.PopPowerDto
 import android.Manifest
 import android.content.Intent
 import android.net.Uri
@@ -164,7 +165,7 @@ fun OutagesScreen(c: AppContainer, section: OutageSection = OutageSection.List) 
                             page?.evaluateJavascript("window.cdaFocusOutage(${o.id})", null)
                         }, onNavigate = {
                             runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("geo:${o.lat},${o.lon}?q=${o.lat},${o.lon}"))) }
-                        })
+                        }, popPower = d.popPower)
                     }
                 }
             }        }
@@ -211,7 +212,7 @@ private val SHORT = mapOf("guasto_mt" to "Guasto MT", "guasto_bt" to "Guasto BT"
 
 /** One dense row per outage: kind, place, Enel customers, since when, impacted POP/AP; details on tap. */
 @Composable
-private fun OutageRow(o: OutageDto, expanded: Boolean, onToggle: () -> Unit, onMap: () -> Unit, onNavigate: () -> Unit) {
+private fun OutageRow(o: OutageDto, expanded: Boolean, onToggle: () -> Unit, onMap: () -> Unit, onNavigate: () -> Unit, popPower: Map<String, PopPowerDto> = emptyMap()) {
     val color = when (o.kind) { "guasto_mt" -> BadRed; "lavoro" -> MaterialTheme.colorScheme.onSurfaceVariant; else -> WarnAmber }
     val small = MaterialTheme.typography.bodySmall
     Column {
@@ -230,7 +231,16 @@ private fun OutageRow(o: OutageDto, expanded: Boolean, onToggle: () -> Unit, onM
                 if (o.impact.isNotEmpty()) {
                     Text("Potenzialmente impattati:", color = BadRed, fontWeight = FontWeight.SemiBold, style = small)
                     o.impact.take(5).forEach { i ->
-                        Text("• ${if (i.type == "pop") "POP" else "AP"} ${i.name} a ${i.distanceM} m" + (i.stations?.let { " · $it CPE" } ?: ""), color = BadRed, style = small)
+                        Text(
+                            "• ${if (i.type == "pop") "POP" else "AP"} ${i.name} a ${i.distanceM} m" + (i.stations?.let { " · $it CPE" } ?: "") + if (i.clientsOnly) " · off-grid: solo i clienti" else "",
+                            color = if (i.clientsOnly) WarnAmber else BadRed,
+                            style = small,
+                        )
+                    }
+                    // the batteries of those POPs: how long they can hold without Enel
+                    o.impact.mapNotNull { it.pop }.distinct().mapNotNull { id -> popPower[id]?.let { id to it } }.forEach { (id, p) ->
+                        val name = o.impact.firstOrNull { it.type == "pop" && it.id == id }?.name?.let { "POP $it" } ?: "POP"
+                        Text("$name: ${powerText(p)}", color = powerColor(p), style = small)
                     }
                 }
                 Row {

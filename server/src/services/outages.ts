@@ -81,7 +81,20 @@ export interface Impact {
   stations: number | null;
   /** UISP site of the AP (the POP itself for a POP). */
   popId?: string | null;
+  /** The POP is off-grid (solar only): the outage hits its customers, not the POP. */
+  clientsOnly?: boolean;
 }
+
+/** Marks the impacts on off-grid POPs (and their APs): only the customers around are hit (pure). */
+export function markOffGrid<T extends Pick<Impact, 'type' | 'id' | 'popId'>>(impact: T[], offGrid: Set<string> | undefined): Array<T & { clientsOnly?: boolean }> {
+  return impact.map((i) => {
+    const pop = i.type === 'pop' ? i.id : (i.popId ?? null);
+    const { clientsOnly: _, ...rest } = i as T & { clientsOnly?: boolean };
+    return pop && offGrid?.has(pop) ? { ...(rest as T), clientsOnly: true } : (rest as T);
+  });
+}
+
+const impactLabel = (i: Impact) => `${i.type === 'pop' ? 'POP' : 'AP'} <b>${e(i.name)}</b> ${i.distanceM} m${i.stations != null ? ` (${i.stations} CPE)` : ''}${i.clientsOnly ? ' · off-grid: solo i clienti' : ''}`;
 
 export const impactKey = (i: Pick<Impact, 'type' | 'id'>) => `${i.type}:${i.id}`;
 
@@ -121,7 +134,7 @@ export function personalText(o: PowerOutage & { impact: Impact[]; zones: Array<{
   const imp = o.impact.length
     ? `\n⚠️ <b>Potenzialmente impattati</b>: ${o.impact
         .slice(0, 5)
-        .map((i) => `${i.type === 'pop' ? 'POP' : 'AP'} <b>${e(i.name)}</b> ${i.distanceM} m${i.stations != null ? ` (${i.stations} CPE)` : ''}`)
+        .map(impactLabel)
         .join(' · ')}`
     : '';
   if (kind === 'restored') return `✅ <b>Ripristinato</b> · ${e(KIND_LABEL[o.kind])} · ${e(o.place)} (${e(o.province)})${where}`;
@@ -222,6 +235,8 @@ export function createOutages(
     userOn?: (userId: number) => boolean;
     /** An outage appeared or ended in a check (live updates of the console). */
     onChange?: () => void;
+    /** POPs powered only by their solar systems (Victron, set by the admin). */
+    offGridPops?: () => Set<string>;
   },
 ) {
   const f = opts.fetchImpl ?? fetch;
@@ -433,8 +448,7 @@ export function createOutages(
 
   const impactText = (imp: Impact[]) => {
     if (!imp.length) return '';
-    const fmt = (i: Impact) => `${i.type === 'pop' ? 'POP' : 'AP'} <b>${e(i.name)}</b> ${i.distanceM} m${i.stations != null ? ` (${i.stations} CPE)` : ''}`;
-    return `\n⚠️ <b>Potenzialmente impattati</b>: ${imp.slice(0, 5).map(fmt).join(' · ')}${imp.length > 5 ? ` e altri ${imp.length - 5}` : ''}`;
+    return `\n⚠️ <b>Potenzialmente impattati</b>: ${imp.slice(0, 5).map(impactLabel).join(' · ')}${imp.length > 5 ? ` e altri ${imp.length - 5}` : ''}`;
   };
 
   const describe = (o: PowerOutage, where: Array<{ zone: Zone; distanceM: number }>, imp: Impact[] = []) => {
@@ -459,7 +473,7 @@ export function createOutages(
       const inf = await infra();
       const inside = all
         .filter((o) => c.includePlanned || o.kind !== 'lavoro')
-        .map((o) => ({ o, where: zonesOf(o, zs), impact: impactOf(o, inf, c.impactRadiusKm) }))
+        .map((o) => ({ o, where: zonesOf(o, zs), impact: markOffGrid(impactOf(o, inf, c.impactRadiusKm), opts.offGridPops?.()) }))
         .filter((x) => x.where.length > 0 || x.impact.length > 0);
       const now = nowIso();
       const known = new Map((db.prepare('SELECT id, notified FROM power_outages WHERE ended_at IS NULL').all() as Array<{ id: number; notified: number }>).map((r) => [r.id, r]));

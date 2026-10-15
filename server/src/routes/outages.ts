@@ -6,7 +6,8 @@ import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { approxPoint, roughDistance } from '../domain/approx.ts';
 import { isValidLatLon } from '../domain/geo.ts';
-import { KIND_LABEL, OUTAGE_SOURCE, scopeOutage } from '../services/outages.ts';
+import { KIND_LABEL, markOffGrid, OUTAGE_SOURCE, scopeOutage } from '../services/outages.ts';
+import { installerPower, type InstallerPower, type PopPower } from '../services/victron-sync.ts';
 
 /** "Guasti Enel": outages in the areas of interest (module power_outages). */
 export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
@@ -29,19 +30,43 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
           zones: o.zones.map((z) => (z.distanceM != null ? { ...z, distanceM: roughDistance(z.distanceM, ctx.cfg.installerDistanceStepM) } : z)),
         }));
 
-  const view = (u: AuthUser) => ({
+  /** The batteries of the POPs hit by the outages shown (Victron): admins everything, installers the essentials. */
+  const popPowerOf = (u: AuthUser, list: Array<{ impact: Array<{ type: string; id: string; popId?: string | null }> }>) => {
+    const all = ctx.victronSync.byPop();
+    const out: Record<string, PopPower | InstallerPower> = {};
+    for (const o of list)
+      for (const i of o.impact) {
+        const pop = i.type === 'pop' ? i.id : (i.popId ?? null);
+        const p = pop ? all.get(pop) : undefined;
+        if (pop && p) out[pop] = u.role === 'admin' ? p : installerPower(p);
+      }
+    return out;
+  };
+
+  /** Impacts on off-grid POPs as they are now (the admin may change it after the outage appeared). */
+  const offGrid = <T extends { impact: Array<{ type: 'pop' | 'ap'; id: string; popId?: string | null }> }>(list: T[]): T[] => {
+    const off = ctx.victronSync.offGridPops();
+    return list.map((o) => ({ ...o, impact: markOffGrid(o.impact, off) }));
+  };
+
+  const view = (u: AuthUser) => {
+    const active = offGrid(shown(u, ctx.outages.active(keysFor(u))));
+    return {
     generatedAt: ctx.outages.status()?.at ?? null,
     lastRun: u.role === 'admin' ? ctx.outages.status() : null,
     // the data source is for admins only (installers never see where the data comes from)
     source: u.role === 'admin' ? 'e-distribuzione' : null,
     labels: KIND_LABEL,
     scope: u.role === 'admin' ? { all: true, assigned: [], zones: [] } : { all: false, assigned: ctx.outages.assignments(u.id), zones: ctx.outages.manualZones(u.id) },
-    active: shown(u, ctx.outages.active(keysFor(u))),
-  });
+    active,
+    // only the POPs with a battery system linked (missing: nothing to show)
+    popPower: popPowerOf(u, active),
+    };
+  };
 
   app.get('/api/outages', user, async (req) => {
     const { recent } = z.object({ recent: z.coerce.boolean().default(false) }).parse(req.query);
-    return { ...view(req.user!), ...(recent ? { recent: shown(req.user!, ctx.outages.recent(48, keysFor(req.user!))) } : {}) };
+    return { ...view(req.user!), ...(recent ? { recent: offGrid(shown(req.user!, ctx.outages.recent(48, keysFor(req.user!))))} : {}) };
   });
 
   // ---- Personal areas of interest (every user with the module) -------------------------------

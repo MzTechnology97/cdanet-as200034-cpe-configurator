@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { isSuspended } from '../services/crm-sync.ts';
+import { installerPower } from '../services/victron-sync.ts';
 import { isStaleCpe } from '../domain/health.ts';
 
 /** AP state shown in "Stato rete". */
@@ -54,6 +55,13 @@ export function networkRoutes(app: FastifyInstance, ctx: AppContext) {
       for (const o of ctx.outages.active(ctx.outages.keysFor(u.id, u.role))) for (const i of o.impact) power.add(`${i.type}:${i.id}`);
     }
 
+    // the POPs' batteries (Victron): admins everything, installers only state, charge and discharging
+    const popPower = ctx.victronSync.byPop();
+    const powerOf = (popId: string) => {
+      const p = popPower.get(popId);
+      return p ? (keys ? installerPower(p) : p) : null;
+    };
+
     const apView = (a: (typeof inf.pops)[number]['aps'][number]) => {
       const c = counts.get(a.id);
       const state = apState(a.status, c);
@@ -101,6 +109,7 @@ export function networkRoutes(app: FastifyInstance, ctx: AppContext) {
           name: p.name,
           state: (aps.length && down === aps.length ? 'down' : down || aps.some((a) => a.state === 'degraded') ? 'degraded' : 'ok') as ApState,
           powerOutage: power.has(`pop:${p.id}`) || aps.some((a) => a.powerOutage),
+          power: powerOf(p.id),
           ...(keys ? {} : { lat: p.lat, lon: p.lon }),
           aps,
         };
@@ -114,7 +123,14 @@ export function networkRoutes(app: FastifyInstance, ctx: AppContext) {
       generatedAt: new Date().toISOString(),
       restricted: !!keys,
       assignedCount: keys ? keys.size : null,
-      summary: { aps: all.length, down: all.filter((a) => a.state === 'down').length, degraded: all.filter((a) => a.state === 'degraded').length, powerOutage: all.filter((a) => a.powerOutage).length },
+      summary: {
+        aps: all.length,
+        down: all.filter((a) => a.state === 'down').length,
+        degraded: all.filter((a) => a.state === 'degraded').length,
+        powerOutage: all.filter((a) => a.powerOutage).length,
+        // POPs whose battery system is in alarm or silent
+        powerAlarms: pops.filter((p) => p.power?.status === 'alarm' || p.power?.status === 'silent').length,
+      },
       pops,
       apsWithoutPop: loose,
       // how fresh the data is: when the network manager is slow or down the page shows the last

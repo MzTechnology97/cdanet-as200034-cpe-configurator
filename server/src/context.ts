@@ -9,6 +9,7 @@ import type { Uisp } from './services/uisp.ts';
 import type { Connectors } from './services/connectors.ts';
 import type { CrmSettings } from './services/crm.ts';
 import type { VrmSettings } from './services/victron.ts';
+import type { VictronSync } from './services/victron-sync.ts';
 import type { Imagery } from './services/imagery.ts';
 import type { CrmSync } from './services/crm-sync.ts';
 import type { Warehouse } from './services/warehouse.ts';
@@ -47,6 +48,8 @@ export interface AppContext {
   crm: CrmSettings;
   /** Victron VRM connector: the solar and battery systems of the POPs (admins only, read only). */
   victron: VrmSettings;
+  /** The POPs' Victron systems read every 5 minutes and the POP each one powers. */
+  victronSync: VictronSync;
   /** Aerial imagery for the admins' maps (Connettori → Immagini satellitari). */
   imagery: Imagery;
   /** RADIUS state copied from the CRM for the NOC (admins only). */
