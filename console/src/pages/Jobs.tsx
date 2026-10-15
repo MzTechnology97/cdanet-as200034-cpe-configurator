@@ -1,4 +1,5 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { AcceptanceHistory, RepointGrants } from '../jobs/AcceptanceHistory';
 import { type FormEvent, type ReactNode, useState } from 'react';
 import { toast } from '../lib/toast';
 import { isOn } from '../lib/modules';
@@ -276,6 +277,8 @@ function JobDrawer({ j, admin, onClose, onChange, onDeleted }: { j: Job; admin: 
         <section className="jb-sec">
           <h3>Collaudo</h3>
           <AcceptancePanel j={j} admin={admin} onChange={onChange} />
+          <AcceptanceHistory jobId={j.id} />
+          {admin && <RepointGrants jobId={j.id} />}
           <h4 className="jb-h4">Speedtest</h4>
           <SpeedTests jobId={j.id} />
           <ReviewPanel job={j} admin={admin} onChange={() => void onChange()} />
