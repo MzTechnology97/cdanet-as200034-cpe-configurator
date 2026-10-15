@@ -12,6 +12,12 @@ import kotlinx.coroutines.runBlocking
  */
 class FcmService : FirebaseMessagingService() {
     override fun onMessageReceived(message: RemoteMessage) {
+        // the console's test is not in the notifications (the feed has nothing new): shown as it is
+        if (message.data["kind"] == "test") {
+            val title = message.data["title"] ?: return
+            PhoneAlerts.notify(applicationContext, (System.currentTimeMillis() % 100_000).toInt() + 200_000, title, message.data["body"].orEmpty())
+            return
+        }
         val shown = runCatching { runBlocking { PhoneAlerts.check(applicationContext) } }.getOrDefault(false)
         if (!shown) {
             val title = message.data["title"] ?: return
