@@ -516,13 +516,11 @@ function InfraCard({ onSaved }: { onSaved: () => Promise<unknown> }) {
   const { inf, sel } = d;
   // the choice being made (the saved one until a box is touched)
   const chosen = edited ?? new Set(sel.items.map((i) => i.key));
-  const count = `${[...chosen].filter((k) => k.startsWith('pop:')).length} POP · ${[...chosen].filter((k) => k.startsWith('ap:')).length} AP selezionati`;
   const how = mode ?? (sel.selectionOnly ? 'only' : 'all');
   const live = new Set(itemNames(inf, []).keys());
   const gone = sel.items.filter((i) => !live.has(i.key));
   const apCount = inf.pops.reduce((t: number, p: { aps: unknown[] }) => t + p.aps.length, 0) + inf.apsWithoutPop.length;
   const selectAll = () => setEdited(new Set([...names.keys()].filter((k) => !k.startsWith('z'))));
-  const selectNone = () => setEdited(new Set());
   const save = async () => {
     if (how === 'only' && !chosen.size) throw new Error('Seleziona almeno un POP o un AP, oppure scegli "tutti"');
     await api('/api/admin/outages/selection', { method: 'PUT', body: { selectionOnly: how === 'only', items: [...chosen].map((key) => ({ key, name: names.get(key) ?? key })) } });
@@ -550,8 +548,6 @@ function InfraCard({ onSaved }: { onSaved: () => Promise<unknown> }) {
       {gone.length > 0 && <Notice tone="warn">Selezionati ma non più presenti in UISP: {gone.map((i) => i.name).join(', ')}.</Notice>}
       <div className="ui-row">
         <Button onClick={selectAll}>Seleziona tutti</Button>
-        <Button onClick={selectNone}>Nessuno</Button>
-        <span className="ui-muted ui-small">{count}</span>
       </div>
       <Picker inf={inf} chosen={chosen} onChange={setEdited} cascade />
       <div className="ui-row">
