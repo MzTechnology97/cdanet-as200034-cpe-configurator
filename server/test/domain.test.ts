@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { randomBytes } from 'node:crypto';
 import { describe, it } from 'node:test';
 import { createSealer, hashPassword, md5Crypt, verifyPassword } from '../src/crypto.ts';
-import { customerNameFromRadius, deviceNameFromCustomer, formalCustomerName, parseClientHeader, parseMac, ssidFor, versionAtLeast, SSID_RX } from '../src/domain/policy.ts';
+import { customerNameFromRadius, deviceNameFromCustomer, formalCustomerName, macSiblings, parseClientHeader, parseMac, ssidFor, versionAtLeast, SSID_RX } from '../src/domain/policy.ts';
 import { parseKeyValues, readonlyCommand, redactRouterOs, summarize } from '../src/domain/routeros.ts';
 import { inspectTemplate, renderSystemCfg, setKey } from '../src/domain/systemcfg.ts';
 import { parseScanCidr, isPrivateIPv4 } from '../src/net/ip.ts';
@@ -51,6 +51,9 @@ describe('policy', () => {
     assert.equal(formalCustomerName({ type: 'business', business_name: 'Bar Sport Srl', first_name: 'Mario', last_name: 'Rossi' }), 'Bar Sport Srl');
     assert.equal(formalCustomerName({ type: 'association', business_name: 'Pro Loco' }), 'Pro Loco');
     assert.equal(formalCustomerName({ type: 'private', customer_name: 'Anna Bianchi' }), 'Anna Bianchi');
+    // the LAN and radio MACs of one airMAX CPE differ by one in the fourth byte
+    assert.deepEqual(macSiblings('1C:6A:1B:CB:95:C3'), ['1C:6A:1B:CA:95:C3', '1C:6A:1B:CC:95:C3']);
+    assert.deepEqual(macSiblings('1C:6A:1B:00:95:C3'), ['1C:6A:1B:01:95:C3']);
   });
   it('accepts MAC addresses with or without separators', () => {
     for (const v of ['24A43C112233', '24a43c112233', '24:a4:3c:11:22:33', '24-A4-3C-11-22-33', '24a4.3c11.2233', ' 24 A4 3C 11 22 33 ']) {

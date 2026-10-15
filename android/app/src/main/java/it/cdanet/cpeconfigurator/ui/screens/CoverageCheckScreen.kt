@@ -465,6 +465,8 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                 )
             }
         }
+        // admins: the other operators at the same point (FTTH, FTTC, radio), by AGCOM sticker, on request
+        if (admin && p != null) OperatorsCoverageCard(c, p.lat, p.lon)
     }
     val linkAp = los?.let { id -> result?.aps?.firstOrNull { it.id == id } }
     linkAp?.let { ap ->

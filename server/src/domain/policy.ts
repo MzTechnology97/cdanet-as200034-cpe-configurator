@@ -64,6 +64,19 @@ export function customerNameFromRadius(username: string): string {
 }
 
 /**
+ * The other MACs of the same airMAX CPE: its LAN and radio interfaces differ by one in the fourth
+ * byte (label/radio 1C:6A:1B:CA:95:C3, LAN 1C:6A:1B:CB:95:C3, field report 15/10/2026).
+ */
+export function macSiblings(mac: string): string[] {
+  const parts = mac.split(':');
+  if (parts.length !== 6) return [];
+  const b = parseInt(parts[3] as string, 16);
+  return [b - 1, b + 1]
+    .filter((x) => x >= 0 && x <= 255)
+    .map((x) => [...parts.slice(0, 3), x.toString(16).toUpperCase().padStart(2, '0'), ...parts.slice(4)].join(':'));
+}
+
+/**
  * A name as the CPE's device name (system name): uppercase letters, digits and single spaces only,
  * since airOS takes nothing else there. «D'Angelo & Figli S.r.l.» → «D ANGELO FIGLI S R L»,
  * «Niccolò Cutrò» → «NICCOLO CUTRO».

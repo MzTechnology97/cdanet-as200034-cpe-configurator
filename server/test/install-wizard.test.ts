@@ -48,6 +48,9 @@ describe('Installazione guidata: cambio AP e CPE già installate', () => {
     assert.equal(found.deviceName, 'ROSSI MARIO');
     assert.equal((await lookup(other, 'AABBCCDDEEFF')).json().job, null, 'other installers do not see it');
     assert.equal((await lookup(admin, 'AABBCCDDEEFF')).json().job.id, job.jobId);
+    // the CPE answers with its LAN MAC (fourth byte + 1): the installation of its label MAC is found
+    assert.equal((await lookup(tec, 'AA:BB:CC:DE:EE:FF')).json().job.id, job.jobId);
+    assert.equal((await lookup(tec, 'AA:BB:CC:DF:EE:FF')).json().job, null, 'two bytes apart: another CPE');
     assert.equal((await lookup(tec, 'nonunmac')).statusCode, 400);
 
     // assigned to another installer: lookup and new acceptance test allowed

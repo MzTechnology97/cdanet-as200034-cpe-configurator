@@ -113,6 +113,8 @@ data class InstallState(
     val job: JobDto? = null,
     /** Repointing: the CPE MACs were looked up (job may still be null: unknown to the app). */
     val jobLooked: Boolean = false,
+    /** The lookup could not reach the server (no Internet here): not the same as «not found». */
+    val jobLookupFailed: Boolean = false,
     /** SSID the CPE must be on (provisioned or chosen in the "Aggancio" step). */
     val expectedSsid: String? = null,
     /** The acceptance test was opened by itself at the last step (only once: back from it, the summary stays). */
@@ -195,9 +197,11 @@ class InstallController(
             // the step was left before the answer: not «looked», the next step tries again
             throw e
         } catch (_: Exception) {
-            null
+            // no answer (customer's Wi-Fi without Internet, weak mobile data): asked again when online
+            _state.update { it.copy(jobLooked = true, jobLookupFailed = true) }
+            return
         }
-        _state.update { it.copy(job = job ?: it.job, jobLooked = true) }
+        _state.update { it.copy(job = job ?: it.job, jobLooked = true, jobLookupFailed = false) }
     }
 
     suspend fun survey() {
