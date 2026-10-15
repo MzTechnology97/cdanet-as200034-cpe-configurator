@@ -43,8 +43,10 @@ import androidx.compose.ui.unit.sp
 import it.cdanet.cpeconfigurator.core.AppContainer
 import it.cdanet.cpeconfigurator.data.CalendarDto
 import it.cdanet.cpeconfigurator.data.WorkOrderDto
+import it.cdanet.cpeconfigurator.ui.Banner
 import it.cdanet.cpeconfigurator.ui.Dropdown
 import it.cdanet.cpeconfigurator.ui.ErrorBanner
+import it.cdanet.cpeconfigurator.ui.GoodGreen
 import it.cdanet.cpeconfigurator.ui.NoticeKind
 import it.cdanet.cpeconfigurator.ui.PrimaryButton
 import it.cdanet.cpeconfigurator.ui.SecondaryButton
@@ -59,6 +61,7 @@ import java.time.YearMonth
 import java.time.format.DateTimeFormatter
 import java.time.temporal.TemporalAdjusters
 import java.util.Locale
+import kotlinx.coroutines.launch
 
 enum class CalView { Day, Week, Month }
 
@@ -152,7 +155,8 @@ private fun statusLabel(o: WorkOrderDto): Pair<String, NoticeKind>? = when {
 /**
  * Calendario degli interventi, as in Google Calendar: day, week and month. An installer sees their
  * own orders; an admin (NOC) everyone's, or one installer's. A tap on an order opens its details,
- * with «Inizia» on the day it is due.
+ * with «Inizia» on the day it is due. The NOC also plans here: «Nuovo intervento» or a tap on a free
+ * hour creates one, «Modifica o sposta» changes day, time and installer, «Annulla intervento».
  */
 @Composable
 fun CalendarScreen(c: AppContainer, onOpen: (Dest) -> Unit) {
@@ -162,15 +166,28 @@ fun CalendarScreen(c: AppContainer, onOpen: (Dest) -> Unit) {
     var data by remember { mutableStateOf<CalendarDto?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var open by remember { mutableStateOf<WorkOrderDto?>(null) }
+    // the NOC's editor: the draft and the order it changes (null = a new one)
+    var editing by remember { mutableStateOf<Pair<OrderDraft, WorkOrderDto?>?>(null) }
+    var saved by remember { mutableStateOf(0) }
+    var notice by remember { mutableStateOf<String?>(null) }
     val refresh by c.refresh.collectAsState()
     val (from, to) = CalendarMath.range(view, anchor)
-    LaunchedEffect(from, to, user, refresh) {
+    LaunchedEffect(from, to, user, refresh, saved) {
         runCatching { c.api.workOrderCalendar(from.toString(), to.toString(), user) }
             .onSuccess { data = it; error = null }
             .onFailure { error = "Calendario non aggiornato: ${it.message ?: "nessuna rete"}" }
     }
     val items = data?.takeIf { it.from <= from.toString() && it.to >= to.toString() }?.items.orEmpty()
     val today = data?.today?.takeIf { it.isNotBlank() }?.let { LocalDate.parse(it) } ?: LocalDate.now()
+    val planner = data?.installers != null
+    val create: (LocalDate, Int?) -> Unit = { d, h -> editing = OrderDraftMath.at(d, h, user) to null }
+    // «Nuovo intervento» from Oggi opens the calendar with the editor
+    LaunchedEffect(planner) {
+        if (planner && c.calendarNewOrder) {
+            c.calendarNewOrder = false
+            create(anchor, null)
+        }
+    }
 
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         Segmented(listOf(CalView.Day to "Giorno", CalView.Week to "Settimana", CalView.Month to "Mese"), view, { view = it })
@@ -184,17 +201,19 @@ fun CalendarScreen(c: AppContainer, onOpen: (Dest) -> Unit) {
             val all = listOf<Pair<Long?, String>>(null to "Tutti gli installatori") + list.map { it.id to it.username }
             Dropdown("Installatore", all, all.firstOrNull { it.first == user } ?: all.first(), { it.second }, { user = it.first }, Modifier.fillMaxWidth())
         }
+        if (planner) PrimaryButton(onClick = { create(anchor, null) }, modifier = Modifier.fillMaxWidth()) { Text("Nuovo intervento") }
         ErrorBanner(error) { error = null }
+        notice?.let { Banner(it, GoodGreen) }
         when (view) {
             CalView.Day -> {
                 Untimed(items.filter { it.day == anchor.toString() }) { open = it }
-                Timeline(listOf(anchor), items, today, showAssignee = data?.installers != null) { open = it }
+                Timeline(listOf(anchor), items, today, showAssignee = planner, onEmpty = if (planner) create else null) { open = it }
             }
             CalView.Week -> {
                 val days = (0L until 7L).map { CalendarMath.weekStart(anchor).plusDays(it) }
                 WeekHeader(days, today) { d -> anchor = d; view = CalView.Day }
                 Untimed(items.filter { o -> days.any { it.toString() == o.day } }, withDay = true) { open = it }
-                Timeline(days, items, today, showAssignee = false) { open = it }
+                Timeline(days, items, today, showAssignee = false, onEmpty = if (planner) create else null) { open = it }
             }
             CalView.Month -> {
                 MonthGrid(YearMonth.from(anchor), anchor, today, items) { d -> anchor = d }
@@ -205,12 +224,29 @@ fun CalendarScreen(c: AppContainer, onOpen: (Dest) -> Unit) {
             }
         }
         Text(
-            "Colori: arancio nuova installazione, blu ripuntamento, giallo riparazione, verde sopralluogo. Gli interventi fatti sono sbiaditi.",
+            "Colori: arancio nuova installazione, blu ripuntamento, giallo riparazione, verde sopralluogo. Gli interventi fatti sono sbiaditi." +
+                if (planner) " Tocca un'ora libera per creare un intervento lì." else "",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-    open?.let { o -> OrderDialog(c, o, today, onOpen) { open = null } }
+    open?.let { o ->
+        OrderDialog(
+            c, o, today, onOpen,
+            onEdit = if (planner && o.status != "done") ({ open = null; editing = OrderDraftMath.of(o) to o }) else null,
+            onCancelled = if (planner) ({ open = null; notice = "Intervento annullato: ${o.customer}."; saved++ }) else null,
+        ) { open = null }
+    }
+    editing?.let { (draft, original) ->
+        WorkOrderEditor(c, draft, original, data?.installers.orEmpty(), onClose = { editing = null }) { item ->
+            editing = null
+            notice = (if (original == null) "Intervento creato" else "Intervento aggiornato") + ": ${item.customer}, " +
+                LocalDate.parse(item.day).format(DateTimeFormatter.ofPattern("EEE d MMM", Locale.ITALIAN)) + (if (item.slot.isNotBlank()) " ${item.slot}" else "") + "."
+            // the calendar goes where the order now is
+            anchor = LocalDate.parse(item.day)
+            saved++
+        }
+    }
 }
 
 @Composable
@@ -278,7 +314,7 @@ private val HOUR = 56.dp
 
 /** Hours down the side, one column per day, each order a block from its start to its end. */
 @Composable
-private fun Timeline(days: List<LocalDate>, items: List<WorkOrderDto>, today: LocalDate, showAssignee: Boolean, onTap: (WorkOrderDto) -> Unit) {
+private fun Timeline(days: List<LocalDate>, items: List<WorkOrderDto>, today: LocalDate, showAssignee: Boolean, onEmpty: ((LocalDate, Int) -> Unit)? = null, onTap: (WorkOrderDto) -> Unit) {
     val timed = items.mapNotNull { o -> CalendarMath.slotMinutes(o.slot)?.let { o to it } }.filter { (o, _) -> days.any { it.toString() == o.day } }
     val first = (timed.minOfOrNull { it.second.first / 60 } ?: 8).coerceAtMost(7)
     val last = (timed.maxOfOrNull { (it.second.second + 59) / 60 } ?: 19).coerceAtLeast(20)
@@ -297,6 +333,10 @@ private fun Timeline(days: List<LocalDate>, items: List<WorkOrderDto>, today: Lo
                 // where the day is now: a line across today's column
                 if (d == today && now.hour in first until last) {
                     HorizontalDivider(Modifier.offset(y = HOUR * (now.hour - first) + HOUR * now.minute / 60f), thickness = 2.dp, color = Tone.Bad.colors.content)
+                }
+                // the NOC: a tap on a free hour plans an order there (the orders drawn after take their own taps)
+                if (onEmpty != null) for (h in first until last) {
+                    Box(Modifier.offset(y = HOUR * (h - first)).fillMaxWidth().height(HOUR).clickable { onEmpty(d, h) })
                 }
                 val day = timed.filter { it.first.day == d.toString() }
                 val (lane, lanes) = CalendarMath.lanes(day.map { it.second })
@@ -378,8 +418,19 @@ private fun AgendaRow(o: WorkOrderDto, showAssignee: Boolean, onTap: () -> Unit)
 }
 
 @Composable
-private fun OrderDialog(c: AppContainer, o: WorkOrderDto, today: LocalDate, onOpen: (Dest) -> Unit, onClose: () -> Unit) {
+private fun OrderDialog(
+    c: AppContainer,
+    o: WorkOrderDto,
+    today: LocalDate,
+    onOpen: (Dest) -> Unit,
+    onEdit: (() -> Unit)? = null,
+    onCancelled: (() -> Unit)? = null,
+    onClose: () -> Unit,
+) {
     val context = LocalContext.current
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
+    var askCancel by remember { mutableStateOf(false) }
+    var failed by remember { mutableStateOf<String?>(null) }
     val me = c.session.state.collectAsState().value?.user?.id
     // «Inizia» on the order's day (or late), for the installer it is assigned to, until it is done
     val canStart = o.status != "done" && o.status != "cancelled" && LocalDate.parse(o.day) <= today && (o.assignedTo == null || o.assignedTo == me?.toLong())
@@ -403,6 +454,12 @@ private fun OrderDialog(c: AppContainer, o: WorkOrderDto, today: LocalDate, onOp
                 if (o.statusNote.isNotBlank()) Text("Nota: ${o.statusNote}", style = MaterialTheme.typography.bodySmall)
                 statusLabel(o)?.let { (s, k) -> StatusChip(s, k) }
                 if (o.id in c.provisioning.field.ready.collectAsState().value) StatusChip("pronto offline", NoticeKind.Good)
+                // the NOC plans from here too
+                if (onEdit != null || onCancelled != null) Row {
+                    onEdit?.let { TextButton(onClick = it) { Text("Modifica o sposta") } }
+                    if (onCancelled != null && o.status != "done") TextButton(onClick = { askCancel = true }) { Text("Annulla intervento", color = MaterialTheme.colorScheme.error) }
+                }
+                failed?.let { Text(it, color = MaterialTheme.colorScheme.error, style = MaterialTheme.typography.bodySmall) }
             }
         },
         confirmButton = {
@@ -416,4 +473,22 @@ private fun OrderDialog(c: AppContainer, o: WorkOrderDto, today: LocalDate, onOp
             }
         },
     )
+    if (askCancel) {
+        AlertDialog(
+            onDismissRequest = { askCancel = false },
+            title = { Text("Annullare l'intervento?") },
+            text = { Text("${o.customer} sparisce dal calendario e dall'app di ${o.assignee ?: "chi lo aveva"}. Se ha già portato a un'installazione resta nello storico.") },
+            confirmButton = {
+                TextButton(onClick = {
+                    askCancel = false
+                    scope.launch {
+                        runCatching { c.api.deleteWorkOrder(o.id) }
+                            .onSuccess { onCancelled?.invoke() }
+                            .onFailure { failed = it.message ?: "Annullamento non riuscito" }
+                    }
+                }) { Text("Annulla intervento", color = MaterialTheme.colorScheme.error) }
+            },
+            dismissButton = { TextButton(onClick = { askCancel = false }) { Text("Tienilo") } },
+        )
+    }
 }

@@ -69,6 +69,9 @@ class AppContainer(context: Context) {
      * admins, and the installers enabled one by one). The last answer stays on the phone, so the
      * block holds offline and from the very first frame.
      */
+    /** «Nuovo intervento» from Oggi (NOC): the calendar opens with the editor. */
+    var calendarNewOrder = false
+
     val secureScreen = kotlinx.coroutines.flow.MutableStateFlow(screenPrefs.getBoolean("secure", false))
 
     /** Title of the screen on show (for the NOC's notice of a screenshot attempt). */
