@@ -115,6 +115,7 @@ enum class Screen(val title: String, val scroll: Boolean = true, val wide: Boole
     Provision("Installazione CPE"),
     CpeWeb("Primo avvio airOS", scroll = false),
     Wifi("Wi-Fi Analyzer"),
+    Speedtest("Speedtest"),
     Network("Strumenti di rete"),
     Discovery("Discovery LAN"),
     Coverage("Copertura"),
@@ -261,6 +262,7 @@ fun AppRoot(c: AppContainer) {
                     if (c.resultQueue.pending.value.isNotEmpty()) runCatching { c.resultQueue.sync() }
                     if (c.acceptanceQueue.pending.value.isNotEmpty()) runCatching { c.acceptanceQueue.sync() }
                     session?.user?.id?.let { c.captureReports.send(it) }
+                    runCatching { c.speedtests.sendPending() }
                     // back on the network after a roof without signal: the warehouse is read again
                     if (c.provisioning.stock.olderThan(java.time.Duration.ofMinutes(30))) runCatching { c.provisioning.stock.refresh(c.api) }
                 }
@@ -470,6 +472,7 @@ fun AppRoot(c: AppContainer) {
                     }
                     Screen.CpeWeb -> WifiRequired(c, "alla Wi-Fi di management della CPE", "Il primo avvio si fa sull'interfaccia web della CPE, raggiungibile solo in rete locale.") { CpeWebScreen(c) }
                     Screen.Wifi -> WifiScreen(c)
+                    Screen.Speedtest -> it.cdanet.cpeconfigurator.ui.screens.SpeedtestToolScreen(c)
                     Screen.Network -> NetworkScreen(c)
                     Screen.Discovery -> WifiRequired(c, "alla Wi-Fi della rete locale da analizzare", "La discovery funziona solo sulla stessa LAN.") { DiscoveryScreen(c) }
                     Screen.Coverage -> CoverageCheckScreen(
@@ -586,6 +589,7 @@ private fun toolGroups(m: Map<String, Boolean>, offline: Boolean, go: (Screen) -
         "Rete del cliente" to listOfNotNull(
             if (net) ToolEntry("Scansione LAN", "Host attivi, topologia, discovery multi-vendor, porte", R.drawable.ic_radar) { go(Screen.Lan) } else null,
             if (net) ToolEntry("Wi-Fi Analyzer", "Reti, canali e consiglio per il router del cliente", R.drawable.ic_wifi_find) { go(Screen.Wifi) } else null,
+            if (net && !offline) ToolEntry("Speedtest", "Download, upload e ping sulla Wi-Fi del cliente, verso il server CDA Net", R.drawable.ic_speed) { go(Screen.Speedtest) } else null,
             if (net) ToolEntry("Diagnostica di rete", "Ping, traceroute, DNS, speed test, MTU, HTTP, Wake-on-LAN", R.drawable.ic_speed) { go(Screen.Diag) } else null,
             if (net) ToolEntry("Apparati in LAN", "SNMP e telecamere (ONVIF, Hikvision, RTSP)", R.drawable.ic_memory) { go(Screen.Devices) } else null,
             if (m["routeros"] != false) ToolEntry("MikroTik · RouterOS", "Consultazione in sola lettura via SSH", R.drawable.ic_router) { go(Screen.RouterOs) } else null,

@@ -402,34 +402,4 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
         }
         return withContext(Dispatchers.IO) { if (viaWifi) network.onWifi(block) else block() }
     }
-
-    /** Throughput against the CDA Net server (authenticated endpoints). */
-    suspend fun speedTest(): ToolResult = io {
-        val base = api.base()
-        val http = OkHttpClient.Builder().connectTimeout(8, TimeUnit.SECONDS).readTimeout(30, TimeUnit.SECONDS).writeTimeout(30, TimeUnit.SECONDS).build()
-        fun req(path: String) = Request.Builder().url(base + path).header("Cache-Control", "no-store").also { b -> session.token?.let { b.header("Authorization", "Bearer $it") } }
-        val pings = (1..5).map {
-            val t = System.nanoTime()
-            http.newCall(req("/api/tools/speed/ping").build()).execute().use { r -> if (!r.isSuccessful) throw IOException("Speed test HTTP ${r.code}: accedi al server") }
-            (System.nanoTime() - t) / 1e6
-        }
-        var t = System.nanoTime()
-        val bytes = http.newCall(req("/api/tools/speed/download?bytes=${16 * 1024 * 1024}").build()).execute().use { r -> r.body?.bytes()?.size ?: 0 }
-        val down = bytes * 8 / ((System.nanoTime() - t) / 1e9) / 1e6
-        val payload = ByteArray(8 * 1024 * 1024)
-        t = System.nanoTime()
-        http.newCall(req("/api/tools/speed/upload").post(payload.toRequestBody("application/octet-stream".toMediaType())).build()).execute().close()
-        val up = payload.size * 8 / ((System.nanoTime() - t) / 1e9) / 1e6
-        val jitter = pings.zipWithNext { a, b -> kotlin.math.abs(b - a) }.average()
-        ToolResult(
-            rows = listOf(
-                "Download" to "%.1f Mbps".format(down),
-                "Upload" to "%.1f Mbps".format(up),
-                "Ping" to "%.0f ms".format(pings.average()),
-                "Jitter" to "%.0f ms".format(jitter),
-                "Server" to base,
-            ),
-            note = "Misura tra questo telefono e il server CDA Net.",
-        )
-    }
 }

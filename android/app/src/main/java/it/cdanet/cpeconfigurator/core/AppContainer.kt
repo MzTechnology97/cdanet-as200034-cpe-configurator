@@ -96,6 +96,9 @@ class AppContainer(context: Context) {
     /** Title of the screen on show (for the NOC's notice of a screenshot attempt). */
     val currentScreen = kotlinx.coroutines.flow.MutableStateFlow("")
 
+    /** Speed tests on the customer's Wi-Fi: server settings, the test, results kept until sent. */
+    val speedtests = it.cdanet.cpeconfigurator.tools.speedtest.Speedtests(appContext.getSharedPreferences("speedtest", Context.MODE_PRIVATE), api, network)
+
     /** Screenshots and recordings seen on a blocked account, kept until the NOC has them. */
     val captureReports = CaptureReports(screenPrefs, api)
 

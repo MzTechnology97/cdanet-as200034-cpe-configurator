@@ -138,6 +138,7 @@ fun InstallScreen(
             InstallStep.Verify -> CpeStep(c) { VerifyStep(c, mode) }
             InstallStep.Link -> CpeStep(c) { LinkStep(c) }
             InstallStep.Aim -> CpeStep(c) { AimStep(c, onAim, onCompass, onPointing, onAlignment) }
+            InstallStep.Router -> RouterSpeedStep(c) { c.install.next() }
             InstallStep.Final -> FinalStep(c, onAcceptance)
         }
     }
@@ -499,7 +500,8 @@ private fun VerifyStep(c: AppContainer, mode: InstallMode) {
     val st by c.install.state.collectAsState()
     FieldConnection(c, FieldMode.Alignment)
     val s = f.status ?: return
-    LaunchedEffect(s.macs) { if (mode == InstallMode.Repoint) c.install.lookupJob(s.macs) }
+    // in the app's scope: leaving the step quickly must not cancel the lookup
+    LaunchedEffect(s.macs) { if (mode == InstallMode.Repoint) c.scope.launch { c.install.lookupJob(s.macs) } }
 
     SectionCard("CPE collegata") {
         KeyValue("Nome", s.hostname ?: "—")
@@ -735,7 +737,7 @@ private fun AimStep(c: AppContainer, onAim: (CompassTarget) -> Unit, onCompass: 
         if (c.moduleOn("field_alignment")) TextButton(onClick = onAlignment) { Text("Puntamento a schermo intero") }
     }
     SecondaryButton(onClick = { c.field.resetPeak() }) { Text("Azzera picco e grafico") }
-    NextButton(c, "Avanti: verifica finale")
+    NextButton(c, "Avanti: router e velocità")
 }
 
 // ---- 6 · Verifica finale e collaudo ---------------------------------------------------------

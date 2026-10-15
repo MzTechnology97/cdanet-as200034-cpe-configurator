@@ -89,6 +89,7 @@ fun screenIcon(s: Screen): Int? = when (s) {
     Screen.Alignment -> R.drawable.ic_signal_cellular_alt
     Screen.Diagnosis -> R.drawable.ic_troubleshoot
     Screen.Wifi -> R.drawable.ic_wifi_find
+    Screen.Speedtest -> R.drawable.ic_speed
     Screen.Network, Screen.Diag -> R.drawable.ic_speed
     Screen.IpScanner, Screen.Lan -> R.drawable.ic_radar
     Screen.PortScanner -> R.drawable.ic_manage_search
@@ -565,11 +566,13 @@ internal fun startOrder(c: AppContainer, o: it.cdanet.cpeconfigurator.data.WorkO
         "new" -> {
             c.provisioning.startWorkOrder(o)
             c.install.start(InstallMode.New)
+            c.install.workOrder(o.id)
             onOpen(Dest(Screen.Provision))
         }
         "survey" -> onOpen(Dest(Screen.NetHub, "AP vicini"))
         else -> {
             c.install.start(InstallMode.Repoint)
+            c.install.workOrder(o.id)
             onOpen(Dest(Screen.Provision))
         }
     }

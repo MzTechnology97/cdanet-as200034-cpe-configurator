@@ -42,7 +42,6 @@ import it.cdanet.cpeconfigurator.field.AcceptanceReport
 import it.cdanet.cpeconfigurator.field.AirosStatus
 import it.cdanet.cpeconfigurator.field.FieldDiagnosis
 import it.cdanet.cpeconfigurator.field.FieldMode
-import it.cdanet.cpeconfigurator.field.InternetProbe
 import it.cdanet.cpeconfigurator.field.InternetTest
 import it.cdanet.cpeconfigurator.field.PhotoCapture
 import it.cdanet.cpeconfigurator.ui.BadRed
@@ -80,7 +79,9 @@ fun AcceptanceScreen(c: AppContainer) {
     val samples = remember { mutableStateListOf<AirosStatus>() }
     var measuring by remember { mutableStateOf(false) }
     var internet by remember { mutableStateOf<InternetTest?>(null) }
-    var testingInternet by remember { mutableStateOf(false) }
+    // the speed test done in this screen (the router step's one comes from the installation)
+    var speed by remember { mutableStateOf<it.cdanet.cpeconfigurator.field.AcceptanceSpeedtest?>(null) }
+    var speedAttempts by remember { mutableStateOf(0) }
     val photos = remember { mutableStateListOf<PendingPhoto>() }
     var notes by remember { mutableStateOf("") }
     // height of the CPE above the ground: every installation is different, the technician types it
@@ -130,8 +131,13 @@ fun AcceptanceScreen(c: AppContainer) {
         c.field.start(FieldMode.Alignment)
     }
 
+    // the router step of this installation: its speed test and the customer's Wi-Fi go into the report
+    val router = c.install.state.collectAsState().value.takeIf { it.job?.id == j.id }?.router
     val report: AcceptanceReport? = if (samples.size >= Acceptance.SAMPLES) {
-        Acceptance.build(samples.toList(), c.field.thresholds, c.field.targetFirmware, internet ?: InternetTest(false, note = "Non misurato"), notes, cpeHeightM = cpeHeight)
+        Acceptance.build(
+            samples.toList(), c.field.thresholds, c.field.targetFirmware, internet ?: InternetTest(false, note = "Non misurato"), notes,
+            cpeHeightM = cpeHeight, speedtest = speed ?: router?.speedtest(), wifi = router?.wifiReport(),
+        )
     } else {
         null
     }
@@ -178,22 +184,19 @@ fun AcceptanceScreen(c: AppContainer) {
         }
 
         SectionCard("2 · Internet dal lato cliente") {
-            Text("Collega il telefono alla Wi-Fi del router del cliente: velocità e ping verso il server CDA Net passano dalla nuova linea.", style = MaterialTheme.typography.bodySmall)
-            internet?.let { i ->
-                if (i.tested) {
-                    KeyValue("Download", "%.1f Mbit/s".format(i.downloadMbps ?: 0.0))
-                    KeyValue("Upload", "%.1f Mbit/s".format(i.uploadMbps ?: 0.0))
-                    KeyValue("Ping / jitter", "%.0f / %.0f ms".format(i.pingMs ?: 0.0, i.jitterMs ?: 0.0))
-                } else {
-                    Text(i.note ?: "Non misurato", color = WarnAmber)
-                }
+            Text("Speedtest verso il server CDA Net sulla Wi-Fi del router del cliente: mai con i dati mobili.", style = MaterialTheme.typography.bodySmall)
+            val routerDone = router?.last
+            if (routerDone != null && speed == null) {
+                Text("Speedtest già fatto al passo «Router e velocità»: lo trovi nel collaudo. Puoi ripeterlo qui.", style = MaterialTheme.typography.bodySmall)
             }
-            BusyButton("Misura Internet", testingInternet, Modifier.fillMaxWidth(), primary = false) {
-                scope.launch {
-                    testingInternet = true
-                    internet = InternetProbe.measure(c.network, c.api.base(), c.session.token)
-                    testingInternet = false
-                }
+            it.cdanet.cpeconfigurator.ui.screens.SpeedtestRunner(c, it.cdanet.cpeconfigurator.tools.speedtest.SpeedtestSubject("acceptance", jobId = j.id, mac = j.mac.ifBlank { null }), speedAttempts) { r, target, passed ->
+                speedAttempts++
+                speed = it.cdanet.cpeconfigurator.field.AcceptanceSpeedtest(
+                    downMbps = Math.round(r.downMbps * 10) / 10.0, upMbps = Math.round(r.upMbps * 10) / 10.0,
+                    pingMs = Math.round(r.pingMs * 10) / 10.0, jitterMs = Math.round(r.jitterMs * 10) / 10.0,
+                    server = r.server, attempts = speedAttempts, target = target, passed = passed,
+                )
+                internet = InternetTest(true, r.pingMs, r.jitterMs, r.downMbps, r.upMbps, note = "Speedtest")
             }
         }
 
