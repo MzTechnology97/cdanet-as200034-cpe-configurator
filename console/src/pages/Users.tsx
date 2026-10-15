@@ -2,15 +2,16 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { type FormEvent, useState } from 'react';
 import { toast } from '../lib/toast';
 import { loadModules } from '../lib/modules';
-import { Assignments } from '../infra/Assignments';
+import { AssignTab, CoverageByPop, InstallerClientsRule, useAssignments } from '../infra/Assignments';
+import { countLabel } from '../infra/Picker';
 import { api } from '../lib/api';
 import type { PageContext, User } from '../shell/routes';
-import { AsyncButton, Badge, Button, Card, Drawer, Field, Icon, Notice, PageHeader, Skeleton, Table } from '../ui';
+import { AsyncButton, Badge, Button, Card, Drawer, Field, Icon, Notice, PageHeader, Segmented, Skeleton, Table, Tabs } from '../ui';
 
 /**
  * Account (admins): installers and administrators. Disabling an account and resetting its password
  * or its two-step verification close its sessions at once. Per-user modules and templates, the
- * security policy and the POP/AP assigned to each installer are here too.
+ * security policy and the POP/AP assigned to each installer (a tab of the account) are here too.
  */
 
 interface Account {
@@ -54,6 +55,11 @@ export function Users({ user: me }: PageContext) {
   const [open, setOpen] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [text, setText] = useState('');
+  const [show, setShow] = useState<'all' | 'installer' | 'admin' | 'off'>('all');
+  const [view, setView] = useState<'accounts' | 'pops'>('accounts');
+  const [openTab, setOpenTab] = useState<'access' | 'infra'>('access');
+  const assignments = useAssignments();
+  const assigned = new Map((assignments.data?.users ?? []).map((a) => [a.id, a.items.map((i) => i.key)]));
   const reload = () => qc.invalidateQueries({ queryKey: ['admin', 'users'] });
 
   const setPolicy = async (on: boolean) => {
@@ -67,7 +73,10 @@ export function Users({ user: me }: PageContext) {
   };
 
   const t = text.trim().toLowerCase();
-  const rows = (users.data ?? []).filter((u) => !t || u.username.toLowerCase().includes(t));
+  const rows = (users.data ?? []).filter(
+    (u) => (!t || u.username.toLowerCase().includes(t) || (u.warehouseSite ?? '').toLowerCase().includes(t)) && (show === 'all' || (show === 'off' ? !u.active : u.active && u.role === show)),
+  );
+  const n = (pred: (u: Account) => boolean) => (users.data ?? []).filter(pred).length;
   const current = users.data?.find((u) => u.id === open) ?? null;
 
   return (
@@ -82,7 +91,7 @@ export function Users({ user: me }: PageContext) {
           </Button>
         }
       />
-      <Card title="Sicurezza">
+      <Card title="Regole">
         {security.data ? (
           <label className="ui-check">
             <input type="checkbox" checked={security.data.totpRequiredForAdmins} onChange={(e) => void setPolicy(e.target.checked)} />
@@ -92,42 +101,87 @@ export function Users({ user: me }: PageContext) {
           <Skeleton lines={1} />
         )}
         <p className="ui-muted ui-small us-p">Gli admin senza 2FA potranno solo attivarla da «Il mio account». Per abilitarla devi averla già attiva tu. Gli installatori possono attivarla quando vogliono.</p>
+        <InstallerClientsRule />
       </Card>
 
-      {users.error ? (
-        <Notice tone="bad">{(users.error as Error).message}</Notice>
-      ) : !users.data ? (
-        <Skeleton lines={6} />
-      ) : (
+      <Tabs
+        value={view}
+        onChange={setView}
+        tabs={[
+          { value: 'accounts', label: 'Account' },
+          { value: 'pops', label: 'POP/AP: chi li copre' },
+        ]}
+      />
+      {view === 'pops' ? (
         <Card padded={false}>
-          <div className="us-head">
-            <label className="hl-search">
-              <Icon name="search" />
-              <input type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder="Cerca un account" aria-label="Cerca" />
-            </label>
-            <span className="ui-muted ui-small">
-              {users.data.length} account · {users.data.filter((u) => u.active).length} attivi
-            </span>
-          </div>
-          <Table
-            rows={rows}
-            rowKey={(u) => u.id}
-            onRow={(u) => setOpen(u.id)}
-            empty="Nessun account trovato."
-            columns={[
-              { label: 'Username', render: (u) => <strong>{u.username}</strong> },
-              { label: 'Ruolo', render: (u) => <Badge tone={u.role === 'admin' ? 'warn' : 'neutral'}>{u.role === 'admin' ? 'Admin' : 'Installatore'}</Badge> },
-              { label: 'Stato', render: (u) => <Badge tone={u.active ? 'good' : 'bad'}>{u.active ? 'Attivo' : 'Disabilitato'}</Badge> },
-              { label: '2FA', render: (u) => (u.totpEnabled ? <Badge tone="good">attiva</Badge> : u.role === 'admin' ? <Badge tone="warn">no</Badge> : '—') },
-              { label: 'Magazzino', render: (u) => (u.warehouseSite ? <span className="ui-small">{u.warehouseSite}{u.stockBypass ? ' · anche fuori magazzino' : ''}</span> : <span className="ui-muted">—</span>) },
-              { label: 'Ultimo accesso', render: (u) => date(u.lastLoginAt) },
-              { label: 'Provisioning', end: true, render: (u) => u.jobs },
-            ]}
+          <CoverageByPop
+            onOpen={(id) => {
+              setOpenTab('infra');
+              setOpen(id);
+            }}
           />
         </Card>
-      )}
+      ) : (
+        <>
+        {users.error ? (
+          <Notice tone="bad">{(users.error as Error).message}</Notice>
+        ) : !users.data ? (
+          <Skeleton lines={6} />
+        ) : (
+          <Card padded={false}>
+            <div className="us-head">
+              <label className="hl-search">
+                <Icon name="search" />
+                <input type="search" value={text} onChange={(e) => setText(e.target.value)} placeholder="Cerca un account" aria-label="Cerca" />
+              </label>
+              <Segmented
+                label="Mostra"
+                value={show}
+                onChange={setShow}
+                options={[
+                  { value: 'all', label: `Tutti ${users.data.length}` },
+                  { value: 'installer', label: `Installatori ${n((u) => u.active && u.role === 'installer')}` },
+                  { value: 'admin', label: `Admin ${n((u) => u.active && u.role === 'admin')}` },
+                  { value: 'off', label: `Disabilitati ${n((u) => !u.active)}` },
+                ]}
+              />
+            </div>
+            <Table
+              rows={rows}
+              rowKey={(u) => u.id}
+              onRow={(u) => {
+                    setOpenTab('access');
+                    setOpen(u.id);
+                  }}
+              empty="Nessun account trovato."
+              columns={[
+                { label: 'Username', render: (u) => <strong>{u.username}</strong> },
+                { label: 'Ruolo', render: (u) => <Badge tone={u.role === 'admin' ? 'warn' : 'neutral'}>{u.role === 'admin' ? 'Admin' : 'Installatore'}</Badge> },
+                { label: 'Stato', render: (u) => <Badge tone={u.active ? 'good' : 'bad'}>{u.active ? 'Attivo' : 'Disabilitato'}</Badge> },
+                { label: '2FA', render: (u) => (u.totpEnabled ? <Badge tone="good">attiva</Badge> : u.role === 'admin' ? <Badge tone="warn">no</Badge> : '—') },
+                {
+                  label: 'POP/AP',
+                  render: (u) =>
+                    u.role === 'admin' ? (
+                      <span className="ui-muted ui-small">tutti</span>
+                    ) : !assignments.data ? (
+                      <span className="ui-muted ui-small">…</span>
+                    ) : assigned.get(u.id)?.length ? (
+                      <span className="ui-small">{countLabel(assigned.get(u.id)!)}</span>
+                    ) : (
+                      <Badge tone="warn">nessuno</Badge>
+                    ),
+                },
+                { label: 'Magazzino', render: (u) => (u.warehouseSite ? <span className="ui-small">{u.warehouseSite}{u.stockBypass ? ' · anche fuori magazzino' : ''}</span> : <span className="ui-muted">—</span>) },
+                { label: 'Ultimo accesso', render: (u) => date(u.lastLoginAt) },
+                { label: 'Provisioning', end: true, render: (u) => u.jobs },
+              ]}
+            />
+          </Card>
+        )}
 
-      <Assignments />
+        </>
+      )}
 
       {creating && (
         <NewAccount
@@ -138,7 +192,7 @@ export function Users({ user: me }: PageContext) {
           }}
         />
       )}
-      {current && <AccountDrawer u={current} me={me} templates={(profiles.data ?? []).flatMap((m) => m.templates)} onClose={() => setOpen(null)} onChanged={reload} />}
+      {current && <AccountDrawer key={`${current.id}-${openTab}`} u={current} me={me} initialTab={current.role === 'installer' ? openTab : 'access'} templates={(profiles.data ?? []).flatMap((m) => m.templates)} onClose={() => setOpen(null)} onChanged={reload} />}
     </div>
   );
 }
@@ -196,107 +250,136 @@ function NewAccount({ onClose, onDone }: { onClose: () => void; onDone: () => Pr
   );
 }
 
-/** One account: password, two-step verification, its templates and modules, state and role. */
-function AccountDrawer({ u, me, templates, onClose, onChanged }: { u: Account; me: User; templates: Template[]; onClose: () => void; onChanged: () => Promise<void> }) {
+type AccountTab = 'access' | 'infra' | 'stock' | 'more';
+
+/** One account, in tabs: access (role, state, password, 2FA), POP/AP, warehouse, templates and features. */
+function AccountDrawer({ u, me, templates, initialTab = 'access', onClose, onChanged }: { u: Account; me: User; templates: Template[]; initialTab?: AccountTab; onClose: () => void; onChanged: () => Promise<void> }) {
   const [pw, setPw] = useState('');
+  const [tab, setTab] = useState<AccountTab>(initialTab);
   const patch = async (body: object, msg: string) => {
     await api(`/api/admin/users/${u.id}`, { method: 'PATCH', body });
     toast(msg);
     await onChanged();
   };
   const mine = templates.filter((t) => t.audience === 'users' && t.users.some((x) => x.id === u.id));
+  const installer = u.role === 'installer';
+  const tabs: Array<{ value: AccountTab; label: string }> = [
+    { value: 'access', label: 'Accesso' },
+    ...(installer
+      ? [
+          { value: 'infra' as const, label: 'POP/AP' },
+          { value: 'stock' as const, label: 'Magazzino' },
+        ]
+      : []),
+    { value: 'more', label: 'Template e funzioni' },
+  ];
   return (
     <Drawer title={`Account ${u.username}`} onClose={onClose}>
       <div className="ui-row">
         <Badge tone={u.role === 'admin' ? 'warn' : 'neutral'}>{u.role === 'admin' ? 'Admin' : 'Installatore'}</Badge>
         <Badge tone={u.active ? 'good' : 'bad'}>{u.active ? 'Attivo' : 'Disabilitato'}</Badge>
-        <span className="ui-muted ui-small">Creato {date(u.createdAt)}</span>
+        <span className="ui-muted ui-small">
+          Creato {date(u.createdAt)} · ultimo accesso {date(u.lastLoginAt)}
+        </span>
       </div>
+      <Tabs value={tab} tabs={tabs} onChange={setTab} />
 
-      <section className="us-sec">
-        <h3>Password</h3>
-        <form
-          className="us-inline"
-          onSubmit={(e) => {
-            e.preventDefault();
-          }}
-        >
-          <Field label="Nuova password" hint="Minimo 12 caratteri. Le sessioni esistenti vengono chiuse.">
-            <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" minLength={12} />
-          </Field>
-          <AsyncButton
-            type="submit"
-            onClick={async () => {
-              if (pw.length < 12) throw new Error('Password: minimo 12 caratteri');
-              await patch({ password: pw }, 'Password aggiornata: sessioni esistenti revocate');
-              setPw('');
-            }}
-            onError={fail}
-          >
-            Reimposta password
-          </AsyncButton>
-        </form>
-        {u.totpEnabled && (
-          <AsyncButton onClick={async () => confirm(`Azzerare la verifica in due passaggi di ${u.username}? (telefono perso) Le sue sessioni verranno chiuse.`) && (await patch({ resetTotp: true }, 'Verifica in due passaggi azzerata'))} onError={fail}>
-            Azzera verifica in due passaggi
-          </AsyncButton>
-        )}
-      </section>
+      {tab === 'access' && (
+        <>
+          <section className="us-sec">
+            <h3>Stato e ruolo</h3>
+            {u.id === me.id ? (
+              <p className="ui-muted ui-small">Non puoi disabilitare o declassare il tuo account.</p>
+            ) : (
+              <div className="ui-row">
+                <AsyncButton
+                  variant={u.active ? 'danger' : 'secondary'}
+                  onClick={async () => {
+                    if (u.active && !confirm(`Disabilitare ${u.username}? Le sessioni attive verranno chiuse.`)) return;
+                    await patch({ active: !u.active }, u.active ? 'Account disabilitato' : 'Account abilitato');
+                  }}
+                  onError={fail}
+                >
+                  {u.active ? 'Disabilita' : 'Abilita'}
+                </AsyncButton>
+                <AsyncButton onClick={() => patch({ role: u.role === 'admin' ? 'installer' : 'admin' }, 'Ruolo aggiornato')} onError={fail}>
+                  {u.role === 'admin' ? 'Rendi installatore' : 'Rendi admin'}
+                </AsyncButton>
+              </div>
+            )}
+          </section>
+          <section className="us-sec">
+            <h3>Password</h3>
+            <form
+              className="us-inline"
+              onSubmit={(e) => {
+                e.preventDefault();
+              }}
+            >
+              <Field label="Nuova password" hint="Minimo 12 caratteri. Le sessioni esistenti vengono chiuse.">
+                <input type="password" value={pw} onChange={(e) => setPw(e.target.value)} autoComplete="new-password" minLength={12} />
+              </Field>
+              <AsyncButton
+                type="submit"
+                onClick={async () => {
+                  if (pw.length < 12) throw new Error('Password: minimo 12 caratteri');
+                  await patch({ password: pw }, 'Password aggiornata: sessioni esistenti revocate');
+                  setPw('');
+                }}
+                onError={fail}
+              >
+                Reimposta password
+              </AsyncButton>
+            </form>
+          </section>
+          <section className="us-sec">
+            <h3>Verifica in due passaggi</h3>
+            {u.totpEnabled ? (
+              <AsyncButton onClick={async () => confirm(`Azzerare la verifica in due passaggi di ${u.username}? (telefono perso) Le sue sessioni verranno chiuse.`) && (await patch({ resetTotp: true }, 'Verifica in due passaggi azzerata'))} onError={fail}>
+                Azzera verifica in due passaggi
+              </AsyncButton>
+            ) : (
+              <p className="ui-muted ui-small">Non attiva: l’utente la attiva da «Il mio account».</p>
+            )}
+          </section>
+        </>
+      )}
 
-      {u.role === 'installer' && (
+      {tab === 'infra' && installer && <AssignTab userId={u.id} username={u.username} />}
+
+      {tab === 'stock' && installer && (
         <section className="us-sec">
-          <h3>Magazzino</h3>
           <AccountWarehouse u={u} onSave={(body) => patch(body, 'Magazzino aggiornato')} />
         </section>
       )}
 
-      <section className="us-sec">
-        <h3>Template airOS</h3>
-        {mine.length ? (
-          <ul className="ui-list ui-small">
-            {mine.map((t) => (
-              <li key={`${t.model}-${t.name}`}>
-                {t.model} · {t.name}
-                {t.defaultForAssigned ? ' (predefinito per lui/lei)' : ''}
-                {t.users.length > 1 ? ` · condiviso con ${t.users.length - 1} altri` : ''}
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="ui-muted ui-small">Usa i template visibili a tutti. Nessun template riservato.</p>
-        )}
-        <a className="ui-btn ui-btn-secondary us-link" href={`#/profiles?user=${u.id}`}>
-          Crea template personale
-        </a>
-      </section>
-
-      <section className="us-sec">
-        <h3>Funzionalità per questo utente</h3>
-        <UserModules u={u} me={me} />
-      </section>
-
-      <section className="us-sec">
-        <h3>Stato e ruolo</h3>
-        {u.id === me.id ? (
-          <p className="ui-muted ui-small">Non puoi disabilitare o declassare il tuo account.</p>
-        ) : (
-          <div className="ui-row">
-            <AsyncButton
-              variant={u.active ? 'danger' : 'secondary'}
-              onClick={async () => {
-                if (u.active && !confirm(`Disabilitare ${u.username}? Le sessioni attive verranno chiuse.`)) return;
-                await patch({ active: !u.active }, u.active ? 'Account disabilitato' : 'Account abilitato');
-              }}
-              onError={fail}
-            >
-              {u.active ? 'Disabilita' : 'Abilita'}
-            </AsyncButton>
-            <AsyncButton onClick={() => patch({ role: u.role === 'admin' ? 'installer' : 'admin' }, 'Ruolo aggiornato')} onError={fail}>
-              {u.role === 'admin' ? 'Rendi installatore' : 'Rendi admin'}
-            </AsyncButton>
-          </div>
-        )}
-      </section>
+      {tab === 'more' && (
+        <>
+          <section className="us-sec">
+            <h3>Template airOS</h3>
+            {mine.length ? (
+              <ul className="ui-list ui-small">
+                {mine.map((t) => (
+                  <li key={`${t.model}-${t.name}`}>
+                    {t.model} · {t.name}
+                    {t.defaultForAssigned ? ' (predefinito per lui/lei)' : ''}
+                    {t.users.length > 1 ? ` · condiviso con ${t.users.length - 1} altri` : ''}
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="ui-muted ui-small">Usa i template visibili a tutti. Nessun template riservato.</p>
+            )}
+            <a className="ui-btn ui-btn-secondary us-link" href={`#/profiles?user=${u.id}`}>
+              Crea template personale
+            </a>
+          </section>
+          <section className="us-sec">
+            <h3>Funzionalità per questo utente</h3>
+            <UserModules u={u} me={me} />
+          </section>
+        </>
+      )}
     </Drawer>
   );
 }
