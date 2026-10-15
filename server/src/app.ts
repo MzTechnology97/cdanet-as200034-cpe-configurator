@@ -36,6 +36,7 @@ import type { Uisp } from './services/uisp.ts';
 import { createConnectors } from './services/connectors.ts';
 import { createCrmSettings } from './services/crm.ts';
 import { createVrmSettings } from './services/victron.ts';
+import { createMyWicSettings } from './services/mywic.ts';
 import { createVictronSync, type VictronSync } from './services/victron-sync.ts';
 import { createImagery } from './services/imagery.ts';
 import { createCrmSync, type CrmSync } from './services/crm-sync.ts';
@@ -128,6 +129,7 @@ export async function buildApp(
     connectors,
     crm: createCrmSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
     victron: createVrmSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
+    mywic: createMyWicSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
     imagery: createImagery(db, sealer, {
       fetchImpl: opts.fetchImpl,
       dir: cfg.imageryDir,
