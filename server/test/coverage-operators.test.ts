@@ -185,9 +185,9 @@ describe('Copertura degli altri operatori', () => {
     await app.close();
   });
 
-  it('merges the rows installers see, so the operators cannot be counted', () => {
+  it('merges the rows installers see, without even how many operators', () => {
     const g = groupOps(['tim', 'fastweb'].map((c) => opsRow(row(c, 'FTTH', 'f', 'FTTX', true, 'ATTIVO', { max_speed: 2500 }))!), RULES);
     const shown = forInstaller({ address: null, ...g });
-    assert.deepEqual(shown.groups[0]!.rows, [{ technology: 'FTTH', technologyLabel: 'FTTHome', family: 'FTTX', state: 'available', maxMbps: 2500, kind: 'fibra', count: 2 }]);
+    assert.deepEqual(shown.groups[0]!.rows, [{ technology: 'FTTH', technologyLabel: 'FTTHome', family: 'FTTX', state: 'available', maxMbps: 2500, kind: 'fibra' }], 'one row, and not how many operators');
   });
 });

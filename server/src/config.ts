@@ -80,7 +80,7 @@ const envSchema = z.object({
   // coverage of the other operators (fibre, FTTC, FWA) for a point: cache and the AGCOM sticker
   COVERAGE_OPS_CACHE_DAYS: int(7, 1, 90),
   COVERAGE_OPS_FWA_MIN_MBPS: int(30, 1, 1000),
-  COVERAGE_OPS_VHCN_TECHS: z.string().max(200).default(''),
+  COVERAGE_OPS_VHCN_TECHS: z.string().max(200).default('WIRELESS_28,WIRELESS_P2P'),
   // CPEs offline for longer than this are left out of Salute CPE and Stato rete (0 = never)
   STALE_CPE_MONTHS: int(12, 0, 120),
   // nearest APs an installer gets from a coverage check (web and app alike)
