@@ -52,16 +52,18 @@ class MainActivity : FragmentActivity() {
 
     /** Android 14+: a screenshot of this window. For a blocked account it came out black: tell the NOC. */
     private val screenCapture: Any? = if (Build.VERSION.SDK_INT >= 34) Activity.ScreenCaptureCallback {
-        val c = (application as CdaApplication).container
-        if (c.secureScreen.value && c.session.token != null) {
-            val screen = c.currentScreen.value
-            c.scope.launch { runCatching { c.api.reportScreenshot(screen) } }
-        }
+        (application as CdaApplication).container.screenCaptured("screenshot")
+    } else null
+
+    /** Android 15+: the app's window is being recorded (also when the recording comes out black). */
+    private val screenRecording: Any? = if (Build.VERSION.SDK_INT >= 35) java.util.function.Consumer<Int> { state ->
+        if (state == WindowManager.SCREEN_RECORDING_STATE_VISIBLE) (application as CdaApplication).container.screenCaptured("recording")
     } else null
 
     override fun onStop() {
         super.onStop()
         if (Build.VERSION.SDK_INT >= 34) (screenCapture as? Activity.ScreenCaptureCallback)?.let { runCatching { unregisterScreenCaptureCallback(it) } }
+        if (Build.VERSION.SDK_INT >= 35) @Suppress("UNCHECKED_CAST") (screenRecording as? java.util.function.Consumer<Int>)?.let { runCatching { windowManager.removeScreenRecordingCallback(it) } }
         val c = (application as CdaApplication).container
         c.backgroundSince = System.currentTimeMillis()
     }
@@ -69,6 +71,10 @@ class MainActivity : FragmentActivity() {
     override fun onStart() {
         super.onStart()
         if (Build.VERSION.SDK_INT >= 34) (screenCapture as? Activity.ScreenCaptureCallback)?.let { runCatching { registerScreenCaptureCallback(mainExecutor, it) } }
+        // already being recorded when the app comes back to the front counts too
+        if (Build.VERSION.SDK_INT >= 35) @Suppress("UNCHECKED_CAST") (screenRecording as? java.util.function.Consumer<Int>)?.let { cb ->
+            runCatching { windowManager.addScreenRecordingCallback(mainExecutor, cb) }.getOrNull()?.let { cb.accept(it) }
+        }
         // "Sblocco a ogni apertura": back after more than a minute away, fingerprint or face again
         val c = (application as CdaApplication).container
         val since = c.backgroundSince

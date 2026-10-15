@@ -333,8 +333,12 @@ class ApiClient(
         AppJson.decodeFromString(ReverseGeocodeDto.serializer(), request("GET", "/api/geocode/reverse?lat=$lat&lon=$lon"))
 
     /** A screenshot taken by an account that may not (the NOC is told). */
-    suspend fun reportScreenshot(screen: String) {
-        request("POST", "/api/security/screenshot-attempt", buildJsonObject { put("screen", screen.take(80)) })
+    suspend fun reportScreenshot(screen: String, at: String? = null, kind: String = "screenshot") {
+        request("POST", "/api/security/screenshot-attempt", buildJsonObject {
+            put("screen", screen.take(80))
+            at?.let { put("at", it) }
+            put("kind", kind)
+        })
     }
 
     suspend fun workOrders(): WorkOrdersDto = AppJson.decodeFromString(WorkOrdersDto.serializer(), request("GET", "/api/work-orders"))

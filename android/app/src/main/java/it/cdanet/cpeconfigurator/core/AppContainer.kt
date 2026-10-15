@@ -96,6 +96,17 @@ class AppContainer(context: Context) {
     /** Title of the screen on show (for the NOC's notice of a screenshot attempt). */
     val currentScreen = kotlinx.coroutines.flow.MutableStateFlow("")
 
+    /** Screenshots and recordings seen on a blocked account, kept until the NOC has them. */
+    val captureReports = CaptureReports(screenPrefs, api)
+
+    /** Android reported a capture of the app: on a blocked, logged-in account it goes to the NOC. */
+    fun screenCaptured(kind: String) {
+        val user = session.state.value?.user ?: return
+        if (!secureScreen.value) return
+        captureReports.seen(currentScreen.value, kind, user.id)
+        scope.launch { captureReports.send(user.id) }
+    }
+
     /**
      * Decides it from the account: admins never blocked; the others blocked unless the server says
      * their «Screenshot nell'app» is on. [modules] null = not known yet (login, offline): blocked.

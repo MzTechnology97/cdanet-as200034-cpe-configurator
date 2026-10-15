@@ -142,6 +142,18 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
                     }
                 }) { Text("Esci da tutti i dispositivi") }
             }
+            // screenshots blocked on this account: whether Android tells the app about the attempts
+            if (c.secureScreen.collectAsState().value) SectionCard("Screenshot", icon = it.cdanet.cpeconfigurator.R.drawable.ic_logout) {
+                Text("Su questo account screenshot e registrazioni dello schermo sono bloccati: l'immagine esce nera e il NOC riceve un avviso.", style = MaterialTheme.typography.bodySmall)
+                val last = c.captureReports.last.collectAsState().value
+                KeyValue(
+                    "Ultimo rilevato",
+                    last?.let { seen ->
+                        (if (seen.kind == "recording") "registrazione · " else "screenshot · ") + it.cdanet.cpeconfigurator.ui.localTime(seen.at) +
+                            if (seen.sent) " · avviso inviato" else " · avviso in attesa di rete"
+                    } ?: "nessuno su questo telefono",
+                )
+            }
         }
 
         SectionCard("Server", icon = it.cdanet.cpeconfigurator.R.drawable.ic_dns) {

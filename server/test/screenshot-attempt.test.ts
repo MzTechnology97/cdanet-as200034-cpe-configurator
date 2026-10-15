@@ -19,13 +19,18 @@ describe('Screenshot nell’app', () => {
     assert.match(n.title, /tecnico/);
     assert.match(n.body, /Installazione CPE/);
     assert.equal((await call('POST', '/api/security/screenshot-attempt', {}, A)).json().notified, false, 'admins may');
+    // a recording, sent later by the phone's queue: the notice says what and when
+    assert.equal((await call('POST', '/api/security/screenshot-attempt', { screen: 'Oggi', kind: 'recording', at: '2026-10-15T07:30:00.000Z' }, T)).json().notified, true);
+    const rec = ((await call('GET', '/api/notifications')).json().items as Array<{ kind: string; title: string; body: string }>).find((x) => /Registrazione/.test(x.title))!;
+    assert.match(rec.body, /registrato lo schermo/);
+    assert.match(rec.body, /15\/10\/26, 09:30/);
 
     // the NOC allows this account: no more notices
     await call('PUT', `/api/admin/users/${tid}/modules`, { screenshots: true });
     assert.equal((await call('GET', '/api/meta', undefined, T)).json().modules.screenshots, true);
     assert.equal((await call('POST', '/api/security/screenshot-attempt', {}, T)).json().notified, false);
     const events = (await call('GET', '/api/admin/events?limit=20')).json();
-    assert.equal((Array.isArray(events) ? events : events.items).filter((e: { action: string }) => e.action === 'security.screenshot').length, 1);
+    assert.equal((Array.isArray(events) ? events : events.items).filter((e: { action: string }) => e.action === 'security.screenshot').length, 2);
     await t.app.close();
   });
 });
