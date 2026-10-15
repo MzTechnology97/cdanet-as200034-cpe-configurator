@@ -186,7 +186,7 @@ function InstallerCoverage() {
       )}
       {result?.error && <Notice tone="bad">{result.error}</Notice>}
       {r && point && <Results r={r} point={point} onLink={(a) => void openLink(a)} openId={link?.a.id ?? null} />}
-      <OperatorsCard key={point ? `${point.la},${point.lo}` : 'none'} point={point} admin={false} />
+      {point && <OperatorsCard key={`${point.la},${point.lo}`} point={point} admin={false} />}
       <div ref={linkRef}>{link && point && <LinkCard link={link} onHeight={(v) => (setHeight(v), recheck({ height: v }))} />}</div>
     </div>
   );

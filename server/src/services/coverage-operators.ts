@@ -240,8 +240,8 @@ export function createCoverageOps(db: Db, cfg: Config, client: () => MyWicClient
 export type CoverageOps = ReturnType<typeof createCoverageOps>;
 
 /**
- * The answer for installers: no operator names and no GeoID; the rows of the same sticker,
- * technology, state and speed merged with their count, so the names cannot be told apart (pure).
+ * The answer for installers: no operator names, no GeoID and not even how many operators there
+ * are: the rows of the same sticker, technology, state and speed merged into one (pure).
  */
 type ShownRow = Omit<OpsRow, 'sourceSticker'> & { kind: OpsKind };
 export function forInstaller<T extends { address: OpsAddress | null; groups: Array<{ rows: ShownRow[] }> }>(a: T) {
@@ -249,12 +249,10 @@ export function forInstaller<T extends { address: OpsAddress | null; groups: Arr
     ...a,
     address: a.address ? { ...a.address, geoid: null } : null,
     groups: a.groups.map((g) => {
-      const merged = new Map<string, Omit<ShownRow, 'operator' | 'downMbps' | 'upMbps'> & { count: number }>();
+      const merged = new Map<string, Omit<ShownRow, 'operator' | 'downMbps' | 'upMbps'>>();
       for (const { operator: _o, downMbps: _d, upMbps: _u, ...r } of g.rows) {
         const k = [r.technology, r.state, r.maxMbps ?? ''].join('|');
-        const m = merged.get(k);
-        if (m) m.count++;
-        else merged.set(k, { ...r, count: 1 });
+        if (!merged.has(k)) merged.set(k, r);
       }
       return { ...g, rows: [...merged.values()] };
     }),
