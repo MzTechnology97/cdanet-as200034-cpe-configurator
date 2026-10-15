@@ -275,13 +275,6 @@ function JobDrawer({ j, admin, onClose, onChange, onDeleted }: { j: Job; admin: 
         <section className="jb-sec">
           <h3>Collaudo</h3>
           <AcceptancePanel j={j} />
-          {admin && j.acceptance && (
-            <div className="ui-row">
-              <AsyncButton icon="arrow_forward" onClick={() => download(`/api/admin/provisioning/jobs/${j.id}/acceptance.pdf`, `collaudo-${j.id.slice(0, 8)}.pdf`)} onError={(e) => toast((e as Error).message, 'bad')}>
-                Scarica il rapporto PDF
-              </AsyncButton>
-            </div>
-          )}
           <ReviewPanel job={j} admin={admin} onChange={() => void onChange()} />
         </section>
       )}

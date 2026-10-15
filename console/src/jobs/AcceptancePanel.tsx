@@ -1,11 +1,12 @@
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
-import { api } from '../lib/api';
-import { Badge, Button, Skeleton } from '../ui';
+import { api, download } from '../lib/api';
+import { toast } from '../lib/toast';
+import { AsyncButton, Badge, Skeleton } from '../ui';
 
 /**
  * "Collaudo" of a job (Storico provisioning): the measures sent by the app, the checks, the notes,
- * the photos and the printable installation report ("verbale", browser print → PDF).
+ * the photos and the «Rapporto di collaudo» made by the server as a PDF, to view or to download.
  */
 
 type Tone = 'good' | 'warn' | 'bad' | 'neutral';
@@ -59,43 +60,21 @@ async function photoUrl(jobId: string, id: number): Promise<string> {
   });
 }
 
-/** The printable report in a new window (its own page, every value escaped). */
-async function printReport(j: Job, a: Acceptance, photos: Photo[]) {
+/** The «Rapporto di collaudo» (PDF made by the server) of a job: opened in a new tab, or downloaded. */
+async function openReport(jobId: string) {
+  // the tab opens now, while the click counts: a window opened after the download is blocked
   const w = window.open('', '_blank');
-  if (!w) return void alert('Consenti le finestre pop-up per stampare il verbale.');
-  w.document.write('<p style="font-family:sans-serif">Preparazione del verbale…</p>');
-  const imgs = await Promise.all(photos.map(async (p) => ({ ...p, src: await photoUrl(j.id, p.id).catch(() => '') })));
-  const esc = (s: unknown) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
-  const rows = (list: Array<[string, string]>) => list.map(([k, v]) => `<tr><th>${esc(k)}</th><td>${esc(v)}</td></tr>`).join('');
-  const html = `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>Verbale installazione ${esc(j.deviceName || j.mac)}</title>
-<style>
-body{font:13px/1.45 system-ui,sans-serif;color:#111;margin:24px}h1{font-size:20px;margin:0 0 4px}h2{font-size:15px;margin:18px 0 6px;border-bottom:1px solid #ccc}
-table{border-collapse:collapse;width:100%}th,td{text-align:left;padding:4px 6px;border-bottom:1px solid #eee;vertical-align:top}th{width:34%;color:#444;font-weight:600}
-.v{display:inline-block;padding:2px 8px;border-radius:10px;font-weight:600}.ok{background:#dcfce7}.warn{background:#fef3c7}.bad{background:#fee2e2}
-.ph{display:grid;grid-template-columns:repeat(2,1fr);gap:10px}.ph figure{margin:0;break-inside:avoid}.ph img{width:100%;border:1px solid #ddd}.ph figcaption{font-size:12px;color:#444}
-.sign{display:grid;grid-template-columns:1fr 1fr;gap:40px;margin-top:40px}.sign div{border-top:1px solid #333;padding-top:4px}
-@media print{body{margin:10mm}button{display:none}}
-</style></head><body>
-<button onclick="print()">Stampa / salva PDF</button>
-<h1>Verbale di installazione CPE</h1>
-<div>CDA Net · AS200034 · collaudo del ${esc(date(a.measuredAt))} · esito <span class="v ${esc(a.verdict)}">${esc(VERDICT[a.verdict]?.[0] ?? a.verdict)}</span></div>
-<h2>Installazione</h2><table>${rows([
-    ['Cliente', j.deviceName || '—'],
-    ['Utente PPPoE', j.pppoeUser],
-    ['CPE', `${j.model} · MAC ${j.mac} · S/N ${j.serial || '—'}`],
-    ['SSID', j.ssid],
-    ['Posizione', j.latitude != null ? `${j.latitude.toFixed(6)}, ${j.longitude.toFixed(6)}` : '—'],
-    ['Installatore', a.by || j.installer || '—'],
-  ])}</table>
-<h2>Misure</h2><table>${rows(measures(a))}</table>
-<h2>Controlli</h2><table>${(a.checks ?? []).map((c) => `<tr><th>${MARK[c.verdict] ?? ''} ${esc(c.title)}</th><td>${esc(c.detail)}</td></tr>`).join('')}</table>
-${a.notes ? `<h2>Note</h2><p>${esc(a.notes)}</p>` : ''}
-${imgs.length ? `<h2>Foto</h2><div class="ph">${imgs.map((p) => `<figure>${p.src ? `<img src="${p.src}">` : ''}<figcaption>${esc(p.caption || `Foto ${p.id}`)} · ${esc(date(p.createdAt))}</figcaption></figure>`).join('')}</div>` : ''}
-<div class="sign"><div>L'installatore</div><div>Il cliente</div></div>
-</body></html>`;
-  w.document.open();
-  w.document.write(html);
-  w.document.close();
+  try {
+    const r = await api<Response>(`/api/provisioning/jobs/${jobId}/acceptance.pdf?view=1`, { raw: true });
+    if (!r.ok) throw new Error(r.status === 404 ? 'Collaudo non ancora inviato.' : `Rapporto non disponibile (HTTP ${r.status})`);
+    const url = URL.createObjectURL(await r.blob());
+    if (w) w.location.href = url;
+    else window.location.href = url;
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (e) {
+    w?.close();
+    throw e;
+  }
 }
 
 /** One photo of the job, read with the session when it scrolls into the panel. */
@@ -173,7 +152,12 @@ export function AcceptancePanel({ j }: { j: Job }) {
       )}
       {a && (
         <div className="ui-row">
-          <Button onClick={() => void printReport(j, a, photos)}>Verbale di installazione (stampa / PDF)</Button>
+          <AsyncButton icon="menu_book" onClick={() => openReport(j.id)} onError={(e) => toast((e as Error).message, 'bad')}>
+            Visualizza rapporto
+          </AsyncButton>
+          <AsyncButton icon="arrow_forward" onClick={() => download(`/api/provisioning/jobs/${j.id}/acceptance.pdf`, `collaudo-${j.id.slice(0, 8)}.pdf`)} onError={(e) => toast((e as Error).message, 'bad')}>
+            Scarica PDF
+          </AsyncButton>
         </div>
       )}
     </div>

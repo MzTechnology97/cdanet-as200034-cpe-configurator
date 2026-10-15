@@ -30,6 +30,8 @@ data class ScanHost(
     val hostname: String? = null,
     val netbios: String? = null,
     val mac: String? = null,
+    /** Where the MAC came from (Ubiquiti, NetBIOS, mDNS, UPnP, router…): see MacHints.sourceLabel. */
+    val macFrom: String? = null,
     val vendor: String? = null,
     val ports: List<Int> = emptyList(),
     val kind: String = "",
@@ -209,6 +211,12 @@ class IpScanner(private val wifi: Network?) {
                         hostname = rdns ?: u?.hostname,
                         netbios = nb?.names?.firstOrNull(),
                         mac = u?.mac ?: nb?.mac ?: arp[ip],
+                        macFrom = when {
+                            u?.mac != null -> "Ubiquiti"
+                            nb?.mac != null -> "NetBIOS"
+                            arp[ip] != null -> "ARP"
+                            else -> null
+                        },
                         ports = ports[ip]?.sorted().orEmpty(),
                         isGateway = ip == gateway,
                         isSelf = ip in self,

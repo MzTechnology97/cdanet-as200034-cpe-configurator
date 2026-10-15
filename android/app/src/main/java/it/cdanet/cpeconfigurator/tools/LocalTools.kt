@@ -225,7 +225,7 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
         ToolResult(
             rows = listOf("Voci" to t.size.toString()),
             items = t.entries.sortedBy { Ip.parse(it.key) ?: 0 }.map { ToolItem(it.key, it.value, host = it.key) },
-            note = if (t.isEmpty()) "Android 10+ limita l'accesso alla tabella ARP: usa la scansione subnet." else null,
+            note = if (t.isEmpty()) "Android non dà la tabella ARP alle app: la Scansione LAN ricava i MAC dalle risposte dei dispositivi (Ubiquiti, NetBIOS, MikroTik, mDNS, UPnP…) e dalle tabelle ARP dei router via SNMP." else null,
         )
     }
 

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import type { FastifyInstance, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
@@ -188,9 +188,14 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
     return logo;
   };
 
-  /** «Rapporto di collaudo» as a PDF for the NOC: outcome, customer, CPE, radio, network, checks, notes, decision and photos. */
-  app.get('/api/admin/provisioning/jobs/:id/acceptance.pdf', { preHandler: [ctx.auth.requireAdmin, ctx.modules.require('acceptance')] }, async (req, reply) => {
+  /**
+   * «Rapporto di collaudo» as a PDF: outcome, customer, CPE, radio, network, checks, notes, decision
+   * and photos. The NOC for every job, an installer for their own (loadJob); ?view=1 opens it in the
+   * browser instead of downloading it.
+   */
+  const acceptanceReport = async (req: FastifyRequest, reply: FastifyReply) => {
     const job = loadJob(req);
+    const forInstaller = req.user!.role !== 'admin';
     const j = db
       .prepare(
         `SELECT j.id, j.device_name, j.pppoe_user, j.model, j.mac, j.serial, j.ssid, j.template_name, j.completed_at, j.latitude, j.longitude, j.uisp_site,
@@ -246,15 +251,18 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
       }),
       logoSvg: logoSvg(),
       generatedAt: new Date(),
+      forInstaller,
     });
     recordEvent(db, req.user!.id, 'job.acceptance_pdf', job.id, j.customer || j.device_name);
     const name = `collaudo-${(j.customer || j.device_name || 'cpe').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'cpe'}-${row.created_at.slice(0, 10)}.pdf`;
     return reply
       .header('Content-Type', 'application/pdf')
-      .header('Content-Disposition', `attachment; filename="${name}"`)
+      .header('Content-Disposition', `${(req.query as { view?: string }).view === '1' ? 'inline' : 'attachment'}; filename="${name}"`)
       .header('Cache-Control', 'no-store')
       .send(pdf);
-  });
+  };
+  app.get('/api/admin/provisioning/jobs/:id/acceptance.pdf', { preHandler: [ctx.auth.requireAdmin, ctx.modules.require('acceptance')] }, acceptanceReport);
+  app.get('/api/provisioning/jobs/:id/acceptance.pdf', { preHandler: [ctx.auth.requireUser, ctx.modules.require('acceptance')] }, acceptanceReport);
 
   /** Decision of the NOC on an acceptance test with poor radio; the installer is told. */
   app.post('/api/admin/provisioning/jobs/:id/review', { preHandler: [ctx.auth.requireAdmin] }, async (req) => {

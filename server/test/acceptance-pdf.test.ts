@@ -1,9 +1,30 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { inflateSync } from 'node:zlib';
 import { jpegInfo, textWidth, wrap } from '../src/services/pdf.ts';
 import { SAMPLE_TEMPLATE, testApp } from './helpers.ts';
 
 const ANDROID = { 'x-cda-client': 'android/9.0.0' };
+
+/** The text drawn on the pages of a PDF (its compressed content streams, inflated). */
+function pdfText(pdf: Buffer): string {
+  const out: string[] = [];
+  let at = 0;
+  const open = '/Filter /FlateDecode >>\nstream\n';
+  for (;;) {
+    const head = pdf.indexOf(open, at, 'latin1');
+    if (head < 0) break;
+    const start = head + open.length;
+    const end = pdf.indexOf('\nendstream', start, 'latin1');
+    try {
+      out.push(inflateSync(pdf.subarray(start, end)).toString('latin1'));
+    } catch {
+      /* an image stream */
+    }
+    at = end;
+  }
+  return out.join('\n');
+}
 
 /** The header of a JPEG (SOI + SOF0 640×480, 3 components), padded to the size the photo route wants. */
 function fakeJpeg(): Buffer {
@@ -20,7 +41,7 @@ describe('Rapporto di collaudo in PDF', () => {
     assert.equal(jpegInfo(Buffer.from('not a jpeg')), null);
   });
 
-  it('the NOC downloads the report of an installation, with its photos', async () => {
+  it('the NOC downloads the report of an installation, with its photos; the installer their own', async () => {
     const t = await testApp();
     const A = t.auth(await t.login());
     const call = (method: 'GET' | 'POST' | 'PUT', url: string, payload?: object | Buffer, headers: Record<string, string> = A) => t.app.inject({ method, url, headers, payload });
@@ -53,6 +74,22 @@ describe('Rapporto di collaudo in PDF', () => {
     const text = pdf.toString('latin1');
     assert.match(text, /\/Subtype \/Image \/Width 640 \/Height 480/, 'the photo is in it');
     assert.ok(!text.includes('Segreta-PPPoE-9'), 'never the PPPoE password');
+    assert.ok(pdfText(pdf).includes('Sito UISP'), 'the NOC sees the site of UISP');
+
+    // the installer of the job: the same report from their own route, without the data source
+    const mine = `/api/provisioning/jobs/${job}/acceptance.pdf`;
+    const own = await call('GET', mine, undefined, T);
+    assert.equal(own.statusCode, 200, own.body);
+    const ownText = pdfText(own.rawPayload);
+    assert.ok(!ownText.includes('UISP'), 'never the name of the data source to installers');
+    assert.ok(ownText.includes('In rete'));
+    assert.ok(!ownText.includes('Segreta-PPPoE-9') && !own.rawPayload.toString('latin1').includes('Segreta-PPPoE-9'));
+    // ?view=1: opened in the browser instead of downloaded
+    assert.match(String((await call('GET', `${mine}?view=1`, undefined, T)).headers['content-disposition']), /^inline; filename=/);
+    // another installer: not theirs
+    await call('POST', '/api/admin/users', { username: 'altro', password: 'Installer-Pass-456' });
+    const O = t.auth(await t.login('altro', 'Installer-Pass-456'));
+    assert.equal((await call('GET', mine, undefined, O)).statusCode, 403, 'not the job of another installer');
     const events = (await call('GET', '/api/admin/events?limit=20')).json();
     assert.ok((Array.isArray(events) ? events : events.items).some((e: { action: string }) => e.action === 'job.acceptance_pdf'));
     await t.app.close();
