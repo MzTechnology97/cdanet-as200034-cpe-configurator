@@ -63,7 +63,7 @@ internal fun diagnosable(kind: String) = kind != "new" && kind != "survey"
 private fun errorText(e: Throwable): String = when ((e as? ApiException)?.status) {
     null -> "Diagnosi non riuscita: senza rete?"
     403 -> "Diagnosi non disponibile per questo intervento."
-    404 -> "Diagnosi non ancora disponibile su questo server."
+    404 -> if ((e as ApiException).code == "work_order_not_found") "Intervento non trovato: forse annullato." else "Diagnosi non ancora disponibile su questo server."
     else -> "Diagnosi non riuscita (${(e as ApiException).code})."
 }
 
