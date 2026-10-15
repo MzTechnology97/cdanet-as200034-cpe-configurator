@@ -1,4 +1,5 @@
 import { type FormEvent, type ReactNode, useRef, useState } from 'react';
+import { OperatorsCard } from '../coverage/Operators';
 import { type Ap, dec, EstimateCell, km, LoadCell, type Point, type Profile, RATING, type Result, type Tone } from '../coverage/parts';
 import { toast } from '../lib/toast';
 import { drawCoverage, MAP_COLORS as C } from '../map/leaflet';
@@ -185,6 +186,7 @@ function InstallerCoverage() {
       )}
       {result?.error && <Notice tone="bad">{result.error}</Notice>}
       {r && point && <Results r={r} point={point} onLink={(a) => void openLink(a)} openId={link?.a.id ?? null} />}
+      <OperatorsCard key={point ? `${point.la},${point.lo}` : 'none'} point={point} admin={false} />
       <div ref={linkRef}>{link && point && <LinkCard link={link} onHeight={(v) => (setHeight(v), recheck({ height: v }))} />}</div>
     </div>
   );
