@@ -138,10 +138,14 @@ export function acceptanceReportPdf(r: ReportData): Buffer {
   doc.rect(M, y, CW, 2.5, BRAND);
   y += 14;
 
-  const verdictLabel = { ok: 'COLLAUDO SUPERATO', warn: 'SUPERATO CON AVVISI', bad: 'COLLAUDO NON SUPERATO' }[r.acceptance.verdict];
+  // marked as passed by the NOC whatever the measures said: said in the outcome
+  const override = a.override as { from?: string; by?: string; at?: string; note?: string } | undefined;
+  const verdictLabel = override ? 'SUPERATO PER DECISIONE DEL NOC' : { ok: 'COLLAUDO SUPERATO', warn: 'SUPERATO CON AVVISI', bad: 'COLLAUDO NON SUPERATO' }[r.acceptance.verdict];
   const tone = TONES[r.acceptance.verdict]!;
   const review = r.acceptance.review;
-  const reviewText = !review
+  const reviewText = override
+    ? `Deciso dal NOC (${override.by ?? '—'}) il ${rome(override.at ?? null)}`
+    : !review
     ? 'Nessuna approvazione del NOC richiesta'
     : review.state === 'approved'
       ? `Approvato dal NOC${review.by ? ` (${review.by})` : ''} il ${rome(review.at)}`
@@ -233,10 +237,10 @@ export function acceptanceReportPdf(r: ReportData): Buffer {
   if (review) {
     section('Approvazione del NOC');
     grid([
-      ['Stato', review.state === 'approved' ? 'approvato' : review.state === 'rejected' ? 'rifiutato' : 'in attesa'],
-      ['Motivo della verifica', review.reason || '—'],
+      ['Stato', override ? `segnato come superato (le misure dicevano: ${override.from === 'bad' ? 'non superato' : 'con riserva'})` : review.state === 'approved' ? 'approvato' : review.state === 'rejected' ? 'rifiutato' : 'in attesa'],
+      ['Motivo della verifica', override ? 'decisione del NOC' : review.reason || '—'],
       ['Deciso da', review.by ?? '—'],
-      ['Il', rome(review.at)],
+      ['Data della decisione', rome(review.at)],
     ]);
     if (review.note) grid([['Nota del NOC', review.note]]);
   }

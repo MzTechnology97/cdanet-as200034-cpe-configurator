@@ -71,6 +71,8 @@ const MESSAGES: Record<string, string> = {
   advisor_data_missing: 'Dati dell’analisi non ancora pronti: premi Aggiorna ora e riprova tra due minuti',
   no_candidates: 'Nessun canale candidato dentro la banda consentita',
   not_cancellable: 'Questa ottimizzazione non si può più annullare',
+  acceptance_already_passed: 'Il collaudo risulta già superato',
+  acceptance_not_found: 'Collaudo non ancora inviato dall’app',
   warehouse_not_found: 'Magazzino non trovato nell’ultima lettura: aggiornalo in Magazzino e riprova',
   cpe_not_in_stock: 'La CPE non risulta nel magazzino del tecnico',
 };

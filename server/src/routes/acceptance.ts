@@ -284,6 +284,34 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
     return { ok: true };
   });
 
+  /**
+   * The NOC marks a test that did not pass (or passed with warnings) as passed, whatever the
+   * measures said, with the reason. The test becomes «superato» everywhere (history, warehouse,
+   * statistics, the report, «pronta da accettare»); what the app had measured stays in [data.override].
+   */
+  app.post('/api/admin/provisioning/jobs/:id/acceptance/pass', { preHandler: [ctx.auth.requireAdmin] }, async (req) => {
+    const job = loadJob(req);
+    const b = z.object({ note: z.string().trim().min(3, 'Scrivi il motivo').max(500) }).strict().parse(req.body);
+    const row = db.prepare('SELECT verdict, data FROM job_acceptance WHERE job_id = ?').get(job.id) as { verdict: string; data: string } | undefined;
+    if (!row) throw new HttpError(404, 'acceptance_not_found');
+    if (row.verdict === 'ok') throw new HttpError(409, 'acceptance_already_passed');
+    const data = JSON.parse(row.data) as Record<string, unknown>;
+    data.override = { from: row.verdict, by: req.user!.username, at: nowIso(), note: b.note };
+    db.prepare("UPDATE job_acceptance SET verdict = 'ok', data = ?, review = 'approved', review_at = ?, review_by = ?, review_note = ? WHERE job_id = ?").run(
+      JSON.stringify(data),
+      nowIso(),
+      req.user!.id,
+      b.note,
+      job.id,
+    );
+    recordEvent(db, req.user!.id, 'job.acceptance_pass', job.id, `era ${row.verdict === 'bad' ? 'non superato' : 'con riserva'} · ${b.note}`);
+    resolveKoByAcceptance(db, job, req.user!.id);
+    ctx.notify.readyForUisp(job.id);
+    ctx.warehouse.record('collaudo', job.mac, `collaudo segnato come superato dal NOC (${req.user!.username})`, job.id);
+    ctx.notify.reviewDecision(job.id, req.user!.username);
+    return { ok: true };
+  });
+
   app.post('/api/provisioning/jobs/:id/photos', user, async (req, reply) => {
     const job = loadJob(req);
     const body = req.body;
