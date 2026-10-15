@@ -4,6 +4,7 @@ import it.cdanet.cpeconfigurator.data.AppJson
 import it.cdanet.cpeconfigurator.ui.screens.DiagnosisDto
 import it.cdanet.cpeconfigurator.ui.screens.diagnosable
 import it.cdanet.cpeconfigurator.ui.screens.diagnosedAtOnce
+import it.cdanet.cpeconfigurator.ui.screens.startsWithEmoji
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -32,5 +33,14 @@ class RemoteDiagnosisTest {
         assertTrue(diagnosedAtOnce("repair") && diagnosedAtOnce("repoint"))
         assertFalse(diagnosedAtOnce("new"))
         assertFalse(diagnosable("new") || diagnosable("survey"))
+    }
+}
+
+class NotificationTitleTest {
+    @Test
+    fun titlesWithTheirOwnEmojiGetNoSecondIcon() {
+        listOf("📉 Segnale in calo su 3 CPE", "🔋 POP Nord a batteria", "✅ POP Nord: batteria in carica", "⚠️ ISP Billing: non funziona", "❌ Configurazione fallita")
+            .forEach { t -> assertTrue(t, startsWithEmoji(t)) }
+        listOf("Nuovo intervento", "3 CPE da controllare", "«Rossi»", "").forEach { t -> assertFalse(t, startsWithEmoji(t)) }
     }
 }
