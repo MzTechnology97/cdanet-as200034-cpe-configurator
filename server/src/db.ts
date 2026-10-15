@@ -562,6 +562,16 @@ const MIGRATIONS: string[] = [
   `
   ALTER TABLE provisioning_jobs ADD COLUMN uisp_crm_client_id INTEGER;
   `,
+  // the coverage of the other operators read for a point or an address (reused for some days):
+  // key «ll:lat,lon» (5 decimals) or «geo:<GeoID>»; payload = the address found and the normalised rows
+  `
+  CREATE TABLE coverage_ops_cache(
+    key TEXT PRIMARY KEY,
+    at TEXT NOT NULL,
+    payload TEXT NOT NULL
+  );
+  CREATE INDEX coverage_ops_cache_at ON coverage_ops_cache(at);
+  `,
 ];
 
 export function openDatabase(path: string): Db {

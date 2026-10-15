@@ -576,3 +576,12 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 
 /* Speedtest nel dettaglio del job */
 .jb-h4 { margin: var(--sp-3) 0 var(--sp-1); font-size: var(--fs-sm); color: var(--muted); }
+
+/* Copertura → Altri operatori: il bollino AGCOM nei suoi colori */
+.op-sticker { display: inline-flex; align-items: center; justify-content: center; min-width: 2.4em; padding: 2px var(--sp-2); border-radius: var(--radius-sm); color: #fff; font-weight: 700; font-size: var(--fs-sm); letter-spacing: 0.02em; }
+.op-sticker.dark { color: #1f2328; }
+.op-sticker.big { min-width: 3.2em; padding: var(--sp-2) var(--sp-3); font-size: 1.25rem; }
+.op-sticker.none { background: var(--muted); }
+.op-head { display: flex; align-items: center; gap: var(--sp-3); margin-bottom: var(--sp-3); }
+.op-group { margin-top: var(--sp-3); }
+.op-title { display: flex; align-items: center; gap: var(--sp-2); margin: 0 0 var(--sp-1); font-size: var(--fs-sm); }
