@@ -69,4 +69,21 @@ class OrderDraftTest {
         assertFalse("address" in b)
         assertTrue("pppoePassword" in OrderDraftMath.body(before.copy(pppoePassword = "x"), before))
     }
+
+    @Test
+    fun aCrmSiteFillsTheOrderWithItsPosition() {
+        val cu = it.cdanet.cpeconfigurator.data.WorkOrderCrmCustomer(name = "ROSSI MARIO", phone = "3330000000")
+        val site = it.cdanet.cpeconfigurator.data.WorkOrderCrmSite(pppoeUser = "rossi.mario@cda-net.it", address = "Via Demo 7, Enna", lat = 37.56, lon = 14.27)
+        val d = OrderDraftMath.fromCrm(OrderDraft(day, notes = "citofono"), cu, site)
+        assertEquals("ROSSI MARIO", d.customer)
+        assertEquals("rossi.mario@cda-net.it", d.pppoeUser)
+        assertEquals("3330000000", d.contact)
+        assertEquals("citofono", d.notes)
+        val b = OrderDraftMath.body(d)
+        assertEquals(37.56, b["lat"]!!.jsonPrimitive.content.toDouble(), 1e-9)
+        // a site without a position: the server finds it from the address
+        val noPos = OrderDraftMath.fromCrm(OrderDraft(day), cu, site.copy(lat = null, lon = null))
+        assertNull(noPos.lat)
+        assertFalse("lat" in OrderDraftMath.body(noPos))
+    }
 }

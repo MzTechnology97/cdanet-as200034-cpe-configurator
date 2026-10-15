@@ -60,6 +60,9 @@ data class OrderDraft(
     val kind: String = "new",
     val customer: String = "",
     val address: String = "",
+    /** Position of the customer's site from the CRM (null: the server finds it from the address). */
+    val lat: Double? = null,
+    val lon: Double? = null,
     val contact: String = "",
     val model: String = "",
     val pppoeUser: String = "",
@@ -98,12 +101,24 @@ object OrderDraftMath {
             kind = o.kind,
             customer = o.customer,
             address = o.address,
+            lat = o.lat,
+            lon = o.lon,
             contact = o.contact,
             model = o.model,
             pppoeUser = o.pppoeUser,
             notes = o.notes,
         )
     }
+
+    /** The draft with a CRM customer's site: name, address and position, phone, PPPoE user. */
+    fun fromCrm(d: OrderDraft, cu: it.cdanet.cpeconfigurator.data.WorkOrderCrmCustomer, s: it.cdanet.cpeconfigurator.data.WorkOrderCrmSite): OrderDraft = d.copy(
+        customer = cu.name.take(120),
+        address = s.address.ifBlank { d.address }.take(200),
+        lat = s.lat?.takeIf { s.lon != null } ?: if (s.address.isBlank()) d.lat else null,
+        lon = s.lon?.takeIf { s.lat != null } ?: if (s.address.isBlank()) d.lon else null,
+        contact = cu.phone?.takeIf { it.isNotBlank() }?.take(120) ?: d.contact,
+        pppoeUser = s.pppoeUser.ifBlank { d.pppoeUser }.take(128),
+    )
 
     /** What stops the save, said plainly; null = it can be saved. */
     fun problem(d: OrderDraft): String? = when {
@@ -126,6 +141,11 @@ object OrderDraftMath {
         field("kind", d.kind, before?.kind) { JsonPrimitive(d.kind) }
         field("customer", d.customer.trim(), before?.customer?.trim()) { JsonPrimitive(d.customer.trim()) }
         field("address", d.address.trim(), before?.address?.trim()) { JsonPrimitive(d.address.trim()) }
+        // the CRM site's position, when chosen there (an address typed by hand clears it: found by the server)
+        if (d.lat != null && d.lon != null && (d.lat != before?.lat || d.lon != before.lon)) {
+            put("lat", JsonPrimitive(d.lat))
+            put("lon", JsonPrimitive(d.lon))
+        }
         field("contact", d.contact.trim(), before?.contact?.trim()) { JsonPrimitive(d.contact.trim()) }
         field("model", d.model, before?.model) { JsonPrimitive(d.model) }
         field("pppoeUser", d.pppoeUser.trim(), before?.pppoeUser?.trim()) { JsonPrimitive(d.pppoeUser.trim()) }
@@ -189,8 +209,15 @@ fun WorkOrderEditor(
 
                 Dropdown("Tipo", OrderDraftMath.KINDS, OrderDraftMath.KINDS.firstOrNull { it.first == d.kind } ?: OrderDraftMath.KINDS.first(), { it.second }, { d = d.copy(kind = it.first) }, Modifier.fillMaxWidth())
 
+                CrmSearch(c) { cu, s -> d = OrderDraftMath.fromCrm(d, cu, s) }
                 OutlinedTextField(d.customer, { d = d.copy(customer = it.take(120)) }, label = { Text("Cliente") }, singleLine = true, modifier = Modifier.fillMaxWidth())
-                OutlinedTextField(d.address, { d = d.copy(address = it.take(200)) }, label = { Text("Indirizzo") }, supportingText = { Text("La posizione si ricava dall'indirizzo.") }, modifier = Modifier.fillMaxWidth())
+                OutlinedTextField(
+                    d.address,
+                    { d = d.copy(address = it.take(200), lat = null, lon = null) },
+                    label = { Text("Indirizzo") },
+                    supportingText = { Text(if (d.lat != null) "Posizione dal CRM." else "La posizione si ricava dall'indirizzo.") },
+                    modifier = Modifier.fillMaxWidth(),
+                )
                 OutlinedTextField(d.contact, { d = d.copy(contact = it.take(120)) }, label = { Text("Contatto") }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone), modifier = Modifier.fillMaxWidth())
 
                 if (d.kind == "new") {
@@ -241,5 +268,55 @@ fun WorkOrderEditor(
             },
             dismissButton = { TextButton(onClick = { pickDay = false }) { Text("Annulla") } },
         ) { DatePicker(state) }
+    }
+}
+
+/**
+ * «Cerca nel CRM»: a customer by name, code, phone, address or PPPoE user; choosing one of its
+ * accounts fills in the order. The PPPoE password is never in the CRM copy: typed by hand.
+ */
+@Composable
+private fun CrmSearch(c: AppContainer, onPick: (it.cdanet.cpeconfigurator.data.WorkOrderCrmCustomer, it.cdanet.cpeconfigurator.data.WorkOrderCrmSite) -> Unit) {
+    var q by remember { mutableStateOf("") }
+    var result by remember { mutableStateOf<it.cdanet.cpeconfigurator.data.WorkOrderCrmDto?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var searching by remember { mutableStateOf(false) }
+    androidx.compose.runtime.LaunchedEffect(q) {
+        result = null
+        error = null
+        if (q.trim().length < 2) return@LaunchedEffect
+        kotlinx.coroutines.delay(400)
+        searching = true
+        runCatching { c.api.workOrderCrm(q) }
+            .onSuccess { result = it }
+            .onFailure { e -> error = if ((e as? it.cdanet.cpeconfigurator.data.ApiException)?.status == 404) "Ricerca nel CRM non ancora disponibile su questo server." else "Ricerca non riuscita: ${e.message}" }
+        searching = false
+    }
+    if (result?.configured == false) return
+    OutlinedTextField(
+        q,
+        { q = it.take(80) },
+        label = { Text("Cerca nel CRM") },
+        placeholder = { Text("Cognome, ragione sociale, telefono, utente PPPoE") },
+        supportingText = { Text(if (searching) "Ricerca…" else "Sceglie nome, indirizzo, posizione, contatto e utente PPPoE. La password si scrive a mano.") },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+    val items = result?.items
+    if (items != null && items.isEmpty() && q.trim().length >= 2) Text("Nessun cliente trovato.", style = MaterialTheme.typography.bodySmall)
+    items?.forEach { cu ->
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Text(listOfNotNull(cu.name, cu.code?.takeIf { it.isNotBlank() }?.let { "cod. $it" }).joinToString(" · "), fontWeight = FontWeight.SemiBold)
+            cu.sites.forEach { s ->
+                TextButton(onClick = { onPick(cu, s); q = ""; result = null }, modifier = Modifier.fillMaxWidth()) {
+                    Text(
+                        listOf(s.pppoeUser.ifBlank { "senza utente PPPoE" }, s.address, s.status.orEmpty(), s.profile.orEmpty()).filter { it.isNotBlank() }.joinToString(" · "),
+                        modifier = Modifier.fillMaxWidth(),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                }
+            }
+        }
     }
 }

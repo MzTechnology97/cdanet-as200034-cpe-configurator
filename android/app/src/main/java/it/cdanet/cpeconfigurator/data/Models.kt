@@ -930,6 +930,30 @@ data class RelinkDto(val ssid: String, val psk: String, val sshPort: Int = 22) {
 @Serializable
 data class CpeJobDto(val job: JobDto? = null)
 
+/** NOC: customers of the CRM for a new work order (name «COGNOME NOME» or company, phone, sites). */
+@Serializable
+data class WorkOrderCrmDto(val configured: Boolean = false, val items: List<WorkOrderCrmCustomer> = emptyList())
+
+@Serializable
+data class WorkOrderCrmCustomer(
+    val name: String = "",
+    val code: String? = null,
+    val phone: String? = null,
+    val status: String? = null,
+    val sites: List<WorkOrderCrmSite> = emptyList(),
+)
+
+/** One account of the customer: its PPPoE user and where it is (no password: typed by hand). */
+@Serializable
+data class WorkOrderCrmSite(
+    val pppoeUser: String = "",
+    val status: String? = null,
+    val profile: String? = null,
+    val address: String = "",
+    val lat: Double? = null,
+    val lon: Double? = null,
+)
+
 /** An earlier acceptance test of an installation (the installation's own, or a re-pointing). */
 @Serializable
 data class AcceptanceHistoryDto(
