@@ -10,6 +10,7 @@ import type { Connectors } from './services/connectors.ts';
 import type { CrmSettings } from './services/crm.ts';
 import type { VrmSettings } from './services/victron.ts';
 import type { MyWicSettings } from './services/mywic.ts';
+import type { CoverageOps } from './services/coverage-operators.ts';
 import type { VictronSync } from './services/victron-sync.ts';
 import type { Imagery } from './services/imagery.ts';
 import type { CrmSync } from './services/crm-sync.ts';
@@ -51,6 +52,8 @@ export interface AppContext {
   victron: VrmSettings;
   /** Multi-operator coverage (MyWic: FTTH, FTTC, FWA of the other operators), admins only, read only. */
   mywic: MyWicSettings;
+  /** The other operators' coverage at a point, grouped by AGCOM sticker, with its cache. */
+  coverageOps: CoverageOps;
   /** The POPs' Victron systems read every 5 minutes and the POP each one powers. */
   victronSync: VictronSync;
   /** Aerial imagery for the admins' maps (Connettori → Immagini satellitari). */

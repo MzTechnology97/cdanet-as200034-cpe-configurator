@@ -46,6 +46,8 @@ import { crmRoutes } from './routes/crm.ts';
 import { connectorRoutes } from './routes/connectors.ts';
 import { victronRoutes } from './routes/victron.ts';
 import { speedtestRoutes } from './routes/speedtest.ts';
+import { coverageOpsRoutes } from './routes/coverage-operators.ts';
+import { createCoverageOps, type CoverageOps } from './services/coverage-operators.ts';
 import { cpeAdminRoutes } from './routes/cpe-admin.ts';
 import { uispRoutes } from './routes/uisp.ts';
 import { mapRoutes } from './routes/map.ts';
@@ -143,6 +145,7 @@ export async function buildApp(
     }),
     crmSync: undefined as unknown as CrmSync,
     victronSync: undefined as unknown as VictronSync,
+    coverageOps: undefined as unknown as CoverageOps,
     warehouse: undefined as unknown as Warehouse,
     apLoad: undefined as unknown as ApLoadService,
     advisor: undefined as unknown as Advisor,
@@ -162,6 +165,7 @@ export async function buildApp(
   };
   ctx.crmSync = createCrmSync(db, ctx.crm);
   ctx.victronSync = createVictronSync(db, ctx.victron);
+  ctx.coverageOps = createCoverageOps(db, cfg, () => ctx.mywic.client());
   ctx.warehouse = createWarehouse(db, ctx.crm);
   ctx.advisor = createAdvisor(ctx);
   ctx.optimizer = createOptimizer(ctx);
@@ -277,6 +281,7 @@ export async function buildApp(
   connectorRoutes(app, ctx);
   victronRoutes(app, ctx);
   speedtestRoutes(app, ctx);
+  coverageOpsRoutes(app, ctx);
 
   const hasWeb = existsSync(join(cfg.staticDir, 'index.html'));
   // The console built by Vite (console/ → web/app): its pages (the console, /map-embed.html for the

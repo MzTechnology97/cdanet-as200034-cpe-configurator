@@ -77,6 +77,10 @@ const envSchema = z.object({
   SPEEDTEST_MIN_PCT: int(80, 10, 100),
   WIFI_WARN_DBM: int(-65, -90, -30),
   WIFI_BLOCK_DBM: int(-70, -95, -30),
+  // coverage of the other operators (fibre, FTTC, FWA) for a point: cache and the AGCOM sticker
+  COVERAGE_OPS_CACHE_DAYS: int(7, 1, 90),
+  COVERAGE_OPS_FWA_MIN_MBPS: int(30, 1, 1000),
+  COVERAGE_OPS_VHCN_TECHS: z.string().max(200).default(''),
   // CPEs offline for longer than this are left out of Salute CPE and Stato rete (0 = never)
   STALE_CPE_MONTHS: int(12, 0, 120),
   // nearest APs an installer gets from a coverage check (web and app alike)
@@ -180,6 +184,8 @@ export interface Config {
   installerCoverageAps: number;
   /** Speedtest (OoklaServer host:port) and the Wi-Fi of the phone towards the customer's router. */
   speedtest: { server: string; seconds: number; streams: number; minPct: number; wifiWarnDbm: number; wifiBlockDbm: number };
+  /** Other operators' coverage: days a lookup is reused, the FWA speed for «FR» and the FWA technologies with the VHCN sticker. */
+  coverageOps: { cacheDays: number; fwaMinMbps: number; vhcnTechs: string };
   /** Months offline after which a CPE is considered gone (hidden in Salute CPE, not counted in Stato rete); 0 = never. */
   staleCpeMonths: number;
   installerDistanceStepM: number;
@@ -291,6 +297,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     },
     installerCoverageAps: e.INSTALLER_COVERAGE_APS,
     speedtest: { server: e.SPEEDTEST_SERVER, seconds: e.SPEEDTEST_SECONDS, streams: e.SPEEDTEST_STREAMS, minPct: e.SPEEDTEST_MIN_PCT, wifiWarnDbm: e.WIFI_WARN_DBM, wifiBlockDbm: e.WIFI_BLOCK_DBM },
+    coverageOps: { cacheDays: e.COVERAGE_OPS_CACHE_DAYS, fwaMinMbps: e.COVERAGE_OPS_FWA_MIN_MBPS, vhcnTechs: e.COVERAGE_OPS_VHCN_TECHS },
     staleCpeMonths: e.STALE_CPE_MONTHS,
     installerDistanceStepM: e.INSTALLER_DISTANCE_STEP_M,
     coverageEirpDbm: e.COVERAGE_AP_EIRP_DBM,
