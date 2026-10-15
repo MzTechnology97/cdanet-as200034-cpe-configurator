@@ -274,7 +274,7 @@ function JobDrawer({ j, admin, onClose, onChange, onDeleted }: { j: Job; admin: 
       {j.status === 'success' && isOn('acceptance') && (
         <section className="jb-sec">
           <h3>Collaudo</h3>
-          <AcceptancePanel j={j} />
+          <AcceptancePanel j={j} admin={admin} onChange={onChange} />
           <ReviewPanel job={j} admin={admin} onChange={() => void onChange()} />
         </section>
       )}

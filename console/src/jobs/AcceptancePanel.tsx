@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { api, download } from '../lib/api';
 import { toast } from '../lib/toast';
-import { AsyncButton, Badge, Skeleton } from '../ui';
+import { AsyncButton, Badge, Button, Field, Skeleton } from '../ui';
 
 /**
  * "Collaudo" of a job (Storico provisioning): the measures sent by the app, the checks, the notes,
@@ -77,6 +77,43 @@ async function openReport(jobId: string) {
   }
 }
 
+/** Admins: a test that did not pass (or passed with warnings) marked as passed, with the reason. */
+function PassOverride({ jobId, was, onDone }: { jobId: string; was: string; onDone: () => Promise<void> }) {
+  const [open, setOpen] = useState(false);
+  const [note, setNote] = useState('');
+  if (!open)
+    return (
+      <div className="ui-row">
+        <Button onClick={() => setOpen(true)}>Segna come superato</Button>
+      </div>
+    );
+  return (
+    <div className="jb-override-form">
+      <Field label="Motivo" hint={`Il collaudo è ${was === 'bad' ? 'non superato' : 'con riserva'}: diventa superato ovunque (storico, magazzino, rapporto, «pronta da accettare»). Le misure restano registrate e l’installatore riceve la notifica.`}>
+        <textarea rows={2} value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} placeholder="Es. segnale accettato: cliente lontano, unico AP possibile" />
+      </Field>
+      <div className="ui-row">
+        <AsyncButton
+          variant="primary"
+          disabled={note.trim().length < 3}
+          onClick={async () => {
+            await api(`/api/admin/provisioning/jobs/${jobId}/acceptance/pass`, { method: 'POST', body: { note: note.trim() } });
+            toast('Collaudo segnato come superato');
+            setOpen(false);
+            await onDone();
+          }}
+          onError={(e) => toast((e as Error).message, 'bad')}
+        >
+          Conferma: superato
+        </AsyncButton>
+        <Button variant="ghost" onClick={() => setOpen(false)}>
+          Annulla
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 /** One photo of the job, read with the session when it scrolls into the panel. */
 function JobPhoto({ jobId, p }: { jobId: string; p: Photo }) {
   const [src, setSrc] = useState<string | null>(null);
@@ -99,7 +136,7 @@ function JobPhoto({ jobId, p }: { jobId: string; p: Photo }) {
   );
 }
 
-export function AcceptancePanel({ j }: { j: Job }) {
+export function AcceptancePanel({ j, admin = false, onChange }: { j: Job; admin?: boolean; onChange?: () => Promise<unknown> | void }) {
   const q = useQuery({ queryKey: ['jobs', j.id, 'acceptance'], queryFn: () => api<{ acceptance: Acceptance | null; photos: Photo[] }>(`/api/provisioning/jobs/${j.id}/acceptance`) });
   if (q.error) return <p className="ui-muted ui-small">Collaudo non disponibile: {(q.error as Error).message}</p>;
   if (!q.data) return <Skeleton lines={3} />;
@@ -116,6 +153,15 @@ export function AcceptancePanel({ j }: { j: Job }) {
               {(a.samples ?? 0) > 1 ? ` · media di ${a.samples} letture` : ''}
             </span>
           </div>
+          {a.override && (
+            <p className="ui-small jb-p jb-override">
+              <strong>Superato per decisione del NOC</strong> ({a.override.by}, {date(a.override.at)}): le misure dicevano «{a.override.from === 'bad' ? 'non superato' : 'con riserva'}». Motivo: {a.override.note}
+            </p>
+          )}
+          {admin && a.verdict !== 'ok' && <PassOverride jobId={j.id} was={a.verdict} onDone={async () => {
+            await q.refetch();
+            await onChange?.();
+          }} />}
           <dl className="ui-facts">
             {measures(a).map(([k, v]) => (
               <div key={k}>
