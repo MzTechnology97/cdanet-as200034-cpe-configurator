@@ -554,6 +554,10 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX victron_links_pop ON victron_links(pop_id);
   `,
+  // the customer's formal name from the CRM («Cognome Nome» or the company name): the CPE's device name
+  `
+  ALTER TABLE crm_radius ADD COLUMN customer_formal TEXT NOT NULL DEFAULT '';
+  `,
 ];
 
 export function openDatabase(path: string): Db {
