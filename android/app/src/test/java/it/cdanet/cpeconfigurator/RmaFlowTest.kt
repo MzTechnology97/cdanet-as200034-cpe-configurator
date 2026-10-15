@@ -103,3 +103,14 @@ class RmaFlowTest {
         assertTrue(rma.pending.value.isEmpty())
     }
 }
+
+class RmaListTest {
+    @Test
+    fun aRemovedCpeWithMissingDataStillReads() {
+        val l = it.cdanet.cpeconfigurator.data.AppJson.decodeFromString(
+            it.cdanet.cpeconfigurator.data.RmaListDto.serializer(),
+            """{"items":[{"id":1,"createdAt":"2026-10-15T18:00:00Z","removedJobId":"a","replacedByJobId":"b","mac":"AA:BB:CC:DD:EE:FF","model":null,"customer":null,"condition":null,"state":"to_return","note":null,"updatedAt":null,"removedBy":"tecnico","updatedBy":null}]}""",
+        )
+        assertEquals("to_return", l.items.single().state)
+    }
+}

@@ -939,13 +939,13 @@ data class CpeJobDto(val job: JobDto? = null)
 data class RmaItemDto(
     val id: Long = 0,
     val createdAt: String = "",
-    val mac: String = "",
-    val model: String = "",
-    val customer: String = "",
+    val mac: String? = null,
+    val model: String? = null,
+    val customer: String? = null,
     /** working, broken, unknown (null: not said yet). */
     val condition: String? = null,
-    val state: String = "",
-    val note: String = "",
+    val state: String? = null,
+    val note: String? = null,
 )
 
 @Serializable

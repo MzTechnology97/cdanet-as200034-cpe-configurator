@@ -73,9 +73,9 @@ fun RmaToReturnCard(c: AppContainer) {
     if (items.isEmpty()) return
     SectionCard("CPE smontate da riportare (${items.size})") {
         items.forEach { r ->
-            Text("${r.model} · ${r.mac}", fontWeight = FontWeight.SemiBold)
+            Text(listOfNotNull(r.model?.takeIf { it.isNotBlank() }, r.mac).joinToString(" · "), fontWeight = FontWeight.SemiBold)
             Text(
-                listOfNotNull(r.customer.takeIf { it.isNotBlank() }, RMA_CONDITIONS.firstOrNull { it.first == r.condition }?.second, r.createdAt.take(10).split('-').reversed().joinToString("/")).joinToString(" · "),
+                listOfNotNull(r.customer?.takeIf { it.isNotBlank() }, RMA_CONDITIONS.firstOrNull { it.first == r.condition }?.second, r.createdAt.take(10).split('-').reversed().joinToString("/")).joinToString(" · "),
                 style = MaterialTheme.typography.bodySmall,
             )
         }
