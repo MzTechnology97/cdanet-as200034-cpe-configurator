@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
@@ -438,7 +439,7 @@ private fun OrderDialog(
         onDismissRequest = onClose,
         title = { Text(o.customer) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Column(Modifier.verticalScroll(androidx.compose.foundation.rememberScrollState()), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Text(
                     LocalDate.parse(o.day).format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.ITALIAN)).replaceFirstChar { it.uppercase() } +
                         (if (o.slot.isNotBlank()) " · ${o.slot}" else ""),
@@ -454,6 +455,8 @@ private fun OrderDialog(
                 if (o.statusNote.isNotBlank()) Text("Nota: ${o.statusNote}", style = MaterialTheme.typography.bodySmall)
                 statusLabel(o)?.let { (s, k) -> StatusChip(s, k) }
                 if (o.id in c.provisioning.field.ready.collectAsState().value) StatusChip("pronto offline", NoticeKind.Good)
+                // the customer's network seen from here, before leaving (faults and re-pointings at once)
+                if (diagnosable(o.kind) && o.status != "done" && o.status != "cancelled") RemoteDiagnosisCard(c, o.id, o.kind)
                 // the NOC plans from here too
                 if (onEdit != null || onCancelled != null) Row {
                     onEdit?.let { TextButton(onClick = it) { Text("Modifica o sposta") } }

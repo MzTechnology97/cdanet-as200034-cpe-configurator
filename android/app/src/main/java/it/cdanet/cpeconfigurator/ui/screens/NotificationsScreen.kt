@@ -32,7 +32,7 @@ import it.cdanet.cpeconfigurator.ui.ErrorBanner
 import it.cdanet.cpeconfigurator.ui.SectionCard
 import kotlinx.coroutines.launch
 
-private val ICONS = mapOf("screenshot_attempt" to "📵", "provisioning_failed" to "❌", "install_ko" to "⛔", "review_pending" to "📶", "install_activated" to "✅", "work_order_noc" to "📋", "network_advice" to "🛠️", "network_optimizer" to "🔧", "platform" to "🖥️", "repoint_unplanned" to "🎯")
+private val ICONS = mapOf("screenshot_attempt" to "📵", "provisioning_failed" to "❌", "install_ko" to "⛔", "review_pending" to "📶", "install_activated" to "✅", "work_order_noc" to "📋", "network_advice" to "🛠️", "network_optimizer" to "🔧", "platform" to "🖥️", "repoint_unplanned" to "🎯", "proactive" to "📈")
 
 /**
  * The user's notifications (NOC approvals, activations; for admins also failures, KO and
@@ -87,7 +87,8 @@ fun NotificationsScreen(c: AppContainer, onUnread: (Int) -> Unit) {
             }
         }
         items(items, key = { it.id }) { n ->
-            val title = if (listOf("✅", "❌", "⚠️").any { n.title.startsWith(it) }) n.title else "${ICONS[n.kind] ?: "🔔"} ${n.title}"
+            // a title that already starts with an emoji (📉, 🔋, ✅…) gets no second icon
+            val title = if (startsWithEmoji(n.title)) n.title else "${ICONS[n.kind] ?: "🔔"} ${n.title}"
             SectionCard {
                 Column(
                     Modifier.fillMaxWidth().clickable(enabled = n.readAt == null) {
@@ -128,3 +129,11 @@ fun NotificationsScreen(c: AppContainer, onUnread: (Int) -> Unit) {
         )
     }
 }
+
+/** «📉 Segnale in calo…», «✅ …»: the first character is a symbol (an emoji), not a letter or digit. */
+internal fun startsWithEmoji(title: String): Boolean {
+    val cp = title.trimStart().codePointAtOrNull() ?: return false
+    return !Character.isLetterOrDigit(cp) && Character.getType(cp).let { it == Character.OTHER_SYMBOL.toInt() || it == Character.SURROGATE.toInt() || it == Character.MATH_SYMBOL.toInt() }
+}
+
+private fun String.codePointAtOrNull(): Int? = if (isEmpty()) null else codePointAt(0)
