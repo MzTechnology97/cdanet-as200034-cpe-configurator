@@ -180,6 +180,21 @@ export const SERVER_SETTINGS: Def[] = [
     get: (c) => c.speedtest.streams, set: (c, v) => (c.speedtest.streams = (v as number | undefined) ?? 4),
   },
   {
+    key: 'coverageOps.cacheDays', env: 'COVERAGE_OPS_CACHE_DAYS', group: 'Copertura altri operatori', label: 'Riusa una verifica per (giorni)', kind: 'int', min: 1, max: 90,
+    help: 'La copertura degli altri operatori (fibra, FTTC, FWA) di un punto viene richiesta al servizio esterno una volta e poi riusata per questi giorni: meno richieste e risposte immediate. «Rileggi» la aggiorna subito.',
+    get: (c) => c.coverageOps.cacheDays, set: (c, v) => (c.coverageOps.cacheDays = (v as number | undefined) ?? 7),
+  },
+  {
+    key: 'coverageOps.fwaMinMbps', env: 'COVERAGE_OPS_FWA_MIN_MBPS', group: 'Copertura altri operatori', label: 'FWA con bollino FR da (Mbit/s)', kind: 'int', min: 1, max: 1000,
+    help: 'Bollino AGCOM delle reti radio (FWA): da questa velocità in su «FR» giallo (misto fibra-radio), sotto «R» rosso. La delibera fissa la soglia a 30 Mbit/s.',
+    get: (c) => c.coverageOps.fwaMinMbps, set: (c, v) => (c.coverageOps.fwaMinMbps = (v as number | undefined) ?? 30),
+  },
+  {
+    key: 'coverageOps.vhcnTechs', env: 'COVERAGE_OPS_VHCN_TECHS', group: 'Copertura altri operatori', label: 'Tecnologie FWA con bollino blu VHCN', kind: 'text',
+    help: 'Codici delle tecnologie radio che hanno il bollino blu «FWA VHCN», separati da virgola (per esempio WIRELESS_28). Vuoto: nessuna; le altre reti radio restano FR o R secondo la velocità.',
+    get: (c) => c.coverageOps.vhcnTechs, set: (c, v) => (c.coverageOps.vhcnTechs = (v as string | undefined) ?? ''),
+  },
+  {
     key: 'coverageHideBelowDbm', env: 'COVERAGE_HIDE_BELOW_DBM', group: 'Copertura per gli installatori', label: 'Nascondi gli AP con segnale stimato più debole di (dBm)', kind: 'int', min: -100, max: -40,
     help: 'In ogni verifica di copertura (console e app, installatori e amministratori) gli AP con un segnale stimato più debole di questo valore non vengono elencati: la risposta dice quanti ne sono stati nascosti. Gli AP senza una stima restano. −100 = mostra tutti.',
     get: (c) => c.coverageHideBelowDbm, set: (c, v) => (c.coverageHideBelowDbm = (v as number | undefined) ?? -70),

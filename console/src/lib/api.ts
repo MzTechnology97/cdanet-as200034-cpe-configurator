@@ -115,7 +115,7 @@ const INSTALLER_MESSAGES: Record<string, string> = {
 };
 
 /** Error codes that name a data source (UISP, the CRM/ISPBilling, e-distribuzione, the warehouse reading). */
-const SOURCE_CODE = /^(uisp|crm|ispbilling|edist|outages_source|warehouse_sync|imagery|firebase)_/;
+const SOURCE_CODE = /^(uisp|crm|ispbilling|edist|outages_source|warehouse_sync|imagery|firebase|vrm|victron|mywic|operators)_/;
 
 export interface ApiErrorBody {
   error?: string;

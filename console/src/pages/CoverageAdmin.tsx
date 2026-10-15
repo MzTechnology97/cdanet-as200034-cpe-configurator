@@ -1,4 +1,5 @@
 import { useQuery } from '@tanstack/react-query';
+import { OperatorsCard } from '../coverage/Operators';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { toast } from '../lib/toast';
 import { drawFresnelLink, pointPicker, simulationOverlay, towards, MAP_COLORS as C } from '../map/leaflet';
@@ -519,6 +520,7 @@ export function CoverageAdmin() {
       )}
       {result?.error && <Notice tone="bad">{result.error}</Notice>}
       {result?.r && point && <Results r={result.r} point={point} onLink={(a) => void openLink(a)} onSimulate={(id) => void simulate(id)} />}
+      {result?.r && point && <OperatorsCard key={`${point.la},${point.lo}`} point={point} />}
       <div ref={linkCardRef}>{link && point && <LinkDetails link={link} point={point} on3d={show3dLink} />}</div>
 
       <Card>
