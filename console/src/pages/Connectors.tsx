@@ -7,14 +7,15 @@ import { type Imagery, ImageryCard } from '../connectors/ImageryCard';
 import { type Telegram, TelegramCard } from '../connectors/TelegramCard';
 import { type Victron, VictronCard } from '../connectors/VictronCard';
 import { type MyWic, MyWicCard } from '../connectors/MyWicCard';
+import { type Nas, NasCard } from '../connectors/NasCard';
 import { api } from '../lib/api';
 import { AsyncButton, Badge, Card, Field, Notice, PageHeader, Skeleton, Stat } from '../ui';
 
 /**
  * Connettori (admins): the external systems, configured and tested from the console. Credentials
  * stay on the server, encrypted, and are never shown again (only whether they are set). UISP and
- * the address search, CRM (ISP Billing), Victron VRM (the POPs' solar systems), Telegram, Firebase (push notifications of the app) and
- * aerial imagery.
+ * the address search, CRM (ISP Billing), Victron VRM (the POPs' solar systems), the NAS of the nightly backup, Telegram, Firebase (push
+ * notifications of the app) and aerial imagery.
  */
 
 const ERRORS: Record<string, string> = {
@@ -55,6 +56,7 @@ interface Data {
   crm: Crm;
   victron?: Victron | null;
   mywic?: MyWic | null;
+  nas?: Nas | null;
   telegram?: Telegram | null;
   geocoder: Geocoder;
   imagery?: Imagery | null;
@@ -100,6 +102,7 @@ export function Connectors() {
           <CrmCard key={`crm-${d.crm.updatedAt ?? ""}`} c={d.crm} onSaved={reload} />
           {d.victron ? <VictronCard key={`vrm-${d.victron.updatedAt ?? ''}`} v={d.victron} onSaved={reload} /> : null}
           {d.mywic ? <MyWicCard key={`mw-${d.mywic.updatedAt ?? ''}`} m={d.mywic} onSaved={reload} /> : null}
+          {d.nas ? <NasCard key={`nas-${d.nas.updatedAt ?? ''}`} n={d.nas} onSaved={reload} /> : null}
           {d.telegram ? <TelegramCard key={`tg-${d.telegram.updatedAt ?? ""}`} t={d.telegram} onSaved={reload} /> : null}
           {d.firebase ? <FirebaseCard key={`fb-${d.firebase.updatedAt ?? ''}-${d.firebase.configured}`} f={d.firebase} onSaved={reload} /> : null}
           <GeocoderCard g={d.geocoder} />

@@ -50,6 +50,7 @@ export function connectorRoutes(app: FastifyInstance, ctx: AppContext) {
     crm: ctx.crm.view(),
     victron: ctx.victron.view(),
     mywic: ctx.mywic.view(),
+    nas: ctx.nas.view(),
     imagery: ctx.imagery.view(),
     firebase: ctx.push.view(),
   }));
