@@ -1,6 +1,32 @@
-# Connetti il tuo Claude (MCP, sola lettura)
+# Connetti il tuo Claude (MCP)
 
 Gli account admin possono collegare il proprio Claude alla piattaforma per il **monitoraggio**. Claude può leggere lo stato della rete, le interruzioni, le batterie dei POP, la salute della piattaforma, gli avvisi del NOC, gli interventi, il magazzino, le statistiche e la diagnosi di un cliente. Non può modificare nulla né inviare comandi alle CPE.
+
+## Lettura e scrittura
+
+Nella pagina di consenso si sceglie:
+- **solo lettura**: il comportamento predefinito;
+- **«Consenti anche le modifiche»**: si aggiungono gli strumenti di scrittura, divisi per gruppo.
+
+Gli strumenti di scrittura:
+- **interventi:** crea, modifica o sposta (anche rimandare o annullare), elimina;
+- **NOC:** approva o rifiuta un collaudo, dichiara superato un collaudo con il motivo, sblocca un accesso bloccato, revoca una connessione di Claude;
+- **magazzino:** aggiorna lo stato di una CPE smontata (RMA);
+- **rete:**
+  - riavvia, rileggi e aggiorna il firmware di una CPE;
+  - fai un backup o ripristinalo;
+  - cambia la radio (mai le chiavi Wi-Fi);
+  - modifica nome, note e manutenzione;
+  - autorizza in UISP la CPE di un'installazione.
+
+Regole per le scritture:
+- Claude chiede conferma all'utente prima di ogni modifica. Gli strumenti sono segnati come modifiche, e quelli sulla rete o di eliminazione come distruttivi.
+- Ogni modifica finisce nel Registro come «modifica via Claude», con l'esito.
+- Ogni azione sulla rete manda anche un avviso al NOC: chi, cosa, su quale CPE, se è riuscita.
+- La password PPPoE e le chiavi Wi-Fi non passano mai da Claude.
+- Il nuovo subscriber nel CRM resta solo nella console.
+
+Una connessione in sola lettura che prova una modifica riceve l'invito a ricollegarsi con le modifiche.
 
 ## Sicurezza
 

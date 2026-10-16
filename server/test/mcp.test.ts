@@ -156,4 +156,54 @@ describe('Connetti il tuo Claude (MCP, sola lettura)', () => {
     const long = sanitize(Array.from({ length: 250 }, (_, i) => i)) as unknown[];
     assert.equal(long.length, 201);
   });
+
+  it('«Consenti anche le modifiche»: the writes only for that connection, each one in the log', async () => {
+    const t = await testApp();
+    const admin = await t.login();
+    const H = t.auth(admin);
+    const setup = (await t.app.inject({ method: 'POST', url: '/api/auth/totp/setup', headers: H, payload: { password: ADMIN.password } })).json();
+    const step = currentStep();
+    const rc = (await t.app.inject({ method: 'POST', url: '/api/auth/totp/enable', headers: H, payload: { code: codeAt(setup.secret, step) } })).json().recoveryCodes as string[];
+    const clientId = (await t.app.inject({ method: 'POST', url: '/oauth/register', payload: { redirect_uris: [CALLBACK] } })).json().client_id as string;
+    const verifier = randomBytes(40).toString('base64url');
+    const q = { response_type: 'code', client_id: clientId, redirect_uri: CALLBACK, code_challenge: createHash('sha256').update(verifier).digest('base64url'), code_challenge_method: 'S256' };
+    const connect = async (code: string, write: boolean) => {
+      const ok = await t.app.inject({ method: 'POST', url: '/oauth/authorize', ...form({ ...q, decision: 'allow', username: ADMIN.username, password: ADMIN.password, code, ...(write ? { write: '1' } : {}) }) });
+      const c = new URL(String(ok.headers.location)).searchParams.get('code')!;
+      const tok = (await t.app.inject({ method: 'POST', url: '/oauth/token', ...form({ grant_type: 'authorization_code', code: c, client_id: clientId, redirect_uri: CALLBACK, code_verifier: verifier }) })).json();
+      return (method: string, params: object = {}) => t.app.inject({ method: 'POST', url: '/mcp', headers: { authorization: `Bearer ${tok.access_token}` }, payload: { jsonrpc: '2.0', id: 1, method, params } });
+    };
+    // the consent page offers the choice
+    assert.match((await t.app.inject({ method: 'GET', url: `/oauth/authorize?${new URLSearchParams(q)}` })).body, /Consenti anche le modifiche/);
+
+    const ro = await connect(codeAt(setup.secret, step + 1), false);
+    const roTools = (await ro('tools/list')).json().result.tools as Array<{ name: string }>;
+    assert.ok(!roTools.some((x) => x.name === 'crea_intervento'), 'read-only: no write tools listed');
+    const denied = (await ro('tools/call', { name: 'crea_intervento', arguments: { day: '2026-10-20', customer: 'ROSSI MARIO' } })).json().result;
+    assert.equal(denied.isError, true);
+    assert.match(denied.content[0].text, /sola lettura/);
+
+    const rw = await connect(rc[0]!, true);
+    const tools = (await rw('tools/list')).json().result.tools as Array<{ name: string; annotations: { readOnlyHint: boolean; destructiveHint?: boolean } }>;
+    const create = tools.find((x) => x.name === 'crea_intervento')!;
+    assert.equal(create.annotations.readOnlyHint, false);
+    assert.equal(tools.find((x) => x.name === 'riavvia_cpe')!.annotations.destructiveHint, true);
+    const made = (await rw('tools/call', { name: 'crea_intervento', arguments: { day: '2026-10-20', kind: 'repair', customer: 'ROSSI MARIO', notes: 'via Claude' } })).json().result;
+    assert.ok(!made.isError, JSON.stringify(made));
+    const wo = t.db.prepare("SELECT id, customer, status FROM work_orders WHERE customer = 'ROSSI MARIO'").get() as { id: number; customer: string; status: string };
+    assert.ok(wo);
+    const moved = (await rw('tools/call', { name: 'modifica_intervento', arguments: { id: wo.id, day: '2026-10-21', status: 'postponed' } })).json().result;
+    assert.ok(!moved.isError, JSON.stringify(moved));
+    assert.deepEqual({ ...(t.db.prepare('SELECT day, status FROM work_orders WHERE id = ?').get(wo.id) as object) }, { day: '2026-10-21', status: 'postponed' });
+    // a missing argument is said, nothing happens
+    assert.match((await rw('tools/call', { name: 'modifica_intervento', arguments: {} })).json().result.content[0].text, /non valido/);
+    // the network without UISP: an error said plainly, never a crash
+    assert.equal((await rw('tools/call', { name: 'riavvia_cpe', arguments: { deviceId: 'abc' } })).json().result.isError, true);
+    const log = t.db.prepare("SELECT target, detail FROM events WHERE action = 'mcp.call' AND detail LIKE 'modifica via Claude%'").all() as Array<{ target: string }>;
+    assert.ok(log.some((e) => e.target === 'crea_intervento') && log.some((e) => e.target === 'riavvia_cpe'), JSON.stringify(log));
+    // the console sees which connections may write
+    const conns = (await t.app.inject({ method: 'GET', url: '/api/admin/mcp', headers: H })).json().connections as Array<{ canWrite: boolean }>;
+    assert.deepEqual(conns.map((c) => c.canWrite).sort(), [false, true]);
+    await t.app.close();
+  });
 });
