@@ -84,7 +84,8 @@ export function createUispCrm(opts: { url: string; appKey: string; fetchImpl?: t
    */
   async function madeBefore(s: NewSubscriber): Promise<number | null> {
     if (!s.note) return null;
-    const list = (await call('GET', '/clients?order=client.id&direction=DESC&limit=200').catch(() => call('GET', '/clients')).catch(() => [])) as unknown[];
+    // only the newest clients, asked to the API: never the whole list while the network is unstable
+    const list = (await call('GET', '/clients?order=client.id&direction=DESC&limit=50').catch(() => [])) as unknown[];
     const since = Date.now() - 2 * 86_400_000;
     const hit = (Array.isArray(list) ? list : []).find((c) => {
       const o = c as { note?: unknown; firstName?: unknown; lastName?: unknown; isLead?: unknown; registrationDate?: unknown };
