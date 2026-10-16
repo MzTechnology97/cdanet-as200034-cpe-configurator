@@ -71,4 +71,22 @@ class PhotoQualityTest {
         assertEquals(PhotoType.Bracket, PhotoType.ofCaption("Staffa / palo"))
         assertEquals(PhotoType.Router, PhotoType.ofKey("router"))
     }
+
+    @Test
+    fun theRoofPhotosAreAskedOnTheRoof() {
+        assertEquals(listOf(PhotoType.Bracket, PhotoType.Cabling), PhotoChecklist.missingOnRoof(listOf("Antenna"), newInstall = true))
+        assertTrue("the router is photographed indoors", PhotoChecklist.missingOnRoof(listOf("Antenna", "Staffa / palo", "Cablaggio"), newInstall = true).isEmpty())
+        assertTrue(PhotoChecklist.missingOnRoof(emptyList(), newInstall = false).isEmpty())
+    }
+
+    @Test
+    fun onlyANewInstallationRequiresThem() {
+        val job = it.cdanet.cpeconfigurator.data.JobDto(id = "j", createdAt = "", status = "success", model = "", mac = "", serial = "", ssid = "", pppoeUser = "")
+        val install = it.cdanet.cpeconfigurator.install.InstallMode.New
+        val repoint = it.cdanet.cpeconfigurator.install.InstallMode.Repoint
+        assertTrue(it.cdanet.cpeconfigurator.install.InstallState(mode = install, job = job).newInstall)
+        assertFalse("a replacement", it.cdanet.cpeconfigurator.install.InstallState(mode = install, job = job.copy(replacesJobId = "old")).newInstall)
+        assertFalse("a re-pointing", it.cdanet.cpeconfigurator.install.InstallState(mode = repoint, job = job).newInstall)
+        assertTrue("a CPE installed before the app", it.cdanet.cpeconfigurator.install.InstallState(mode = repoint, job = job, jobAdopted = true).newInstall)
+    }
 }

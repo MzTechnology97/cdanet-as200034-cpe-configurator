@@ -362,7 +362,11 @@ private fun WriteStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
                     val id = prov.doneJobId
                     if (s != null && id != null) {
                         c.install.provisioned(
-                            JobDto(id = id, createdAt = "", status = "success", model = s.model, template = s.template, mac = s.mac, serial = s.serial, ssid = s.ssid, pppoeUser = s.pppoeUser, deviceName = s.deviceName),
+                            JobDto(
+                                id = id, createdAt = "", status = "success", model = s.model, template = s.template, mac = s.mac, serial = s.serial, ssid = s.ssid, pppoeUser = s.pppoeUser, deviceName = s.deviceName,
+                                // a replacement: no photos required in its acceptance test
+                                replacesJobId = c.provisioning.form.value.replaces,
+                            ),
                         )
                     }
                     c.install.next()

@@ -55,7 +55,10 @@ private val ROOF_CAPTIONS = listOf("Antenna", "Staffa / palo", "Cablaggio", "Alt
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun RoofStep(c: AppContainer, onNext: () -> Unit) {
-    val roof = c.install.state.collectAsState().value.roof
+    val install = c.install.state.collectAsState().value
+    val roof = install.roof
+    // a new installation: antenna, bracket and cabling photographed here, never a second climb for them
+    val roofMissing = it.cdanet.cpeconfigurator.field.PhotoChecklist.missingOnRoof(roof.photos.map { p -> p.caption }, install.newInstall)
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     var shot by remember { mutableStateOf<Pair<File, String>?>(null) }
@@ -100,6 +103,7 @@ fun RoofStep(c: AppContainer, onNext: () -> Unit) {
 
     SectionCard("3 · Foto dal tetto (${roof.photos.size})") {
         Text("Antenna, staffa o palo e cablaggio adesso; il router del cliente lo fotografi in casa, nel collaudo.", style = MaterialTheme.typography.bodySmall)
+        if (install.newInstall) PhotoChecklistRow(it.cdanet.cpeconfigurator.field.PhotoChecklist.roof(true), roofMissing)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             ROOF_CAPTIONS.forEach { cap ->
                 SecondaryButton(onClick = { val (f, u) = PhotoCapture.newTarget(context); shot = f to cap; camera.launch(u) }, enabled = roof.photos.size < 7) { Text(cap, maxLines = 1, softWrap = false) }
@@ -124,7 +128,10 @@ fun RoofStep(c: AppContainer, onNext: () -> Unit) {
 
     if (!roof.done) Text("Fai le misure radio prima di scendere: dopo il telefono passa alla Wi-Fi del router.", color = WarnAmber, style = MaterialTheme.typography.bodySmall)
     else if (parseCpeHeight(roof.heightText) == null) Text("Manca l'altezza della CPE: puoi scriverla anche nel collaudo.", color = WarnAmber, style = MaterialTheme.typography.bodySmall)
-    BusyButton("Scendi: router del cliente", false, Modifier.fillMaxWidth(), enabled = roof.done) { onNext() }
+    if (roof.done && roofMissing.isNotEmpty()) {
+        Text("Prima di scendere mancano le foto: ${roofMissing.joinToString(", ") { t -> t.label }}. Sono obbligatorie per la nuova installazione e si fanno solo da qui.", color = WarnAmber, style = MaterialTheme.typography.bodySmall)
+    }
+    BusyButton("Scendi: router del cliente", false, Modifier.fillMaxWidth(), enabled = roof.done && roofMissing.isEmpty() && review == null) { onNext() }
 }
 
 /** «1 · Misure radio»: the ten readings of the acceptance test, from the CPE's Wi-Fi. */

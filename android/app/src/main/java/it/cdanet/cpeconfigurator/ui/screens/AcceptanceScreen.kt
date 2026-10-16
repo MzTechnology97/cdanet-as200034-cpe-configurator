@@ -160,7 +160,7 @@ fun AcceptanceScreen(c: AppContainer) {
     val adopted = wizard?.jobAdopted == true
     val repoint = !adopted && (wizard?.mode == it.cdanet.cpeconfigurator.install.InstallMode.Repoint || activeOrder?.kind == "repoint")
     // the four photos are required for a new installation only (not re-pointings, not CPE replacements)
-    val newInstall = !repoint && j.replacesJobId == null
+    val newInstall = wizard?.newInstall ?: (!repoint && j.replacesJobId == null)
     val photoTypes = photos.mapNotNull { ph -> PhotoType.ofCaption(ph.caption) } +
         if (repoint) emptyList() else serverPhotos.mapNotNull { p -> PhotoType.ofKey(p.type) ?: PhotoType.ofCaption(p.caption) }
     val missingPhotos = PhotoChecklist.missing(photoTypes, newInstall)

@@ -132,7 +132,13 @@ data class InstallState(
     val router: RouterCheck = RouterCheck(),
     /** The work order this installation comes from (speed test target and context). */
     val workOrderId: Long? = null,
-)
+) {
+    /**
+     * A new installation's acceptance test: the four photos are required (decision of 15/10/2026).
+     * Not a re-pointing nor a CPE replacement; a CPE installed before the app and registered now is.
+     */
+    val newInstall: Boolean get() = jobAdopted || (mode == InstallMode.New && job?.replacesJobId == null)
+}
 
 /**
  * Guided installation: the steps and what they share (position, chosen AP, job). Kept outside
