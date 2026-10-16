@@ -57,17 +57,14 @@ fun LoginScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) ->
     val scope = rememberCoroutineScope()
     val savedBackend by c.settings.backendUrl.collectAsState(initial = "")
     val savedUser by c.settings.lastUsername.collectAsState(initial = "")
-    var backend by remember { mutableStateOf("") }
     var username by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var busy by remember { mutableStateOf(false) }
     var error by remember { mutableStateOf<String?>(null) }
     var serverInfo by remember { mutableStateOf<String?>(null) }
-    var editBackend by remember { mutableStateOf(false) }
     var mfaToken by remember { mutableStateOf<String?>(null) }
     var code by remember { mutableStateOf("") }
 
-    LaunchedEffect(savedBackend) { if (backend.isBlank()) backend = savedBackend }
     LaunchedEffect(savedUser) { if (username.isBlank()) username = savedUser }
 
     val view = androidx.compose.ui.platform.LocalView.current
@@ -146,7 +143,6 @@ fun LoginScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) ->
                     busy = true
                     error = null
                     try {
-                        if (backend != savedBackend) c.settings.setBackendUrl(backend)
                         mfaToken = c.api.login(username, password)
                         if (mfaToken == null) {
                             c.settings.setLastUsername(username)
@@ -162,28 +158,19 @@ fun LoginScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState) ->
             }
         }
 
+        // the server is built into the app: only whether it answers
         SectionCard("Server CDA Net", icon = R.drawable.ic_dns) {
-            if (editBackend) {
-                Field("URL server", backend, { backend = it.trim() }, keyboardType = KeyboardType.Uri, placeholder = "https://cpe.cda-net.it")
-            } else {
-                Text(backend.ifBlank { "—" }, style = MaterialTheme.typography.bodyLarge)
-            }
             serverInfo?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
-            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = { editBackend = !editBackend }) { Text(if (editBackend) "Chiudi modifica" else "Modifica URL") }
-                TextButton(onClick = {
-                    scope.launch {
-                        serverInfo = try {
-                            Settings.normalizeBackendUrl(backend)
-                            c.settings.setBackendUrl(backend)
-                            val h = c.api.health()
-                            "Online · server v${h.version} · firmware target ${h.targetFirmware}"
-                        } catch (e: Exception) {
-                            "Non raggiungibile: ${e.message}"
-                        }
+            TextButton(onClick = {
+                scope.launch {
+                    serverInfo = try {
+                        val h = c.api.health()
+                        "Online · server v${h.version} · firmware target ${h.targetFirmware}"
+                    } catch (e: Exception) {
+                        "Non raggiungibile: ${e.message}"
                     }
-                }) { Text("Verifica collegamento") }
-            }
+                }
+            }) { Text("Verifica collegamento") }
         }
 
         TextButton(onClick = onOffline) { Text("Continua senza accesso (solo strumenti locali)") }

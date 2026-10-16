@@ -9,37 +9,31 @@ import it.cdanet.cpeconfigurator.BuildConfig
 import it.cdanet.cpeconfigurator.network.Ip
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import java.net.URL
 import it.cdanet.cpeconfigurator.network.TestTls
 
 private val Context.dataStore by preferencesDataStore(name = "settings")
 
-/** Non-secret preferences only (backend URL, last username, Home shortcuts). */
+/** Non-secret preferences only (last username, Home shortcuts). The server is built into the app. */
 class Settings(private val context: Context) {
-    private val backendKey = stringPreferencesKey("backend_url")
     private val usernameKey = stringPreferencesKey("last_username")
-    private val insecureKey = booleanPreferencesKey("insecure_tls_test")
 
-    /** TEST ONLY: accept the server's unverified (self-signed) certificate. */
-    val insecureTls: Flow<Boolean> = context.dataStore.data.map { it[insecureKey] ?: false }
+    /**
+     * The server's certificate is checked always: its own CA is built into the app for its name
+     * (network_security_config). The old «accept unverified certificate» switch is gone; a value
+     * saved by an older version is ignored.
+     */
+    val insecureTls: Flow<Boolean> = flowOf(false)
 
-    suspend fun insecureTlsNow(): Boolean = insecureTls.first()
+    suspend fun insecureTlsNow(): Boolean = false
 
-    suspend fun setInsecureTls(value: Boolean) {
-        context.dataStore.edit { it[insecureKey] = value }
-        TestTls.enabled = value
-    }
-
-    val backendUrl: Flow<String> = context.dataStore.data.map { it[backendKey] ?: BuildConfig.DEFAULT_BACKEND_URL }
+    /** The CDA Net server, fixed in the app (no longer shown or changed on the phone). */
+    val backendUrl: Flow<String> = flowOf(BuildConfig.DEFAULT_BACKEND_URL)
     val lastUsername: Flow<String> = context.dataStore.data.map { it[usernameKey] ?: "" }
 
     suspend fun backendUrlNow(): String = backendUrl.first()
-
-    suspend fun setBackendUrl(value: String) {
-        val clean = normalizeBackendUrl(value)
-        context.dataStore.edit { it[backendKey] = clean }
-    }
 
     suspend fun setLastUsername(value: String) {
         context.dataStore.edit { it[usernameKey] = value }

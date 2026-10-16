@@ -24,7 +24,7 @@ android {
         targetSdk = 35
         versionCode = appVersionCode
         versionName = appVersion
-        buildConfigField("String", "DEFAULT_BACKEND_URL", "\"${System.getenv("CDA_DEFAULT_BACKEND") ?: "http://172.31.0.29"}\"")
+        buildConfigField("String", "DEFAULT_BACKEND_URL", "\"${System.getenv("CDA_DEFAULT_BACKEND") ?: "https://app.cda-net.it"}\"")
     }
 
     signingConfigs {

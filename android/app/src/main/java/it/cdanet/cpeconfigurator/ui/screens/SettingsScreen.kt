@@ -110,13 +110,10 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
     val session by c.session.state.collectAsState()
-    val saved by c.settings.backendUrl.collectAsState(initial = "")
     val pending by c.resultQueue.pending.collectAsState()
-    var backend by remember { mutableStateOf("") }
     var msg by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
-    LaunchedEffect(saved) { if (backend.isBlank()) backend = saved }
 
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         ErrorBanner(error) { error = null }
@@ -156,25 +153,12 @@ fun SettingsScreen(c: AppContainer, update: UpdateState, onUpdate: (UpdateState)
             }
         }
 
+        // the server is built into the app (address and certificate): only whether it answers
         SectionCard("Server", icon = it.cdanet.cpeconfigurator.R.drawable.ic_dns) {
-            Field("URL server", backend, { backend = it.trim() }, keyboardType = KeyboardType.Uri)
-            val insecure by c.settings.insecureTls.collectAsState(initial = false)
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Accetta certificato non verificato (solo test)", modifier = Modifier.weight(1f))
-                Switch(checked = insecure, onCheckedChange = { on -> scope.launch { c.settings.setInsecureTls(on) } })
-            }
-            if (insecure) {
-                Text(
-                    "Attivo: l'app non verifica il certificato HTTPS del server (solo verso il server CDA Net). Usalo solo per i test con certificato autofirmato; la soluzione definitiva è installare sul telefono la CA del server.",
-                    color = BadRed,
-                    style = MaterialTheme.typography.bodySmall,
-                )
-            }
-            BusyButton("Salva e verifica", busy, Modifier.fillMaxWidth()) {
+            BusyButton("Verifica collegamento", busy, Modifier.fillMaxWidth()) {
                 scope.launch {
                     busy = true
                     try {
-                        c.settings.setBackendUrl(backend)
                         val h = c.api.health()
                         msg = "Server raggiungibile · v${h.version}"
                     } catch (e: Exception) {
