@@ -121,7 +121,7 @@ fun FieldConnection(c: AppContainer, mode: FieldMode) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AssistChip(
-                    onClick = { manual = ""; c.field.start(mode) },
+                    onClick = { manual = ""; c.field.forgetSelection(); c.field.start(mode) },
                     label = { Text("Cerca CPE") },
                     leadingIcon = { Icon(painterResource(R.drawable.ic_radar), contentDescription = null, modifier = Modifier.size(18.dp)) },
                 )
@@ -137,11 +137,12 @@ fun FieldConnection(c: AppContainer, mode: FieldMode) {
                 )
             }
         }
-        if (st.candidates.isNotEmpty() && st.status == null) {
-            SectionCard("Trovate ${st.candidates.size} CPE: scegli quella da sistemare") {
-                st.candidates.forEach { d ->
+        val candidates by c.field.candidates.collectAsState()
+        if (candidates.isNotEmpty() && st.status == null) {
+            SectionCard("Trovate ${candidates.size} CPE: scegli quella da sistemare") {
+                candidates.forEach { d ->
                     Column(
-                        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable { manual = d.ip.orEmpty(); c.field.start(mode, d.ip) }.padding(vertical = 8.dp),
+                        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable { manual = ""; c.field.select(d); c.field.start(mode) }.padding(vertical = 8.dp),
                     ) {
                         Text("${d.product ?: d.model ?: "CPE"} · ${d.ip}", style = MaterialTheme.typography.titleSmall)
                         Text(

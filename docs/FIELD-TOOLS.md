@@ -281,6 +281,8 @@ La stessa discovery serve anche negli altri flussi:
   - Se non ne trova, prova come prima il gateway della Wi-Fi, l'IP LAN e l'IP di management.
   - **IP manuale** resta sempre disponibile; **Cerca CPE** rifà la ricerca.
   - Il cambio AP via SSH usa anche la porta SSH dichiarata dalla CPE.
+- **Barra della CPE in «CPE collegata»**: in cima a tutte le schede (diagnosi, puntamento, AP visibili, collaudo, firmware) c'è la CPE su cui lavorano gli strumenti. È trovata dalla discovery all'apertura, oppure scelta dall'elenco se ne rispondono più di una. Mostra prodotto, IP, nome, MAC, SSID, firmware (verde se è quello richiesto) e se è «di fabbrica». Da lì si usano **Cerca di nuovo**, **Interfaccia web** e **Riavvia**.
+- **Firmware senza uscire dall'installazione**: se il controllo della CPE trova un firmware diverso da quello richiesto, propone subito **Aggiorna a 8.7.4**. Se il firmware non è ancora sul telefono, prima **Scarica il firmware**, con Internet. Poi conferma, invio, controllo MD5, scrittura, attesa del riavvio e rilettura della versione; alla fine il controllo si ripete da solo e si prosegue. Anche la scheda Firmware usa la versione letta dalla discovery; la lettura via SSH resta come verifica.
 - **CPE bloccata**: se risponde alla discovery ma non alla sua interfaccia web, l'app lo dice e propone **Riavvia la CPE**, con conferma.
 - **Scansione LAN e topologia**: modello, modalità e apparati UniFi più completi. Dettagli del protocollo ripresi da [ubnt-discovery-next](https://github.com/Gaaraalex/ubnt-discovery-next) (licenza MIT).
 
