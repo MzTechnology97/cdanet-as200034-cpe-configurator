@@ -66,6 +66,7 @@ export const ROUTES: Array<Route | Group> = [
   { id: 'profiles', icon: 'settings_input_antenna', label: 'Profili airOS', admin: true, react: () => import('../pages/Profiles').then((m) => m.Profiles) },
   { id: 'firmware', icon: 'system_update', label: 'Firmware airOS', admin: true, module: 'firmware_upgrade', react: () => import('../pages/Firmware').then((m) => m.Firmware) },
   { id: 'connectors', icon: 'link', label: 'Connettori', admin: true, react: () => import('../pages/Connectors').then((m) => m.Connectors) },
+  { id: 'claude', icon: 'monitor_heart', label: 'Connetti il tuo Claude', admin: true, react: () => import('../pages/Claude').then((m) => m.Claude) },
   { id: 'server', icon: 'dns', label: 'Impostazioni server', admin: true, react: () => import('../pages/ServerSettings').then((m) => m.ServerSettings) },
   { id: 'modules', icon: 'handyman', label: 'Funzionalità', admin: true, react: () => import('../pages/Modules').then((m) => m.Modules) },
   { id: 'privacy', icon: 'lock', label: 'Informativa privacy', admin: true, react: () => import('../pages/Privacy').then((m) => m.Privacy) },
