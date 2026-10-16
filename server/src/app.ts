@@ -288,7 +288,8 @@ export async function buildApp(
     reply.header('X-Frame-Options', 'DENY');
     reply.header('Cross-Origin-Opener-Policy', 'same-origin');
     if (req.url.startsWith('/api/')) reply.header('Cache-Control', reply.getHeader('Cache-Control') ?? 'no-store');
-    else reply.header('Content-Security-Policy', CSP);
+    // a page with its own policy keeps it (the Claude consent page: its inline style, the redirect as form target)
+    else if (!reply.getHeader('Content-Security-Policy')) reply.header('Content-Security-Policy', CSP);
     return payload;
   });
 
