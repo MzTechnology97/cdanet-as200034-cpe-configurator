@@ -187,7 +187,8 @@ export function fieldRoutes(app: FastifyInstance, ctx: AppContext) {
   /**
    * Re-pointing a CPE installed before the app: nothing to attach its acceptance test to. The
    * technician registers it here (MAC, model, name and SSID read from the CPE, the phone's GPS)
-   * and its test is then the one of a new installation. The NOC hears of it at once.
+   * and its test is then the one of a new installation. The NOC hears of it at once. On site
+   * only, like the claim: the phone's GPS against the CPE's place in UISP when UISP knows it.
    */
   app.post('/api/field/cpe/register', user, async (req) => {
     const b = z
@@ -208,6 +209,21 @@ export function fieldRoutes(app: FastifyInstance, ctx: AppContext) {
     const known = ctx.db.prepare(`SELECT 1 FROM provisioning_jobs WHERE status = 'success' AND mac IN (${all.map(() => '?').join(',')}) LIMIT 1`).get(...all);
     if (known) throw new HttpError(409, 'cpe_known');
     const pos = b.position && isValidLatLon(b.position.lat, b.position.lon) ? b.position : null;
+    if (!pos) throw new HttpError(400, 'position_required');
+    // where UISP has the CPE (its own location, else its site's): the phone must be there
+    let away: number | null = null;
+    const u = ctx.uisp;
+    if (u) {
+      try {
+        const dev = await u.findByMac(...all);
+        let at = dev?.location ?? null;
+        if (dev && !at && dev.siteId) at = (await u.sites()).find((x) => x.id === dev.siteId)?.location ?? null;
+        if (at) away = Math.round(distanceM(at, pos));
+      } catch {
+        // UISP not reachable: registered, the NOC is told the presence was not checked
+      }
+      if (away != null && away > REPOINT_CLAIM_MAX_M + Math.min(pos.accuracyM ?? 0, 200)) throw new HttpError(403, 'too_far', { distanceM: away, maxM: REPOINT_CLAIM_MAX_M });
+    }
     const me = req.user!;
     const now = nowIso();
     const id = randomUUID();
@@ -218,7 +234,7 @@ export function fieldRoutes(app: FastifyInstance, ctx: AppContext) {
         `INSERT INTO provisioning_jobs(id, created_at, expires_at, completed_at, user_id, client, model, mac, serial, ssid, pppoe_user, device_name, status, stages, latitude, longitude, location_accuracy, location_source)
          VALUES(?,?,?,?,?,'adopted',?,?,'',?,'',?,'success',?,?,?,?,?)`,
       )
-      .run(id, now, now, now, me.id, b.model, mac, b.ssid ?? '', name, JSON.stringify(["CPE installata prima dell'app, registrata nel ripuntamento"]), pos?.lat ?? null, pos?.lon ?? null, pos?.accuracyM ?? null, pos ? 'gps' : '');
+      .run(id, now, now, now, me.id, b.model, mac, b.ssid ?? '', name, JSON.stringify(["CPE installata prima dell'app, registrata nel ripuntamento"]), pos.lat, pos.lon, pos.accuracyM ?? null, 'gps');
     recordEvent(ctx.db, me.id, 'job.adopted', id, `CPE ${mac} (${b.model}) installata prima dell'app, registrata nel ripuntamento`);
     ctx.notify.inbox.push('noc', {
       kind: 'repoint_unplanned',
@@ -226,7 +242,7 @@ export function fieldRoutes(app: FastifyInstance, ctx: AppContext) {
       lines: [
         `Tecnico: ${me.username}`,
         `CPE: ${mac} · ${b.model}${b.ssid ? ` · ${b.ssid}` : ''}`,
-        pos ? 'Posizione dal GPS del telefono' : 'Senza posizione GPS',
+        away != null ? `Telefono a ${away} m dalla CPE in UISP` : 'Presenza non verificata: la CPE non ha una posizione in UISP',
         'Il suo collaudo vale come quello di una nuova installazione',
       ],
       jobId: id,

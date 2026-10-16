@@ -223,7 +223,12 @@ class InstallController(
                 _state.update { it.copy(jobLooked = false) }
                 lookupJob(s.macs, again = true, here = here)
             } else {
-                _state.update { it.copy(adoptError = e.message ?: e.code) }
+                val why = when (e.code) {
+                    "too_far" -> "Il telefono è lontano da dove risulta questa CPE: si registra solo dal cliente."
+                    "position_required" -> "Serve la posizione GPS per registrare la CPE: attiva la localizzazione e riprova."
+                    else -> e.message ?: e.code
+                }
+                _state.update { it.copy(adoptError = why) }
             }
         } catch (e: Exception) {
             _state.update { it.copy(adoptError = "Senza rete: riprova quando il telefono ha Internet.") }

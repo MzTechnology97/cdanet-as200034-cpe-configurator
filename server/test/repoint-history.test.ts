@@ -167,10 +167,24 @@ describe('Ripuntamenti: ogni collaudo resta nello storico', () => {
     assert.equal((t.db.prepare('SELECT kind FROM job_acceptance WHERE job_id = ?').get(job.id) as { kind: string }).kind, 'install');
     // never twice, not even by the LAN MAC: it is found (or handed over) instead
     assert.equal((await reg(['DE:AD:BE:F0:00:01'])).json().error, 'cpe_known');
+    // on site only: no GPS, nothing; UISP knows where the CPE is and the phone is far
+    const noGps = await t.app.inject({ method: 'POST', url: '/api/field/cpe/register', headers: T, payload: { macs: ['DE:AD:BE:EF:00:09'], model: 'LiteBeam 5AC' } });
+    assert.equal(noGps.json().error, 'position_required');
+    const uispDevice = { id: 'd1', mac: 'DE:AD:BE:EF:00:21', location: null, siteId: 's1' };
+    t.ctx.uisp = {
+      findByMac: async (...m: string[]) => (m.includes('DE:AD:BE:EF:00:21') ? uispDevice : null),
+      sites: async () => [{ id: 's1', location: { lat: 37.6, lon: 14.2794 } }],
+    } as never;
+    const far = await reg(['DE:AD:BE:EF:00:21']);
+    assert.deepEqual([far.statusCode, far.json().error], [403, 'too_far']);
+    uispDevice.location = { lat: 37.5681, lon: 14.2796 } as never;
+    assert.equal((await reg(['DE:AD:BE:EF:00:21'])).statusCode, 200, 'next to where UISP has it');
+    t.ctx.uisp = null;
     // the NOC knows, the activity log too
     const noc = t.db.prepare("SELECT title, body FROM notifications WHERE kind = 'repoint_unplanned'").all() as Array<{ title: string; body: string }>;
     assert.ok(noc.some((n) => /installata prima dell'app registrata: VERDI LUCA/.test(n.title)), JSON.stringify(noc));
-    assert.equal((t.db.prepare("SELECT count(*) n FROM events WHERE action = 'job.adopted'").get() as { n: number }).n, 1);
+    assert.ok(noc.some((n) => /Presenza non verificata/.test(n.body)) && noc.some((n) => /Telefono a \d+ m dalla CPE in UISP/.test(n.body)), JSON.stringify(noc));
+    assert.equal((t.db.prepare("SELECT count(*) n FROM events WHERE action = 'job.adopted'").get() as { n: number }).n, 2);
     await t.app.close();
   });
 });
