@@ -478,7 +478,9 @@ private fun CpeDiscoveryCheck(c: AppContainer, labelMac: String, replacedMac: St
         Text(
             when {
                 busy && result == null -> "Ricerca della CPE collegata…"
-                list.isNullOrEmpty() -> msg ?: "Nessuna CPE Ubiquiti risponde: collegati alla sua Wi-Fi di management (riprovo da solo)"
+                // nothing answers: the CPE still comes from the warehouse menu above (or the label)
+                list.isNullOrEmpty() -> (msg?.let { "$it. " } ?: "Nessuna CPE Ubiquiti risponde (riprovo da solo). ") +
+                    if (stock?.items.isNullOrEmpty()) "Scansiona MAC e seriale dall'etichetta." else "Puoi scegliere la CPE dal tuo magazzino qui sopra."
                 d == null -> "Rispondono ${list.size} apparati Ubiquiti: scansiona il MAC dall'etichetta per riconoscere la CPE"
                 else -> "CPE collegata: ${d.product ?: d.model ?: "Ubiquiti"} ${d.ip.orEmpty()}"
             },

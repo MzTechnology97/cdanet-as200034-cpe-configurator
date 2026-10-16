@@ -274,7 +274,7 @@ La stessa discovery serve anche negli altri flussi:
   - se la CPE è di fabbrica o già configurata;
   - nelle sostituzioni, che non sia ancora collegata la CPE da sostituire.
 
-  Se la CPE è nel **magazzino** dell'installatore, propone MAC e seriale registrati lì (che vengono dall'etichetta).
+  Se la CPE è nel **magazzino** dell'installatore, propone MAC e seriale registrati lì (che vengono dall'etichetta). Se la discovery non trova nulla, la CPE si sceglie comunque dal menu **Dal tuo magazzino** del modulo, oppure si scansiona dall'etichetta.
 - **CPE collegata** (diagnosi, puntamento, ripuntamento e cambio AP, collaudo): l'app cerca **prima** la CPE con la discovery, qualunque IP abbia.
   - Se trova una sola CPE (gli apparati UniFi del cliente sono esclusi), si collega da sola e lo segnala.
   - Se ne trova più di una, le elenca (modello, IP, nome, MAC, firmware, SSID) e si sceglie quella da sistemare.
