@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
-import { attestationHtml, type Controller, controllerComplete, noticeSha256, PRIVACY_VERSION, privacyNotice } from '../domain/privacy.ts';
+import { attestationHtml, type Controller, controllerComplete, noticeHtml, noticeSha256, PRIVACY_VERSION, privacyNotice } from '../domain/privacy.ts';
 
 const KEY = 'privacy.controller';
 
@@ -30,6 +30,17 @@ export function privacyRoutes(app: FastifyInstance, ctx: AppContext) {
     db.prepare('SELECT id, accepted_at acceptedAt FROM privacy_acceptances WHERE user_id = ? AND text_sha256 = ? ORDER BY id DESC LIMIT 1').get(userId, sha) as
       | { id: number; acceptedAt: string }
       | undefined;
+
+  /**
+   * The same notice, public: the privacy policy address of the app on Google Play
+   * (https://app.cda-net.it/privacy). Only the controller's details and the text, nothing else.
+   */
+  app.get('/privacy', async (_req, reply) => {
+    const c = controller();
+    reply.header('Content-Security-Policy', "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'").header('Cache-Control', 'public, max-age=300');
+    if (!controllerComplete(c)) return reply.code(404).type('text/plain; charset=utf-8').send('Informativa non ancora pubblicata.');
+    return reply.type('text/html; charset=utf-8').send(noticeHtml(c));
+  });
 
   /** The notice to show (null when the admin has not completed it yet) and whether this user accepted it. */
   app.get('/api/privacy', user, async (req) => {

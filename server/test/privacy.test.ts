@@ -39,4 +39,16 @@ describe('Informativa privacy', () => {
     assert.equal(list.users.find((u: { username: string }) => u.username === 'tecnico').current, false);
     assert.ok(!(await call('GET', `/api/privacy/acceptances/${ok.json().id}/document`, undefined, T)).body.includes('Mario Demo'));
   });
+
+  it('public page for Google Play: no login, only the notice', async () => {
+    const t = await testApp();
+    const A = t.auth(await t.login());
+    assert.equal((await t.app.inject({ method: 'GET', url: '/privacy' })).statusCode, 404, 'not configured yet');
+    await t.app.inject({ method: 'PUT', url: '/api/admin/privacy', headers: A, payload: CONTROLLER });
+    const r = await t.app.inject({ method: 'GET', url: '/privacy' });
+    assert.equal(r.statusCode, 200);
+    assert.match(r.headers['content-type'] as string, /text\/html/);
+    assert.match(String(r.headers['content-security-policy']), /default-src 'none'/);
+    assert.ok(r.body.includes('Azienda Demo S.r.l.') && r.body.includes('Garante'));
+  });
 });

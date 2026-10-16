@@ -40,7 +40,7 @@ jobs:
           echo "code=$((a*10000+b*100+c))" >> "$GITHUB_OUTPUT"
       - name: Unit tests and debug build
         working-directory: android
-        run: gradle --no-daemon testDebugUnitTest assembleDebug lintRelease
+        run: gradle --no-daemon testServerDebugUnitTest assembleServerDebug lintServerRelease lintPlayRelease
       - name: Signed release build
         id: release
         working-directory: android
@@ -56,17 +56,19 @@ jobs:
             exit 0
           fi
           echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/release.jks"
-          ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.jks" gradle --no-daemon assembleRelease
+          # the APK the server hands out, and the bundle for Google Play (same key)
+          ANDROID_KEYSTORE_PATH="$RUNNER_TEMP/release.jks" gradle --no-daemon assembleServerRelease bundlePlayRelease
           rm -f "$RUNNER_TEMP/release.jks"
           echo "signed=true" >> "$GITHUB_OUTPUT"
       - name: Stage artifacts
         run: |
           set -eu
           mkdir -p out
-          cp android/app/build/outputs/apk/debug/app-debug.apk "out/CDA-Net-CPE-${{ steps.v.outputs.version }}-debug.apk"
+          cp android/app/build/outputs/apk/server/debug/app-server-debug.apk "out/CDA-Net-CPE-${{ steps.v.outputs.version }}-debug.apk"
           if [ "${{ steps.release.outputs.signed }}" = "true" ]; then
             f="CDA-Net-CPE-${{ steps.v.outputs.version }}.apk"
-            cp android/app/build/outputs/apk/release/app-release.apk "out/$f"
+            cp android/app/build/outputs/apk/server/release/app-server-release.apk "out/$f"
+            cp android/app/build/outputs/bundle/playRelease/app-play-release.aab "out/CDA-Net-CPE-${{ steps.v.outputs.version }}-play.aab"
             sha=$(sha256sum "out/$f" | cut -d' ' -f1)
             printf '{"versionCode":%s,"versionName":"%s","sha256":"%s","fileName":"%s","mandatory":false}\n' \
               "${{ steps.v.outputs.code }}" "${{ steps.v.outputs.version }}" "$sha" "$f" > out/latest.json
@@ -91,3 +93,16 @@ jobs:
           gh release create "$tag" --target "$GITHUB_SHA" --title "CDA Net CPE $tag" \
             --notes "APK firmato ${{ steps.v.outputs.version }} (versionCode ${{ steps.v.outputs.code }}). Il server lo scarica automaticamente." \
             "out/CDA-Net-CPE-${{ steps.v.outputs.version }}.apk" out/latest.json out/SHA256SUMS
+      # Google Play, internal testing: only once the service account is configured (docs/GOOGLE-PLAY.md)
+      - name: Upload to Google Play
+        if: steps.release.outputs.signed == 'true' && github.ref == 'refs/heads/main'
+        env:
+          PLAY_SERVICE_ACCOUNT_JSON: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          PLAY_TRACK: ${{ vars.PLAY_TRACK || 'internal' }}
+          PLAY_RELEASE_STATUS: ${{ vars.PLAY_RELEASE_STATUS || 'completed' }}
+        run: |
+          if [ -z "$PLAY_SERVICE_ACCOUNT_JSON" ]; then
+            echo "Google Play non configurato: bundle solo negli artifact."
+            exit 0
+          fi
+          node tools/play-upload.mjs "out/CDA-Net-CPE-${{ steps.v.outputs.version }}-play.aab" "${{ steps.v.outputs.version }}"

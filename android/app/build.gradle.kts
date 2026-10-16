@@ -27,6 +27,22 @@ android {
         buildConfigField("String", "DEFAULT_BACKEND_URL", "\"${System.getenv("CDA_DEFAULT_BACKEND") ?: "https://app.cda-net.it"}\"")
     }
 
+    // «server»: the APK the server hands out and updates by itself (as so far). «play»: the bundle
+    // for Google Play, which installs and updates it (no "install unknown apps" permission).
+    // Same package and same key: one replaces the other in place.
+    flavorDimensions += "store"
+    productFlavors {
+        create("server") {
+            dimension = "store"
+            isDefault = true
+            buildConfigField("String", "STORE", "\"server\"")
+        }
+        create("play") {
+            dimension = "store"
+            buildConfigField("String", "STORE", "\"play\"")
+        }
+    }
+
     signingConfigs {
         if (keystorePath != null) {
             create("cdaRelease") {
