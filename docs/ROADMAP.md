@@ -136,6 +136,7 @@ Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). 
   - clienti e account PPPoE del CRM, installazioni, collaudi e storico, stato in UISP, KO, speedtest, andamento di una CPE;
   - consigli e proposte dell'ottimizzatore (solo lettura), infrastruttura, mappa dei guasti;
   - site e piani UISP, firmware, antenne, stato del server, magazzini e movimenti, cronologia degli interventi, ricerca del cliente per un intervento.
+- v1.35.9: **Claude e gli altri operatori, limite rigoroso**. Il posto nelle 10 verifiche al minuto per collegamento si prende prima della chiamata e si restituisce se la risposta arriva dalla memoria del server o va in errore: nemmeno le richieste in parallelo superano il limite. C'è un test con un servizio WIC finto.
 
   Restano fuori connettori, impostazioni del server, privacy e chiavi Wi-Fi.
 - v1.33.50: app, **CPE del tuo magazzino**: al passo 1 dell'installazione (e nella scheda «CPE di questo intervento» delle configurazioni preparate) si sceglie la CPE dal proprio magazzino, e modello, MAC e seriale si compilano da soli. Un MAC che non è nel magazzino del tecnico blocca la preparazione o la scrittura, anche senza rete; con l'opzione dell'account attiva resta solo un avviso. Senza l'opzione, nelle nuove installazioni i campi MAC e seriale non ci sono proprio: la CPE si sceglie solo dal magazzino (la sostituzione di una CPE guasta resta com'era). L'elenco si aggiorna a ogni apertura di Oggi con rete e resta sul telefono.

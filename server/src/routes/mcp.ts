@@ -387,15 +387,23 @@ ${error ? `<p class="err">${escapeHtml(error)}</p>` : ''}
     }
     const third = tool.limits?.includes('third');
     const heavy = tool.limits?.includes('heavy');
-    if (third && (thirdCalls.get(row.id) ?? []).filter((x) => x > Date.now() - 60_000).length >= THIRD_PER_MINUTE) {
-      return { content: [{ type: 'text', text: `Limite di ${THIRD_PER_MINUTE} verifiche degli altri operatori al minuto per questa connessione (il servizio è condiviso con gli installatori sul campo): riprova tra un minuto.` }], isError: true };
+    // the external quota: the slot is taken before the call (calls in parallel count too) and given
+    // back when the answer did not reach the service (the server's cache, an error)
+    let slot = 0;
+    if (third) {
+      const recent = (thirdCalls.get(row.id) ?? []).filter((x) => x > Date.now() - 60_000);
+      if (recent.length >= THIRD_PER_MINUTE) {
+        return { content: [{ type: 'text', text: `Limite di ${THIRD_PER_MINUTE} verifiche degli altri operatori al minuto per questa connessione (il servizio è condiviso con gli installatori sul campo): riprova tra un minuto.` }], isError: true };
+      }
+      slot = Date.now() + Math.random();
+      thirdCalls.set(row.id, [...recent, slot]);
     }
     if (heavy && heavyBusy.has(row.id)) {
       return { content: [{ type: 'text', text: 'Una simulazione alla volta: aspetta che finisca la precedente.' }], isError: true };
     }
     if (heavy) heavyBusy.add(row.id);
     // the console's own route, with this admin's rights (a short session token, never shown)
-    let r: Awaited<ReturnType<typeof app.inject>>;
+    let r: Awaited<ReturnType<typeof app.inject>> | undefined;
     try {
       const { token } = await ctx.auth.issueToken({ id: user.id, username: user.username, role: user.role, token_version: user.token_version });
       r = await app.inject({
@@ -406,10 +414,9 @@ ${error ? `<p class="err">${escapeHtml(error)}</p>` : ''}
       });
     } finally {
       if (heavy) heavyBusy.delete(row.id);
-    }
-    // the external quota: only what really reached the service (the server's cache is free)
-    if (third && r.statusCode < 400 && !/"cached":true/.test(r.body)) {
-      thirdCalls.set(row.id, [...(thirdCalls.get(row.id) ?? []).filter((x) => x > Date.now() - 60_000), Date.now()]);
+      if (third && (!r || r.statusCode >= 400 || /"cached":true/.test(r.body))) {
+        thirdCalls.set(row.id, (thirdCalls.get(row.id) ?? []).filter((x) => x !== slot));
+      }
     }
     db.prepare('UPDATE mcp_tokens SET last_used_at = ?, calls = calls + 1 WHERE id = ?').run(nowIso(), row.id);
     const keys = Object.keys(args ?? {});
