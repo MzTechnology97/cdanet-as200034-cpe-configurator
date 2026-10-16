@@ -5,17 +5,19 @@ import { toast } from '../lib/toast';
 import { AsyncButton, Badge, Button, Card, EmptyState, Notice, PageHeader, Segmented, Skeleton, Table } from '../ui';
 
 /**
- * «Connetti il tuo Claude» (admins): the address of the read-only MCP server of the platform, how to
+ * «Connetti il tuo Claude» (admins): the address of the MCP server of the platform, how to
  * add it to Claude (Desktop with mcp-remote while the server has no public certificate, the
- * connectors of Claude with a domain, Claude Code), what Claude can read, and every connection of
- * the admins with its use and the revoke. The consent itself is given on the platform's own page
- * (user, password and second step), never here.
+ * connectors of Claude with a domain, Claude Code), what Claude can read and change, and every
+ * connection of the admins (read only, or read and write) with its use and the revoke. The consent
+ * itself is given on the platform's own page (user, password and second step; changes only with a
+ * second fresh code), never here.
  */
 
 interface Mcp {
   url: string;
-  tools: Array<{ name: string; title: string }>;
-  connections: Array<{ id: number; username: string; client: string; createdAt: string; lastUsedAt: string | null; calls: number; revokedAt: string | null; active: boolean }>;
+  /** write: a change (only for a connection given «lettura e scrittura»); network: on CPEs and UISP. */
+  tools: Array<{ name: string; title: string; write?: boolean; network?: boolean }>;
+  connections: Array<{ id: number; username: string; client: string; createdAt: string; lastUsedAt: string | null; calls: number; revokedAt: string | null; active: boolean; canWrite?: boolean }>;
 }
 type Conn = Mcp['connections'][number];
 const date = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '—');
@@ -48,7 +50,7 @@ export function Claude() {
   const code = d ? `claude mcp add --transport http cdanet ${d.url}` : '';
   return (
     <div className="ui-page">
-      <PageHeader icon="monitor_heart" title="Connetti il tuo Claude" subtitle="Claude legge la piattaforma in sola lettura, per il monitoraggio: stato rete, interruzioni, batterie dei POP, avvisi, interventi, magazzino, diagnosi." />
+      <PageHeader icon="monitor_heart" title="Connetti il tuo Claude" subtitle="Claude legge la piattaforma per il monitoraggio (stato rete, interruzioni, batterie dei POP, avvisi, interventi, magazzino, diagnosi) e, solo se lo consenti, fa anche modifiche." />
       {q.error && <Notice tone="bad">{(q.error as Error).message}</Notice>}
       {!d && !q.error && <Skeleton lines={8} />}
       {me.data && !me.data.totpEnabled && (
@@ -64,7 +66,7 @@ export function Claude() {
               <Button onClick={() => void copy(d.url, 'Indirizzo')}>Copia</Button>
             </div>
             <p className="ui-muted ui-small cn-p">
-              Al primo uso Claude apre la pagina di consenso della piattaforma: utente, password e codice di verifica, poi «Consenti». La pagina dice dove tornerai (claude.ai o questo computer): se non è il posto da cui sei partito, annulla.
+              Al primo uso Claude apre la pagina di consenso della piattaforma: utente, password e codice di verifica, poi «Consenti». La pagina dice dove tornerai (claude.ai o questo computer): se non è il posto da cui sei partito, annulla. Senza la casella «Consenti anche le modifiche» la connessione resta in sola lettura; per le modifiche serve un secondo codice di verifica nuovo, e per passare da lettura a scrittura un nuovo consenso.
             </p>
           </Card>
 
@@ -93,14 +95,26 @@ export function Claude() {
             </section>
           </Card>
 
-          <Card title="Cosa può leggere">
-            <ul className="mcp-tools">
-              {d.tools.map((t) => (
-                <li key={t.name}>{t.title}</li>
+          <Card title="Cosa può fare">
+            {[
+              { title: 'Leggere', list: d.tools.filter((t) => !t.write), note: 'Con ogni connessione.' },
+              { title: 'Modificare', list: d.tools.filter((t) => t.write && !t.network), note: 'Solo con «lettura e scrittura». Ogni modifica arriva come avviso al NOC.' },
+              { title: 'Agire sulla rete', list: d.tools.filter((t) => t.network), note: 'Solo con «lettura e scrittura»: una CPE alla volta, al massimo 5 azioni all’ora per connessione, e Claude chiede conferma a ogni azione.' },
+            ]
+              .filter((g) => g.list.length)
+              .map((g) => (
+                <section key={g.title} className="mcp-group">
+                  <h3>{g.title}</h3>
+                  <p className="ui-muted ui-small cn-p">{g.note}</p>
+                  <ul className="mcp-tools">
+                    {g.list.map((t) => (
+                      <li key={t.name}>{t.title}</li>
+                    ))}
+                  </ul>
+                </section>
               ))}
-            </ul>
             <p className="ui-muted ui-small cn-p">
-              Mai password, chiavi, token o segreti; mai telefoni, email o codici fiscali dei clienti; elenchi fino a 200 elementi. Ogni richiesta finisce nel Registro con il nome dello strumento. Quello che Claude legge passa da Anthropic: per i dati dei clienti serve l’accordo sul trattamento dei dati (DPA).
+              Mai password, chiavi, token o segreti; mai telefoni, email o codici fiscali dei clienti; elenchi fino a 200 elementi. Fuori da Claude restano account e ruoli, connettori, impostazioni del server, informativa privacy, sblocco degli accessi e revoca delle connessioni, password PPPoE, chiavi Wi-Fi e nuovi subscriber. Ogni richiesta finisce nel Registro con il nome dello strumento. Quello che Claude legge passa da Anthropic: per i dati dei clienti serve l’accordo sul trattamento dei dati (DPA).
             </p>
           </Card>
 
@@ -125,6 +139,7 @@ export function Claude() {
                 columns={[
                   { label: 'Admin', render: (c) => <strong>{c.username}</strong> },
                   { label: 'Claude', render: (c) => c.client },
+                  { label: 'Permessi', render: (c) => (c.canWrite ? <Badge tone="warn">lettura e scrittura</Badge> : <Badge tone="neutral">sola lettura</Badge>) },
                   { label: 'Collegato', render: (c) => <span className="ui-small">{date(c.createdAt)}</span> },
                   { label: 'Ultimo uso', render: (c) => <span className="ui-small">{date(c.lastUsedAt)}</span> },
                   { label: 'Richieste', render: (c) => c.calls },
