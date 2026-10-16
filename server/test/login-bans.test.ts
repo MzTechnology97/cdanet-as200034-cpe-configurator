@@ -36,12 +36,19 @@ describe('Accessi bloccati (stile fail2ban)', () => {
     assert.ok(!JSON.stringify(log).includes('sbagliata'), 'never the password');
     assert.equal((await t.app.inject({ method: 'DELETE', url: `/api/admin/bans/${ipBan.id}`, headers: H })).statusCode, 200);
     assert.equal((await login('tecnico', 'Installer-Pass-123', '203.0.113.5')).statusCode, 200);
-    // banned again within the day: 24 hours
+    // unbanned from the console: trusted, it starts again (30 minutes, not 24 hours)
     for (let i = 0; i < 5; i++) await login('mario', 'sbagliata', '203.0.113.5');
     const again = await login('tecnico', 'Installer-Pass-123', '203.0.113.5');
     assert.equal(again.statusCode, 429);
-    assert.ok(Date.parse(again.json().until) - Date.now() > 23 * 3_600_000);
-    assert.equal((t.db.prepare("SELECT count(*) n FROM events WHERE action IN ('auth.ban','auth.unban')").get() as { n: number }).n, 3);
+    assert.ok(Date.parse(again.json().until) - Date.now() < 31 * 60_000, again.json().until);
+    // that ban runs out by itself (not lifted): banned again within the day, 24 hours
+    t.db.prepare("UPDATE login_bans SET until = ? WHERE lifted_at IS NULL").run(new Date(Date.now() - 1000).toISOString());
+    t.ctx.loginGuard.reload();
+    for (let i = 0; i < 6; i++) await login('mario', 'sbagliata', '203.0.113.5');
+    const third = await login('tecnico', 'Installer-Pass-123', '203.0.113.5');
+    assert.equal(third.statusCode, 429);
+    assert.ok(Date.parse(third.json().until) - Date.now() > 23 * 3_600_000, third.json().until);
+    assert.equal((t.db.prepare("SELECT count(*) n FROM events WHERE action IN ('auth.ban','auth.unban')").get() as { n: number }).n, 4);
 
     // a device failing in a loop (from private addresses, never banned by IP): stopped everywhere
     const dev = { 'x-cda-device': DEVICE, 'x-cda-client': 'android/1.35.3' };

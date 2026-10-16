@@ -96,7 +96,8 @@ export function createLoginGuard(db: Db, opts: { ignore?: string; notify?: (html
 
   function ban(kind: BanKind, value: string, attempts: number) {
     const since = new Date(Date.now() - REPEAT_BAN_MS).toISOString();
-    const before = (db.prepare('SELECT count(*) n FROM login_bans WHERE kind = ? AND value = ? AND created_at > ?').get(kind, value, since) as { n: number }).n;
+    // a ban lifted from the console does not count: whoever lifted it trusts it, it starts again
+    const before = (db.prepare('SELECT count(*) n FROM login_bans WHERE kind = ? AND value = ? AND created_at > ? AND lifted_at IS NULL').get(kind, value, since) as { n: number }).n;
     const until = new Date(Date.now() + (before ? REPEAT_BAN_MS : BAN_MS)).toISOString();
     const reason = `${attempts} tentativi falliti in ${FAIL_WINDOW_MS / 60_000} minuti${before ? ', di nuovo nelle 24 ore' : ''}`;
     const r = db.prepare('INSERT INTO login_bans(kind, value, created_at, until, attempts, reason) VALUES(?,?,?,?,?,?)').run(kind, value, nowIso(), until, attempts, reason);
@@ -121,6 +122,8 @@ export function createLoginGuard(db: Db, opts: { ignore?: string; notify?: (html
     check(req: FastifyRequest, username: string) {
       const b = bannedFor(req);
       if (b) throw new HttpError(429, 'banned', { until: b.until });
+      // the networks never banned by IP keep the old limit per username; the others have the ban
+      if (!ipExempt(plainIp(req.ip))) return;
       const from = new Date(Date.now() - USER_WINDOW_MS).toISOString();
       const n = (db.prepare('SELECT count(*) n FROM login_attempts WHERE ok = 0 AND ip = ? AND username = ? AND created_at > ?').get(plainIp(req.ip), username.toLowerCase(), from) as { n: number }).n;
       if (n >= USER_LIMIT) throw new HttpError(429, 'too_many_attempts');
@@ -156,6 +159,9 @@ export function createLoginGuard(db: Db, opts: { ignore?: string; notify?: (html
     },
 
     bannedFor,
+
+    /** The bans in force read again from the database (after a change made outside, and in tests). */
+    reload: load,
 
     /** Console: the bans (in force first) with the usernames tried and the last attempt. */
     list(limit = 200) {
