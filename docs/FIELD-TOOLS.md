@@ -266,7 +266,23 @@ Azioni disponibili:
 - **Copia**;
 - **Riavvia**: usa la sfida del protocollo, con la risposta SHA-256(crypt(password, salt) || sfida), quindi la password non viaggia in rete. Le credenziali predefinite sono quelle CDA Net delle CPE salvate sul telefono, oppure altre inserite a mano. Prima di riavviare chiede conferma.
 
-La stessa discovery, più completa, serve anche a Scansione LAN, alla topologia e alla ricerca della CPE durante l'installazione. Dettagli del protocollo ripresi da [ubnt-discovery-next](https://github.com/Gaaraalex/ubnt-discovery-next) (licenza MIT).
+La stessa discovery serve anche negli altri flussi:
+- **Installazione**: il controllo della CPE collegata parte da solo all'apertura e si ripete ogni 8 secondi finché una CPE risponde. Il tasto **Controlla di nuovo** lo rilancia. Prima di scrivere la configurazione verifica:
+  - il modello, che imposta nel modulo;
+  - che il MAC coincida con l'etichetta. La discovery può dare il MAC wireless, a poche unità da quello LAN;
+  - il firmware rispetto all'8.7.4;
+  - se la CPE è di fabbrica o già configurata;
+  - nelle sostituzioni, che non sia ancora collegata la CPE da sostituire.
+
+  Se la CPE è nel **magazzino** dell'installatore, propone MAC e seriale registrati lì (che vengono dall'etichetta). Se la discovery non trova nulla, la CPE si sceglie comunque dal menu **Dal tuo magazzino** del modulo, oppure si scansiona dall'etichetta.
+- **CPE collegata** (diagnosi, puntamento, ripuntamento e cambio AP, collaudo): l'app cerca **prima** la CPE con la discovery, qualunque IP abbia.
+  - Se trova una sola CPE (gli apparati UniFi del cliente sono esclusi), si collega da sola e lo segnala.
+  - Se ne trova più di una, le elenca (modello, IP, nome, MAC, firmware, SSID) e si sceglie quella da sistemare.
+  - Se non ne trova, prova come prima il gateway della Wi-Fi, l'IP LAN e l'IP di management.
+  - **IP manuale** resta sempre disponibile; **Cerca CPE** rifà la ricerca.
+  - Il cambio AP via SSH usa anche la porta SSH dichiarata dalla CPE.
+- **CPE bloccata**: se risponde alla discovery ma non alla sua interfaccia web, l'app lo dice e propone **Riavvia la CPE**, con conferma.
+- **Scansione LAN e topologia**: modello, modalità e apparati UniFi più completi. Dettagli del protocollo ripresi da [ubnt-discovery-next](https://github.com/Gaaraalex/ubnt-discovery-next) (licenza MIT).
 
 ## Strumenti di rete
 
