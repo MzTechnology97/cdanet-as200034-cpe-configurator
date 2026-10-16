@@ -31,7 +31,15 @@ const sha = (s: string) => createHash('sha256').update(s).digest('hex');
 const secret = () => randomBytes(32).toString('base64url');
 const attr = (s: string) => s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c] as string);
 
-/** https anywhere, plain http only back to the same computer (Claude Desktop and similar). */
+/** The Claude apps' own callbacks: no other site can receive a consent given on our page. */
+const CLAUDE_HOSTS = ['claude.ai', 'claude.com'];
+const LOOPBACK = ['localhost', '127.0.0.1', '[::1]'];
+
+/**
+ * Where a consent may send its code: the Claude apps (https on claude.ai / claude.com) or this
+ * same computer over plain http (the local bridge of Claude Desktop, Claude Code). Anything else
+ * would let a stranger's site collect an admin's consent (phishing), so it is refused.
+ */
 export function redirectAllowed(uri: string): boolean {
   let u: URL;
   try {
@@ -40,8 +48,21 @@ export function redirectAllowed(uri: string): boolean {
     return false;
   }
   if (u.hash || u.username || u.password) return false;
-  if (u.protocol === 'https:') return true;
-  return u.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(u.hostname);
+  if (u.protocol === 'https:') return CLAUDE_HOSTS.includes(u.hostname) && (u.port === '' || u.port === '443');
+  return u.protocol === 'http:' && LOOPBACK.includes(u.hostname);
+}
+
+/** Where the admin goes back after the consent, said plainly on the page («claude.ai», «questo computer»). */
+export function returnPlace(uri: string): string {
+  const u = new URL(uri);
+  return LOOPBACK.includes(u.hostname) ? `questo computer (porta ${u.port || '80'})` : u.hostname;
+}
+
+/** The client's name is the server's, from where it returns: a registered «client_name» proves nothing. */
+export function clientName(uris: string[]): string {
+  const hosts = new Set(uris.map((x) => new URL(x).hostname));
+  if ([...hosts].every((h) => LOOPBACK.includes(h))) return 'Claude su questo computer';
+  return `Claude (${[...hosts].filter((h) => CLAUDE_HOSTS.includes(h)).join(', ')})`;
 }
 
 type ClientRow = { id: string; name: string; redirect_uris: string };
@@ -53,8 +74,8 @@ export function mcpRoutes(app: FastifyInstance, ctx: AppContext) {
   const limiter = createLoginLimiter();
   const registrations = new Map<string, number[]>();
   const calls = new Map<number, number[]>();
-  // the address the Claude app used (a tunnel, the LAN, the public name): discovery and issuer follow it
-  const base = (req: FastifyRequest) => (req.host ? `${req.protocol}://${req.host}` : (ctx.cfg.publicUrl ?? ''));
+  // the platform's own address (PUBLIC_URL); without it, the address the Claude app used
+  const base = (req: FastifyRequest) => ctx.cfg.publicUrl ?? `${req.protocol}://${req.host}`;
   const resourceMeta = (req: FastifyRequest) => `${base(req)}/.well-known/oauth-protected-resource`;
   const userById = (id: number) => db.prepare('SELECT * FROM users WHERE id = ?').get(id) as UserRow | undefined;
   /** The connection still stands only for an active admin, with the same password and the second step. */
@@ -115,7 +136,7 @@ export function mcpRoutes(app: FastifyInstance, ctx: AppContext) {
         .passthrough()
         .safeParse(req.body);
       if (!b.success) return oauthError(reply, 'invalid_client_metadata', 'redirect_uris richiesti');
-      if (!b.data.redirect_uris.every(redirectAllowed)) return oauthError(reply, 'invalid_redirect_uri', 'Solo https o http verso questo computer');
+      if (!b.data.redirect_uris.every(redirectAllowed)) return oauthError(reply, 'invalid_redirect_uri', 'Solo i ritorni delle app di Claude (claude.ai, claude.com) o di questo computer');
       if (b.data.token_endpoint_auth_method && b.data.token_endpoint_auth_method !== 'none') return oauthError(reply, 'invalid_client_metadata', 'Solo client pubblici (PKCE)');
       const now = Date.now();
       const recent = (registrations.get(req.ip) ?? []).filter((t) => t > now - 3_600_000);
@@ -123,7 +144,7 @@ export function mcpRoutes(app: FastifyInstance, ctx: AppContext) {
       registrations.set(req.ip, [...recent, now]);
       cleanup();
       const id = `cda-${secret().slice(0, 24)}`;
-      const name = b.data.client_name || 'Claude';
+      const name = clientName(b.data.redirect_uris);
       db.prepare('INSERT INTO mcp_clients(id, name, redirect_uris, created_at, created_ip) VALUES(?,?,?,?,?)').run(id, name, JSON.stringify(b.data.redirect_uris), nowIso(), req.ip);
       return reply.code(201).header('Cache-Control', 'no-store').send({
         client_id: id,
@@ -165,7 +186,7 @@ export function mcpRoutes(app: FastifyInstance, ctx: AppContext) {
         .send(`<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><title>Connetti il tuo Claude · CDA Net</title>
 <style>body{font:15px/1.5 system-ui,sans-serif;background:#f4f6f8;color:#1b2430;margin:0;padding:24px 16px}main{max-width:460px;margin:0 auto;background:#fff;border-radius:12px;padding:24px;box-shadow:0 1px 4px #0002}
 h1{font-size:20px;margin:0 0 8px}ul{padding-left:20px}label{display:block;margin-top:12px;font-weight:600}input{width:100%;box-sizing:border-box;padding:10px;border:1px solid #c5ccd6;border-radius:8px;font:inherit}
-.row{display:flex;gap:8px;margin-top:18px}button{flex:1;padding:11px;border-radius:8px;border:0;font:inherit;font-weight:600;cursor:pointer}.ok{background:#0b6bcb;color:#fff}.no{background:#e6e9ee}.err{color:#b42318;font-weight:600}small{color:#5b6573}</style></head><body><main>${html}</main></body></html>`);
+.row{display:flex;gap:8px;margin-top:18px}button{flex:1;padding:11px;border-radius:8px;border:0;font:inherit;font-weight:600;cursor:pointer}.ok{background:#0b6bcb;color:#fff}.where{background:#fff7e0;border:1px solid #f0c36d;border-radius:8px;padding:8px 10px}.no{background:#e6e9ee}.err{color:#b42318;font-weight:600}small{color:#5b6573}</style></head><body><main>${html}</main></body></html>`);
     }
 
     function consentHtml(q: z.infer<typeof authQuery>, c: ClientRow, error?: string) {
@@ -175,6 +196,7 @@ h1{font-size:20px;margin:0 0 8px}ul{padding-left:20px}label{display:block;margin
         .join('');
       return `<h1>Connetti il tuo Claude</h1>
 <p><b>${escapeHtml(c.name)}</b> chiede di leggere la piattaforma CDA Net con il tuo account, <b>solo in lettura</b>, per il monitoraggio.</p>
+<p class="where">Dopo il consenso tornerai a: <b>${escapeHtml(returnPlace(q.redirect_uri))}</b>. Se non è dove hai avviato il collegamento, premi Annulla.</p>
 <p>Potrà usare:</p><ul>${MCP_TOOLS.map((t) => `<li>${escapeHtml(t.title)}</li>`).join('')}</ul>
 <p><small>Non potrà modificare nulla né inviare comandi alle CPE. Password, chiavi e recapiti dei clienti non escono mai. Ogni richiesta finisce nel Registro; la connessione si revoca dalla console.</small></p>
 ${error ? `<p class="err">${escapeHtml(error)}</p>` : ''}

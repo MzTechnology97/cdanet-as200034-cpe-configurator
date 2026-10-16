@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash, randomBytes } from 'node:crypto';
 import { describe, it } from 'node:test';
 import { codeAt, currentStep } from '../src/domain/totp.ts';
-import { redirectAllowed } from '../src/routes/mcp.ts';
+import { clientName, redirectAllowed, returnPlace } from '../src/routes/mcp.ts';
 import { sanitize } from '../src/services/mcp-tools.ts';
 import { ADMIN, testApp } from './helpers.ts';
 
@@ -33,8 +33,11 @@ describe('Connetti il tuo Claude (MCP, sola lettura)', () => {
 
     // registration: https (or back to this computer) only
     assert.equal((await t.app.inject({ method: 'POST', url: '/oauth/register', payload: { redirect_uris: ['http://evil.example/cb'] } })).json().error, 'invalid_redirect_uri');
-    const reg = await t.app.inject({ method: 'POST', url: '/oauth/register', payload: { redirect_uris: [CALLBACK], client_name: 'Claude', token_endpoint_auth_method: 'none' } });
+    // a stranger's https site: a consent on our page must never reach it
+    assert.equal((await t.app.inject({ method: 'POST', url: '/oauth/register', payload: { redirect_uris: ['https://evil.example/cb'], client_name: 'Claude' } })).json().error, 'invalid_redirect_uri');
+    const reg = await t.app.inject({ method: 'POST', url: '/oauth/register', payload: { redirect_uris: [CALLBACK], client_name: 'CDA Net ufficiale', token_endpoint_auth_method: 'none' } });
     assert.equal(reg.statusCode, 201, reg.body);
+    assert.equal(reg.json().client_name, 'Claude (claude.ai)', 'the name is the server\'s, not the client\'s');
     const clientId = reg.json().client_id as string;
 
     // consent page: PKCE S256 and the registered redirect only
@@ -46,6 +49,8 @@ describe('Connetti il tuo Claude (MCP, sola lettura)', () => {
     const pg = await t.app.inject({ method: 'GET', url: `/oauth/authorize?${new URLSearchParams(q)}` });
     assert.equal(pg.statusCode, 200);
     assert.match(pg.body, /Connetti il tuo Claude/);
+    assert.match(pg.body, /tornerai a: <b>claude\.ai<\/b>/);
+    assert.ok(!pg.body.includes('CDA Net ufficiale'));
     assert.match(String(pg.headers['content-security-policy']), /frame-ancestors 'none'/);
 
     // wrong password, an installer, no second step: refused; the admin with the code: a one-time code
@@ -135,8 +140,15 @@ describe('Connetti il tuo Claude (MCP, sola lettura)', () => {
 
   it('only https redirects, or back to this computer; secrets and contact details never leave', () => {
     assert.ok(redirectAllowed('https://claude.ai/api/mcp/auth_callback'));
+    assert.ok(redirectAllowed('https://claude.com/api/mcp/auth_callback'));
     assert.ok(redirectAllowed('http://localhost:6274/oauth/callback'));
+    assert.ok(redirectAllowed('http://127.0.0.1:3334/oauth/callback'));
+    assert.ok(!redirectAllowed('https://evil.example/cb'));
+    assert.ok(!redirectAllowed('https://claude.ai.evil.example/cb'));
+    assert.ok(!redirectAllowed('https://claude.ai:8443/cb'));
     assert.ok(!redirectAllowed('http://claude.ai/cb'));
+    assert.equal(returnPlace('http://localhost:6274/cb'), 'questo computer (porta 6274)');
+    assert.equal(clientName(['http://127.0.0.1:3334/cb']), 'Claude su questo computer');
     assert.ok(!redirectAllowed('https://claude.ai/cb#x'));
     assert.ok(!redirectAllowed('javascript:alert(1)'));
     const out = sanitize({ customer: 'ROSSI', contact: '333', phone: '333', pppoePassword: 'x', wpa2Psk: 'y', token: 'z', nested: [{ apName: 'N38-D02', email: 'a@b.it', footprint: 1 }] }) as Record<string, unknown>;

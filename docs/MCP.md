@@ -5,7 +5,7 @@ Gli account admin possono collegare il proprio Claude alla piattaforma per il **
 ## Sicurezza
 
 - Solo account **admin** con la **verifica in due passaggi** attiva. Il consenso si dà con utente, password e codice.
-- OAuth 2.1 con PKCE (S256). Gli indirizzi di ritorno sono esatti: `https`, oppure `http` solo verso lo stesso computer.
+- OAuth 2.1 con PKCE (S256). Si torna solo alle app di Claude (`https://claude.ai`, `https://claude.com`) oppure a questo computer (`http://localhost`, `127.0.0.1`): un altro sito non può ricevere un consenso dato sulla nostra pagina. Il nome del client lo decide il server, e la pagina di consenso mostra in evidenza dove si tornerà.
 - Token di accesso di un'ora; token di rinnovo di 30 giorni, che ruotano a ogni uso. Si salvano solo come impronta (SHA-256). Un token di rinnovo già usato che ricompare chiude la connessione.
 - La connessione si chiude subito se l'admin viene disattivato, perde il ruolo, cambia password o toglie la verifica in due passaggi. Si revoca anche dalla console.
 - Le risposte escono ripulite:
