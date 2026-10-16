@@ -37,6 +37,7 @@ import { createConnectors } from './services/connectors.ts';
 import { createCrmSettings } from './services/crm.ts';
 import { createVrmSettings } from './services/victron.ts';
 import { createMyWicSettings } from './services/mywic.ts';
+import { createNas, type reachSmb, type SmbClient } from './services/nas.ts';
 import { createVictronSync, type VictronSync } from './services/victron-sync.ts';
 import { createImagery } from './services/imagery.ts';
 import { createCrmSync, type CrmSync } from './services/crm-sync.ts';
@@ -52,6 +53,7 @@ import { feasibilityRoutes } from './routes/feasibility.ts';
 import { createCoverageOps, type CoverageOps } from './services/coverage-operators.ts';
 import { createPlatformHealth, type PlatformHealth } from './services/platform-health.ts';
 import { platformRoutes } from './routes/platform.ts';
+import { nasRoutes } from './routes/nas.ts';
 import { createProactiveAlerts, type ProactiveAlerts } from './services/proactive-alerts.ts';
 import { cpeAdminRoutes } from './routes/cpe-admin.ts';
 import { uispRoutes } from './routes/uisp.ts';
@@ -107,7 +109,7 @@ export function ensureBootstrapAdmin(db: Db, cfg: Config): 'created' | 'exists' 
 export async function buildApp(
   cfg: Config,
   version: string,
-  opts: { db?: Db; logger?: boolean; uisp?: Uisp | null; fetchImpl?: typeof fetch; telegramIntervalMs?: number } = {},
+  opts: { db?: Db; logger?: boolean; uisp?: Uisp | null; fetchImpl?: typeof fetch; telegramIntervalMs?: number; smb?: SmbClient; reachSmb?: typeof reachSmb } = {},
 ): Promise<{ app: FastifyInstance; ctx: AppContext }> {
   const db = opts.db ?? openDatabase(cfg.dbPath);
   ensureBootstrapAdmin(db, cfg);
@@ -139,6 +141,7 @@ export async function buildApp(
     crm: createCrmSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
     victron: createVrmSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
     mywic: createMyWicSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
+    nas: createNas(db, sealer, { version, masterKey: cfg.masterKey, smb: opts.smb, reach: opts.reachSmb, log: (m) => pushLog(m) }),
     imagery: createImagery(db, sealer, {
       fetchImpl: opts.fetchImpl,
       dir: cfg.imageryDir,
@@ -223,6 +226,8 @@ export async function buildApp(
         },
       },
       { id: 'victron', label: 'Victron VRM (batterie dei POP)', everyMin: 5, read: () => (ctx.victron.client() ? ctx.victronSync.state() : null) },
+      // one copy a night: late when the last good one is older than 30 hours
+      { id: 'nas', label: 'Backup sul NAS', everyMin: 24 * 60, lateMin: 30 * 60, read: () => ctx.nas.health() },
     ],
   });
   ctx.proactive = createProactiveAlerts(ctx, (m) => app.log.warn(m));
@@ -321,6 +326,7 @@ export async function buildApp(
   speedtestRoutes(app, ctx);
   coverageOpsRoutes(app, ctx);
   platformRoutes(app, ctx);
+  nasRoutes(app, ctx);
   diagnosisRoutes(app, ctx);
   feasibilityRoutes(app, ctx);
 

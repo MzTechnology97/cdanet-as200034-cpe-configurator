@@ -114,7 +114,7 @@ export function Platform() {
                 <dd>{d.server.lastDownload ? `${date(d.server.lastDownload.at)} da ${d.server.lastDownload.by}` : 'mai'}</dd>
               </div>
             </dl>
-            <p className="ui-muted ui-small">Aggiornato {date(d.generatedAt)}: si aggiorna ogni minuto. Le copie automatiche restano sul server stesso: per averne una altrove scarica il backup qui sotto.</p>
+            <p className="ui-muted ui-small">Aggiornato {date(d.generatedAt)}: si aggiorna ogni minuto. Le copie automatiche prima degli aggiornamenti restano sul server stesso: per averne una altrove ogni notte configura il NAS in Connettori → NAS, oppure scarica il backup qui sotto.</p>
           </Card>
           <BackupCard />
           <VerifyCard />
