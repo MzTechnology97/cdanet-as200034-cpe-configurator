@@ -2,7 +2,6 @@
 <!--
   Cleartext is required: factory CPEs (192.168.172.1), RouterOS, cameras and the
   internal CDA Net server are reached over HTTP/RTSP on private networks.
-  The app itself only accepts an HTTP backend on private/CGNAT addresses.
 -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="true">
@@ -12,4 +11,16 @@
             <certificates src="user" />
         </trust-anchors>
     </base-config>
+    <!--
+      The CDA Net server, built into the app: its own certificate (Caddy's local CA, public root
+      only) is trusted for this name alone, with no setting on the phone; a public certificate
+      (system CAs) works as well the day the server gets one.
+    -->
+    <domain-config cleartextTrafficPermitted="false">
+        <domain includeSubdomains="false">app.cda-net.it</domain>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="@raw/cdanet_server_ca" />
+        </trust-anchors>
+    </domain-config>
 </network-security-config>
