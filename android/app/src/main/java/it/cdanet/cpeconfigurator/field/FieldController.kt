@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import java.net.InetSocketAddress
@@ -56,8 +57,6 @@ data class FieldState(
     val discoveredHost: String? = null,
     /** A device answers the discovery but not its web interface: probably stuck (reboot it). */
     val stuck: it.cdanet.cpeconfigurator.tools.UbntDevice? = null,
-    /** The discovery found several CPEs on this Wi-Fi: the technician picks the one to work on. */
-    val candidates: List<it.cdanet.cpeconfigurator.tools.UbntDevice> = emptyList(),
 )
 
 /**
@@ -129,6 +128,7 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
     fun savedCredentials(): CredentialsDto? = access?.takeIf { valid(it) }?.credentials
 
     fun forget() {
+        forgetSelection()
         stop()
         access = null
         store?.remove(SAVED_ACCESS)
@@ -139,19 +139,60 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
     /** Called at each start of a tool on the CPE (the app logs the ones done without Internet). */
     var onStart: ((FieldMode, String?) -> Unit)? = null
 
-    /** The discovery runs once per start, when the usual addresses do not answer. */
-    @Volatile private var discoveryTried = false
-    /** SSH port the CPE found by the discovery declares (repoint/AP change over SSH try it too). */
-    @Volatile private var discoveredSshPort: Int? = null
-    /** IP of the CPE the discovery found in this session (tried first when reconnecting). */
-    @Volatile private var discoveredHost: String? = null
+    /**
+     * The CPE every tool of «CPE collegata» works on (diagnosis, alignment, acceptance, firmware,
+     * AP change), found by the Ubiquiti discovery on the phone's Wi-Fi or picked from its list.
+     */
+    private val _selected = MutableStateFlow<it.cdanet.cpeconfigurator.tools.UbntDevice?>(null)
+    val selected: StateFlow<it.cdanet.cpeconfigurator.tools.UbntDevice?> = _selected.asStateFlow()
+    /** Several CPEs answered the discovery: the technician picks the one to work on. */
+    private val _candidates = MutableStateFlow<List<it.cdanet.cpeconfigurator.tools.UbntDevice>>(emptyList())
+    val candidates: StateFlow<List<it.cdanet.cpeconfigurator.tools.UbntDevice>> = _candidates.asStateFlow()
+    private val _searching = MutableStateFlow(false)
+    val searching: StateFlow<Boolean> = _searching.asStateFlow()
+    /** The discovery ran for the current choice (not again at every reconnection). */
+    @Volatile private var searched = false
+    private val discoveryLock = kotlinx.coroutines.sync.Mutex()
+    private val discoveredSshPort: Int? get() = _selected.value?.sshPort
+
+    /**
+     * The CPEs on this Wi-Fi (UniFi devices of the customer are not CPEs): one is selected at once,
+     * several wait for the technician's choice. Two callers at the same time share one search.
+     */
+    suspend fun discoverCpes(): List<it.cdanet.cpeconfigurator.tools.UbntDevice> = discoveryLock.withLock {
+        if (searched) return@withLock listOfNotNull(_selected.value).ifEmpty { _candidates.value }
+        _searching.value = true
+        try {
+            val found = runCatching { it.cdanet.cpeconfigurator.tools.UbntDiscovery.discover(network, 2_500) }.getOrDefault(emptyList())
+                .filter { d -> !d.unifi && d.ip?.let { Ip.isPrivate(it) } == true }
+            searched = true
+            _candidates.value = if (found.size > 1) found else emptyList()
+            found.singleOrNull()?.let { select(it) }
+            found
+        } finally {
+            _searching.value = false
+        }
+    }
+
+    /** The CPE to work on (from the list of the discovery): the next connection goes there. */
+    fun select(d: it.cdanet.cpeconfigurator.tools.UbntDevice) {
+        _selected.value = d
+        _candidates.value = emptyList()
+        searched = true
+        client = null
+    }
+
+    /** «Cerca di nuovo»: forgets the chosen CPE, the next connection (or [discoverCpes]) searches again. */
+    fun forgetSelection() {
+        _selected.value = null
+        _candidates.value = emptyList()
+        searched = false
+        client = null
+    }
 
     fun start(mode: FieldMode, manualHost: String? = null) {
         onStart?.invoke(mode, manualHost)
         stop()
-        discoveryTried = false
-        // a CPE picked from the list (or an IP typed by hand): that one; a new search otherwise
-        if (manualHost == null) discoveredHost = null
         _state.value = FieldState(running = true, connecting = true)
         job = scope.launch(Dispatchers.IO) {
             val period = if (mode == FieldMode.Alignment) 1_000L else 3_000L
@@ -313,31 +354,21 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
             }
             return null
         }
-        // first the discovery (once per start): the CPE answers whatever its IP. UniFi devices of
-        // the customer are not CPEs. Several CPEs: the technician chooses (no guess)
-        if (manualHost == null && !discoveryTried) {
-            discoveryTried = true
-            _state.update { it.copy(candidates = emptyList(), stuck = null, discoveredHost = null) }
-            val found = runCatching { it.cdanet.cpeconfigurator.tools.UbntDiscovery.discover(network, 2_500) }.getOrDefault(emptyList())
-                .filter { d -> !d.unifi && d.ip?.let { Ip.isPrivate(it) } == true }
-            if (found.size > 1) {
-                _state.update { it.copy(candidates = found) }
-                throw ChooseCpe()
-            }
-            found.singleOrNull()?.let { d ->
-                tryHost(d.ip!!)?.let { cl ->
-                    discoveredHost = d.ip
-                    discoveredSshPort = d.sshPort
-                    _state.update { it.copy(discoveredHost = d.ip) }
-                    return@withContext cl
-                }
-                // it answers the discovery, its web interface does not: stuck, a reboot may help
-                if (authError == null && d.mac != null) _state.update { it.copy(stuck = d) }
-            }
+        // first the discovery: the CPE answers whatever its IP; several CPEs: the technician
+        // chooses (no guess). Then the chosen CPE, then the usual addresses as a fallback
+        if (manualHost == null && _selected.value == null) {
+            if (discoverCpes().size > 1) throw ChooseCpe()
         }
-        // the CPE the discovery found before (after its reboot it is there again), then the fallbacks
-        for (host in (listOfNotNull(discoveredHost) + hosts).distinct()) {
-            if (host in tried && host != discoveredHost) continue
+        if (manualHost == null) _selected.value?.let { d ->
+            tryHost(d.ip!!)?.let { cl ->
+                _state.update { it.copy(discoveredHost = d.ip, stuck = null) }
+                return@withContext cl
+            }
+            // it answers the discovery, its web interface does not: stuck, a reboot may help
+            if (authError == null && d.mac != null) _state.update { it.copy(stuck = d) }
+        }
+        for (host in hosts) {
+            if (host in tried) continue
             tryHost(host)?.let { return@withContext it }
         }
         if (authError != null) {

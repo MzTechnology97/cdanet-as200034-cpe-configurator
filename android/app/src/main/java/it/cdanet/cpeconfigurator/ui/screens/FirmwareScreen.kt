@@ -12,6 +12,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateListOf
 import androidx.compose.runtime.mutableStateMapOf
@@ -28,6 +29,7 @@ import it.cdanet.cpeconfigurator.core.AppContainer
 import it.cdanet.cpeconfigurator.data.FirmwareImageDto
 import it.cdanet.cpeconfigurator.data.FirmwareListDto
 import it.cdanet.cpeconfigurator.firmware.AirosBuild
+import it.cdanet.cpeconfigurator.firmware.AirosImage
 import it.cdanet.cpeconfigurator.firmware.CpeFirmwareFlasher
 import it.cdanet.cpeconfigurator.ui.BusyButton
 import it.cdanet.cpeconfigurator.ui.KeyValue
@@ -51,15 +53,12 @@ fun FirmwareScreen(c: AppContainer) {
     var listError by remember { mutableStateOf<String?>(null) }
     val progress = remember { mutableStateMapOf<Int, Float>() }
     var downloaded by remember { mutableStateOf(0) }
+    // the version the Ubiquiti discovery read (no SSH needed); «Leggi la versione» reads it over SSH
+    val selected by c.field.selected.collectAsState()
     var cpe by remember { mutableStateOf<AirosBuild?>(null) }
+    LaunchedEffect(selected?.firmware) { selected?.firmware?.let { AirosImage.parseBuild(it) }?.let { cpe = it } }
     var reading by remember { mutableStateOf(false) }
-    var flashing by remember { mutableStateOf(false) }
-    var confirm by remember { mutableStateOf<FirmwareImageDto?>(null) }
-    val stages = remember { mutableStateListOf<String>() }
-    var outcome by remember { mutableStateOf<Pair<String, NoticeKind>?>(null) }
-
-    // the CPE must not lose the phone halfway: display on while reading or flashing
-    if (flashing) it.cdanet.cpeconfigurator.ui.KeepScreenOn()
+    var readError by remember { mutableStateOf<String?>(null) }
 
     LaunchedEffect(Unit) {
         runCatching { c.api.firmwareList() }
@@ -108,39 +107,74 @@ fun FirmwareScreen(c: AppContainer) {
             "Collegati alla Wi-Fi della CPE. Durante l'aggiornamento (3-5 minuti) non togliere alimentazione alla CPE e non chiudere l'app: se la scrittura si interrompe la CPE può non ripartire.",
             NoticeKind.Warn,
         )
-        BusyButton("Leggi la versione della CPE", reading, enabled = !flashing, primary = false) {
+        BusyButton(if (cpe == null) "Leggi la versione della CPE" else "Rileggi la versione via SSH", reading, primary = false) {
             scope.launch {
                 reading = true
-                outcome = null
+                readError = null
                 runCatching { c.field.withCpeSsh { open -> open().use { CpeFirmwareFlasher {}.readVersion(it) } } }
                     .onSuccess {
                         cpe = it
-                        if (it == null) outcome = "Versione della CPE non leggibile" to NoticeKind.Bad
+                        if (it == null) readError = "Versione della CPE non leggibile"
                     }
-                    .onFailure { outcome = (it.message ?: it.toString()) to NoticeKind.Bad }
+                    .onFailure { readError = it.message ?: it.toString() }
                 reading = false
             }
         }
-        cpe?.let { b ->
-            KeyValue("Firmware attuale", "${b.platform} · ${b.version}")
-            val target = l?.target
-            val img = l?.items?.firstOrNull { it.platform == b.platform }
-            when {
-                target != null && b.version == target -> Notice("La CPE ha già il firmware richiesto ($target).", NoticeKind.Good)
-                img == null -> Notice("Nessun firmware ${target ?: ""} per la piattaforma ${b.platform}: chiedi all'amministratore di caricarlo.", NoticeKind.Bad)
-                !c.firmware.has(img) -> Notice("Il firmware ${img.platform} ${img.version} non è sul telefono: scaricalo con Internet, poi torna sulla Wi-Fi della CPE.", NoticeKind.Warn)
-                else -> BusyButton("Aggiorna a ${img.version}", flashing) { confirm = img }
-            }
-        }
-        stages.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
-        outcome?.let { (text, kind) -> Notice(text, kind) }
+        readError?.let { Notice(it, NoticeKind.Bad) }
+        cpe?.let { b -> CpeFirmwareUpdater(c, b, l) { after -> if (after != null) cpe = after } }
     }
+}
 
-    confirm?.let { img ->
+/**
+ * The update of the CPE on the phone's Wi-Fi to the required airOS version, from [current] (read
+ * over SSH or by the Ubiquiti discovery): the image of its platform (downloaded with Internet if
+ * missing), confirmation, then send, MD5 check, write, wait for the reboot and read the version
+ * again. Used by «Firmware» and inside the installation, without leaving it. [onDone]: the build
+ * after the update (null when the CPE did not come back in time).
+ */
+@Composable
+fun CpeFirmwareUpdater(c: AppContainer, current: AirosBuild, list: FirmwareListDto?, onDone: (AirosBuild?) -> Unit) {
+    val scope = rememberCoroutineScope()
+    var flashing by remember { mutableStateOf(false) }
+    var confirm by remember { mutableStateOf<FirmwareImageDto?>(null) }
+    var downloading by remember { mutableStateOf<Float?>(null) }
+    var downloaded by remember { mutableStateOf(0) }
+    val stages = remember { mutableStateListOf<String>() }
+    var outcome by remember { mutableStateOf<Pair<String, NoticeKind>?>(null) }
+    // the CPE must not lose the phone halfway: display on while flashing
+    if (flashing) it.cdanet.cpeconfigurator.ui.KeepScreenOn()
+
+    KeyValue("Firmware attuale", "${current.platform} · ${current.version}")
+    val target = list?.target
+    val img = list?.items?.firstOrNull { it.platform == current.platform }
+    when {
+        list == null -> Notice("Elenco dei firmware non disponibile: apri una volta CPE collegata → Firmware con Internet.", NoticeKind.Warn)
+        target != null && current.version == target -> if (outcome == null) Notice("La CPE ha già il firmware richiesto ($target).", NoticeKind.Good)
+        img == null -> Notice("Nessun firmware ${target ?: ""} per la piattaforma ${current.platform}: chiedi all'amministratore di caricarlo.", NoticeKind.Bad)
+        downloaded >= 0 && !c.firmware.has(img) -> {
+            Text("Il firmware ${img.platform} ${img.version} (${mb(img.size)}) non è sul telefono.", style = MaterialTheme.typography.bodySmall)
+            BusyButton("Scarica il firmware", downloading != null, primary = false, tonal = true) {
+                scope.launch {
+                    downloading = 0f
+                    outcome = null
+                    runCatching { c.firmware.download(c.api, img) { p -> downloading = p } }
+                        .onFailure { outcome = "Download non riuscito: ${it.message}. Serve Internet: poi torna sulla Wi-Fi della CPE." to NoticeKind.Bad }
+                    downloading = null
+                    downloaded++
+                }
+            }
+            downloading?.let { p -> LinearProgressIndicator(progress = { p }, modifier = Modifier.fillMaxWidth()) }
+        }
+        else -> BusyButton("Aggiorna a ${img.version}", flashing) { confirm = img }
+    }
+    stages.forEach { Text("• $it", style = MaterialTheme.typography.bodySmall) }
+    outcome?.let { (text, kind) -> Notice(text, kind) }
+
+    confirm?.let { image ->
         AlertDialog(
             onDismissRequest = { confirm = null },
-            title = { Text("Aggiornare la CPE a ${img.version}?") },
-            text = { Text("Da ${cpe?.version ?: "?"} a ${img.version} (${img.platform}). La CPE si riavvia da sola. Tieni la CPE alimentata e il telefono vicino fino alla fine.") },
+            title = { Text("Aggiornare la CPE a ${image.version}?") },
+            text = { Text("Da ${current.version} a ${image.version} (${image.platform}). La CPE si riavvia da sola in 3-5 minuti. Tieni la CPE alimentata e il telefono vicino fino alla fine.") },
             confirmButton = {
                 TextButton(onClick = {
                     confirm = null
@@ -152,28 +186,31 @@ fun FirmwareScreen(c: AppContainer) {
                         var before: AirosBuild? = null
                         val result = runCatching {
                             c.field.withCpeSsh { open ->
-                                before = open().use { flasher.start(it, c.firmware.fileOf(img), img) }
+                                before = open().use { flasher.start(it, c.firmware.fileOf(image), image) }
                                 flasher.waitBack(open)
                             }
                         }
                         val after = result.getOrNull()
                         val failure = result.exceptionOrNull()
                         outcome = when {
-                            failure is CpeFirmwareFlasher.AlreadyUpToDate -> "La CPE ha già il firmware ${img.version}." to NoticeKind.Good
+                            failure is CpeFirmwareFlasher.AlreadyUpToDate -> "La CPE ha già il firmware ${image.version}." to NoticeKind.Good
                             failure != null -> (failure.message ?: failure.toString()) to NoticeKind.Bad
-                            after == null -> "La CPE non è tornata raggiungibile entro 9 minuti: attendi ancora, ricollegati alla sua Wi-Fi e rileggi la versione. Non toglierle alimentazione." to NoticeKind.Warn
-                            after.version == img.version -> "Aggiornata: ${after.build}. Ora puoi procedere con il provisioning." to NoticeKind.Good
-                            else -> "La CPE è ripartita con ${after.version} invece di ${img.version}: aggiornamento non applicato (vedi /tmp/fwupdate.log)." to NoticeKind.Bad
+                            after == null -> "La CPE non è tornata raggiungibile entro 9 minuti: attendi ancora, ricollegati alla sua Wi-Fi e ricontrolla. Non toglierle alimentazione." to NoticeKind.Warn
+                            after.version == image.version -> "Aggiornata: ${after.build}. Puoi procedere." to NoticeKind.Good
+                            else -> "La CPE è ripartita con ${after.version} invece di ${image.version}: aggiornamento non applicato (vedi /tmp/fwupdate.log)." to NoticeKind.Bad
                         }
-                        if (after != null) cpe = after
                         val from = before
                         if (from != null) {
                             // the flash started: activity log on the server (best effort, there may be no Internet here)
-                            val ok = after?.version == img.version
+                            val ok = after?.version == image.version
                             val note = if (ok) null else outcome?.first
-                            scope.launch { runCatching { c.api.firmwareReport(null, from.build, img.version, ok, note) } }
+                            scope.launch { runCatching { c.api.firmwareReport(null, from.build, image.version, ok, note) } }
                         }
                         flashing = false
+                        when {
+                            failure is CpeFirmwareFlasher.AlreadyUpToDate -> onDone(failure.build)
+                            failure == null -> onDone(after)
+                        }
                     }
                 }) { Text("Aggiorna") }
             },

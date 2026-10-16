@@ -509,7 +509,7 @@ fun AppRoot(c: AppContainer) {
                         onAim = { t -> c.compassTarget.value = t; arWithSignal = false; go(Screen.ArAim) },
                         onCompass = { t -> c.compassTarget.value = t; go(Screen.Compass) },
                     )
-                    Screen.CpeHub -> CpeHub(c, hubTabs[screen.name], { hubTabs[screen.name] = it }, onAcceptance = { c.selectedJob.value = null; go(Screen.Acceptance) })
+                    Screen.CpeHub -> CpeHub(c, hubTabs[screen.name], { hubTabs[screen.name] = it }, onAcceptance = { c.selectedJob.value = null; go(Screen.Acceptance) }, onOpenWeb = { url -> c.cpeWebUrl.value = url; go(Screen.CpeWeb) })
                     Screen.Lan -> LanHub(c, hubTabs[screen.name], { hubTabs[screen.name] = it }, onPortScan = { c.portScanTarget.value = it; hubTabs[Screen.Lan.name] = 2 })
                     Screen.Diag -> DiagHub(c, hubTabs[screen.name]) { hubTabs[screen.name] = it }
                     Screen.Devices -> DevicesHub(c, hubTabs[screen.name]) { hubTabs[screen.name] = it }
