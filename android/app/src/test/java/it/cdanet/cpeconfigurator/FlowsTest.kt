@@ -206,4 +206,18 @@ class FlowsTest {
         online = false
         assertEquals(RepointLookup.Unreachable, RepointLookup.find({ api.cpeJob(macs) }, { api.claimCpe(macs, here) }))
     }
+
+    @Test
+    fun aCpeInstalledBeforeTheAppIsRegisteredWithWhatItSays() = runBlocking {
+        val api = api()
+        answers["POST /api/field/cpe/register"] = MockResponse().setBody("""{"job":$job}""")
+        val here = it.cdanet.cpeconfigurator.data.CpeLocation(37.5681, 14.2796, 9.0, "gps")
+        val j = api.registerCpe(listOf("AA:BB:CC:DD:EE:FF", "AA:BB:CC:DE:EE:FF"), "NanoStation 5AC Loco", "Verdi Luca", "CDA-NET-N2-D01", here)
+        assertEquals("job-9", j?.id)
+        val sent = Json.parseToJsonElement(bodies["POST /api/field/cpe/register"]!!).jsonObject
+        assertEquals("NanoStation 5AC Loco", sent["model"]!!.jsonPrimitive.content)
+        assertEquals("Verdi Luca", sent["hostname"]!!.jsonPrimitive.content)
+        assertEquals(2, (sent["macs"] as kotlinx.serialization.json.JsonArray).size)
+        assertEquals(14.2796, sent["position"]!!.jsonObject["lon"]!!.jsonPrimitive.content.toDouble(), 1e-9)
+    }
 }

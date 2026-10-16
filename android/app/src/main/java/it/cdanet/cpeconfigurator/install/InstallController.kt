@@ -119,6 +119,9 @@ data class InstallState(
     val jobClaimed: Boolean = false,
     /** ...or not handed over: why (too far from the installation, no GPS). */
     val jobClaimRefused: String? = null,
+    /** Re-pointing a CPE installed before the app, registered now: its test is a new installation's. */
+    val jobAdopted: Boolean = false,
+    val adoptError: String? = null,
     /** SSID the CPE must be on (provisioned or chosen in the "Aggancio" step). */
     val expectedSsid: String? = null,
     /** The acceptance test was opened by itself at the last step (only once: back from it, the summary stays). */
@@ -203,6 +206,27 @@ class InstallController(
                 is RepointLookup.Refused -> it.copy(jobLooked = true, jobLookupFailed = false, jobClaimRefused = found.why)
                 RepointLookup.Unreachable -> it.copy(jobLooked = true, jobLookupFailed = true)
             }
+        }
+    }
+
+    /** Registers the CPE installed before the app (nothing found for its MACs), so the test can be saved. */
+    suspend fun adopt(s: it.cdanet.cpeconfigurator.field.AirosStatus, here: suspend () -> CpeLocation?) {
+        _state.update { it.copy(adoptError = null) }
+        try {
+            val job = api.registerCpe(s.macs, s.model ?: "CPE", s.hostname, s.essid, here())
+            _state.update { it.copy(job = job ?: it.job, jobAdopted = job != null) }
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: it.cdanet.cpeconfigurator.data.ApiException) {
+            if (e.code == "cpe_known") {
+                // registered meanwhile (another phone, another technician): found the usual way
+                _state.update { it.copy(jobLooked = false) }
+                lookupJob(s.macs, again = true, here = here)
+            } else {
+                _state.update { it.copy(adoptError = e.message ?: e.code) }
+            }
+        } catch (e: Exception) {
+            _state.update { it.copy(adoptError = "Senza rete: riprova quando il telefono ha Internet.") }
         }
     }
 
