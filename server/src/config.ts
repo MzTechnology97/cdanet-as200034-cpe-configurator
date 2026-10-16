@@ -21,6 +21,8 @@ const envSchema = z.object({
   HOST: z.string().default('0.0.0.0'),
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent']).default('info'),
   TRUST_PROXY: z.string().default('loopback,uniquelocal'),
+  // never banned by IP after failed logins (besides loopback and the private networks): IPs or CIDRs
+  LOGIN_BAN_IGNORE: z.string().default(''),
   DB_PATH: z.string().default('./data/cdanet.sqlite'),
   // airOS firmware images for the field upgrade (default: 'firmware' next to the database).
   FIRMWARE_DIR: z.string().optional(),
@@ -140,6 +142,7 @@ export interface Config {
   host: string;
   logLevel: Env['LOG_LEVEL'];
   trustProxy: string;
+  loginBanIgnore: string;
   dbPath: string;
   photosDir: string;
   firmwareDir: string;
@@ -257,6 +260,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     host: e.HOST,
     logLevel: e.LOG_LEVEL,
     trustProxy: e.TRUST_PROXY,
+    loginBanIgnore: e.LOGIN_BAN_IGNORE,
     dbPath: e.DB_PATH,
     ouiDir: e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-oui-${process.pid}`) : join(dirname(e.DB_PATH), 'oui'),
     dem: { url: e.DEM_URL, dir: e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-dem-${process.pid}`) : join(dirname(e.DB_PATH), 'dem') },

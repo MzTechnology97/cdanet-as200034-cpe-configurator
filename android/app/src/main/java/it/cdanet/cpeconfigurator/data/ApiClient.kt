@@ -31,6 +31,7 @@ private val ERRORS = mapOf(
     "invalid_credentials" to "Username o password non corretti",
     "device_revoked" to "Accesso rapido non più valido su questo telefono: accedi con la password",
     "too_many_attempts" to "Troppi tentativi: riprova tra qualche minuto",
+    "banned" to "Troppi tentativi di accesso falliti: accesso bloccato per un po'. Se non eri tu, avvisa il NOC.",
     "unauthorized" to "Sessione scaduta: accedi di nuovo",
     "forbidden" to "Operazione non consentita",
     "invalid_request" to "Dati non validi",
@@ -105,8 +106,10 @@ class ApiClient(
     private val backendUrl: suspend () -> String,
     private val session: Session,
     private val clientHeader: String,
-    private val http: OkHttpClient = defaultHttp(),
+    httpClient: OkHttpClient = defaultHttp(),
     private val network: it.cdanet.cpeconfigurator.network.NetworkHelper? = null,
+    /** This installation's id (X-CDA-Device): the server bans a device failing logins in a loop. */
+    private val deviceId: () -> String? = { null },
 ) {
     constructor(
         settings: Settings,
@@ -114,7 +117,13 @@ class ApiClient(
         clientHeader: String,
         http: OkHttpClient = defaultHttp(),
         network: it.cdanet.cpeconfigurator.network.NetworkHelper? = null,
-    ) : this({ settings.backendUrlNow() }, session, clientHeader, http, network)
+    ) : this({ settings.backendUrlNow() }, session, clientHeader, http, network, { settings.deviceId() })
+
+    /** Every call to our server carries the installation's id. */
+    private val http: OkHttpClient = httpClient.newBuilder().addInterceptor { chain ->
+        val id = deviceId()
+        chain.proceed(if (id == null) chain.request() else chain.request().newBuilder().header("X-CDA-Device", id).build())
+    }.build()
 
     /** The client routed through [routedNet] (built once per network). */
     @Volatile private var routed: Triple<android.net.Network, OkHttpClient, OkHttpClient>? = null

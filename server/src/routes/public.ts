@@ -39,19 +39,16 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
 
   const login = async (req: FastifyRequest) => {
     const body = loginSchema.parse(req.body);
-    if (limiter.blocked(req.ip, body.username)) throw new HttpError(429, 'too_many_attempts');
+    ctx.loginGuard.check(req, body.username);
     const u = findUser.get(body.username) as
       | { id: number; username: string; password_hash: string; role: 'admin' | 'installer'; active: number; token_version: number; totp_enabled: number }
       | undefined;
     const valid = verifyPassword(body.password, u?.password_hash ?? DUMMY_PASSWORD_HASH);
     if (!u || !valid || !u.active) {
-      limiter.fail(req.ip, body.username);
-      if (limiter.blocked(req.ip, body.username)) {
-        ctx.notify.security(`Troppi tentativi di accesso falliti per <b>${escapeHtml(body.username)}</b> da ${escapeHtml(req.ip)}: accesso bloccato per qualche minuto`);
-      }
+      ctx.loginGuard.record(req, body.username, 'password', false, !u ? 'utente inesistente' : !valid ? 'password errata' : 'account disattivato');
       throw new HttpError(401, 'invalid_credentials');
     }
-    limiter.clear(req.ip, body.username);
+    ctx.loginGuard.record(req, body.username, 'password', true);
     // Two-step verification: the password alone only buys a 5-minute token for the code step.
     if (u.totp_enabled) return { mfaRequired: true, mfaToken: await ctx.auth.issueMfaToken(u) };
     return session(u, req.ip);
@@ -71,13 +68,12 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     const t = await ctx.auth.verifyMfaToken(b.mfaToken);
     const u = ctx.db.prepare('SELECT * FROM users WHERE id = ?').get(t.id) as TotpRow | undefined;
     if (!u || !u.active || u.token_version !== t.tv || !u.totp_enabled) throw new HttpError(401, 'mfa_expired');
-    if (limiter.blocked(req.ip, u.username)) throw new HttpError(429, 'too_many_attempts');
+    ctx.loginGuard.check(req, u.username);
     if (!checkSecondFactor(u, b.code)) {
-      limiter.fail(req.ip, u.username);
-      if (limiter.blocked(req.ip, u.username)) ctx.notify.security(`Troppi codici di verifica errati per <b>${escapeHtml(u.username)}</b> da ${escapeHtml(req.ip)}`);
+      ctx.loginGuard.record(req, u.username, 'totp', false, 'codice errato');
       throw new HttpError(401, 'invalid_code');
     }
-    limiter.clear(req.ip, u.username);
+    ctx.loginGuard.record(req, u.username, 'totp', true);
     return session(u, req.ip);
   });
 
@@ -288,7 +284,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
   app.post('/api/auth/device-login', async (req) => {
     trusted(req);
     const b = z.object({ id: z.string().uuid(), secret: z.string().min(20).max(100) }).parse(req.body);
-    if (limiter.blocked(req.ip, `device:${b.id}`)) throw new HttpError(429, 'too_many_attempts');
+    ctx.loginGuard.check(req, `device:${b.id}`);
     const d = deviceRow.get(b.id) as
       | {
           user_id: number;
@@ -307,10 +303,10 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
       | undefined;
     const ok = !!d && timingSafeEqual(Buffer.from(sha(b.secret)), Buffer.from(d.secret_hash)) && !!d.active && d.token_version === d.tv;
     if (!d || !ok) {
-      limiter.fail(req.ip, `device:${b.id}`);
+      ctx.loginGuard.record(req, d?.username ?? `device:${b.id.slice(0, 8)}`, 'quick', false, 'accesso rapido non valido');
       throw new HttpError(401, 'device_revoked');
     }
-    limiter.clear(req.ip, `device:${b.id}`);
+    ctx.loginGuard.record(req, d.username, 'quick', true);
     if (d.expires_at && d.expires_at <= nowIso()) {
       // the persistent login ran out: a login with the password is needed (and registers the phone again)
       ctx.db.prepare('DELETE FROM auth_devices WHERE id = ?').run(b.id);

@@ -35,6 +35,15 @@ class Settings(private val context: Context) {
 
     suspend fun backendUrlNow(): String = backendUrl.first()
 
+    /**
+     * This installation's id (a random UUID made once, kept until the app is removed): sent to the
+     * server, which bans a device failing logins in a loop. Not a hardware id: nothing about the phone.
+     */
+    fun deviceId(): String {
+        val p = context.getSharedPreferences("device", Context.MODE_PRIVATE)
+        return p.getString("id", null) ?: java.util.UUID.randomUUID().toString().also { p.edit().putString("id", it).apply() }
+    }
+
     suspend fun setLastUsername(value: String) {
         context.dataStore.edit { it[usernameKey] = value }
     }
