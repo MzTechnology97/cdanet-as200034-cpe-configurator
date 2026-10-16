@@ -558,7 +558,11 @@ private fun VerifyStep(c: AppContainer, mode: InstallMode) {
                     KeyValue("Cliente", job.deviceName.ifBlank { job.pppoeUser })
                     KeyValue("Installata il", job.createdAt.take(10).split('-').reversed().joinToString("/"))
                     KeyValue("SSID originale", job.ssid)
-                    Text("Il collaudo del ripuntamento si aggiunge a questa installazione: quello iniziale resta nello storico.", style = MaterialTheme.typography.bodySmall)
+                    Text(
+                        if (st.jobAdopted) "CPE installata prima dell'app, registrata ora: il suo collaudo vale come quello di una nuova installazione (con le foto obbligatorie)."
+                        else "Il collaudo del ripuntamento si aggiunge a questa installazione: quello iniziale resta nello storico.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
                     if (st.jobClaimed) Text("CPE installata da un altro tecnico: il collaudo si salva comunque e il NOC viene avvisato.", style = MaterialTheme.typography.bodySmall, color = WarnAmber)
                 }
                 st.jobClaimRefused != null -> Text(st.jobClaimRefused!!, style = MaterialTheme.typography.bodySmall, color = WarnAmber)
@@ -567,11 +571,22 @@ private fun VerifyStep(c: AppContainer, mode: InstallMode) {
                     style = MaterialTheme.typography.bodySmall,
                     color = WarnAmber,
                 )
-                else -> Text(
-                    "CPE installata prima dell'app: ripuntamento e cambio AP funzionano, il collaudo finale si potrà condividere ma non salvare sul server.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = WarnAmber,
-                )
+                else -> {
+                    Text(
+                        "CPE installata prima dell'app: registrala per salvare il collaudo, che varrà come quello di una nuova installazione. Il NOC viene avvisato.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = WarnAmber,
+                    )
+                    var adopting by remember { mutableStateOf(false) }
+                    BusyButton("Registra la CPE", adopting, Modifier.fillMaxWidth()) {
+                        adopting = true
+                        c.scope.launch {
+                            c.install.adopt(s) { runCatching { it.cdanet.cpeconfigurator.network.LocationHelper(context).current() }.getOrNull() }
+                            adopting = false
+                        }
+                    }
+                    st.adoptError?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = BadRed) }
+                }
             }
         }
     }

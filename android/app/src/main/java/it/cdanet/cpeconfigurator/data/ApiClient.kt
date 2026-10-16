@@ -291,6 +291,21 @@ class ApiClient(
         return AppJson.decodeFromString(CpeJobDto.serializer(), request("POST", "/api/field/cpe/claim", body)).job
     }
 
+    /**
+     * Re-pointing a CPE installed before the app: registered from what the CPE says (MACs, model,
+     * name, SSID) and where the phone is; its acceptance test is then a new installation's.
+     */
+    suspend fun registerCpe(macs: List<String>, model: String, hostname: String?, ssid: String?, at: CpeLocation?): JobDto? {
+        val body = buildJsonObject {
+            put("macs", kotlinx.serialization.json.JsonArray(macs.take(8).map { kotlinx.serialization.json.JsonPrimitive(it) }))
+            put("model", model.take(60))
+            hostname?.takeIf { it.isNotBlank() }?.let { put("hostname", it.take(64)) }
+            ssid?.takeIf { it.isNotBlank() }?.let { put("ssid", it.take(64)) }
+            at?.let { l -> put("position", buildJsonObject { put("lat", l.latitude); put("lon", l.longitude); l.accuracy?.let { put("accuracyM", it) } }) }
+        }
+        return AppJson.decodeFromString(CpeJobDto.serializer(), request("POST", "/api/field/cpe/register", body)).job
+    }
+
     /** The earlier acceptance tests of an installation (re-pointings), newest first. */
     suspend fun acceptanceHistory(jobId: String): List<AcceptanceHistoryDto> =
         AppJson.decodeFromString(AcceptanceHistoryResponse.serializer(), request("GET", "/api/provisioning/jobs/$jobId/acceptance/history")).items

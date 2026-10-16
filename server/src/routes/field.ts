@@ -1,9 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
-import { SSID_RX, TARGET_FIRMWARE, parseClientHeader, parseMac, versionAtLeast, macSiblings, REPOINT_GRANT_HOURS, REPOINT_CLAIM_MAX_M } from '../domain/policy.ts';
+import { SSID_RX, TARGET_FIRMWARE, parseClientHeader, parseMac, versionAtLeast, macSiblings, deviceNameFromCustomer, REPOINT_GRANT_HOURS, REPOINT_CLAIM_MAX_M } from '../domain/policy.ts';
 import { distanceM, isValidLatLon } from '../domain/geo.ts';
 
 /**
@@ -181,5 +182,78 @@ export function fieldRoutes(app: FastifyInstance, ctx: AppContext) {
       }
     }
     return { job: view };
+  });
+
+  /**
+   * Re-pointing a CPE installed before the app: nothing to attach its acceptance test to. The
+   * technician registers it here (MAC, model, name and SSID read from the CPE, the phone's GPS)
+   * and its test is then the one of a new installation. The NOC hears of it at once. On site
+   * only, like the claim: the phone's GPS against the CPE's place in UISP when UISP knows it.
+   */
+  app.post('/api/field/cpe/register', user, async (req) => {
+    const b = z
+      .object({
+        macs: z.array(z.string().max(40)).min(1).max(8),
+        model: z.string().trim().min(1).max(60),
+        hostname: z.string().trim().max(64).optional(),
+        ssid: z.string().trim().max(64).optional(),
+        position: z.object({ lat: z.number(), lon: z.number(), accuracyM: z.number().min(0).max(100_000).nullable().optional() }).strict().optional(),
+      })
+      .strict()
+      .parse(req.body);
+    const macs = [...new Set(b.macs.map((m) => parseMac(m)).filter((m): m is string => !!m))];
+    const mac = macs[0];
+    if (!mac) throw new HttpError(400, 'invalid_mac');
+    // already known (also by a sibling MAC): it has its installation, found by the claim
+    const all = [...new Set([...macs, ...macs.flatMap(macSiblings)])];
+    const known = ctx.db.prepare(`SELECT 1 FROM provisioning_jobs WHERE status = 'success' AND mac IN (${all.map(() => '?').join(',')}) LIMIT 1`).get(...all);
+    if (known) throw new HttpError(409, 'cpe_known');
+    const pos = b.position && isValidLatLon(b.position.lat, b.position.lon) ? b.position : null;
+    if (!pos) throw new HttpError(400, 'position_required');
+    // where UISP has the CPE (its own location, else its site's): the phone must be there
+    let away: number | null = null;
+    const u = ctx.uisp;
+    if (u) {
+      try {
+        const dev = await u.findByMac(...all);
+        let at = dev?.location ?? null;
+        if (dev && !at && dev.siteId) at = (await u.sites()).find((x) => x.id === dev.siteId)?.location ?? null;
+        if (at) away = Math.round(distanceM(at, pos));
+      } catch {
+        // UISP not reachable: registered, the NOC is told the presence was not checked
+      }
+      if (away != null && away > REPOINT_CLAIM_MAX_M + Math.min(pos.accuracyM ?? 0, 200)) throw new HttpError(403, 'too_far', { distanceM: away, maxM: REPOINT_CLAIM_MAX_M });
+    }
+    const me = req.user!;
+    const now = nowIso();
+    const id = randomUUID();
+    // the CPE's name as the app writes it («COGNOME NOME», [A-Z0-9 ] only)
+    const name = deviceNameFromCustomer(b.hostname ?? '');
+    ctx.db
+      .prepare(
+        `INSERT INTO provisioning_jobs(id, created_at, expires_at, completed_at, user_id, client, model, mac, serial, ssid, pppoe_user, device_name, status, stages, latitude, longitude, location_accuracy, location_source)
+         VALUES(?,?,?,?,?,'adopted',?,?,'',?,'',?,'success',?,?,?,?,?)`,
+      )
+      .run(id, now, now, now, me.id, b.model, mac, b.ssid ?? '', name, JSON.stringify(["CPE installata prima dell'app, registrata nel ripuntamento"]), pos.lat, pos.lon, pos.accuracyM ?? null, 'gps');
+    recordEvent(ctx.db, me.id, 'job.adopted', id, `CPE ${mac} (${b.model}) installata prima dell'app, registrata nel ripuntamento`);
+    ctx.notify.inbox.push('noc', {
+      kind: 'repoint_unplanned',
+      title: `CPE installata prima dell'app registrata: ${name || mac}`,
+      lines: [
+        `Tecnico: ${me.username}`,
+        `CPE: ${mac} · ${b.model}${b.ssid ? ` · ${b.ssid}` : ''}`,
+        away != null ? `Telefono a ${away} m dalla CPE in UISP` : 'Presenza non verificata: la CPE non ha una posizione in UISP',
+        'Il suo collaudo vale come quello di una nuova installazione',
+      ],
+      jobId: id,
+      mac: mac,
+    });
+    const job = ctx.db
+      .prepare(
+        `SELECT j.id, j.created_at createdAt, j.status, j.model, j.template_name template, j.mac, j.serial, j.ssid, j.pppoe_user pppoeUser, j.device_name deviceName
+           FROM provisioning_jobs j WHERE j.id = ?`,
+      )
+      .get(id);
+    return { job };
   });
 }

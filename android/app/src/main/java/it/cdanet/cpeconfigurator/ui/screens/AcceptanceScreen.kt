@@ -156,7 +156,9 @@ fun AcceptanceScreen(c: AppContainer) {
     val roof = wizard?.roof
     val activeOrder by c.activeWorkOrder.collectAsState()
     // a re-pointing or AP change: a new test, the earlier one kept (the work order is closed with it)
-    val repoint = wizard?.mode == it.cdanet.cpeconfigurator.install.InstallMode.Repoint || activeOrder?.kind == "repoint"
+    // a CPE installed before the app, registered in the re-pointing: its first test, a new installation's
+    val adopted = wizard?.jobAdopted == true
+    val repoint = !adopted && (wizard?.mode == it.cdanet.cpeconfigurator.install.InstallMode.Repoint || activeOrder?.kind == "repoint")
     // the four photos are required for a new installation only (not re-pointings, not CPE replacements)
     val newInstall = !repoint && j.replacesJobId == null
     val photoTypes = photos.mapNotNull { ph -> PhotoType.ofCaption(ph.caption) } +
