@@ -23,6 +23,8 @@ export function createNotifier(
 ) {
   // Module "Notifiche Telegram" off: every notification is dropped here.
   const telegram = { ...rawTelegram, notify: (...a: Parameters<Telegram['notify']>) => (isOn() ? rawTelegram.notify(...a) : Promise.resolve()), summaryHour: () => (isOn() ? rawTelegram.summaryHour() : null) };
+  // background checks (UISP lookups) before a notification: idle() waits for them
+  let pending: Promise<unknown> = Promise.resolve();
   const jobLink = (mac: string) => (cfg.publicUrl ? `\n<a href="${e(cfg.publicUrl)}/#/jobs?q=${encodeURIComponent(mac)}">Apri nello storico</a>` : '');
   // Notifications page of each user; personal Telegram only with the module on and the bot set
   const inbox = createInbox(
@@ -109,13 +111,23 @@ export function createNotifier(
    * The acceptance test passed (or the NOC approved it): the CPE is on the roof, connected and
    * online, ready to be accepted in UISP. Told once per installation.
    */
-  function readyForUisp(jobId: string) {
-    if (!getUisp()) return;
+  function readyForUisp(jobId: string): Promise<void> {
+    const run = readyForUispNow(jobId).catch((err) => log(`notify uisp ready: ${(err as Error).message}`));
+    pending = pending.then(() => run);
+    return run;
+  }
+  async function readyForUispNow(jobId: string) {
+    const uisp = getUisp();
+    if (!uisp) return;
     const j = db
       .prepare('SELECT j.model, j.mac, j.ssid, j.replaces_job_id, u.username FROM provisioning_jobs j JOIN users u ON u.id = j.user_id WHERE j.id = ?')
       .get(jobId) as { model: string; mac: string; ssid: string; replaces_job_id: string | null; username: string } | undefined;
     if (!j) return;
-    if (db.prepare("SELECT 1 FROM events WHERE action = 'job.uisp_ready' AND target = ? LIMIT 1").get(jobId)) return;
+    const told = () => !!db.prepare("SELECT 1 FROM events WHERE action = 'job.uisp_ready' AND target = ? LIMIT 1").get(jobId);
+    if (told()) return;
+    // already accepted in UISP (a CPE installed before the app, a test done again): nothing to accept
+    if ((await uisp.findByMac(j.mac).catch(() => null))?.authorized) return;
+    if (told()) return;
     db.prepare("INSERT INTO events(created_at, user_id, action, target, detail) VALUES(?, NULL, 'job.uisp_ready', ?, 'collaudo superato')").run(nowIso(), jobId);
     void telegram.notify(
       'uisp_pending',
@@ -294,6 +306,7 @@ export function createNotifier(
   let timers: NodeJS.Timeout[] = [];
   return {
     readyForUisp,
+    idle: () => pending,
     workOrderAssigned,
     workOrderAlerts,
     inbox,
