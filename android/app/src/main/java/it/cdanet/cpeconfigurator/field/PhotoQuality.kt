@@ -27,6 +27,15 @@ object PhotoChecklist {
         if (newInstall) listOf(PhotoType.Antenna, PhotoType.Bracket, PhotoType.Cabling, PhotoType.Router) else emptyList()
 
     fun missing(have: Collection<PhotoType>, newInstall: Boolean): List<PhotoType> = required(newInstall).filterNot { it in have }
+
+    /** The required ones taken on the roof: all but the customer's router (indoors, at the end). */
+    fun roof(newInstall: Boolean): List<PhotoType> = required(newInstall).filterNot { it == PhotoType.Router }
+
+    /** What is still missing before leaving the roof: never a second climb for a photo. */
+    fun missingOnRoof(captions: List<String>, newInstall: Boolean): List<PhotoType> {
+        val have = captions.mapNotNull { PhotoType.ofCaption(it) }.toSet()
+        return roof(newInstall).filterNot { it in have }
+    }
 }
 
 /**
