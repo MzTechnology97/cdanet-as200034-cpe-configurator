@@ -133,7 +133,7 @@ describe('Connettore NAS (SMB/CIFS)', () => {
         `#!/bin/sh
 printf '%s\n' "$@" "PASSWD=$PASSWD" >> '${log}'
 case "$*" in
-  *-U\ wrong*) echo 'session setup failed: NT_STATUS_LOGON_FAILURE'; exit 1;;
+  *'-U wrong'*) echo 'session setup failed: NT_STATUS_LOGON_FAILURE'; exit 1;;
   *-L*) printf 'Disk|Backup|Copie\nIPC|IPC$|IPC Service\n'; echo 'do_connect: Connection to nas failed (Error NT_STATUS_RESOURCE_NAME_NOT_FOUND)' >&2; echo 'Unable to connect with SMB1 -- no workgroup available' >&2; exit 0;;
   *ls*) cat <<'EOF'
 ${LS}EOF
