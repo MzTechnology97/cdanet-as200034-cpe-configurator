@@ -108,6 +108,9 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
         return false
     }
 
+    /** The CDA Net CPE credentials on the phone (after [prefetch]), for tools outside the field session. */
+    fun savedCredentials(): CredentialsDto? = access?.takeIf { valid(it) }?.credentials
+
     fun forget() {
         stop()
         access = null

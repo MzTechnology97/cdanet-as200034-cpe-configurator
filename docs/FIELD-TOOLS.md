@@ -238,6 +238,36 @@ Se il segnale nell'ultimo quarto del periodo è più basso di almeno 4 dB rispet
 
 API usate: `GET /devices/{id}/statistics` (`interval`, `start`, `period`) e `GET /outages` (`deviceId`, `start`, `period`) della specifica UISP API 1.5.0.
 
+## Discovery Ubiquiti
+
+**Strumenti → Con la CPE → Discovery Ubiquiti** cerca gli apparati airOS e UniFi nella rete locale della Wi-Fi a cui è collegato il telefono (quella della CPE o del cliente). La discovery non attraversa i router.
+
+Funziona come la Ubiquiti Discovery Utility:
+- richieste v1 (`01 00 00 00`) e v2 per UniFi (`02 08 00 00`) sulla porta UDP 10001, in broadcast e al gruppo multicast 233.89.188.1;
+- una richiesta ogni mezzo secondo per 10 secondi, più l'ascolto degli annunci sulla porta UDP 10002;
+- gli apparati compaiono man mano che rispondono.
+
+Per ogni apparato mostra:
+- prodotto, nome, IP, MAC e firmware (versione e build);
+- tempo da cui è acceso, SSID e modalità wireless (Station o Access Point);
+- se è ancora **di fabbrica** (dove l'apparato lo dice);
+- se è un apparato UniFi.
+
+La ricerca accetta `*` e `?`, e si può ordinare per IP, nome o prodotto.
+
+Nel dettaglio di un apparato:
+- tutte le sue interfacce;
+- le porte web e SSH;
+- il seriale;
+- l'**IPv6 di emergenza** `fe80::`, calcolato dal MAC.
+
+Azioni disponibili:
+- **Interfaccia web**: apre l'interfaccia dell'apparato nell'app, solo per indirizzi privati e con il certificato autofirmato accettato solo per quell'indirizzo;
+- **Copia**;
+- **Riavvia**: usa la sfida del protocollo, con la risposta SHA-256(crypt(password, salt) || sfida), quindi la password non viaggia in rete. Le credenziali predefinite sono quelle CDA Net delle CPE salvate sul telefono, oppure altre inserite a mano. Prima di riavviare chiede conferma.
+
+La stessa discovery, più completa, serve anche a Scansione LAN, alla topologia e alla ricerca della CPE durante l'installazione. Dettagli del protocollo ripresi da [ubnt-discovery-next](https://github.com/Gaaraalex/ubnt-discovery-next) (licenza MIT).
+
 ## Strumenti di rete
 
 - **Discovery LAN → Trova apparati Ubiquiti**: invia la richiesta di discovery Ubiquiti (UDP 10001, la stessa usata da UISP) e ascolta gli annunci degli apparati (UDP 10002). Mostra IP, MAC, modello, firmware, nome e SSID di CPE e AP sulla LAN, anche quando l'IP non è noto. Non attraversa i router: il telefono deve essere sulla stessa LAN.

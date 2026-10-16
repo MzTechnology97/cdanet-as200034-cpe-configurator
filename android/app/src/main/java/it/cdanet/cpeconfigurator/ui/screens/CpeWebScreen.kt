@@ -32,6 +32,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import it.cdanet.cpeconfigurator.core.AppContainer
+import it.cdanet.cpeconfigurator.network.Ip
 
 /**
  * airOS first-boot UI inside the app. The process is bound to the Wi-Fi network
@@ -42,7 +43,9 @@ import it.cdanet.cpeconfigurator.core.AppContainer
 @Composable
 fun CpeWebScreen(c: AppContainer) {
     val state by c.provisioning.state.collectAsState()
-    val host = state.pkg?.target?.host ?: "192.168.172.1"
+    // a device of the Ubiquiti discovery (private addresses only), else the CPE of the installation
+    val chosen = remember { c.cpeWebUrl.value?.takeIf { u -> android.net.Uri.parse(u).host?.let { h -> Ip.isPrivate(h) } == true } }
+    val host = chosen?.let { android.net.Uri.parse(it).host } ?: state.pkg?.target?.host ?: "192.168.172.1"
     val bound = remember { c.network.bindToWifi() }
     // a file field of the page (System → Upload firmware): the firmware already on the phone, or
     // any file through Android's picker. The callback must be answered once, even with nothing.
@@ -59,11 +62,12 @@ fun CpeWebScreen(c: AppContainer) {
         onDispose {
             pending?.onReceiveValue(null)
             c.network.unbind()
+            c.cpeWebUrl.value = null
         }
     }
     Column(Modifier.fillMaxSize()) {
         Text(
-            if (bound) "Interfaccia CPE https://$host · al termine torna indietro" else "Nessuna Wi-Fi collegata: collegati alla Wi-Fi della CPE",
+            if (bound) "Interfaccia ${chosen ?: "https://$host"} · al termine torna indietro" else "Nessuna Wi-Fi collegata: collegati alla Wi-Fi della CPE",
             style = MaterialTheme.typography.bodySmall,
             modifier = Modifier.fillMaxWidth().padding(8.dp),
         )
@@ -95,7 +99,7 @@ fun CpeWebScreen(c: AppContainer) {
                             if (errHost == host) handler.proceed() else handler.cancel()
                         }
                     }
-                    loadUrl("https://$host/")
+                    loadUrl(chosen ?: "https://$host/")
                 }
             },
             onRelease = { it.destroy() },
