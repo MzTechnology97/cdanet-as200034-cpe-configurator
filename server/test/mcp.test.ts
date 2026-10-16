@@ -107,7 +107,10 @@ describe('Connetti il tuo Claude (MCP, sola lettura)', () => {
     for (const tool of tools) {
       const r = await rpc('tools/call', { name: tool.name, arguments: tool.name === 'diagnosi' ? { pppoeUser: 'rossi.mario@cda-net.it' } : {} });
       assert.equal(r.statusCode, 200, `${tool.name}: ${r.body}`);
-      assert.equal(typeof r.json().result.content[0].text, 'string', tool.name);
+      const out = r.json().result.content[0].text as string;
+      assert.equal(typeof out, 'string', tool.name);
+      // never a secret, however deep: passwords, secrets, keys, PSK, tokens
+      assert.ok(!/"[^"]*(password|passwd|secret|psk|apikey|api_key|appkey|privatekey|token|ciphertext)[^"]*":/i.test(out), `${tool.name}: ${out.slice(0, 300)}`);
     }
     assert.equal((await rpc('tools/call', { name: 'diagnosi', arguments: {} })).json().result.isError, true, 'needs a subject');
     assert.equal((await rpc('tools/call', { name: 'cancella_tutto', arguments: {} })).json().result.isError, true);

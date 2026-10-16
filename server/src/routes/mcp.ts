@@ -24,6 +24,8 @@ const CODE_TTL_MS = 5 * 60_000;
 const CALLS_PER_MINUTE = 120;
 /** Actions on the network (CPEs, UISP) per connection and hour: one at a time, never a sweep. */
 const NETWORK_PER_HOUR = 5;
+/** The other operators' coverage (an external quota shared with the field): per connection and minute. */
+const THIRD_PER_MINUTE = 10;
 const REGISTRATIONS_PER_HOUR = 10;
 const PROTOCOLS = ['2025-06-18', '2025-03-26', '2024-11-05'];
 /** Who may call /mcp from a browser (the Claude apps call it from their servers: no Origin). */
@@ -76,6 +78,8 @@ export function mcpRoutes(app: FastifyInstance, ctx: AppContext) {
   const registrations = new Map<string, number[]>();
   const calls = new Map<number, number[]>();
   const networkCalls = new Map<number, number[]>();
+  const thirdCalls = new Map<number, number[]>();
+  const heavyBusy = new Set<number>();
   // the platform's own address (PUBLIC_URL); without it, the address the Claude app used
   const base = (req: FastifyRequest) => ctx.cfg.publicUrl ?? `${req.protocol}://${req.host}`;
   const resourceMeta = (req: FastifyRequest) => `${base(req)}/.well-known/oauth-protected-resource`;
@@ -381,14 +385,32 @@ ${error ? `<p class="err">${escapeHtml(error)}</p>` : ''}
     } catch (e) {
       return { content: [{ type: 'text', text: (e as Error).message }], isError: true };
     }
+    const third = tool.limits?.includes('third');
+    const heavy = tool.limits?.includes('heavy');
+    if (third && (thirdCalls.get(row.id) ?? []).filter((x) => x > Date.now() - 60_000).length >= THIRD_PER_MINUTE) {
+      return { content: [{ type: 'text', text: `Limite di ${THIRD_PER_MINUTE} verifiche degli altri operatori al minuto per questa connessione (il servizio è condiviso con gli installatori sul campo): riprova tra un minuto.` }], isError: true };
+    }
+    if (heavy && heavyBusy.has(row.id)) {
+      return { content: [{ type: 'text', text: 'Una simulazione alla volta: aspetta che finisca la precedente.' }], isError: true };
+    }
+    if (heavy) heavyBusy.add(row.id);
     // the console's own route, with this admin's rights (a short session token, never shown)
-    const { token } = await ctx.auth.issueToken({ id: user.id, username: user.username, role: user.role, token_version: user.token_version });
-    const r = await app.inject({
-      method: tool.method ?? 'GET',
-      url: path,
-      headers: { authorization: `Bearer ${token}`, accept: 'application/json', ...(tool.method && tool.method !== 'DELETE' ? { 'content-type': 'application/json' } : {}) },
-      ...(tool.method && tool.method !== 'DELETE' ? { payload: JSON.stringify(body ?? {}) } : {}),
-    });
+    let r: Awaited<ReturnType<typeof app.inject>>;
+    try {
+      const { token } = await ctx.auth.issueToken({ id: user.id, username: user.username, role: user.role, token_version: user.token_version });
+      r = await app.inject({
+        method: tool.method ?? 'GET',
+        url: path,
+        headers: { authorization: `Bearer ${token}`, accept: 'application/json', ...(tool.method && tool.method !== 'DELETE' ? { 'content-type': 'application/json' } : {}) },
+        ...(tool.method && tool.method !== 'DELETE' ? { payload: JSON.stringify(body ?? {}) } : {}),
+      });
+    } finally {
+      if (heavy) heavyBusy.delete(row.id);
+    }
+    // the external quota: only what really reached the service (the server's cache is free)
+    if (third && r.statusCode < 400 && !/"cached":true/.test(r.body)) {
+      thirdCalls.set(row.id, [...(thirdCalls.get(row.id) ?? []).filter((x) => x > Date.now() - 60_000), Date.now()]);
+    }
     db.prepare('UPDATE mcp_tokens SET last_used_at = ?, calls = calls + 1 WHERE id = ?').run(nowIso(), row.id);
     const keys = Object.keys(args ?? {});
     recordEvent(

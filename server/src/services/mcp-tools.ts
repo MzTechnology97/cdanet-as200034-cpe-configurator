@@ -17,6 +17,12 @@ export interface McpTool {
   body?(args: Record<string, unknown>): Record<string, unknown> | undefined;
   /** On the network (CPEs, UISP): the NOC hears of every call. */
   network?: boolean;
+  /**
+   * «third»: an external service with its own quota (the other operators' coverage): a few a
+   * minute per connection, the server's cache does not count. «heavy»: a simulation that costs the
+   * server's CPU (terrain, coverage): one at a time per connection.
+   */
+  limits?: Array<'third' | 'heavy'>;
 }
 
 const str = (v: unknown, max = 80) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, max) : undefined);
@@ -235,6 +241,7 @@ export const MCP_TOOLS: McpTool[] = [
     title: 'Copertura CDA Net in un punto',
     description: 'Gli AP CDA Net che coprono un punto: distanza, azimut, segnale stimato, carico, giudizio.',
     inputSchema: obj({ ...LATLON, km: { type: 'number', description: 'Raggio in km (predefinito del server)' }, limit: { type: 'integer', minimum: 1, maximum: 50 } }, ['lat', 'lon']),
+    limits: ['heavy'],
     path: (a) => `/api/coverage${qs({ lat: coord(a.lat, 'lat'), lon: coord(a.lon, 'lon'), km: typeof a.km === 'number' ? a.km : undefined, limit: int(a.limit, 1, 50) })}`,
   },
   {
@@ -242,6 +249,7 @@ export const MCP_TOOLS: McpTool[] = [
     title: 'Altri operatori (WIC)',
     description: "Copertura degli altri operatori (FTTH, FTTC, FWA, radio) con il bollino AGCOM, in un punto (lat/lon) oppure a un indirizzo esatto (city, street, streetType, number, stair da indirizzi_operatori). Ogni verifica passa l'indirizzo al servizio esterno: il server la tiene in memoria qualche giorno.",
     inputSchema: obj({ ...LATLON, ...ADDRESS, stair: { type: 'string', description: 'Scala, se presente' } }),
+    limits: ['third'],
     path: (a) => {
       if (a.city && a.street && a.number) return `/api/admin/coverage/operators${qs({ city: str(a.city), street: str(a.street, 120), streetType: str(a.streetType, 40) ?? '', number: str(a.number, 20), stair: str(a.stair, 20) })}`;
       return `/api/admin/coverage/operators${qs({ lat: coord(a.lat, 'lat'), lon: coord(a.lon, 'lon') })}`;
@@ -252,6 +260,7 @@ export const MCP_TOOLS: McpTool[] = [
     title: 'Indirizzi per la verifica degli altri operatori',
     description: "La ricerca guidata dell'indirizzo, un passo alla volta: q (≥2 lettere) per il comune; city+q per la via; city+street+streetType+q (prefisso del civico) per il civico; city+street+streetType+number per la scala.",
     inputSchema: obj({ q: { type: 'string' }, ...ADDRESS }),
+    limits: ['third'],
     path: (a) => `/api/admin/coverage/operators/places${qs({ q: str(a.q, 60), city: str(a.city), street: str(a.street, 120), streetType: str(a.streetType, 40), number: str(a.number, 20) })}`,
   },
   {
@@ -259,6 +268,7 @@ export const MCP_TOOLS: McpTool[] = [
     title: 'Verifica di fattibilità',
     description: "Fattibilità per la vendita in un punto: copertura CDA Net, altri operatori, bollino AGCOM e la proposta.",
     inputSchema: obj({ ...LATLON, label: { type: 'string', description: "Indirizzo o nome del punto (per il verbale)" } }, ['lat', 'lon']),
+    limits: ['third', 'heavy'],
     path: (a) => `/api/admin/feasibility${qs({ lat: coord(a.lat, 'lat'), lon: coord(a.lon, 'lon'), label: str(a.label, 200) })}`,
   },
   {
@@ -280,6 +290,7 @@ export const MCP_TOOLS: McpTool[] = [
     title: 'Puntamento da un punto',
     description: "Gli AP vicini a un punto con azimut, inclinazione, distanza e segnale atteso, per un'antenna all'altezza indicata.",
     inputSchema: obj({ ...LATLON, height: { type: 'number', description: "Altezza dell'antenna dal suolo in metri" } }, ['lat', 'lon']),
+    limits: ['heavy'],
     path: (a) => `/api/pointing${qs({ lat: coord(a.lat, 'lat'), lon: coord(a.lon, 'lon'), height: typeof a.height === 'number' ? a.height : undefined })}`,
   },
   {
@@ -287,6 +298,7 @@ export const MCP_TOOLS: McpTool[] = [
     title: 'Profilo del terreno verso un AP',
     description: 'Il profilo del terreno e la zona di Fresnel tra un punto e un AP (apId da puntamento o copertura).',
     inputSchema: obj({ ...LATLON, apId: { type: 'string' }, height: { type: 'number' } }, ['lat', 'lon', 'apId']),
+    limits: ['heavy'],
     path: (a) => `/api/pointing/profile${qs({ lat: coord(a.lat, 'lat'), lon: coord(a.lon, 'lon'), apId: String(need(a.apId, 'apId')).slice(0, 80), height: typeof a.height === 'number' ? a.height : undefined })}`,
   },
   {
@@ -294,6 +306,7 @@ export const MCP_TOOLS: McpTool[] = [
     title: "L'orizzonte da un punto",
     description: "Il profilo dei rilievi tutto intorno a un punto (montagne, ostacoli).",
     inputSchema: obj({ ...LATLON, height: { type: 'number' } }, ['lat', 'lon']),
+    limits: ['heavy'],
     path: (a) => `/api/pointing/horizon${qs({ lat: coord(a.lat, 'lat'), lon: coord(a.lon, 'lon'), height: typeof a.height === 'number' ? a.height : undefined })}`,
   },
   {
@@ -301,6 +314,7 @@ export const MCP_TOOLS: McpTool[] = [
     title: 'Simulazione di copertura di un AP',
     description: "La copertura stimata di un AP (apId), con il modello di CPE scelto.",
     inputSchema: obj({ apId: { type: 'string' }, cpe: { type: 'string', description: 'Modello di CPE' } }, ['apId']),
+    limits: ['heavy'],
     path: (a) => `/api/admin/coverage/simulation${qs({ apId: String(need(a.apId, 'apId')).slice(0, 80), cpe: str(a.cpe, 40) })}`,
   },
   {
@@ -308,6 +322,7 @@ export const MCP_TOOLS: McpTool[] = [
     title: 'Precisione delle stime di copertura',
     description: 'Quanto le stime di segnale si avvicinano alle misure dei collaudi.',
     inputSchema: none,
+    limits: ['heavy'],
     path: () => '/api/admin/coverage/accuracy',
   },
   // ---- read: customers, installations, network --------------------------------------------------
