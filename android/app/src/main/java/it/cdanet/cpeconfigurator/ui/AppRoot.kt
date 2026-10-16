@@ -230,7 +230,35 @@ fun AppRoot(c: AppContainer) {
         MandatoryUpdateScreen(c, mandatory, required, update, onState = { update = it }, onRecheck = { recheck++ })
         return
     }
+    // the session of the last contact with the server, kept on the phone: back online the app
+    // signs in again by itself (fingerprint/face: from the banner); at its end the login comes back
+    LaunchedEffect(session?.offline, session?.expiresAt) {
+        val s = session?.takeIf { it.offline } ?: return@LaunchedEffect
+        launch {
+            val left = runCatching { java.time.Duration.between(java.time.Instant.now(), java.time.Instant.parse(s.expiresAt)).toMillis() }.getOrDefault(0L)
+            delay(left.coerceAtLeast(0L))
+            if (c.session.isOffline) c.session.clear()
+        }
+        c.network.internet.collect { online ->
+            if (online && c.session.isOffline && c.quickLogin.saved()?.persistent == true) {
+                delay(1500) // the new route settles
+                autoLogin(c)
+            }
+        }
+    }
+    // signed in again after working offline: every screen reads its data from the server again
+    var wasOffline by remember { mutableStateOf(false) }
+    LaunchedEffect(session?.offline) {
+        val now = session?.offline
+        if (now == false && wasOffline) c.refresh.value++
+        wasOffline = now == true
+    }
+    // how long the app may go on without Internet: the hours start again at every contact
+    var everSignedIn by remember { mutableStateOf(false) }
     LaunchedEffect(session) {
+        // the CPE credentials go only when a session ends (logout, refused, expired), not at the
+        // start of the app with nobody signed in yet: offline they are what the tools need
+        if (session != null) everSignedIn = true
         // screenshots: blocked when nobody is logged in; with an account, at once by its role (an
         // installer stays blocked until the server allows it, also when it cannot be reached)
         if (session == null) c.lockScreenCapture() else c.updateSecureScreen(session?.user?.role, null)
@@ -246,6 +274,9 @@ fun AppRoot(c: AppContainer) {
                 runCatching { c.api.meta() }.onSuccess {
                     c.modules.value = it.modules
                     c.updateSecureScreen(session?.user?.role, it.modules)
+                    session?.takeIf { s -> !s.offline }?.let { s -> c.offlineSession.save(c.settings.backendUrlNow(), s.user, it.modules, it.offlineSessionHours) }
+                    // what was done without Internet goes to the activity log now
+                    if (session?.offline == false) c.offlineLog.send(c.api)
                 }
             }
             c.resultQueue.syncInBackground()
@@ -287,7 +318,7 @@ fun AppRoot(c: AppContainer) {
             }
             // CPE credentials for alignment/diagnosis, so they also work later without Internet.
             scope.launch { if (listOf("field_alignment", "field_diagnosis", "acceptance").any { c.moduleOn(it) }) c.field.prefetch() }
-        } else {
+        } else if (everSignedIn) {
             c.field.forget()
         }
     }
@@ -296,7 +327,11 @@ fun AppRoot(c: AppContainer) {
         // on the roof without Internet, with an installation saved on the phone: straight to it,
         // the login (which needs the server) can wait until the phone is back online
         val saved = c.provisioning.state.collectAsState().value.pkg != null
-        LaunchedEffect(saved) { if (saved && c.network.noInternet()) offline = true }
+        LaunchedEffect(saved) {
+            // closed app or phone switched off, no Internet: the session kept on the phone first
+            if (c.network.noInternet() && resumeOffline(c, lock = c.quickLogin.lockAtOpen())) return@LaunchedEffect
+            if (saved && c.network.noInternet()) offline = true
+        }
         LoginScreen(c, update = update, onUpdate = { update = it }, onOffline = { offline = true })
         return
     }
@@ -369,6 +404,7 @@ fun AppRoot(c: AppContainer) {
 
     Scaffold(
         topBar = {
+            Column {
             TopAppBar(
                 title = {
                     Row(verticalAlignment = Alignment.CenterVertically) {
@@ -417,6 +453,9 @@ fun AppRoot(c: AppContainer) {
                 },
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.surface, scrolledContainerColor = MaterialTheme.colorScheme.surfaceContainer),
             )
+            // working with the session kept on the phone: until when, and how to reconnect
+            OfflineSessionBanner(c)
+            }
         },
         bottomBar = {
             if (screen in TOP && !wide) {

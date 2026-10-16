@@ -129,7 +129,7 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
     val shortcutStore = remember { ShortcutStore(c.settings, c.api) }
     LaunchedEffect(account, offline) { if (!offline && session != null && account.isNotBlank()) shortcutStore.sync(account) }
     var today by remember { mutableStateOf(Today(null, null, null)) }
-    LaunchedEffect(offline, modules) {
+    LaunchedEffect(offline, modules, c.refresh.collectAsState().value) {
         if (offline) return@LaunchedEffect
         val todo = runCatching { toDoItems(c.api.myJobs()).size }.getOrNull()
         today = Today(todo, today.outages, today.cpeIssues)

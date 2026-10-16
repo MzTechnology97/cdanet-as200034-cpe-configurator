@@ -159,6 +159,8 @@ class ApiClient(
 
     suspend fun request(method: String, path: String, body: JsonElement? = null, auth: Boolean = true, client: Boolean = false): String =
         withContext(Dispatchers.IO) {
+            // working offline (session taken back from the phone): the server waits for the new login
+            if (auth && session.isOffline) throw IOException(OFFLINE_SESSION)
             val url = (base() + path).toHttpUrl()
             val b = Request.Builder().url(url).header("Accept", "application/json").header("Cache-Control", "no-store")
             if (auth) session.token?.let { b.header("Authorization", "Bearer $it") }
@@ -173,7 +175,8 @@ class ApiClient(
                 if (!r.isSuccessful) {
                     val err = runCatching { AppJson.decodeFromString(ApiErrorDto.serializer(), text) }.getOrNull()
                     val code = err?.error?.ifBlank { null } ?: "HTTP ${r.code}"
-                    if (r.code == 401 && auth) session.clear()
+                    // refused (401) or this phone blocked after failed logins: nothing stays to work offline
+                    if ((r.code == 401 || (r.code == 429 && code == "banned")) && auth) session.revoke()
                     if (r.code == 426) updateRequired.value = err?.minVersion ?: "nuova"
                     val detail = err?.minVersion?.let { " (minima $it)" } ?: ""
                     throw ApiException(r.code, code, apiMessage(code) + detail)
@@ -204,7 +207,7 @@ class ApiClient(
             if (!r.isSuccessful) {
                 val err = runCatching { AppJson.decodeFromString(ApiErrorDto.serializer(), r.body?.string().orEmpty()) }.getOrNull()
                 val code = err?.error?.ifBlank { null } ?: "HTTP ${r.code}"
-                if (r.code == 401) session.clear()
+                if (r.code == 401) session.revoke()
                 throw ApiException(r.code, code, apiMessage(code))
             }
             r.body?.bytes() ?: ByteArray(0)
@@ -244,6 +247,14 @@ class ApiClient(
         val r = AppJson.decodeFromString(LoginResponse.serializer(), request("POST", "/api/auth/device-login", body, auth = false, client = true))
         session.set(SessionState(r.token, r.user, r.expiresAt))
         return r.deviceExpiresAt
+    }
+
+    /** What was done without Internet, to the activity log at the time it happened. */
+    suspend fun offlineEvents(list: List<it.cdanet.cpeconfigurator.security.OfflineLog.Entry>) {
+        val body = buildJsonObject {
+            put("events", kotlinx.serialization.json.JsonArray(list.map { e -> AppJson.encodeToJsonElement(it.cdanet.cpeconfigurator.security.OfflineLog.Entry.serializer(), e) }))
+        }
+        request("POST", "/api/field/offline-events", body, client = true)
     }
 
     /** Registers this phone for the quick login (after a full login). */
@@ -512,7 +523,7 @@ class ApiClient(
         session.token?.let { b.header("Authorization", "Bearer $it") }
         serverClient().newCall(b.build()).execute().use { r ->
             if (!r.isSuccessful) {
-                if (r.code == 401) session.clear()
+                if (r.code == 401) session.revoke()
                 throw ApiException(r.code, "HTTP ${r.code}", if (r.code == 404) apiMessage("firmware_not_found") else "Download del firmware non riuscito (HTTP ${r.code})")
             }
             val input = r.body?.byteStream() ?: throw java.io.IOException("Risposta vuota")
@@ -683,6 +694,8 @@ class ApiClient(
     }
 
     companion object {
+        const val OFFLINE_SESSION = "Senza Internet: lavori con la sessione salvata sul telefono. Questi dati del server tornano quando l'app si ricollega."
+
         fun defaultHttp(): OkHttpClient = OkHttpClient.Builder()
             .connectTimeout(8, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)

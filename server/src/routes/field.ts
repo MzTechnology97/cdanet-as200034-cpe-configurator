@@ -60,8 +60,47 @@ export function fieldRoutes(app: FastifyInstance, ctx: AppContext) {
       sshPorts: [...new Set([...facts.map((f) => f.sshPort), 22])],
       targetFirmware: TARGET_FIRMWARE,
       thresholds: ctx.cfg.thresholds,
-      expiresAt: new Date(Date.now() + 8 * 3600_000).toISOString(),
+      // as long as the app may work without Internet (at least the 8 hours of a working day)
+      expiresAt: new Date(Date.now() + Math.max(8, ctx.cfg.offlineSessionHours) * 3600_000).toISOString(),
     };
+  });
+
+  /**
+   * What the app did with the session kept on the phone, without Internet (taken back after a
+   * restart, CPE tools used): into the activity log at the time it happened, marked offline. Only
+   * times within the offline session (plus an hour of clock drift), never in the future.
+   */
+  app.post('/api/field/offline-events', { preHandler: ctx.auth.requireUser }, async (req) => {
+    trustedClient(req.headers['x-cda-client'] as string | undefined);
+    const b = z
+      .object({
+        events: z
+          .array(
+            z
+              .object({
+                at: z.string().datetime(),
+                action: z.enum(['session.offline_resume', 'field.offline_use']),
+                target: z.string().trim().max(80).default(''),
+                detail: z.string().trim().max(200).default(''),
+              })
+              .strict(),
+          )
+          .max(200),
+      })
+      .strict()
+      .parse(req.body);
+    const now = Date.now();
+    const oldest = now - (Math.max(8, ctx.cfg.offlineSessionHours) + 1) * 3600_000;
+    const ins = ctx.db.prepare('INSERT INTO events(created_at, user_id, action, target, detail) VALUES(?,?,?,?,?)');
+    let saved = 0;
+    for (const e of b.events) {
+      const at = Date.parse(e.at);
+      if (at < oldest || at > now + 300_000) continue;
+      const clean = (s: string) => s.replace(/[\r\n\t]+/g, ' ');
+      ins.run(new Date(at).toISOString(), req.user!.id, e.action, clean(e.target), `senza Internet${e.detail ? ` · ${clean(e.detail)}` : ''} · registrato ${new Date(now).toISOString()}`);
+      saved++;
+    }
+    return { saved };
   });
 
   /**
