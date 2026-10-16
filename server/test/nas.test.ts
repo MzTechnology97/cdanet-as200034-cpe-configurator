@@ -152,7 +152,7 @@ exit 0
       const args = readFileSync(log, 'utf8');
       assert.ok(!args.split('\n').includes('Segreta-1') && !/backup%/.test(args), 'not in argv');
       assert.match(args, /PASSWD=Segreta-1/);
-      assert.match(args, /^-D\n\CDA Net$/m, 'the folder as one argument');
+      assert.ok(args.split('\n').some((l, i, all) => l === '-D' && all[i + 1] === '\\CDA Net'), 'the folder as one argument');
       await assert.rejects(createSmbclient({ bin: join(dir, 'missing') }).shares('nas.lan', cred), (e: HttpError) => e.code === 'nas_client_missing');
     } finally {
       rmSync(dir, { recursive: true, force: true });
