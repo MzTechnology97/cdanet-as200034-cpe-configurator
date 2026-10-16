@@ -6,11 +6,11 @@ Gli account admin possono collegare il proprio Claude alla piattaforma per il **
 
 Nella pagina di consenso si sceglie:
 - **solo lettura**: il comportamento predefinito;
-- **«Consenti anche le modifiche»**: si aggiungono gli strumenti di scrittura, divisi per gruppo.
+- **«Consenti anche le modifiche»**: serve un **secondo codice nuovo** (il successivo dell'app, oppure un codice di recupero), così il permesso di scrittura è una scelta esplicita. Per passare da lettura a scrittura serve sempre un nuovo consenso: il rinnovo del token non lo cambia.
 
 Gli strumenti di scrittura:
 - **interventi:** crea, modifica o sposta (anche rimandare o annullare), elimina;
-- **NOC:** approva o rifiuta un collaudo, dichiara superato un collaudo con il motivo, sblocca un accesso bloccato, revoca una connessione di Claude;
+- **NOC:** approva o rifiuta un collaudo, dichiara superato un collaudo con il motivo;
 - **magazzino:** aggiorna lo stato di una CPE smontata (RMA);
 - **rete:**
   - riavvia, rileggi e aggiorna il firmware di una CPE;
@@ -19,12 +19,24 @@ Gli strumenti di scrittura:
   - modifica nome, note e manutenzione;
   - autorizza in UISP la CPE di un'installazione.
 
+Restano fuori da Claude, per sicurezza:
+- sblocco degli accessi bloccati;
+- revoca delle connessioni;
+- account e ruoli;
+- connettori;
+- impostazioni del server;
+- privacy;
+- ottimizzatore degli AP;
+- nuovo subscriber nel CRM;
+- password PPPoE e chiavi Wi-Fi.
+
+Un Claude compromesso non può darsi altri permessi né togliere i blocchi.
+
 Regole per le scritture:
 - Claude chiede conferma all'utente prima di ogni modifica. Gli strumenti sono segnati come modifiche, e quelli sulla rete o di eliminazione come distruttivi.
-- Ogni modifica finisce nel Registro come «modifica via Claude», con l'esito.
-- Ogni azione sulla rete manda anche un avviso al NOC: chi, cosa, su quale CPE, se è riuscita.
-- La password PPPoE e le chiavi Wi-Fi non passano mai da Claude.
-- Il nuovo subscriber nel CRM resta solo nella console.
+- **Rete una CPE alla volta**: al massimo 5 azioni sulla rete all'ora per connessione; le altre si fanno dalla console.
+- **Prompt injection.** Quello che restituiscono gli strumenti esce dentro `dati`, con l'avviso che il testo scritto dagli utenti è un dato e non un'istruzione: note, nomi, motivi dei KO, hostname delle CPE. Anche le istruzioni del server lo dicono a Claude.
+- Ogni modifica finisce nel Registro come «modifica via Claude», con l'esito. Ogni modifica, non solo quelle sulla rete, manda anche un avviso al NOC su Telegram: chi, cosa, su cosa, se è riuscita.
 
 Una connessione in sola lettura che prova una modifica riceve l'invito a ricollegarsi con le modifiche.
 
