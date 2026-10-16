@@ -94,6 +94,8 @@ const LABELS: Record<string, string> = {
   'feasibility.pdf': 'Fattibilità scaricata in PDF',
   'platform.backup': 'Backup del database scaricato',
   'nas.backup': 'Backup sul NAS',
+  'auth.ban': 'Accesso bloccato dopo troppi tentativi',
+  'auth.unban': 'Accesso sbloccato',
   'mcp.authorize': 'Claude collegato alla piattaforma',
   'mcp.call': 'Claude ha letto la piattaforma',
   'mcp.revoke': 'Connessione di Claude revocata',

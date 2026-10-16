@@ -5,6 +5,37 @@ import { isAdminUser } from './terms';
  * installers), the session expiry and the admins who must set up two-step verification.
  */
 const KEY = 'cdaSession';
+const DEVICE_KEY = 'cdaDevice';
+let device: string | null = null;
+
+/**
+ * A random id of this browser (UUID, kept in localStorage), sent as X-CDA-Device: after too many
+ * failed logins the server blocks this device too, not only its address. Chosen by the browser,
+ * so it only stops a console that keeps failing, never someone who changes it on purpose.
+ */
+export function deviceId(): string {
+  if (device) return device;
+  let id: string | null = null;
+  try {
+    id = localStorage.getItem(DEVICE_KEY);
+  } catch {
+    /* storage blocked: a new id for this page */
+  }
+  if (!id || !/^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(id)) {
+    const b = crypto.getRandomValues(new Uint8Array(16));
+    b[6] = (b[6]! & 0x0f) | 0x40;
+    b[8] = (b[8]! & 0x3f) | 0x80;
+    const h = [...b].map((x) => x.toString(16).padStart(2, '0')).join('');
+    id = `${h.slice(0, 8)}-${h.slice(8, 12)}-${h.slice(12, 16)}-${h.slice(16, 20)}-${h.slice(20)}`;
+    try {
+      localStorage.setItem(DEVICE_KEY, id);
+    } catch {
+      /* kept for this page only */
+    }
+  }
+  device = id;
+  return id;
+}
 
 /** Human-readable messages for API error codes. */
 const MESSAGES: Record<string, string> = {
@@ -134,7 +165,12 @@ export class ApiError extends Error {
     const installer = !isAdminUser() && (INSTALLER_MESSAGES[code] ?? (SOURCE_CODE.test(code) ? 'Servizio non disponibile: contatta l’amministratore' : undefined));
     // the CPE is in a warehouse, but not the installer's one
     const elsewhere = code === 'cpe_not_in_stock' && body?.result === 'other_warehouse' ? 'La CPE è in un altro magazzino, non in quello del tecnico' : '';
-    super(elsewhere || installer || (MESSAGES[code] ?? code) + (detail ? ` (${detail})` : ''));
+    const until = typeof body?.until === 'string' ? new Date(body.until) : null;
+    const banned =
+      code === 'banned'
+        ? `Troppi accessi non riusciti: accesso bloccato${until && !Number.isNaN(until.getTime()) ? ` fino alle ${until.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}${until.toDateString() !== new Date().toDateString() ? ` del ${until.toLocaleDateString('it-IT')}` : ''}` : ''}. Se è un errore chiedi a un amministratore di sbloccarti.`
+        : '';
+    super(banned || elsewhere || installer || (MESSAGES[code] ?? code) + (detail ? ` (${detail})` : ''));
     this.status = status;
     this.body = body;
   }
@@ -150,7 +186,7 @@ export interface ApiOptions {
 
 async function call(path: string, { method = 'GET', body, raw = false, headers = {}, signal }: ApiOptions = {}): Promise<unknown> {
   const s = session.get();
-  const h: Record<string, string> = { ...headers };
+  const h: Record<string, string> = { 'X-CDA-Device': deviceId(), ...headers };
   if (s?.token) h.Authorization = `Bearer ${s.token}`;
   if (body !== undefined && !(body instanceof Uint8Array)) h['Content-Type'] = 'application/json';
   const r = await fetch(path, {
