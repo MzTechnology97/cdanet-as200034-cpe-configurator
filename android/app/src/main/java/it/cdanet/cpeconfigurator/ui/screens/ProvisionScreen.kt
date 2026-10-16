@@ -13,6 +13,7 @@ import android.provider.Settings as AndroidSettings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.ui.Alignment
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -439,41 +440,53 @@ private fun SiteCpeCard(c: AppContainer, pkg: it.cdanet.cpeconfigurator.data.Pro
 }
 
 /**
- * «Controlla la CPE collegata»: the Ubiquiti discovery on the CPE's Wi-Fi, before the configuration
- * is written: model (set in the form), MAC against the label, firmware, factory or configured, and
- * the CPE of the installer's warehouse (its MAC and serial filled in from there).
+ * The CPE on the phone's Wi-Fi, checked by itself with the Ubiquiti discovery (at opening, then
+ * every few seconds until a CPE answers): model (set in the form), MAC against the label, firmware,
+ * factory or configured, the CPE being replaced, and the CPE of the installer's warehouse (its MAC
+ * and serial filled in from there). The button runs it again.
  */
 @Composable
 private fun CpeDiscoveryCheck(c: AppContainer, labelMac: String, replacedMac: String) {
     val scope = rememberCoroutineScope()
     var busy by remember { mutableStateOf(false) }
     var msg by remember { mutableStateOf<String?>(null) }
-    var result by remember { mutableStateOf<it.cdanet.cpeconfigurator.provisioning.DiscoveryCheck.Result?>(null) }
+    var found by remember { mutableStateOf<List<it.cdanet.cpeconfigurator.tools.UbntDevice>?>(null) }
+    var round by remember { mutableStateOf(0) }
     val stock by c.provisioning.stock.state.collectAsState()
-    BusyButton("Controlla la CPE collegata", busy, primary = false, tonal = true) {
-        scope.launch {
-            busy = true
-            msg = null
-            result = null
-            runCatching { it.cdanet.cpeconfigurator.tools.UbntDiscovery.discover(c.network) }
-                .onSuccess { found ->
-                    // several on the Wi-Fi (a customer's LAN): the one of the label, if it is there
-                    val d = found.firstOrNull { d -> it.cdanet.cpeconfigurator.provisioning.DiscoveryCheck.sameDevice(d, labelMac) } ?: found.singleOrNull()
-                    when {
-                        found.isEmpty() -> msg = "Nessuna CPE Ubiquiti risponde: collegati alla sua Wi-Fi di management"
-                        d == null -> msg = "Rispondono ${found.size} apparati Ubiquiti: scansiona il MAC dall'etichetta per riconoscere la CPE"
-                        else -> {
-                            val r = it.cdanet.cpeconfigurator.provisioning.DiscoveryCheck.evaluate(d, labelMac, stock?.items.orEmpty(), c.field.targetFirmware ?: "8.7.4", replacedMac)
-                            r.model?.let { m -> c.provisioning.updateForm { f -> f.copy(model = m) } }
-                            result = r
-                        }
-                    }
-                }
-                .onFailure { msg = it.message }
-            busy = false
+    suspend fun search() {
+        busy = true
+        runCatching { it.cdanet.cpeconfigurator.tools.UbntDiscovery.discover(c.network, 2_500) }
+            .onSuccess { list -> found = list.filter { d -> !d.unifi } }
+            .onFailure { e -> msg = e.message }
+        busy = false
+    }
+    // at opening and again every 8 seconds while no CPE answers (the Wi-Fi of the CPE may come later)
+    LaunchedEffect(round) {
+        while (true) {
+            search()
+            if (!found.isNullOrEmpty()) break
+            kotlinx.coroutines.delay(8_000)
         }
     }
-    msg?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+    val list = found
+    // several on the Wi-Fi (a customer's LAN): the one of the label, if it is there
+    val d = list?.firstOrNull { d -> it.cdanet.cpeconfigurator.provisioning.DiscoveryCheck.sameDevice(d, labelMac) } ?: list?.singleOrNull()
+    val result = d?.let { x -> it.cdanet.cpeconfigurator.provisioning.DiscoveryCheck.evaluate(x, labelMac, stock?.items.orEmpty(), c.field.targetFirmware ?: "8.7.4", replacedMac) }
+    // the model of the CPE goes into the form by itself
+    LaunchedEffect(result?.model) { result?.model?.let { m -> c.provisioning.updateForm { f -> if (f.model == m) f else f.copy(model = m) } } }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            when {
+                busy && result == null -> "Ricerca della CPE collegata…"
+                list.isNullOrEmpty() -> msg ?: "Nessuna CPE Ubiquiti risponde: collegati alla sua Wi-Fi di management (riprovo da solo)"
+                d == null -> "Rispondono ${list.size} apparati Ubiquiti: scansiona il MAC dall'etichetta per riconoscere la CPE"
+                else -> "CPE collegata: ${d.product ?: d.model ?: "Ubiquiti"} ${d.ip.orEmpty()}"
+            },
+            style = MaterialTheme.typography.bodySmall,
+            modifier = Modifier.weight(1f),
+        )
+        TextButton(enabled = !busy, onClick = { msg = null; round++ }) { Text("Controlla di nuovo") }
+    }
     result?.let { r ->
         r.checks.forEach { ch -> CheckRow(ch.title, ch.verdict, ch.detail) }
         r.stock?.let { item ->

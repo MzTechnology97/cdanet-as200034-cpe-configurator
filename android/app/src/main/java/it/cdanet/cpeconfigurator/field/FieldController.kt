@@ -56,6 +56,8 @@ data class FieldState(
     val discoveredHost: String? = null,
     /** A device answers the discovery but not its web interface: probably stuck (reboot it). */
     val stuck: it.cdanet.cpeconfigurator.tools.UbntDevice? = null,
+    /** The discovery found several CPEs on this Wi-Fi: the technician picks the one to work on. */
+    val candidates: List<it.cdanet.cpeconfigurator.tools.UbntDevice> = emptyList(),
 )
 
 /**
@@ -139,11 +141,17 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
 
     /** The discovery runs once per start, when the usual addresses do not answer. */
     @Volatile private var discoveryTried = false
+    /** SSH port the CPE found by the discovery declares (repoint/AP change over SSH try it too). */
+    @Volatile private var discoveredSshPort: Int? = null
+    /** IP of the CPE the discovery found in this session (tried first when reconnecting). */
+    @Volatile private var discoveredHost: String? = null
 
     fun start(mode: FieldMode, manualHost: String? = null) {
         onStart?.invoke(mode, manualHost)
         stop()
         discoveryTried = false
+        // a CPE picked from the list (or an IP typed by hand): that one; a new search otherwise
+        if (manualHost == null) discoveredHost = null
         _state.value = FieldState(running = true, connecting = true)
         job = scope.launch(Dispatchers.IO) {
             val period = if (mode == FieldMode.Alignment) 1_000L else 3_000L
@@ -172,6 +180,11 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
                         )
                     }
                 } catch (e: Exception) {
+                    // several CPEs answer the discovery: the loop waits for the technician's choice
+                    if (e is ChooseCpe) {
+                        _state.update { it.copy(connecting = false, running = false, error = null) }
+                        return@launch
+                    }
                     if (e is AirosAuthException) client = null
                     _state.update { it.copy(connecting = false, error = e.message ?: e.toString()) }
                     // every credential rejected: stop instead of hammering the CPE with logins
@@ -215,7 +228,7 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
         val host = c.baseUrl.substringAfter("://").substringBefore('/').substringBefore(':')
         stop()
         try {
-            network.onWifi { it.cdanet.cpeconfigurator.install.CpeRelinker(onStage).relink(host, listOfNotNull(sshPort, access?.sshPort, 22), cr.username, cr.password, ssid, psk, lockMac) }
+            network.onWifi { it.cdanet.cpeconfigurator.install.CpeRelinker(onStage).relink(host, listOfNotNull(sshPort, discoveredSshPort, access?.sshPort, 22).distinct(), cr.username, cr.password, ssid, psk, lockMac) }
         } finally {
             client = null
         }
@@ -229,7 +242,7 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
         val c = client ?: connect(null).also { client = it }
         val cr = working ?: throw IllegalStateException("Credenziali della CPE non disponibili: ricollegati alla CPE")
         val host = c.baseUrl.substringAfter("://").substringBefore('/').substringBefore(':')
-        val ports = listOfNotNull(access?.sshPort, 22).distinct()
+        val ports = listOfNotNull(discoveredSshPort, access?.sshPort, 22).distinct()
         stop()
         try {
             block {
@@ -252,7 +265,13 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
         }
     }
 
-    /** Gateway of the current Wi-Fi first (CPE in router mode or its management Wi-Fi), then the configured IPs. */
+    private class ChooseCpe : Exception("Scegli la CPE")
+
+    /**
+     * The CPE to work on: the IP typed by hand; else the Ubiquiti discovery on this Wi-Fi (one CPE:
+     * that one, whatever its IP; several: the technician picks one); then, as a fallback, the
+     * gateway of the Wi-Fi and the usual CPE addresses.
+     */
     private suspend fun connect(manualHost: String?): AirosClient = withContext(Dispatchers.IO) {
         val a = access
         val m = manual
@@ -294,21 +313,32 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
             }
             return null
         }
-        for (host in hosts) tryHost(host)?.let { return@withContext it }
-        // not at the usual addresses (a CPE set by hand with another IP): the Ubiquiti discovery
-        // finds it on the LAN of this Wi-Fi, once per start
-        if (authError == null && manualHost == null && !discoveryTried) {
+        // first the discovery (once per start): the CPE answers whatever its IP. UniFi devices of
+        // the customer are not CPEs. Several CPEs: the technician chooses (no guess)
+        if (manualHost == null && !discoveryTried) {
             discoveryTried = true
-            val found = runCatching { it.cdanet.cpeconfigurator.tools.UbntDiscovery.discover(network, 3_000) }.getOrDefault(emptyList())
-            for (d in found) {
-                val ip = d.ip?.takeIf { Ip.isPrivate(it) && it !in tried } ?: continue
-                tryHost(ip)?.let { cl ->
-                    _state.update { it.copy(discoveredHost = ip) }
+            _state.update { it.copy(candidates = emptyList(), stuck = null, discoveredHost = null) }
+            val found = runCatching { it.cdanet.cpeconfigurator.tools.UbntDiscovery.discover(network, 2_500) }.getOrDefault(emptyList())
+                .filter { d -> !d.unifi && d.ip?.let { Ip.isPrivate(it) } == true }
+            if (found.size > 1) {
+                _state.update { it.copy(candidates = found) }
+                throw ChooseCpe()
+            }
+            found.singleOrNull()?.let { d ->
+                tryHost(d.ip!!)?.let { cl ->
+                    discoveredHost = d.ip
+                    discoveredSshPort = d.sshPort
+                    _state.update { it.copy(discoveredHost = d.ip) }
                     return@withContext cl
                 }
+                // it answers the discovery, its web interface does not: stuck, a reboot may help
+                if (authError == null && d.mac != null) _state.update { it.copy(stuck = d) }
             }
-            // it answers the discovery, its web interface does not: stuck, a reboot may help
-            if (authError == null) found.firstOrNull { it.mac != null }?.let { d -> _state.update { it.copy(stuck = d) } }
+        }
+        // the CPE the discovery found before (after its reboot it is there again), then the fallbacks
+        for (host in (listOfNotNull(discoveredHost) + hosts).distinct()) {
+            if (host in tried && host != discoveredHost) continue
+            tryHost(host)?.let { return@withContext it }
         }
         if (authError != null) {
             _state.update { it.copy(authFailed = true) }
@@ -317,6 +347,6 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
                 else "La CPE rifiuta le credenziali CDA Net e quelle di fabbrica (ubnt/ubnt): inserisci quelle della CPE",
             )
         }
-        throw IllegalStateException("Nessuna CPE airOS trovata su ${hosts.joinToString()}: verifica la Wi-Fi a cui sei collegato")
+        throw IllegalStateException("Nessuna CPE trovata: né la discovery Ubiquiti né ${hosts.joinToString()} rispondono. Verifica la Wi-Fi a cui sei collegato o usa «IP manuale»")
     }
 }

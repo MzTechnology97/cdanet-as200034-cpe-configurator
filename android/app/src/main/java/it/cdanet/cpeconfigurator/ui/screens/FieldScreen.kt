@@ -18,6 +18,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.res.painterResource
 import it.cdanet.cpeconfigurator.R
 import it.cdanet.cpeconfigurator.ui.CheckRow
@@ -120,6 +121,11 @@ fun FieldConnection(c: AppContainer, mode: FieldMode) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AssistChip(
+                    onClick = { manual = ""; c.field.start(mode) },
+                    label = { Text("Cerca CPE") },
+                    leadingIcon = { Icon(painterResource(R.drawable.ic_radar), contentDescription = null, modifier = Modifier.size(18.dp)) },
+                )
+                AssistChip(
                     onClick = { showManual = !showManual },
                     label = { Text(if (showManual) "Nascondi IP" else "IP manuale") },
                     leadingIcon = { Icon(painterResource(R.drawable.ic_link), contentDescription = null, modifier = Modifier.size(18.dp)) },
@@ -131,10 +137,26 @@ fun FieldConnection(c: AppContainer, mode: FieldMode) {
                 )
             }
         }
+        if (st.candidates.isNotEmpty() && st.status == null) {
+            SectionCard("Trovate ${st.candidates.size} CPE: scegli quella da sistemare") {
+                st.candidates.forEach { d ->
+                    Column(
+                        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable { manual = d.ip.orEmpty(); c.field.start(mode, d.ip) }.padding(vertical = 8.dp),
+                    ) {
+                        Text("${d.product ?: d.model ?: "CPE"} · ${d.ip}", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            listOfNotNull(d.hostname, d.mac, d.version?.let { "v$it" }, d.ssid?.let { "SSID $it" }).joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
         st.error?.let { Banner(it, BadRed) }
         if (st.status == null) {
             Text(
-                "Collega il telefono alla Wi-Fi di management della CPE oppure alla Wi-Fi del router del cliente: l'app prova da sola il gateway, l'IP LAN e l'IP di management della CPE.",
+                "Collega il telefono alla Wi-Fi di management della CPE oppure alla Wi-Fi del router del cliente: l'app cerca la CPE con la discovery Ubiquiti (qualunque IP abbia), poi prova il gateway, l'IP LAN e l'IP di management. Con più CPE in rete scegli quella da sistemare.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
