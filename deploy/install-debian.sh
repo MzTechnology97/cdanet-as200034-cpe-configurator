@@ -133,7 +133,7 @@ if [[ ! -f $ENV_FILE ]]; then
   fi
   set_env DEPLOY_DIR "$DEPLOY_DIR"
   chmod 0600 "$ENV_FILE"
-  echo "  creato $ENV_FILE: completare CPE_ADMIN_PASSWORD e UISP_ENROLLMENT prima del provisioning"
+  echo "  creato $ENV_FILE: completare CPE_ADMIN_PASSWORD prima del provisioning (chiave UISP e rete delle CPE: in ogni template airOS)"
 fi
 [[ -z ${CDANET_IMAGE:-} ]] || set_env CDANET_IMAGE "$CDANET_IMAGE"
 [[ -z ${CDANET_CHANNEL:-} ]] || set_env CDANET_CHANNEL "$CDANET_CHANNEL"

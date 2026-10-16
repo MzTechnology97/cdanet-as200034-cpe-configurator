@@ -48,13 +48,16 @@ export function fieldRoutes(app: FastifyInstance, ctx: AppContext) {
     const s = ctx.cfg.cpeSecrets;
     if (!s.adminPassword) throw new HttpError(409, 'cpe_admin_secret_missing');
     const n = ctx.cfg.network;
+    // every template has its own CPE address and SSH port: the default template's first
+    const facts = ctx.templates.addresses();
     recordEvent(ctx.db, req.user!.id, 'field.access', b.target || '—', b.purpose);
     reply.header('Cache-Control', 'no-store');
     return {
       credentials: { username: s.adminUsername, password: s.adminPassword },
       // Tried in order by the app, after the gateway of the current Wi-Fi.
-      hosts: [...new Set([n.lanIp, n.factoryIp])],
-      sshPort: n.sshPort,
+      hosts: [...new Set([...facts.map((f) => f.lanIp).filter((ip): ip is string => !!ip), n.factoryIp])],
+      sshPort: facts[0]?.sshPort ?? 22,
+      sshPorts: [...new Set([...facts.map((f) => f.sshPort), 22])],
       targetFirmware: TARGET_FIRMWARE,
       thresholds: ctx.cfg.thresholds,
       expiresAt: new Date(Date.now() + 8 * 3600_000).toISOString(),
@@ -76,7 +79,7 @@ export function fieldRoutes(app: FastifyInstance, ctx: AppContext) {
     const psk = ctx.sealer.open(row.wpa2_ciphertext);
     recordEvent(ctx.db, req.user!.id, 'field.relink', (b.mac && parseMac(b.mac)) || '—', `${b.from || '?'} → ${b.ssid}`);
     reply.header('Cache-Control', 'no-store');
-    return { ssid: b.ssid, psk, sshPort: ctx.cfg.network.sshPort };
+    return { ssid: b.ssid, psk, sshPort: ctx.templates.addresses()[0]?.sshPort ?? 22 };
   });
 
   /**

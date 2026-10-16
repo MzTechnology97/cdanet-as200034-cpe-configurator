@@ -54,20 +54,18 @@ describe('autoTemplate', () => {
       'wpasupplicant.profile.1.network.1.psk=${WPA2_PSK}',
       'ppp.1.name=${PPPOE_USER}',
       'ppp.1.password=${PPPOE_PASSWORD}',
-      'ppp.1.mtu=${PPPOE_MTU}',
       'users.1.name=${CPE_USERNAME}',
       'users.1.password=${CPE_PASSWORD_HASH}',
       'unms.uri=${UISP_ENROLLMENT}',
       'resolv.host.1.name=${DEVICE_NAME}',
-      'netconf.1.ip=${LAN_IP}',
-      'netconf.1.netmask=${LAN_NETMASK}',
-      'httpd.https.port=${HTTPS_PORT}',
-      'dhcpd.1.start=${DHCP_START}',
-      'ntpclient.1.server=${NTP_SERVER}',
+      'snmp.community=${SNMP_COMMUNITY}',
     ]) {
       assert.ok(t.split('\n').includes(line), line);
     }
-    // untouched lab settings
+    // the lab CPE's own values become the template's (editable from the form), no longer server values
+    for (const line of ['ppp.1.mtu=1450', 'netconf.1.ip=192.168.1.254', 'httpd.https.port=20443', 'dhcpd.1.start=192.168.1.10', 'ntpclient.1.server=10.0.0.254', 'snmp.contact=172.31.0.7']) {
+      assert.ok(t.split('\n').includes(line), line);
+    }
     assert.ok(t.includes('radio.1.countrycode=511'));
     assert.ok(t.includes('netconf.2.ip=0.0.0.0'));
     assert.ok(!t.includes('\r'));
@@ -93,7 +91,6 @@ describe('autoTemplate', () => {
     assert.equal(autoTemplate(once).template, once);
     const partial = autoTemplate('radio.1.mode=managed\nwireless.1.ssid=X\nnetconf.1.devname=eth0\n'.repeat(3));
     assert.ok(partial.warnings.some((w) => w.includes('PPPoE')));
-    assert.ok(partial.warnings.some((w) => w.includes('LAN')));
   });
 
   it('board match suggestions distinguish NanoStation and Loco', () => {
@@ -120,7 +117,7 @@ describe('POST /api/admin/profiles/:model/autotemplate', () => {
     const body = r.json();
     assert.equal(body.report.ok, true);
     assert.equal(body.suggestedBoardMatch, 'board\\.name=LiteBeam 5AC');
-    assert.ok(body.replacements.length >= 15);
+    assert.ok(body.replacements.length >= 11);
     assert.ok(!r.body.includes('LabWpaKey123'));
     // nothing stored until the admin confirms with PUT
     const list = (await t.app.inject({ method: 'GET', url: '/api/admin/profiles', headers: t.auth(token) })).json();

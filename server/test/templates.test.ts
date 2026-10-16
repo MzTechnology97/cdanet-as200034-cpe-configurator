@@ -21,7 +21,7 @@ describe('named templates API', () => {
     assert.equal(a.statusCode, 201, a.body);
     const b = await call('POST', '/api/admin/profiles/LiteBeam%205AC/templates', {
       name: 'Palo alto',
-      template: SAMPLE_TEMPLATE.replace('netconf.3.ip=${LAN_IP}', 'netconf.3.ip=${LAN_IP}\nradio.1.txpower=10'),
+      template: SAMPLE_TEMPLATE.replace('netconf.3.ip=192.168.1.254', 'netconf.3.ip=192.168.1.254\nradio.1.txpower=10'),
       boardMatch: BM,
     });
     assert.equal(b.statusCode, 201);

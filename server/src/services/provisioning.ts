@@ -14,8 +14,9 @@ import { isDeviceMac,
   deviceNameFromCustomer,
   parseMac,
 } from '../domain/policy.ts';
-import { renderSystemCfg, type PlaceholderName } from '../domain/systemcfg.ts';
-import type { Templates, Viewer } from './templates.ts';
+import { templateFacts, type TemplateParams } from '../domain/airos-form.ts';
+import { renderSystemCfg, setKey, type PlaceholderName } from '../domain/systemcfg.ts';
+import type { LegacyValues, Templates, TemplateSecrets, Viewer } from './templates.ts';
 import { photoDir, sweepPhotos } from './photos.ts';
 import { rmSync } from 'node:fs';
 
@@ -144,6 +145,12 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
     const name = deviceNameFor(x);
     const n = cfg.network;
     const tpl = templates.resolve(x.model, x.templateId, viewer);
+    let f: ReturnType<typeof templateFacts> | null = null;
+    try {
+      f = tpl ? templateFacts(sealer.open(tpl.ciphertext)) : null;
+    } catch {
+      f = null;
+    }
     return {
       targetFirmware: TARGET_FIRMWARE,
       template: tpl ? { id: tpl.id, name: tpl.name } : null,
@@ -152,34 +159,37 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
       steps: [
         `Primo avvio CPE su ${n.factoryIp}: Country Licensed e credenziali CDA Net`,
         `Template ${x.model} "${tpl?.name ?? '—'}" · verifica firmware ${TARGET_FIRMWARE}, board e MAC ${x.mac ?? 'letto sul posto'}`,
-        `Station WPA2 su ${x.ssid} (chiave dal backend)`,
-        'Router Mode, WAN wireless diretta in PPPoE, nessuna VLAN',
-        `PPPoE ${x.pppoeUser} · MTU/MRU ${n.pppoeMtu}/${n.pppoeMru}`,
-        `LAN ${n.lanIp}/${n.lanNetmask} · DHCP ${n.dhcpStart}-${n.dhcpEnd}`,
-        `Watchdog ${n.watchdogHost} · NTP ${n.ntpServer}`,
-        `SNMP v2c · contact ${cfg.cpeSecrets.snmpContact} · location ${name}`,
+        `${f?.wirelessMode === 'ap' ? 'Access Point' : 'Station'}${f?.ptp ? ' PtP' : ''} WPA2 su ${x.ssid} (chiave dal backend)`,
+        f?.netMode === 'bridge' ? 'Bridge Mode, nessuna VLAN' : 'Router Mode, WAN wireless diretta in PPPoE, nessuna VLAN',
+        `PPPoE ${x.pppoeUser}`,
+        `LAN ${f?.lanIp ?? '—'} (dal template)`,
+        `Watchdog ${tpl?.params.watchdogHost ?? '—'}`,
+        `SNMP v2c · contact ${tpl?.params.snmpContact ?? '—'} · location ${name}`,
         'Calculate EIRP Limit OFF · Automatic Power Control (Station) ON',
         `Device Name ${name}`,
-        `Management HTTP ${MANAGEMENT_PORTS.http} / HTTPS ${MANAGEMENT_PORTS.https} · UISP`,
+        `Management HTTP ${f?.httpPort ?? MANAGEMENT_PORTS.http} / HTTPS ${f?.httpsPort ?? MANAGEMENT_PORTS.https} · UISP`,
         'Persistenza cfgmtd, reboot e verifica associazione/PPPoE',
       ],
     };
   }
 
-  /** Placeholder values of a job (same for the rendered config and the drift check). */
-  function jobValues(x: Pick<ProvisionRequest, 'ssid' | 'pppoeUser' | 'mac' | 'serial' | 'workOrderId'> & { pppoePassword?: string }, wpa2: string) {
+  /**
+   * Placeholder values of a job (same for the rendered config and the drift check): the customer's
+   * from the job, the CPE admin from the server, the SNMP community and the UISP key from the template.
+   */
+  function jobValues(
+    x: Pick<ProvisionRequest, 'ssid' | 'pppoeUser' | 'mac' | 'serial' | 'workOrderId'> & { pppoePassword?: string },
+    wpa2: string,
+    secrets: TemplateSecrets,
+  ) {
     const s = cfg.cpeSecrets;
-    const n = cfg.network;
     const name = deviceNameFor(x);
     const values: Partial<Record<PlaceholderName, string>> = {
       SSID: x.ssid,
       WPA2_PSK: wpa2,
       PPPOE_USER: x.pppoeUser,
       ...(x.pppoePassword !== undefined ? { PPPOE_PASSWORD: x.pppoePassword } : {}),
-      HTTP_PORT: String(MANAGEMENT_PORTS.http),
-      HTTPS_PORT: String(MANAGEMENT_PORTS.https),
-      SNMP_COMMUNITY: s.snmpCommunity,
-      SNMP_CONTACT: s.snmpContact,
+      ...(secrets.snmpCommunity ? { SNMP_COMMUNITY: secrets.snmpCommunity } : {}),
       SNMP_LOCATION: name,
       DEVICE_NAME: name,
       CPE_USERNAME: s.adminUsername,
@@ -188,32 +198,23 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
       // a job prepared before the visit has neither: a template that needs them cannot be prepared that way
       ...(x.mac !== undefined ? { EXPECTED_MAC: x.mac } : {}),
       ...(x.serial !== undefined ? { EXPECTED_SERIAL: x.serial } : {}),
-      LAN_IP: n.lanIp,
-      LAN_NETMASK: n.lanNetmask,
-      DHCP_START: n.dhcpStart,
-      DHCP_END: n.dhcpEnd,
-      DHCP_LEASE: String(n.dhcpLease),
-      PPPOE_MTU: String(n.pppoeMtu),
-      PPPOE_MRU: String(n.pppoeMru),
-      WATCHDOG_HOST: n.watchdogHost,
-      NTP_SERVER: n.ntpServer,
-      SSH_PORT: String(n.sshPort),
-      DISCOVERY_PORT: String(n.discoveryPort),
     };
-    if (s.uispEnrollment) values.UISP_ENROLLMENT = s.uispEnrollment;
+    if (secrets.uispKey) values.UISP_ENROLLMENT = secrets.uispKey;
     return { values, name };
   }
 
-  /** Keys forced on every CPE regardless of the template (CDA Net policy). */
-  function enforcedKeys(name: string, location?: { latitude: number; longitude: number } | null): Array<[string, string]> {
-    const s = cfg.cpeSecrets;
-    const n = cfg.network;
+  /** Keys forced on every CPE regardless of the template's text (CDA Net policy, values of the template). */
+  function enforcedKeys(
+    name: string,
+    location: { latitude: number; longitude: number } | null | undefined,
+    tpl: { params: TemplateParams; secrets: TemplateSecrets },
+  ): Array<[string, string]> {
     return [
       ['pwdog.status', 'enabled'],
-      ['pwdog.host', n.watchdogHost],
+      ['pwdog.host', tpl.params.watchdogHost],
       ['snmp.status', 'enabled'],
-      ['snmp.community', s.snmpCommunity],
-      ['snmp.contact', s.snmpContact],
+      ...(tpl.secrets.snmpCommunity ? ([['snmp.community', tpl.secrets.snmpCommunity]] as Array<[string, string]>) : []),
+      ['snmp.contact', tpl.params.snmpContact],
       ['snmp.location', name],
       ['system.eirp.status', 'disabled'],
       ['radio.1.obey', 'disabled'],
@@ -272,10 +273,11 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
 
     const s = cfg.cpeSecrets;
     const n = cfg.network;
+    if (!profile.secrets.snmpCommunity) throw new HttpError(409, 'template_snmp_community_missing');
     const render = (ssid: string, key: string) => {
-      const { values, name } = jobValues({ ...x, ssid }, key);
+      const { values, name } = jobValues({ ...x, ssid }, key, profile.secrets);
       try {
-        return { name, text: renderSystemCfg(template, { values, enforced: enforcedKeys(name, x.location) }) };
+        return { name, text: renderSystemCfg(template, { values, enforced: enforcedKeys(name, x.location, profile) }) };
       } catch (e) {
         const code = (e as Error).message;
         if (code === 'missing_value_UISP_ENROLLMENT') throw new HttpError(503, 'runtime_secret_missing', { placeholder: 'UISP_ENROLLMENT' });
@@ -329,7 +331,11 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
       checks: { firmware: TARGET_FIRMWARE, boardMatch: profile.boardMatch, mac: x.mac ?? '', firmwareBypass: cfg.firmwareBypass },
       config: { path: '/tmp/system.cfg', text, sha256: configSha256 },
       summary: { model: x.model, template: profile.name, ssid: x.ssid, pppoeUser: x.pppoeUser, deviceName: name, mac: x.mac ?? '', serial: x.serial ?? '' },
-      afterApply: { lanIp: n.lanIp, httpPort: MANAGEMENT_PORTS.http, httpsPort: MANAGEMENT_PORTS.https },
+      // where the CPE answers once configured: the template's own LAN address and ports
+      afterApply: (() => {
+        const f = templateFacts(text);
+        return { lanIp: f.lanIp ?? n.factoryIp, httpPort: f.httpPort, httpsPort: f.httpsPort };
+      })(),
       alternatives,
     };
   }
@@ -496,6 +502,60 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
     return job;
   }
 
-  return { readiness, plan, createJob, recordResult, listJobs, housekeeping, jobValues, enforcedKeys, deleteAttempt };
+  /**
+   * The check of the conversion of a template saved before v1.35.11: rendered the old way (server
+   * values) and the new way (its own values) for the same job, the bytes must be the same.
+   */
+  function legacyCheck(old: LegacyValues) {
+    const sample = {
+      SSID: 'CDA-NET-N2-D01',
+      WPA2_PSK: 'chiave-di-prova',
+      PPPOE_USER: 'prova.cliente@cda-net.it',
+      PPPOE_PASSWORD: 'password-di-prova',
+      SNMP_LOCATION: 'CLIENTE DI PROVA',
+      DEVICE_NAME: 'CLIENTE DI PROVA',
+      CPE_USERNAME: 'admin-prova',
+      CPE_PASSWORD: 'password-admin-prova',
+      CPE_PASSWORD_HASH: '$1$prova$hash',
+      EXPECTED_MAC: '24:A4:3C:00:00:01',
+      EXPECTED_SERIAL: 'SERIALE-PROVA',
+    };
+    const location = { latitude: 37.5668, longitude: 14.2808 };
+    const tryRender = (fn: () => string) => {
+      try {
+        return fn();
+      } catch (e) {
+        return `ERRORE ${(e as Error).message}`;
+      }
+    };
+    return (before: string, after: { text: string; params: TemplateParams; secrets: TemplateSecrets }) => {
+      const oldValues: Record<string, string | undefined> = { ...sample, ...old.retired, SNMP_COMMUNITY: old.snmpCommunity, UISP_ENROLLMENT: old.uispKey };
+      // the rendering of v1.35.10: one pass with the server's values, then the same forced keys
+      const oldOut = tryRender(() => {
+        const missing = [...before.matchAll(/\$\{([A-Z0-9_]+)\}/g)].map((m) => m[1] as string).find((k) => !oldValues[k]);
+        if (missing) throw new Error(`missing_value_${missing}`);
+        let out = before.replace(/^\uFEFF/, '').replace(/\r\n?/g, '\n').replace(/\$\{([A-Z0-9_]+)\}/g, (_m, k: string) => oldValues[k] as string);
+        const forced: Array<[string, string]> = [
+          ['pwdog.status', 'enabled'],
+          ['pwdog.host', old.watchdogHost],
+          ['snmp.status', 'enabled'],
+          ['snmp.community', old.snmpCommunity],
+          ['snmp.contact', old.snmpContact],
+          ...enforcedKeys(sample.DEVICE_NAME, location, { params: after.params, secrets: after.secrets }).slice(5),
+        ];
+        for (const [k, v] of forced) out = setKey(out, k, v);
+        return out;
+      });
+      const newValues: Partial<Record<PlaceholderName, string>> = {
+        ...sample,
+        ...(after.secrets.snmpCommunity ? { SNMP_COMMUNITY: after.secrets.snmpCommunity } : {}),
+        ...(after.secrets.uispKey ? { UISP_ENROLLMENT: after.secrets.uispKey } : {}),
+      };
+      const newOut = tryRender(() => renderSystemCfg(after.text, { values: newValues, enforced: enforcedKeys(sample.DEVICE_NAME, location, after) }));
+      return oldOut === newOut;
+    };
+  }
+
+  return { readiness, plan, createJob, recordResult, listJobs, housekeeping, jobValues, enforcedKeys, deleteAttempt, legacyCheck };
 }
 export type Provisioning = ReturnType<typeof createProvisioning>;

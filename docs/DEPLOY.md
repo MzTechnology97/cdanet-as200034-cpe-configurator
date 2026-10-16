@@ -34,7 +34,7 @@ Lo script:
 
 Rieseguirlo è sicuro: `.env`, chiave e database restano intatti.
 
-Dopo l'installazione completa in `.env` almeno `CPE_ADMIN_PASSWORD` e `UISP_ENROLLMENT`. Il comando apre l'editor e alla chiusura applica le modifiche:
+Dopo l'installazione completa in `.env` almeno `CPE_ADMIN_PASSWORD` (la chiave UISP e il resto della configurazione delle CPE stanno in ogni template airOS). Il comando apre l'editor e alla chiusura applica le modifiche:
 
 ```bash
 sudo cdanet-cpe edit
@@ -116,8 +116,7 @@ Se rendi privati la repo o il pacchetto GHCR (consigliato):
 ## Impostazioni dal portale (senza SSH)
 
 Console → **Amministrazione → Impostazioni server** (solo admin): i parametri che prima andavano scritti nel file `.env` si impostano dal web e hanno la precedenza sul `.env` (che resta il valore di partenza, ripristinabile con "Ripristina .env"):
-- **Credenziali delle CPE**: utente e **password amministratore CPE** (`CPE_ADMIN_USERNAME`/`CPE_ADMIN_PASSWORD`), **chiave di adozione UISP** (`UISP_ENROLLMENT`), community e contatto SNMP;
-- **Rete standard delle CPE**: IP di fabbrica e LAN, netmask, DHCP, MTU/MRU PPPoE, watchdog, NTP, porte SSH e discovery;
+- **Credenziali delle CPE**: utente e **password amministratore CPE** (`CPE_ADMIN_USERNAME`/`CPE_ADMIN_PASSWORD`) e IP di fabbrica. Dalla v1.35.11 rete, DHCP, PPPoE, porte, NTP, watchdog, SNMP e chiave UISP sono di ogni template (Profili airOS, vedi [PROVISIONING.md](PROVISIONING.md)); le variabili `CPE_LAN_*`, `CPE_DHCP_*`, `CPE_PPPOE_*`, `CPE_WATCHDOG_HOST`, `CPE_NTP_SERVER`, `CPE_SSH_PORT`, `CPE_DISCOVERY_PORT`, `UISP_ENROLLMENT` e `SNMP_*` servono solo a convertire una volta i template salvati prima;
 - **Provisioning e app**: validità di un provisioning, versione minima dell'app, durata delle sessioni, conservazione dello storico, indirizzo pubblico della console, RouterOS su IP pubblici;
 - **Rilasci dell'app Android**: repository/token GitHub e frequenza di controllo.
 

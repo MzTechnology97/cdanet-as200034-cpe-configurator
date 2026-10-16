@@ -431,6 +431,15 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .pf-code { width: 100%; min-height: 420px; font-family: var(--font-mono); font-size: .82rem; line-height: 1.45; white-space: pre; overflow: auto; tab-size: 2; color: var(--ink); background: var(--surface-2); border: 1px solid var(--line-strong); border-radius: var(--radius-sm); padding: var(--sp-3); resize: vertical; }
 .pf-code:focus { border-color: var(--brand); box-shadow: var(--focus); outline: none; }
 .pf-backup { justify-self: start; }
+.tp-summary { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); font-size: var(--fs-sm); }
+.tp-mode { font-weight: 700; color: var(--ink); }
+.tp-grid { display: grid; gap: var(--sp-3) var(--sp-4); grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); align-items: start; padding-top: var(--sp-2); }
+.tp-bool { display: grid; gap: 4px; padding: var(--sp-2) 0; }
+.tp-bool .ui-check { align-items: flex-start; }
+.tp-bool .ui-check input { margin-top: 2px; }
+.tp-bool .ui-check > span { display: grid; gap: 2px; }
+.tp-warn { border-left: 3px solid var(--warn); padding-left: var(--sp-2); }
+.tp-policy { display: block; margin-top: 4px; color: var(--warn); font-size: var(--fs-xs); font-weight: 600; }
 
 /* Reti Wi-Fi */
 .wf-p { margin: 0; }

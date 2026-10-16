@@ -53,7 +53,7 @@ API: `POST /api/admin/provisioning/jobs/{id}/review` con `{ decision: approved|r
 
 L'app prova da sola, in quest'ordine:
 1. il **gateway della Wi-Fi** a cui è collegato il telefono;
-2. l'**IP LAN della CPE** (`CPE_LAN_IP`, default `192.168.1.254`): telefono sulla Wi-Fi del router del cliente, dietro la CPE;
+2. gli **IP LAN dei template** (prima quello del predefinito, es. `192.168.1.254`): telefono sulla Wi-Fi del router del cliente, dietro la CPE;
 3. l'**IP di management** (`CPE_FACTORY_IP`, default `192.168.172.1`): telefono sulla **Wi-Fi di management** della CPE (radio 2,4 GHz dei modelli airMAX AC Gen2), se il template la lascia attiva.
 
 Su ogni indirizzo prova l'interfaccia web di airOS: `https` sulle porte 443 e 20443, poi `http` sulle porte 80 e 20080. Con "IP manuale" si indica direttamente l'indirizzo.

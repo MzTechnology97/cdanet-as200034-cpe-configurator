@@ -82,12 +82,8 @@ describe('system.cfg rendering', () => {
     WPA2_PSK: 'psk${SSID}value',
     PPPOE_USER: 'rossi.mario@cda-net.it',
     PPPOE_PASSWORD: 'pppoe-pass',
-    PPPOE_MTU: '1450',
     CPE_USERNAME: 'ubnt',
     CPE_PASSWORD_HASH: '$1$abc$def',
-    HTTP_PORT: '20080',
-    HTTPS_PORT: '20443',
-    LAN_IP: '192.168.1.254',
   };
 
   it('substitutes placeholders once and enforces policy keys', () => {
@@ -110,7 +106,10 @@ describe('system.cfg rendering', () => {
   });
 
   it('rejects missing values, multiline values and VLAN profiles', () => {
-    assert.throws(() => renderSystemCfg(SAMPLE_TEMPLATE, { values: { ...values, LAN_IP: '' }, enforced: [] }), /missing_value_LAN_IP/);
+    assert.throws(() => renderSystemCfg(SAMPLE_TEMPLATE, { values: { ...values, PPPOE_USER: '' }, enforced: [] }), /missing_value_PPPOE_USER/);
+    // the server-wide values of before v1.35.11: a template must have its own
+    assert.ok(inspectTemplate(`${SAMPLE_TEMPLATE}netconf.2.ip=\${LAN_IP}
+`).errors.includes('retired_placeholders'));
     assert.throws(() => renderSystemCfg(SAMPLE_TEMPLATE, { values: { ...values, PPPOE_PASSWORD: 'a\nvlan.1.id=87' }, enforced: [] }), /invalid_value/);
     const vlan = `${SAMPLE_TEMPLATE}vlan.1.id=87\n`;
     assert.equal(inspectTemplate(vlan).ok, false);
