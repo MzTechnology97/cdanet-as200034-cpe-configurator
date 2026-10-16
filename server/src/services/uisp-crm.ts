@@ -78,20 +78,46 @@ export function createUispCrm(opts: { url: string; appKey: string; fetchImpl?: t
     });
   }
 
+  /**
+   * The client an earlier attempt for the same CPE made: same note (model, MAC and SSID of the CPE),
+   * same name, registered in the last 2 days. null when there is none or the CRM cannot be read.
+   */
+  async function madeBefore(s: NewSubscriber): Promise<number | null> {
+    if (!s.note) return null;
+    // only the newest clients, asked to the API: never the whole list while the network is unstable
+    const list = (await call('GET', '/clients?order=client.id&direction=DESC&limit=50').catch(() => [])) as unknown[];
+    const since = Date.now() - 2 * 86_400_000;
+    const hit = (Array.isArray(list) ? list : []).find((c) => {
+      const o = c as { note?: unknown; firstName?: unknown; lastName?: unknown; isLead?: unknown; registrationDate?: unknown };
+      const at = typeof o.registrationDate === 'string' ? Date.parse(o.registrationDate.replace(/([+-]\d{2})(\d{2})$/, '$1:$2')) : NaN;
+      return o.note === s.note && o.lastName === s.lastName && (o.firstName ?? '') === s.firstName && o.isLead !== true && Number.isFinite(at) && at >= since;
+    }) as { id?: unknown } | undefined;
+    return num(hit?.id);
+  }
+
   /** Client and service of a new subscriber; [siteId] is the endpoint site when UISP already made it. */
   async function createSubscriber(s: NewSubscriber): Promise<{ clientId: number; serviceId: number; siteId: string | null }> {
     const gps = s.lat !== null && s.lon !== null ? { addressGpsLat: s.lat, addressGpsLon: s.lon } : {};
-    let clientId = s.clientId ?? null;
+    // a client made by an earlier attempt whose answer was lost: reused, never made twice
+    let clientId = s.clientId ?? (await madeBefore(s));
     if (clientId === null) {
-      const client = (await call('POST', '/clients', {
-        clientType: 1,
-        isLead: false,
-        firstName: s.firstName,
-        lastName: s.lastName,
-        street1: s.street,
-        ...gps,
-        ...(s.note ? { note: s.note } : {}),
-      })) as { id?: unknown };
+      let client: { id?: unknown };
+      try {
+        client = (await call('POST', '/clients', {
+          clientType: 1,
+          isLead: false,
+          firstName: s.firstName,
+          lastName: s.lastName,
+          street1: s.street,
+          ...gps,
+          ...(s.note ? { note: s.note } : {}),
+        })) as { id?: unknown };
+      } catch (e) {
+        // a network error does not say whether the CRM made the client (field report 16/10/2026): looked for
+        const found = (e as HttpError).code === 'uisp_unreachable' ? await madeBefore(s) : null;
+        if (found === null) throw e;
+        client = { id: found };
+      }
       clientId = num(client?.id);
       if (clientId === null) throw new HttpError(502, 'uisp_crm_error', { detail: 'cliente senza id' });
     }
