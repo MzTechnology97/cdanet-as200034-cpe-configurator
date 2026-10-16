@@ -11,11 +11,8 @@ export const PLACEHOLDERS = {
   WPA2_PSK: 'Chiave WPA2 dell’SSID (cifrata nel DB)',
   PPPOE_USER: 'Username RADIUS/PPPoE',
   PPPOE_PASSWORD: 'Password PPPoE (transitoria)',
-  HTTP_PORT: 'Porta HTTP management (20080)',
-  HTTPS_PORT: 'Porta HTTPS management (20443)',
-  UISP_ENROLLMENT: 'Chiave UISP (runtime secret)',
-  SNMP_COMMUNITY: 'Community SNMP v2c',
-  SNMP_CONTACT: 'Contatto SNMP',
+  UISP_ENROLLMENT: 'Chiave UISP del template (cifrata)',
+  SNMP_COMMUNITY: 'Community SNMP del template (cifrata)',
   SNMP_LOCATION: 'Location SNMP (COGNOME NOME)',
   DEVICE_NAME: 'Device Name (COGNOME NOME)',
   CPE_USERNAME: 'Username admin CPE',
@@ -23,18 +20,28 @@ export const PLACEHOLDERS = {
   CPE_PASSWORD_HASH: 'Password admin CPE in formato MD5-crypt per users.N.password',
   EXPECTED_MAC: 'MAC atteso della CPE',
   EXPECTED_SERIAL: 'Seriale atteso della CPE',
-  LAN_IP: 'IP LAN',
-  LAN_NETMASK: 'Netmask LAN',
-  DHCP_START: 'Inizio pool DHCP',
-  DHCP_END: 'Fine pool DHCP',
-  DHCP_LEASE: 'Lease DHCP (s)',
-  PPPOE_MTU: 'MTU PPPoE',
-  PPPOE_MRU: 'MRU PPPoE',
-  WATCHDOG_HOST: 'Host watchdog',
-  NTP_SERVER: 'Server NTP',
-  SSH_PORT: 'Porta SSH',
-  DISCOVERY_PORT: 'Porta discovery',
 } as const;
+/**
+ * Values that were the same for every template (server settings) until v1.35.11: now each template
+ * has its own, written in its text. Kept only to convert the templates saved before.
+ */
+export const RETIRED_PLACEHOLDERS = [
+  'HTTP_PORT',
+  'HTTPS_PORT',
+  'SNMP_CONTACT',
+  'LAN_IP',
+  'LAN_NETMASK',
+  'DHCP_START',
+  'DHCP_END',
+  'DHCP_LEASE',
+  'PPPOE_MTU',
+  'PPPOE_MRU',
+  'WATCHDOG_HOST',
+  'NTP_SERVER',
+  'SSH_PORT',
+  'DISCOVERY_PORT',
+] as const;
+export type RetiredPlaceholder = (typeof RETIRED_PLACEHOLDERS)[number];
 export type PlaceholderName = keyof typeof PLACEHOLDERS;
 
 const TOKEN_RX = /\$\{([A-Z0-9_]+)\}/g;
@@ -46,6 +53,8 @@ export interface TemplateReport {
   warnings: string[];
   placeholders: string[];
   unknownPlaceholders: string[];
+  /** Server-wide values of the past: the template must have its own value instead. */
+  retiredPlaceholders: string[];
   lines: number;
 }
 
@@ -67,8 +76,11 @@ export function inspectTemplate(raw: string): TemplateReport {
   const found = new Set<string>();
   for (const m of template.matchAll(TOKEN_RX)) found.add(m[1] as string);
   const placeholders = [...found].sort();
-  const unknownPlaceholders = placeholders.filter((p) => !(p in PLACEHOLDERS));
+  const retired = new Set<string>(RETIRED_PLACEHOLDERS);
+  const retiredPlaceholders = placeholders.filter((p) => retired.has(p));
+  const unknownPlaceholders = placeholders.filter((p) => !(p in PLACEHOLDERS) && !retired.has(p));
   if (unknownPlaceholders.length) errors.push('unknown_placeholders');
+  if (retiredPlaceholders.length) errors.push('retired_placeholders');
 
   for (const required of ['SSID', 'WPA2_PSK', 'PPPOE_USER', 'PPPOE_PASSWORD'] as const) {
     if (!found.has(required)) warnings.push(`missing_placeholder_${required}`);
@@ -88,6 +100,7 @@ export function inspectTemplate(raw: string): TemplateReport {
     warnings,
     placeholders,
     unknownPlaceholders,
+    retiredPlaceholders,
     lines: template.split('\n').length,
   };
 }

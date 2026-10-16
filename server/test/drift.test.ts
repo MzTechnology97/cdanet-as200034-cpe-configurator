@@ -8,9 +8,9 @@ import { ADMIN, SAMPLE_TEMPLATE, testConfig } from './helpers.ts';
 
 describe('Configuration drift (CPE vs CDA Net template)', () => {
   it('compares values, masks secrets, skips what cannot be compared', () => {
-    const tpl = 'wireless.1.ssid=${SSID}\nwpasupplicant.profile.1.network.1.psk=${WPA2_PSK}\nppp.1.password=${PPPOE_PASSWORD}\nradio.1.txpower=12\nhttpd.port=${HTTP_PORT}\n';
+    const tpl = 'wireless.1.ssid=${SSID}\nwpasupplicant.profile.1.network.1.psk=${WPA2_PSK}\nppp.1.password=${PPPOE_PASSWORD}\nradio.1.txpower=12\nhttpd.port=20080\n';
     const actual = 'wireless.1.ssid=CDA-NET-N2-D01\nwpasupplicant.profile.1.network.1.psk=changed-psk\nppp.1.password=whatever\nradio.1.txpower=27\nsnmp.location=x\nextra.key=1\n';
-    const r = configDrift(tpl, { SSID: 'CDA-NET-N2-D01', WPA2_PSK: 'right-psk', HTTP_PORT: '20080' }, [['snmp.location', 'ROSSI MARIO']], actual);
+    const r = configDrift(tpl, { SSID: 'CDA-NET-N2-D01', WPA2_PSK: 'right-psk' }, [['snmp.location', 'ROSSI MARIO']], actual);
     assert.equal(r.skipped, 1); // PPPoE password is never kept by CDA Net
     assert.equal(r.extra, 1);
     const byKey = Object.fromEntries(r.items.map((i) => [i.key, i]));

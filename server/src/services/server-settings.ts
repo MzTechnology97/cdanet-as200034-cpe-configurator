@@ -21,6 +21,11 @@ interface Def {
   min?: number;
   max?: number;
   restart?: boolean;
+  /**
+   * Until v1.35.10 the same for every CPE; now each airOS template has its own value. Still applied
+   * at start (the conversion of the old templates copies it into them), no longer shown or editable.
+   */
+  retired?: true;
   get: (c: Config) => string | number | boolean | undefined;
   set: (c: Config, v: string | number | boolean | undefined) => void;
 }
@@ -72,36 +77,36 @@ export const SERVER_SETTINGS: Def[] = [
     get: (c) => c.cpeSecrets.adminPassword, set: (c, v) => (c.cpeSecrets.adminPassword = v as string | undefined),
   },
   {
-    key: 'cpe.uispEnrollment', env: 'UISP_ENROLLMENT', group: 'Credenziali delle CPE', label: 'Chiave di adozione UISP', kind: 'secret',
+    retired: true, key: 'cpe.uispEnrollment', env: 'UISP_ENROLLMENT', group: 'Credenziali delle CPE', label: 'Chiave di adozione UISP', kind: 'secret',
     help: 'La "UISP key" (wss://…) scritta nelle CPE per farle comparire in UISP.',
     get: (c) => c.cpeSecrets.uispEnrollment, set: (c, v) => (c.cpeSecrets.uispEnrollment = v as string | undefined),
   },
   {
-    key: 'cpe.snmpCommunity', env: 'SNMP_COMMUNITY', group: 'Credenziali delle CPE', label: 'Community SNMP delle CPE', kind: 'secret',
+    retired: true, key: 'cpe.snmpCommunity', env: 'SNMP_COMMUNITY', group: 'Credenziali delle CPE', label: 'Community SNMP delle CPE', kind: 'secret',
     get: (c) => c.cpeSecrets.snmpCommunity, set: (c, v) => (c.cpeSecrets.snmpCommunity = (v as string | undefined) ?? 'public'),
   },
   {
-    key: 'cpe.snmpContact', env: 'SNMP_CONTACT', group: 'Credenziali delle CPE', label: 'Contatto SNMP (sysContact)', kind: 'text',
+    retired: true, key: 'cpe.snmpContact', env: 'SNMP_CONTACT', group: 'Credenziali delle CPE', label: 'Contatto SNMP (sysContact)', kind: 'text',
     get: (c) => c.cpeSecrets.snmpContact, set: (c, v) => (c.cpeSecrets.snmpContact = (v as string | undefined) ?? ''),
   },
-  ip('factoryIp', 'CPE_FACTORY_IP', 'IP di fabbrica / management della CPE'),
-  ip('lanIp', 'CPE_LAN_IP', 'IP LAN della CPE'),
-  ip('lanNetmask', 'CPE_LAN_NETMASK', 'Netmask LAN'),
-  ip('dhcpStart', 'CPE_DHCP_START', 'DHCP: primo indirizzo'),
-  ip('dhcpEnd', 'CPE_DHCP_END', 'DHCP: ultimo indirizzo'),
-  netInt('dhcpLease', 'CPE_DHCP_LEASE', 'DHCP: durata lease (s)', 60, 86400),
-  netInt('pppoeMtu', 'CPE_PPPOE_MTU', 'PPPoE MTU', 576, 1500),
-  netInt('pppoeMru', 'CPE_PPPOE_MRU', 'PPPoE MRU', 576, 1500),
+  { ...ip('factoryIp', 'CPE_FACTORY_IP', 'IP di fabbrica / management della CPE'), group: 'Credenziali delle CPE' },
+  { ...ip('lanIp', 'CPE_LAN_IP', 'IP LAN della CPE'), retired: true },
+  { ...ip('lanNetmask', 'CPE_LAN_NETMASK', 'Netmask LAN'), retired: true },
+  { ...ip('dhcpStart', 'CPE_DHCP_START', 'DHCP: primo indirizzo'), retired: true },
+  { ...ip('dhcpEnd', 'CPE_DHCP_END', 'DHCP: ultimo indirizzo'), retired: true },
+  { ...netInt('dhcpLease', 'CPE_DHCP_LEASE', 'DHCP: durata lease (s)', 60, 86400), retired: true },
+  { ...netInt('pppoeMtu', 'CPE_PPPOE_MTU', 'PPPoE MTU', 576, 1500), retired: true },
+  { ...netInt('pppoeMru', 'CPE_PPPOE_MRU', 'PPPoE MRU', 576, 1500), retired: true },
   {
-    key: 'network.watchdogHost', env: 'CPE_WATCHDOG_HOST', group: 'Rete standard delle CPE', label: 'Host del watchdog (ping)', kind: 'text',
+    retired: true, key: 'network.watchdogHost', env: 'CPE_WATCHDOG_HOST', group: 'Rete standard delle CPE', label: 'Host del watchdog (ping)', kind: 'text',
     get: (c) => c.network.watchdogHost, set: (c, v) => (c.network.watchdogHost = (v as string | undefined) ?? '8.8.8.8'),
   },
   {
-    key: 'network.ntpServer', env: 'CPE_NTP_SERVER', group: 'Rete standard delle CPE', label: 'Server NTP', kind: 'text',
+    retired: true, key: 'network.ntpServer', env: 'CPE_NTP_SERVER', group: 'Rete standard delle CPE', label: 'Server NTP', kind: 'text',
     get: (c) => c.network.ntpServer, set: (c, v) => (c.network.ntpServer = (v as string | undefined) ?? '10.0.0.254'),
   },
-  netInt('sshPort', 'CPE_SSH_PORT', 'Porta SSH della CPE', 1, 65535),
-  netInt('discoveryPort', 'CPE_DISCOVERY_PORT', 'Porta discovery Ubiquiti', 1, 65535),
+  { ...netInt('sshPort', 'CPE_SSH_PORT', 'Porta SSH della CPE', 1, 65535), retired: true },
+  { ...netInt('discoveryPort', 'CPE_DISCOVERY_PORT', 'Porta discovery Ubiquiti', 1, 65535), retired: true },
   {
     key: 'jobTtlMinutes', env: 'PROVISION_JOB_TTL_MINUTES', group: 'Provisioning e app', label: 'Validità di un provisioning (minuti)', kind: 'int', min: 5, max: 2880,
     help: 'Per quanto tempo la configurazione preparata resta valida sul telefono: anche 48 ore (2880) per salire sul tetto senza Internet.',
@@ -318,7 +323,7 @@ export function createServerSettings(db: Db, cfg: Config, sealer: Sealer) {
     return {
       updatedAt,
       updatedBy,
-      settings: SERVER_SETTINGS.map((d) => {
+      settings: SERVER_SETTINGS.filter((d) => !d.retired).map((d) => {
         const fromWeb = d.key in values;
         const envValue = baseline.get(d.key);
         const current = d.get(cfg);
@@ -349,7 +354,7 @@ export function createServerSettings(db: Db, cfg: Config, sealer: Sealer) {
     const changed: string[] = [];
     for (const [k, v] of Object.entries(input)) {
       const d = byKey.get(k);
-      if (!d) throw Object.assign(new Error(`unknown setting ${k}`), { code: 'unknown_setting' });
+      if (!d || d.retired) throw Object.assign(new Error(`unknown setting ${k}`), { code: 'unknown_setting' });
       if (v === null) {
         delete next[k];
       } else {

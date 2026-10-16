@@ -681,9 +681,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     const full = db.prepare('SELECT model, mac, serial, ssid, pppoe_user, template_name, latitude, longitude FROM provisioning_jobs WHERE id = ?').get(job.id) as {
       model: string; mac: string; serial: string; ssid: string; pppoe_user: string; template_name: string; latitude: number | null; longitude: number | null;
     };
-    const tpl = db
-      .prepare('SELECT template_ciphertext FROM profile_templates WHERE model = ? AND name = ? AND firmware = ?')
-      .get(full.model, full.template_name, TARGET_FIRMWARE) as { template_ciphertext: string } | undefined;
+    const tpl = ctx.templates.byName(full.model, full.template_name);
     if (!tpl) throw new HttpError(409, 'drift_template_missing', { template: full.template_name });
     const wpa = db.prepare('SELECT wpa2_ciphertext FROM wireless_secrets WHERE ssid = ?').get(full.ssid) as { wpa2_ciphertext: string } | undefined;
     const device = await deviceOf(job);
@@ -697,12 +695,13 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     const { values, name } = ctx.provisioning.jobValues(
       { ssid: full.ssid, pppoeUser: full.pppoe_user, mac: full.mac, serial: full.serial },
       wpa ? ctx.sealer.open(wpa.wpa2_ciphertext) : '',
+      tpl.secrets,
     );
     if (!wpa) delete values.WPA2_PSK;
     const report = configDrift(
-      ctx.sealer.open(tpl.template_ciphertext),
+      tpl.text,
       values,
-      ctx.provisioning.enforcedKeys(name, full.latitude != null && full.longitude != null ? { latitude: full.latitude, longitude: full.longitude } : null),
+      ctx.provisioning.enforcedKeys(name, full.latitude != null && full.longitude != null ? { latitude: full.latitude, longitude: full.longitude } : null, tpl),
       cfgText,
     );
     recordEvent(db, req.user!.id, 'uisp.drift', device.name || device.mac || device.id, `${report.items.length} differenze`);

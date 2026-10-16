@@ -19,7 +19,17 @@ describe('Field tools access', () => {
     assert.equal(r.statusCode, 200, r.body);
     const b = r.json();
     assert.equal(b.credentials.password, 'Cpe-Admin-Secret-1');
-    assert.deepEqual(b.hosts, ['192.168.1.254', '192.168.172.1']);
+    // no template yet: only the factory address; then the LAN address of every template, default first
+    assert.deepEqual(b.hosts, ['192.168.172.1']);
+    const H = { authorization: `Bearer ${admin}` };
+    const draft = (await app.inject({ method: 'POST', url: '/api/admin/profiles/LiteBeam%205AC/form/read', headers: H, payload: {} })).json();
+    const lan = (await app.inject({ method: 'POST', url: '/api/admin/profiles/LiteBeam%205AC/form/apply', headers: H, payload: { template: draft.template, changes: { lanIp: '192.168.5.1', sshPort: 2222 } } })).json();
+    const made = await app.inject({ method: 'POST', url: '/api/admin/profiles/LiteBeam%205AC/templates', headers: H, payload: { name: 'Standard', template: lan.template, boardMatch: 'board\.name=LiteBeam' } });
+    assert.equal(made.statusCode, 201, made.body);
+    const b2 = (await call({ 'x-cda-client': 'android/1.2.0' })).json();
+    assert.deepEqual(b2.hosts, ['192.168.5.1', '192.168.172.1']);
+    assert.equal(b2.sshPort, 2222);
+    assert.deepEqual(b2.sshPorts, [2222, 22]);
     assert.equal(b.targetFirmware, '8.7.4');
     assert.equal(b.thresholds.signalMin, -75);
     assert.equal(r.headers['cache-control'], 'no-store');

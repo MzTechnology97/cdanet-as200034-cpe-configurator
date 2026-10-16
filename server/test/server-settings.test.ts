@@ -22,7 +22,7 @@ describe('Impostazioni server dal web (invece del .env)', () => {
     assert.equal(pw.value, null, 'secrets are never returned');
     assert.ok(!JSON.stringify(v0).includes('Cpe-Admin-Secret-1'));
 
-    const r = await call('PUT', '/api/admin/server-settings', { values: { 'cpe.adminPassword': 'Nuova-Password-Cpe-9', 'network.lanIp': '192.168.10.254', jwtTtlHours: 12 } });
+    const r = await call('PUT', '/api/admin/server-settings', { values: { 'cpe.adminPassword': 'Nuova-Password-Cpe-9', jwtTtlHours: 12 } });
     assert.equal(r.statusCode, 200, r.body);
     assert.deepEqual(r.json().restartNeeded, ['jwtTtlHours']);
     assert.ok(!r.body.includes('Nuova-Password-Cpe-9'));
@@ -30,12 +30,11 @@ describe('Impostazioni server dal web (invece del .env)', () => {
     assert.ok(!stored.includes('Nuova-Password-Cpe-9'), 'sealed in the database');
     assert.equal(r.json().settings.find((s: { key: string }) => s.key === 'cpe.adminPassword').source, 'web');
 
-    // applied at once: the field tools get the new password and the new LAN IP
+    // applied at once: the field tools get the new password
     await call('POST', '/api/admin/users', { username: 'tecnico', password: 'Installer-Pass-123' });
     const T = await login('tecnico', 'Installer-Pass-123');
     const access = (await call('POST', '/api/field/access', { purpose: 'diagnosis' }, { ...T, ...ANDROID })).json();
     assert.equal(access.credentials.password, 'Nuova-Password-Cpe-9');
-    assert.ok(access.hosts.includes('192.168.10.254'));
 
     // thresholds of the acceptance test: set from the web, sent to the app at once
     assert.equal(access.thresholds.signalMin, -75);
@@ -45,16 +44,20 @@ describe('Impostazioni server dal web (invece del .env)', () => {
     assert.equal(access2.thresholds.signalMin, -72);
 
     // validation, unknown keys, admins only, activity log without values
-    assert.equal((await call('PUT', '/api/admin/server-settings', { values: { 'network.lanIp': '999.1.1.1' } })).statusCode, 400);
+    assert.equal((await call('PUT', '/api/admin/server-settings', { values: { 'cpe.adminUsername': 'a\nb' } })).statusCode, 400);
+    // the CPE network and services are in each airOS template now: no longer settings of the server
+    for (const k of ['network.lanIp', 'network.watchdogHost', 'cpe.snmpCommunity', 'cpe.uispEnrollment', 'cpe.snmpContact']) {
+      assert.equal((await call('PUT', '/api/admin/server-settings', { values: { [k]: 'x' } })).json().error, 'unknown_setting', k);
+    }
+    assert.ok(!v0.settings.some((s: { key: string }) => s.key === 'network.lanIp' || s.key === 'cpe.snmpCommunity'));
     assert.equal((await call('PUT', '/api/admin/server-settings', { values: { nonEsiste: 1 } })).json().error, 'unknown_setting');
     assert.equal((await call('GET', '/api/admin/server-settings', undefined, T)).statusCode, 403);
     const log = JSON.stringify(db.prepare("SELECT * FROM events WHERE action = 'server.settings'").all());
     assert.ok(log.includes('cpe.adminPassword') && !log.includes('Nuova-Password-Cpe-9'));
 
     // back to the .env value
-    await call('PUT', '/api/admin/server-settings', { values: { 'network.lanIp': null } });
-    assert.equal((await call('GET', '/api/admin/server-settings')).json().settings.find((s: { key: string }) => s.key === 'network.lanIp').value, cfg.network.lanIp);
-    assert.equal(cfg.network.lanIp, '192.168.1.254');
+    await call('PUT', '/api/admin/server-settings', { values: { 'thresholds.signalMin': null } });
+    assert.equal(cfg.thresholds.signalMin, -75);
     assert.equal((await call('POST', '/api/admin/server-settings/restart', {})).statusCode, 200);
     await app.close();
 
