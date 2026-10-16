@@ -627,6 +627,45 @@ const MIGRATIONS: string[] = [
   CREATE INDEX cpe_rma_state ON cpe_rma(state);
   ALTER TABLE users ADD COLUMN warehouse_min_stock INTEGER;
   `,
+  // the admins' own Claude (MCP connector, read-only monitoring): OAuth clients registered by the
+  // Claude apps, one-time codes and the connections (tokens kept as SHA-256 only, revocable)
+  `
+  CREATE TABLE mcp_clients(
+    id TEXT PRIMARY KEY,
+    name TEXT NOT NULL DEFAULT '',
+    redirect_uris TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    created_ip TEXT NOT NULL DEFAULT '',
+    last_used_at TEXT
+  );
+  CREATE TABLE mcp_codes(
+    code_hash TEXT PRIMARY KEY,
+    client_id TEXT NOT NULL REFERENCES mcp_clients(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    redirect_uri TEXT NOT NULL,
+    challenge TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    used INTEGER NOT NULL DEFAULT 0
+  );
+  CREATE TABLE mcp_tokens(
+    id INTEGER PRIMARY KEY,
+    client_id TEXT NOT NULL REFERENCES mcp_clients(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    token_version INTEGER NOT NULL,
+    access_hash TEXT NOT NULL UNIQUE,
+    access_expires TEXT NOT NULL,
+    refresh_hash TEXT NOT NULL UNIQUE,
+    refresh_prev_hash TEXT,
+    refresh_expires TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    created_ip TEXT NOT NULL DEFAULT '',
+    last_used_at TEXT,
+    calls INTEGER NOT NULL DEFAULT 0,
+    revoked_at TEXT,
+    revoked_by INTEGER
+  );
+  CREATE INDEX mcp_tokens_user ON mcp_tokens(user_id);
+  `,
 ];
 
 export function openDatabase(path: string): Db {

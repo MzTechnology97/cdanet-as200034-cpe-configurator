@@ -17,6 +17,7 @@ import {
 } from '../domain/policy.ts';
 import { loadLatestRelease } from '../services/releases.ts';
 import { escapeHtml } from '../services/telegram.ts';
+import { checkSecondFactor as sharedSecondFactor } from '../services/second-factor.ts';
 import { hashRecovery, looksLikeRecoveryCode, newRecoveryCodes, newSecret, otpauthUrl, verifyCode } from '../domain/totp.ts';
 
 const loginSchema = z.object({
@@ -94,21 +95,8 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     recovery_codes: string;
   };
 
-  /** TOTP code (anti-replay) or one-time recovery code; consumes what it uses. */
-  function checkSecondFactor(u: TotpRow, code: string): boolean {
-    if (looksLikeRecoveryCode(code) && !/^\d{6}$/.test(code)) {
-      const hashes = JSON.parse(u.recovery_codes || '[]') as string[];
-      const h = hashRecovery(code);
-      if (!hashes.includes(h)) return false;
-      ctx.db.prepare('UPDATE users SET recovery_codes = ? WHERE id = ?').run(JSON.stringify(hashes.filter((x) => x !== h)), u.id);
-      recordEvent(ctx.db, u.id, 'account.recovery_code', u.username, `codice di recupero usato, ne restano ${hashes.length - 1}`);
-      return true;
-    }
-    const step = verifyCode(ctx.sealer.open(u.totp_secret), code, { lastStep: u.totp_last_step });
-    if (step === null) return false;
-    ctx.db.prepare('UPDATE users SET totp_last_step = ? WHERE id = ?').run(step, u.id);
-    return true;
-  }
+  const checkSecondFactor = (u: TotpRow, code: string) => sharedSecondFactor(ctx.db, ctx.sealer, u, code);
+
   app.post('/api/auth/login', login);
   // v0.5.x APKs log in here before their updater installs v1.
   app.post('/api/login', login);
