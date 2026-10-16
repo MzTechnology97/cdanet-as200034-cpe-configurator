@@ -1,5 +1,6 @@
 import { useEffect } from 'react';
 import { keys, queryClient } from './query';
+import { deviceId } from './api';
 
 /** What each event of the server refreshes (the page asks the API again, with its user's rights). */
 const REFRESH: Record<string, ReadonlyArray<readonly string[]>> = {
@@ -28,7 +29,7 @@ export function useLiveEvents(token: string | null) {
       ctrl = new AbortController();
       let wait = 5_000;
       try {
-        const res = await fetch('/api/events', { headers: { authorization: `Bearer ${token}`, accept: 'text/event-stream' }, signal: ctrl.signal, cache: 'no-store' });
+        const res = await fetch('/api/events', { headers: { authorization: `Bearer ${token}`, accept: 'text/event-stream', 'X-CDA-Device': deviceId() }, signal: ctrl.signal, cache: 'no-store' });
         if (res.status === 404) wait = 5 * 60_000; // server not updated yet
         if (res.status === 401) return; // the session is over: the API calls handle it
         if (!res.ok || !res.body) return later(wait);

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createRoot } from 'react-dom/client';
-import { api, session } from '../lib/api';
+import { api, deviceId, session } from '../lib/api';
 import type { LMap, Simulation } from './leaflet';
 
 /**
@@ -42,7 +42,7 @@ function loadMapLibre(): Promise<GL> {
       // tiles of our server need the session: cda://api/... is fetched with it
       gl.addProtocol('cda', async (params: { url: string }, ctrl: AbortController) => {
         const token = session.get()?.token;
-        const r = await fetch(params.url.replace('cda://', '/'), { headers: token ? { Authorization: `Bearer ${token}` } : {}, signal: ctrl.signal });
+        const r = await fetch(params.url.replace('cda://', '/'), { headers: { 'X-CDA-Device': deviceId(), ...(token ? { Authorization: `Bearer ${token}` } : {}) }, signal: ctrl.signal });
         // no photo there (the public service often answers blank): an error, so the map keeps
         // the photo of the zoom below, enlarged, instead of a hole
         if (r.status === 204 && params.url.includes('/imagery/')) throw new Error(NO_PHOTO);
