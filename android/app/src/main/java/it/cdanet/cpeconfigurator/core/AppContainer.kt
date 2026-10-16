@@ -38,6 +38,20 @@ class AppContainer(context: Context) {
     val pointingCache = it.cdanet.cpeconfigurator.data.PointingCache(appContext)
     val install = it.cdanet.cpeconfigurator.install.InstallController(api, field, pointingCache, session)
     val quickLogin = it.cdanet.cpeconfigurator.security.QuickLogin(appContext)
+    /** The session kept on the phone for working without Internet (see [OfflineSessions]). */
+    val offlineSession = it.cdanet.cpeconfigurator.security.OfflineSessions(secure).also { o ->
+        // refused by the server: nothing stays on the phone to go on offline
+        session.onRevoked = {
+            o.clear()
+            field.forget()
+        }
+    }
+    /** What was done with the session kept on the phone, for the activity log (see [OfflineLog]). */
+    val offlineLog = it.cdanet.cpeconfigurator.security.OfflineLog(secure).also { log ->
+        field.onStart = { mode, host ->
+            if (session.isOffline) log.record("field.offline_use", host ?: "CPE collegata", if (mode == it.cdanet.cpeconfigurator.field.FieldMode.Alignment) "puntamento" else "diagnosi")
+        }
+    }
 
     /** Set after a login with the password: the app then offers the fingerprint/face quick login. */
     val offerQuickLogin = kotlinx.coroutines.flow.MutableStateFlow(false)

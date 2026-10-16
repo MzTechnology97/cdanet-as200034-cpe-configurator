@@ -89,6 +89,8 @@ data class MetaDto(
     val coverageMaxKm: Int = 15,
     /** Optional features enabled by the admin ("Funzionalità"). */
     val modules: Map<String, Boolean> = emptyMap(),
+    /** How long the app may go on without Internet after this contact (0 = never). */
+    val offlineSessionHours: Int = 0,
 )
 
 @Serializable

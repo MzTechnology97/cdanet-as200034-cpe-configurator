@@ -31,11 +31,31 @@ describe('Field tools access', () => {
     assert.equal(b2.sshPort, 2222);
     assert.deepEqual(b2.sshPorts, [2222, 22]);
     assert.equal(b.targetFirmware, '8.7.4');
+    // kept on the phone as long as the app may work without Internet (24 h by default)
+    const hours = (Date.parse(b.expiresAt) - Date.now()) / 3600_000;
+    assert.ok(hours > 23.9 && hours <= 24, String(hours));
+    assert.equal((await app.inject({ method: 'GET', url: '/api/meta', headers: { authorization: `Bearer ${tok}` } })).json().offlineSessionHours, 24);
     assert.equal(b.thresholds.signalMin, -75);
     assert.equal(r.headers['cache-control'], 'no-store');
     assert.equal((await call({ 'x-cda-client': 'android/1.2.0' }, { purpose: 'hack' })).statusCode, 400);
 
+    // what the app did offline: in the log at the time it happened, never too old or in the future
+    const sent = await app.inject({
+      method: 'POST',
+      url: '/api/field/offline-events',
+      headers: { authorization: `Bearer ${tok}`, 'x-cda-client': 'android/1.2.0' },
+      payload: {
+        events: [
+          { at: new Date(Date.now() - 3 * 3600_000).toISOString(), action: 'field.offline_use', target: '192.168.1.254', detail: 'diagnosi' },
+          { at: new Date(Date.now() - 30 * 3600_000).toISOString(), action: 'session.offline_resume' },
+          { at: new Date(Date.now() + 3600_000).toISOString(), action: 'session.offline_resume' },
+        ],
+      },
+    });
+    assert.deepEqual(sent.json(), { saved: 1 });
     const ev = (await app.inject({ method: 'GET', url: '/api/admin/events', headers: { authorization: `Bearer ${admin}` } })).json();
+    const offEv = ev.find((e: { action: string }) => e.action === 'field.offline_use');
+    assert.ok(offEv && /^senza Internet · diagnosi/.test(offEv.detail) && Date.parse(offEv.createdAt) < Date.now() - 2.9 * 3600_000, JSON.stringify(offEv));
     const access = ev.find((e: { action: string }) => e.action === 'field.access');
     assert.ok(access);
     assert.ok(!JSON.stringify(ev).includes('Cpe-Admin-Secret-1'));

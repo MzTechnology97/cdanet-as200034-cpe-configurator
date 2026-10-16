@@ -116,7 +116,11 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
         working = null
     }
 
+    /** Called at each start of a tool on the CPE (the app logs the ones done without Internet). */
+    var onStart: ((FieldMode, String?) -> Unit)? = null
+
     fun start(mode: FieldMode, manualHost: String? = null) {
+        onStart?.invoke(mode, manualHost)
         stop()
         _state.value = FieldState(running = true, connecting = true)
         job = scope.launch(Dispatchers.IO) {
