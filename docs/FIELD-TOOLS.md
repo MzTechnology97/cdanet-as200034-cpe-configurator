@@ -64,11 +64,25 @@ Il traffico verso la CPE passa sempre dalla Wi-Fi (anche se la Wi-Fi non ha Inte
 
 Le credenziali CDA Net della CPE (`CPE_ADMIN_USERNAME`/`CPE_ADMIN_PASSWORD`) arrivano dal server con `POST /api/field/access`:
 - solo verso l'app Android riconosciuta (header `X-CDA-Client`, versione minima);
-- in risposta `no-store`, tenute solo in memoria;
-- con validità di 8 ore;
+- in risposta `no-store`, conservate sul telefono cifrate con il Keystore di Android;
+- valide quanto la sessione senza Internet (vedi sotto, minimo 8 ore);
 - ogni consegna è registrata nel Registro attività ("Accesso alla CPE dagli strumenti di campo").
 
 L'app le richiede subito dopo il login, così gli strumenti funzionano anche più tardi sul tetto senza Internet.
+
+## Sessione senza Internet
+
+Dopo ogni contatto con il server l'app tiene sul telefono, cifrata con il Keystore, la sessione dell'account (utente, ruolo, funzionalità attive) per le ore impostate in **Impostazioni server → Sessione dell'app senza Internet** (predefinito 24, 0 = mai, massimo 72). Il conteggio riparte a ogni contatto.
+
+Se l'app viene chiusa o il telefono si spegne e alla riapertura non c'è Internet, l'app riparte con quella sessione. Funzionano:
+- gli strumenti sulla CPE (diagnosi, puntamento, AP visibili, collaudo), con le credenziali salvate;
+- gli strumenti locali e il provisioning già preparato.
+
+Un avviso in alto dice fino a quando vale la sessione salvata. I dati del server tornano appena c'è Internet:
+- con l'accesso automatico l'app si ricollega da sola e rilegge i dati;
+- con lo sblocco con impronta o volto si usa **Ricollegati con impronta o volto** nell'avviso. All'apertura offline l'impronta o il volto vengono chiesti comunque.
+
+Il token del server non viene salvato. Allo scadere delle ore torna la schermata di accesso. Un account bloccato, una password cambiata, «Esci ovunque» o la chiave del telefono revocata tolgono la sessione salvata e le credenziali CPE al primo contatto con il server. «Esci» le toglie subito.
 
 Ordine dei tentativi sulla CPE: credenziali **inserite a mano** (se presenti), poi quelle **CDA Net**, poi quelle **di fabbrica** airOS (`ubnt`/`ubnt`). Se la CPE le rifiuta tutte (CPE configurata a mano o prima dell'app con altre credenziali) l'app si ferma — niente tentativi ripetuti — e mostra **Credenziali della CPE** per inserire utente e password: valgono solo per quella sessione, restano in memoria e non vengono mai salvate né inviate al server. Si possono inserire anche prima con "Credenziali diverse". Quando la CPE si apre con credenziali non standard l'app lo segnala.
 

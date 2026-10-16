@@ -331,6 +331,8 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     uisp: !!ctx.uisp,
     modules: ctx.modules.stateFor(req.user!.id),
     coverageMaxKm: ctx.uispSettings.coverageMaxKm,
+    // how long the app may go on without Internet after this contact (Impostazioni server)
+    offlineSessionHours: ctx.cfg.offlineSessionHours,
   }));
 
   // Android update channel: reachable before login so a broken login can still be repaired.

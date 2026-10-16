@@ -81,9 +81,32 @@ suspend fun rememberPhone(c: AppContainer) {
     c.quickLogin.savePersistent(c.settings.backendUrlNow(), user.username, key.id, key.secret, key.expiresAt)
 }
 
+/** The server refused the phone's key: nothing is left on the phone to go on, offline either. */
+private fun keyRefused(c: AppContainer) {
+    c.quickLogin.clear()
+    c.offlineSession.clear()
+    if (c.session.isOffline) c.session.clear()
+}
+
+/**
+ * No Internet to sign in: the session of the last contact with the server, kept on the phone for
+ * the hours the admin allows, for the same account the phone remembers. [lock]: fingerprint/face
+ * first when the phone asks for it at every opening (the prompt works without Internet).
+ */
+suspend fun resumeOffline(c: AppContainer, lock: Boolean): Boolean {
+    val saved = c.quickLogin.saved() ?: return false
+    val s = c.offlineSession.valid(c.settings.backendUrlNow()) ?: return false
+    if (s.user.username != saved.username) return false
+    c.modules.value = s.modules
+    if (lock && !saved.persistent) c.locked.value = true
+    c.session.set(c.offlineSession.session(s))
+    return true
+}
+
 /**
  * Opening the app with a persistent key: a new session without asking anything. Returns null when
- * signed in, else the message to show (the key is forgotten when the server refuses it).
+ * signed in (also offline, with the session kept on the phone), else the message to show (the key
+ * is forgotten when the server refuses it).
  */
 suspend fun autoLogin(c: AppContainer): String? {
     val s = c.quickLogin.saved()?.takeIf { it.persistent } ?: return "Accesso automatico non attivo"
@@ -95,7 +118,9 @@ suspend fun autoLogin(c: AppContainer): String? {
         c.quickLogin.setExpiry(c.api.deviceLogin(s.deviceId, secret))
         null
     } catch (e: Exception) {
-        if (keyGone(e)) c.quickLogin.clear()
+        if (keyGone(e)) keyRefused(c)
+        // no server (closed app, phone off, roof without signal): go on with the session on the phone
+        else if (e is java.io.IOException && (c.session.isOffline || resumeOffline(c, lock = false))) return null
         e.message ?: e.toString()
     }
 }
@@ -107,6 +132,7 @@ suspend fun logoutPhone(c: AppContainer) {
     c.activeWorkOrder.value = null
     if (c.session.token != null) dropOldKey(c)
     c.quickLogin.clear()
+    c.offlineSession.clear()
     c.session.clear()
 }
 
@@ -139,7 +165,9 @@ suspend fun quickLogin(c: AppContainer, activity: FragmentActivity) {
     try {
         c.quickLogin.setExpiry(c.api.deviceLogin(s.deviceId, secret))
     } catch (e: Exception) {
-        if (keyGone(e)) c.quickLogin.clear()
+        if (keyGone(e)) keyRefused(c)
+        // unlocked with fingerprint/face, no server: the session on the phone (no second prompt)
+        else if (e is java.io.IOException && (c.session.isOffline || resumeOffline(c, lock = false))) return
         throw e
     }
 }
@@ -344,5 +372,49 @@ fun LockScreen(c: AppContainer, onLogout: () -> Unit) {
             BusyButton("Sblocca", false, Modifier.fillMaxWidth()) { unlock() }
             TextButton(onClick = onLogout) { Text("Esci e accedi con la password") }
         }
+    }
+}
+
+/**
+ * Shown while the app works with the session kept on the phone (no Internet): until when, and with
+ * fingerprint/face a button to sign in again once online (the persistent key does it by itself).
+ */
+@Composable
+fun OfflineSessionBanner(c: AppContainer) {
+    val session by c.session.state.collectAsState()
+    val s = session?.takeIf { it.offline } ?: return
+    val online by c.network.internet.collectAsState()
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    Column(
+        Modifier.fillMaxWidth().background(MaterialTheme.colorScheme.tertiaryContainer).padding(horizontal = 16.dp, vertical = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(4.dp),
+    ) {
+        Text(
+            "Senza Internet: sessione salvata sul telefono fino a ${localTime(s.expiresAt)}. Gli strumenti sulla CPE funzionano; i dati del server tornano quando l'app si ricollega.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onTertiaryContainer,
+        )
+        val saved = c.quickLogin.saved()
+        if (online && saved != null && !saved.persistent) {
+            TextButton(enabled = !busy, onClick = {
+                val activity = context.fragmentActivity() ?: return@TextButton
+                scope.launch {
+                    busy = true
+                    error = null
+                    try {
+                        quickLogin(c, activity)
+                    } catch (_: QuickLoginCancelled) {
+                    } catch (e: Exception) {
+                        error = e.message ?: e.toString()
+                    } finally {
+                        busy = false
+                    }
+                }
+            }) { Text("Ricollegati con impronta o volto") }
+        }
+        error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
     }
 }

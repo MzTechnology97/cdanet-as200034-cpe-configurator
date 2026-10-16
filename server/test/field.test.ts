@@ -31,6 +31,10 @@ describe('Field tools access', () => {
     assert.equal(b2.sshPort, 2222);
     assert.deepEqual(b2.sshPorts, [2222, 22]);
     assert.equal(b.targetFirmware, '8.7.4');
+    // kept on the phone as long as the app may work without Internet (24 h by default)
+    const hours = (Date.parse(b.expiresAt) - Date.now()) / 3600_000;
+    assert.ok(hours > 23.9 && hours <= 24, String(hours));
+    assert.equal((await app.inject({ method: 'GET', url: '/api/meta', headers: { authorization: `Bearer ${tok}` } })).json().offlineSessionHours, 24);
     assert.equal(b.thresholds.signalMin, -75);
     assert.equal(r.headers['cache-control'], 'no-store');
     assert.equal((await call({ 'x-cda-client': 'android/1.2.0' }, { purpose: 'hack' })).statusCode, 400);

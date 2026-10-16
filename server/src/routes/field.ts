@@ -60,7 +60,8 @@ export function fieldRoutes(app: FastifyInstance, ctx: AppContext) {
       sshPorts: [...new Set([...facts.map((f) => f.sshPort), 22])],
       targetFirmware: TARGET_FIRMWARE,
       thresholds: ctx.cfg.thresholds,
-      expiresAt: new Date(Date.now() + 8 * 3600_000).toISOString(),
+      // as long as the app may work without Internet (at least the 8 hours of a working day)
+      expiresAt: new Date(Date.now() + Math.max(8, ctx.cfg.offlineSessionHours) * 3600_000).toISOString(),
     };
   });
 
