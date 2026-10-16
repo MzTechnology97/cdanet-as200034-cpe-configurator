@@ -46,6 +46,12 @@ class AppContainer(context: Context) {
             field.forget()
         }
     }
+    /** What was done with the session kept on the phone, for the activity log (see [OfflineLog]). */
+    val offlineLog = it.cdanet.cpeconfigurator.security.OfflineLog(secure).also { log ->
+        field.onStart = { mode, host ->
+            if (session.isOffline) log.record("field.offline_use", host ?: "CPE collegata", if (mode == it.cdanet.cpeconfigurator.field.FieldMode.Alignment) "puntamento" else "diagnosi")
+        }
+    }
 
     /** Set after a login with the password: the app then offers the fingerprint/face quick login. */
     val offerQuickLogin = kotlinx.coroutines.flow.MutableStateFlow(false)

@@ -82,7 +82,20 @@ Un avviso in alto dice fino a quando vale la sessione salvata. I dati del server
 - con l'accesso automatico l'app si ricollega da sola e rilegge i dati;
 - con lo sblocco con impronta o volto si usa **Ricollegati con impronta o volto** nell'avviso. All'apertura offline l'impronta o il volto vengono chiesti comunque.
 
-Il token del server non viene salvato. Allo scadere delle ore torna la schermata di accesso. Un account bloccato, una password cambiata, «Esci ovunque» o la chiave del telefono revocata tolgono la sessione salvata e le credenziali CPE al primo contatto con il server. «Esci» le toglie subito.
+Il token del server non viene salvato. Allo scadere delle ore torna la schermata di accesso.
+
+**Attenzione:** un account disattivato, una password cambiata o un telefono perso restano utilizzabili senza Internet fino alla scadenza. Al primo contatto con il server l'app cancella la sessione salvata e le credenziali CPE, nei casi seguenti:
+- risposta 401;
+- chiave del telefono revocata o scaduta;
+- telefono bloccato per accessi falliti.
+
+«Esci» le cancella subito.
+
+**Registro:** quello che si fa con la sessione salvata entra nel Registro attività al primo contatto, con l'ora in cui è successo e la nota «senza Internet»:
+- `session.offline_resume`: sessione ripresa;
+- `field.offline_use`: diagnosi o puntamento avviati.
+
+Il server accetta solo ore comprese nella durata della sessione offline, mai nel futuro.
 
 Ordine dei tentativi sulla CPE: credenziali **inserite a mano** (se presenti), poi quelle **CDA Net**, poi quelle **di fabbrica** airOS (`ubnt`/`ubnt`). Se la CPE le rifiuta tutte (CPE configurata a mano o prima dell'app con altre credenziali) l'app si ferma — niente tentativi ripetuti — e mostra **Credenziali della CPE** per inserire utente e password: valgono solo per quella sessione, restano in memoria e non vengono mai salvate né inviate al server. Si possono inserire anche prima con "Credenziali diverse". Quando la CPE si apre con credenziali non standard l'app lo segnala.
 

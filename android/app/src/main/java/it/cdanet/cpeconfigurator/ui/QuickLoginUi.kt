@@ -84,9 +84,18 @@ suspend fun rememberPhone(c: AppContainer) {
 /** The server refused the phone's key: nothing is left on the phone to go on, offline either. */
 private fun keyRefused(c: AppContainer) {
     c.quickLogin.clear()
+    dropOffline(c)
+}
+
+/** No more work offline on this phone: the saved session and the CPE credentials go. */
+private fun dropOffline(c: AppContainer) {
     c.offlineSession.clear()
+    c.field.forget()
     if (c.session.isOffline) c.session.clear()
 }
+
+/** This phone is blocked on the server (failed logins): the key stays, the offline session goes. */
+private fun banned(e: Throwable) = (e as? ApiException)?.code == "banned"
 
 /**
  * No Internet to sign in: the session of the last contact with the server, kept on the phone for
@@ -100,6 +109,7 @@ suspend fun resumeOffline(c: AppContainer, lock: Boolean): Boolean {
     c.modules.value = s.modules
     if (lock && !saved.persistent) c.locked.value = true
     c.session.set(c.offlineSession.session(s))
+    c.offlineLog.record("session.offline_resume", s.user.username, "fino a ${s.until}")
     return true
 }
 
@@ -119,6 +129,7 @@ suspend fun autoLogin(c: AppContainer): String? {
         null
     } catch (e: Exception) {
         if (keyGone(e)) keyRefused(c)
+        else if (banned(e)) dropOffline(c)
         // no server (closed app, phone off, roof without signal): go on with the session on the phone
         else if (e is java.io.IOException && (c.session.isOffline || resumeOffline(c, lock = false))) return null
         e.message ?: e.toString()
@@ -133,6 +144,9 @@ suspend fun logoutPhone(c: AppContainer) {
     if (c.session.token != null) dropOldKey(c)
     c.quickLogin.clear()
     c.offlineSession.clear()
+    // what was done offline still reaches the log when possible, then nothing stays
+    if (c.session.token != null) c.offlineLog.send(c.api)
+    c.offlineLog.clear()
     c.session.clear()
 }
 
@@ -166,6 +180,7 @@ suspend fun quickLogin(c: AppContainer, activity: FragmentActivity) {
         c.quickLogin.setExpiry(c.api.deviceLogin(s.deviceId, secret))
     } catch (e: Exception) {
         if (keyGone(e)) keyRefused(c)
+        else if (banned(e)) dropOffline(c)
         // unlocked with fingerprint/face, no server: the session on the phone (no second prompt)
         else if (e is java.io.IOException && (c.session.isOffline || resumeOffline(c, lock = false))) return
         throw e

@@ -175,7 +175,8 @@ class ApiClient(
                 if (!r.isSuccessful) {
                     val err = runCatching { AppJson.decodeFromString(ApiErrorDto.serializer(), text) }.getOrNull()
                     val code = err?.error?.ifBlank { null } ?: "HTTP ${r.code}"
-                    if (r.code == 401 && auth) session.revoke()
+                    // refused (401) or this phone blocked after failed logins: nothing stays to work offline
+                    if ((r.code == 401 || (r.code == 429 && code == "banned")) && auth) session.revoke()
                     if (r.code == 426) updateRequired.value = err?.minVersion ?: "nuova"
                     val detail = err?.minVersion?.let { " (minima $it)" } ?: ""
                     throw ApiException(r.code, code, apiMessage(code) + detail)
@@ -246,6 +247,14 @@ class ApiClient(
         val r = AppJson.decodeFromString(LoginResponse.serializer(), request("POST", "/api/auth/device-login", body, auth = false, client = true))
         session.set(SessionState(r.token, r.user, r.expiresAt))
         return r.deviceExpiresAt
+    }
+
+    /** What was done without Internet, to the activity log at the time it happened. */
+    suspend fun offlineEvents(list: List<it.cdanet.cpeconfigurator.security.OfflineLog.Entry>) {
+        val body = buildJsonObject {
+            put("events", kotlinx.serialization.json.JsonArray(list.map { e -> AppJson.encodeToJsonElement(it.cdanet.cpeconfigurator.security.OfflineLog.Entry.serializer(), e) }))
+        }
+        request("POST", "/api/field/offline-events", body, client = true)
     }
 
     /** Registers this phone for the quick login (after a full login). */

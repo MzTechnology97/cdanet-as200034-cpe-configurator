@@ -274,6 +274,8 @@ fun AppRoot(c: AppContainer) {
                     c.modules.value = it.modules
                     c.updateSecureScreen(session?.user?.role, it.modules)
                     session?.takeIf { s -> !s.offline }?.let { s -> c.offlineSession.save(c.settings.backendUrlNow(), s.user, it.modules, it.offlineSessionHours) }
+                    // what was done without Internet goes to the activity log now
+                    if (session?.offline == false) c.offlineLog.send(c.api)
                 }
             }
             c.resultQueue.syncInBackground()
