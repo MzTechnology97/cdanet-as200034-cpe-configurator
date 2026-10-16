@@ -182,4 +182,49 @@ describe('Nuovo subscriber in UISP all\'accettazione', () => {
     assert.deepEqual([clients, services, deletes], [1, 2, []], 'one client, the service tried again, nothing deleted in the CRM');
     await app.close();
   });
+
+  it('a client POST whose answer is lost: the client the CRM made is found and reused, never made twice', async () => {
+    subscriberTiming.pollMs = 1;
+    const fake = fakeUisp();
+    const now = new Date().toISOString().replace(/\.\d{3}Z$/, '+0000');
+    const old = new Date(Date.now() - 5 * 86_400_000).toISOString().replace(/\.\d{3}Z$/, '+0000');
+    const note = 'CPE LiteBeam 5AC AA:BB:CC:DD:EE:FF · CDA-NET-N2-D01';
+    // a namesake for the same CPE registered days ago (a reused CPE) and someone else: never taken
+    const made: Array<Record<string, unknown>> = [
+      { id: 400, firstName: 'Mario', lastName: 'Rossi', note, registrationDate: old },
+      { id: 401, firstName: 'Luca', lastName: 'Bianchi', note, registrationDate: now },
+    ];
+    let posts = 0;
+    const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (!url.pathname.startsWith('/crm/api/v1.0')) return fake.fetchImpl(input, init);
+      const path = url.pathname.replace('/crm/api/v1.0', '');
+      const method = init?.method ?? 'GET';
+      if (path === '/clients' && method === 'GET') return new Response(JSON.stringify([...made].reverse()));
+      if (path === '/clients' && method === 'POST') {
+        posts++;
+        const b = JSON.parse(String(init!.body));
+        made.push({ id: 503, firstName: b.firstName, lastName: b.lastName, note: b.note, registrationDate: now });
+        // field report 16/10/2026: the client is made, the answer never arrives
+        throw new TypeError('fetch failed');
+      }
+      if (path === '/clients/503/services' && method === 'POST') return new Response(JSON.stringify({ id: 703, unmsClientSiteId: 'site-sub-1' }), { status: 201 });
+      return new Response('[]');
+    }) as typeof fetch;
+    const db = openDatabase(':memory:');
+    const { app } = await buildApp(testConfig(), 'test', { db, logger: false, uisp: null, fetchImpl });
+    const login = await app.inject({ method: 'POST', url: '/api/auth/login', payload: { username: ADMIN.username, password: ADMIN.password } });
+    const H = { authorization: `Bearer ${login.json().token}` };
+    const call = (method: 'GET' | 'POST' | 'PUT', url: string, payload?: object, extra: Record<string, string> = {}) => app.inject({ method, url, headers: { ...H, ...extra }, payload });
+    await call('PUT', '/api/admin/connectors/uisp', { enabled: true, url: 'https://uisp.test', token: 'tok-secret', crmKey: 'crm-key', ignoreTls: false, autoBackup: false, coverageMaxKm: 15, cacheSeconds: 60 });
+    await call('POST', '/api/admin/profiles/LiteBeam%205AC/templates', { name: 'Standard', template: SAMPLE_TEMPLATE, boardMatch: 'board\.name=LiteBeam 5AC' });
+    await call('PUT', '/api/admin/wireless-networks/CDA-NET-N2-D01', { wpa2Password: 'test-psk-12345' });
+    const job = (await call('POST', '/api/provisioning/jobs', { model: 'LiteBeam 5AC', mac: 'AABBCCDDEEFF', serial: 'S1', ssid: 'CDA-NET-N2-D01', pppoeUser: 'rossi.mario@cda-net.it', pppoePassword: 'x' }, { 'x-cda-client': 'android/1.0.7' })).json();
+    const r = await call('POST', `/api/admin/provisioning/jobs/${job.jobId}/uisp/subscriber`, { lastName: 'Rossi', firstName: 'Mario', street: '', servicePlanPeriodId: 31 });
+    assert.equal(r.statusCode, 200, r.body);
+    assert.equal(posts, 1);
+    const row = db.prepare('SELECT uisp_crm_client_id c, uisp_crm_service_id s FROM provisioning_jobs WHERE id = ?').get(job.jobId) as { c: number; s: number };
+    assert.deepEqual([row.c, row.s], [503, 703], 'the client found is kept on the job');
+    await app.close();
+  });
 });

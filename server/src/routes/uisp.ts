@@ -612,7 +612,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
         throw e;
       }
       ({ serviceId, clientId, siteId } = sub);
-      db.prepare('UPDATE provisioning_jobs SET uisp_crm_service_id = ? WHERE id = ?').run(serviceId, job.id);
+      db.prepare('UPDATE provisioning_jobs SET uisp_crm_service_id = ?, uisp_crm_client_id = ? WHERE id = ?').run(serviceId, sub.clientId, job.id);
       recordEvent(db, req.user!.id, 'uisp.subscriber', `${b.lastName} ${b.firstName}`.trim(), `${job.id} · cliente ${sub.clientId} · servizio ${serviceId}`);
     }
     // UISP makes the endpoint site of the service a moment later
