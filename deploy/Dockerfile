@@ -23,8 +23,9 @@ LABEL org.opencontainers.image.title="cdanet-cpe-server" \
       org.opencontainers.image.source="https://github.com/MzTechnology97/cdanet-as200034-cpe-configurator" \
       org.opencontainers.image.version="${VERSION}" \
       org.opencontainers.image.revision="${REVISION}"
-# Network diagnostics used by /api/tools and su-exec to drop root after fixing volume ownership.
-RUN apk add --no-cache iputils traceroute iproute2 su-exec tini
+# Network diagnostics used by /api/tools, su-exec to drop root after fixing volume ownership and
+# smbclient (Samba) for the nightly backup on a NAS (Connettori → NAS).
+RUN apk add --no-cache iputils traceroute iproute2 su-exec tini samba-client
 WORKDIR /app/server
 COPY --from=deps /app/server/node_modules ./node_modules
 COPY server/package.json ./

@@ -31,6 +31,8 @@ export interface SourceProbe {
   id: string;
   label: string;
   everyMin: number;
+  /** After how long without news it is late (minutes); three missed readings when not given. */
+  lateMin?: number;
   /** null = not configured (no alert). */
   read: () => { at: string | null; error: string | null; detail?: string } | null;
 }
@@ -40,10 +42,10 @@ const MIN = 60_000;
 const late = (everyMin: number) => Math.max(30, everyMin * 3);
 
 /** The state of a source from its last reading (pure). */
-export function sourceState(r: { at: string | null; error: string | null } | null, everyMin: number, now = Date.now()): HealthState {
+export function sourceState(r: { at: string | null; error: string | null } | null, everyMin: number, now = Date.now(), lateMin = late(everyMin)): HealthState {
   if (!r) return 'off';
   if (r.error) return 'bad';
-  if (!r.at || now - Date.parse(r.at) > late(everyMin) * MIN) return 'warn';
+  if (!r.at || now - Date.parse(r.at) > lateMin * MIN) return 'warn';
   return 'ok';
 }
 
@@ -180,7 +182,8 @@ export function createPlatformHealth(
       } catch (e) {
         r = { at: null, error: (e as Error).message };
       }
-      return { id: p.id, label: p.label, state: sourceState(r, p.everyMin, now), at: r?.at ?? null, error: r?.error ?? null, everyMin: p.everyMin, lateMin: late(p.everyMin), ...(r?.detail ? { detail: r.detail } : {}) };
+      const lateMin = p.lateMin ?? late(p.everyMin);
+      return { id: p.id, label: p.label, state: sourceState(r, p.everyMin, now, lateMin), at: r?.at ?? null, error: r?.error ?? null, everyMin: p.everyMin, lateMin, ...(r?.detail ? { detail: r.detail } : {}) };
     });
   }
 
