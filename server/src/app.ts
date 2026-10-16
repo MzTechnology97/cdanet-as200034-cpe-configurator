@@ -51,6 +51,8 @@ import { coverageOpsRoutes } from './routes/coverage-operators.ts';
 import { diagnosisRoutes } from './routes/diagnosis.ts';
 import { feasibilityRoutes } from './routes/feasibility.ts';
 import { mcpRoutes } from './routes/mcp.ts';
+import { banRoutes } from './routes/bans.ts';
+import { createLoginGuard } from './services/login-guard.ts';
 import { createCoverageOps, type CoverageOps } from './services/coverage-operators.ts';
 import { createPlatformHealth, type PlatformHealth } from './services/platform-health.ts';
 import { platformRoutes } from './routes/platform.ts';
@@ -174,6 +176,7 @@ export async function buildApp(
     antennas: createAntennas({ dir: join(dirname(cfg.terrainDir), 'antennas'), db, ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
     anncsu: createAnncsu({ dir: join(dirname(cfg.terrainDir), 'anncsu'), ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
     notify: undefined as unknown as Notifier,
+    loginGuard: createLoginGuard(db, { ignore: cfg.loginBanIgnore, notify: (html) => ctx.notify.security(html) }),
     version,
   };
   ctx.crmSync = createCrmSync(db, ctx.crm);
@@ -257,6 +260,19 @@ export async function buildApp(
     return newest && !versionAtLeast(pinned, newest) ? newest : pinned;
   };
   const ALWAYS_OPEN = ['/api/health', '/api/mobile/', '/api/map/'];
+  // fail2ban-like: a banned device is stopped everywhere; a banned IP only at the logins and
+  // without a session (many installers share one public IP: those logged in keep working)
+  const LOGINS = ['/api/auth/login', '/api/login', '/api/auth/device-login', '/oauth/authorize', '/oauth/token'];
+  app.addHook('onRequest', async (req, reply) => {
+    const path = req.url.split('?')[0]!;
+    if (!(path.startsWith('/api/') || path.startsWith('/oauth/') || path === '/mcp') || ALWAYS_OPEN.some((p) => path.startsWith(p))) return;
+    const b = ctx.loginGuard.bannedFor(req);
+    if (!b) return;
+    const login = LOGINS.some((p) => path === p || path.startsWith(`${p}/`));
+    if (b.kind === 'ip' && !login && req.headers.authorization) return;
+    const secs = Math.max(1, Math.ceil((Date.parse(b.until) - Date.now()) / 1000));
+    return reply.code(429).header('Retry-After', String(secs)).send({ error: 'banned', until: b.until });
+  });
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/api/') || ALWAYS_OPEN.some((p) => req.url.startsWith(p))) return;
     const client = parseClientHeader(req.headers['x-cda-client'] as string | undefined);
@@ -277,7 +293,10 @@ export async function buildApp(
   });
 
   app.setErrorHandler((err, req, reply) => {
-    if (err instanceof HttpError) return reply.code(err.status).send({ error: err.code, ...err.extra });
+    if (err instanceof HttpError) {
+      if (err.code === 'banned' && typeof err.extra?.until === 'string') reply.header('Retry-After', String(Math.max(1, Math.ceil((Date.parse(err.extra.until) - Date.now()) / 1000))));
+      return reply.code(err.status).send({ error: err.code, ...err.extra });
+    }
     if (err instanceof ZodError) {
       return reply.code(400).send({
         error: 'invalid_request',
@@ -331,6 +350,7 @@ export async function buildApp(
   diagnosisRoutes(app, ctx);
   feasibilityRoutes(app, ctx);
   mcpRoutes(app, ctx);
+  banRoutes(app, ctx);
 
   const hasWeb = existsSync(join(cfg.staticDir, 'index.html'));
   // The console built by Vite (console/ → web/app): its pages (the console, /map-embed.html for the

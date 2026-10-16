@@ -666,6 +666,34 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX mcp_tokens_user ON mcp_tokens(user_id);
   `,
+  // every login attempt (web, app, Claude) and the bans of IPs and devices (fail2ban-like)
+  `
+  CREATE TABLE login_attempts(
+    id INTEGER PRIMARY KEY,
+    created_at TEXT NOT NULL,
+    ip TEXT NOT NULL,
+    device TEXT,
+    username TEXT NOT NULL DEFAULT '',
+    channel TEXT NOT NULL DEFAULT 'web',
+    kind TEXT NOT NULL,
+    ok INTEGER NOT NULL,
+    reason TEXT NOT NULL DEFAULT ''
+  );
+  CREATE INDEX login_attempts_ip ON login_attempts(ip, created_at);
+  CREATE INDEX login_attempts_device ON login_attempts(device, created_at);
+  CREATE TABLE login_bans(
+    id INTEGER PRIMARY KEY,
+    kind TEXT NOT NULL CHECK(kind IN('ip','device')),
+    value TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    until TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    reason TEXT NOT NULL DEFAULT '',
+    lifted_at TEXT,
+    lifted_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+  );
+  CREATE INDEX login_bans_value ON login_bans(kind, value);
+  `,
 ];
 
 export function openDatabase(path: string): Db {

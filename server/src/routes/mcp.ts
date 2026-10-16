@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { HttpError, createLoginLimiter } from '../auth.ts';
+import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { DUMMY_PASSWORD_HASH, verifyPassword } from '../crypto.ts';
 import { nowIso, recordEvent } from '../db.ts';
@@ -71,7 +71,6 @@ type UserRow = SecondFactorUser & { role: 'admin' | 'installer'; active: number;
 
 export function mcpRoutes(app: FastifyInstance, ctx: AppContext) {
   const { db } = ctx;
-  const limiter = createLoginLimiter();
   const registrations = new Map<string, number[]>();
   const calls = new Map<number, number[]>();
   // the platform's own address (PUBLIC_URL); without it, the address the Claude app used
@@ -231,20 +230,24 @@ ${error ? `<p class="err">${escapeHtml(error)}</p>` : ''}
       }
       const username = String(raw.username ?? '').trim().slice(0, 80);
       const fail = (msg: string, status = 401) => page(reply, q.data.redirect_uri, consentHtml(q.data, c, msg), status);
-      if (limiter.blocked(req.ip, username)) return fail('Troppi tentativi: riprova tra qualche minuto.', 429);
+      try {
+        ctx.loginGuard.check(req, username);
+      } catch {
+        return fail('Troppi tentativi falliti: accesso bloccato, riprova più tardi.', 429);
+      }
       const u = db.prepare('SELECT * FROM users WHERE username = ?').get(username) as UserRow | undefined;
       const valid = verifyPassword(String(raw.password ?? '').slice(0, 200), u?.password_hash ?? DUMMY_PASSWORD_HASH);
       if (!u || !valid || !u.active) {
-        limiter.fail(req.ip, username);
+        ctx.loginGuard.record(req, username, 'oauth', false, 'password errata');
         return fail('Utente o password non validi.');
       }
       if (u.role !== 'admin') return fail('Solo gli account admin possono collegare il proprio Claude.', 403);
       if (!u.totp_enabled) return fail('Attiva prima la verifica in due passaggi dal tuo account nella console.', 403);
       if (!checkSecondFactor(db, ctx.sealer, u, String(raw.code ?? '').trim().slice(0, 12))) {
-        limiter.fail(req.ip, username);
+        ctx.loginGuard.record(req, username, 'oauth', false, 'codice errato');
         return fail('Codice di verifica non valido.');
       }
-      limiter.clear(req.ip, username);
+      ctx.loginGuard.record(req, username, 'oauth', true);
       const code = secret();
       db.prepare('INSERT INTO mcp_codes(code_hash, client_id, user_id, redirect_uri, challenge, expires_at) VALUES(?,?,?,?,?,?)').run(
         sha(code),

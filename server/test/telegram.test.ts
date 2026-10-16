@@ -113,11 +113,13 @@ describe('Telegram notifications', () => {
     f.sent.length = 0;
 
     // security: lockout and admin login from a new address
-    for (let i = 0; i < 11; i++) await login('tecnico-inesistente', 'wrong', '10.9.9.9');
+    // 5 failures from a public address ban it (a private one never: the office, the containers)
+    for (let i = 0; i < 6; i++) await login('tecnico-inesistente', 'wrong', '203.0.113.9');
+    await ctx.notify.idle();
     await login(ADMIN.username, ADMIN.password, '10.0.0.1'); // known address
     await login(ADMIN.username, ADMIN.password, '93.41.1.2'); // new address
     await ctx.telegram.idle();
-    assert.equal(f.sent.filter((m) => m.text.includes('Troppi tentativi')).length, 1);
+    assert.equal(f.sent.filter((m) => m.text.includes('Accesso bloccato') && m.text.includes('203.0.113.9')).length, 1);
     assert.equal(f.sent.filter((m) => m.text.includes('93.41.1.2')).length, 1);
     assert.equal(f.sent.filter((m) => m.text.includes('10.0.0.1')).length, 0);
     f.sent.length = 0;
