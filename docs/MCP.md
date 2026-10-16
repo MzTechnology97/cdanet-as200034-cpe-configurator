@@ -2,6 +2,23 @@
 
 Gli account admin possono collegare il proprio Claude alla piattaforma per il **monitoraggio**. Claude può leggere lo stato della rete, le interruzioni, le batterie dei POP, la salute della piattaforma, gli avvisi del NOC, gli interventi, il magazzino, le statistiche e la diagnosi di un cliente. Non può modificare nulla né inviare comandi alle CPE.
 
+## Cosa legge
+
+In sola lettura Claude ha a disposizione tutti i moduli:
+- **rete:** stato della rete, salute della piattaforma, gestione rete, infrastruttura, salute e andamento delle CPE, consigli e proposte dell'ottimizzatore;
+- **corrente:** interruzioni e mappa dei guasti, batterie dei POP;
+- **copertura:**
+  - copertura CDA Net;
+  - **altri operatori (WIC)**, per punto o per indirizzo esatto con la ricerca guidata, e fattibilità;
+  - ricerca di indirizzi e coordinate, puntamento, profilo del terreno e orizzonte, simulazione di un AP, precisione delle stime;
+- **clienti:** clienti e account PPPoE del CRM, ricerca del cliente per un intervento;
+- **installazioni:** installazioni, collaudi e storico, stato in UISP, KO, speedtest, diagnosi;
+- **interventi:** interventi e loro cronologia;
+- **magazzino:** giacenze, magazzini, movimenti, CPE smontate;
+- **NOC:** avvisi, accessi bloccati e registro degli accessi, statistiche, report mensile, site e piani UISP, firmware, antenne, stato del server.
+
+Fuori: connettori, impostazioni del server, privacy, chiavi Wi-Fi.
+
 ## Lettura e scrittura
 
 Nella pagina di consenso si sceglie:
