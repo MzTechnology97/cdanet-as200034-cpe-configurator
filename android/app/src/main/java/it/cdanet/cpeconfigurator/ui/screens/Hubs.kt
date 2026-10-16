@@ -169,7 +169,7 @@ fun NetworkHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit, onAim: (
 
 /** "CPE collegata": everything done with the CPE in hand, connecting to it once. */
 @Composable
-fun CpeHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit, onAcceptance: () -> Unit) {
+fun CpeHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit, onAcceptance: () -> Unit, onOpenWeb: (String) -> Unit = {}) {
     val modules by c.modules.collectAsState()
     val tabs = cpeTabTitles(modules).map { t ->
         when (t) {
@@ -185,7 +185,13 @@ fun CpeHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit, onAcceptance
             }
         }
     }
-    TabbedHub(tabs, selected, onSelect)
+    // the CPE every tab works on, found by the discovery (or picked from its list), above the tabs
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        if (tabs.isNotEmpty()) Box(Modifier.padding(horizontal = 16.dp).padding(top = 8.dp)) {
+            WifiRequired(c, CPE_WIFI_HUB, "La discovery cerca la CPE nella rete locale della Wi-Fi.") { ConnectedCpeBar(c, onOpenWeb) }
+        }
+        Box(Modifier.weight(1f)) { TabbedHub(tabs, selected, onSelect) }
+    }
 }
 
 /** Tabs of the customer's-network tools (pure: Home shortcuts open one of them). */

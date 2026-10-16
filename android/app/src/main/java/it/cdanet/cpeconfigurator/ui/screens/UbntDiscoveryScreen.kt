@@ -232,7 +232,7 @@ private fun UbntDetails(c: AppContainer, d: UbntDevice, onDismiss: () -> Unit, o
  * credentials of the CPEs by default (from the server, kept on the phone), or others typed here.
  */
 @Composable
-private fun RebootDialog(c: AppContainer, d: UbntDevice, busy: Boolean, onDismiss: () -> Unit, onConfirm: (String, String) -> Unit) {
+internal fun RebootDialog(c: AppContainer, d: UbntDevice, busy: Boolean, onDismiss: () -> Unit, onConfirm: (String, String) -> Unit) {
     var saved by remember { mutableStateOf<it.cdanet.cpeconfigurator.data.CredentialsDto?>(null) }
     LaunchedEffect(Unit) { if (c.session.state.value != null && c.field.prefetch()) saved = c.field.savedCredentials() }
     var useSaved by remember { mutableStateOf(true) }

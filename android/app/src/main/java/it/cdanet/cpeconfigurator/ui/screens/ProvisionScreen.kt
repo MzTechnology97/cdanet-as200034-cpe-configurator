@@ -472,8 +472,9 @@ private fun CpeDiscoveryCheck(c: AppContainer, labelMac: String, replacedMac: St
     // several on the Wi-Fi (a customer's LAN): the one of the label, if it is there
     val d = list?.firstOrNull { d -> it.cdanet.cpeconfigurator.provisioning.DiscoveryCheck.sameDevice(d, labelMac) } ?: list?.singleOrNull()
     val result = d?.let { x -> it.cdanet.cpeconfigurator.provisioning.DiscoveryCheck.evaluate(x, labelMac, stock?.items.orEmpty(), c.field.targetFirmware ?: "8.7.4", replacedMac) }
-    // the model of the CPE goes into the form by itself
+    // the model of the CPE goes into the form by itself; the CPE becomes the one the tools work on
     LaunchedEffect(result?.model) { result?.model?.let { m -> c.provisioning.updateForm { f -> if (f.model == m) f else f.copy(model = m) } } }
+    LaunchedEffect(d?.mac, d?.ip) { d?.let { x -> if (c.field.selected.value?.mac != x.mac || c.field.selected.value?.ip != x.ip) c.field.select(x) } }
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             when {
@@ -491,6 +492,15 @@ private fun CpeDiscoveryCheck(c: AppContainer, labelMac: String, replacedMac: St
     }
     result?.let { r ->
         r.checks.forEach { ch -> CheckRow(ch.title, ch.verdict, ch.detail) }
+        // firmware not the required one: updated from here, without leaving the installation
+        val build = d?.firmware?.let { f -> it.cdanet.cpeconfigurator.firmware.AirosImage.parseBuild(f) }
+        if (build != null && r.checks.any { ch -> ch.title == "Firmware" && ch.verdict != it.cdanet.cpeconfigurator.field.Verdict.Ok }) {
+            CpeFirmwareUpdater(c, build, c.firmware.savedList()) { _ ->
+                // the CPE is back: the discovery reads it again (new firmware, same MAC)
+                c.field.forgetSelection()
+                round++
+            }
+        }
         r.stock?.let { item ->
             Text("CPE del tuo magazzino: ${item.model} · MAC ${item.mac}${item.serial.takeIf { s -> s.isNotBlank() }?.let { s -> " · S/N $s" }.orEmpty()}", style = MaterialTheme.typography.bodySmall)
             if (Validation.normalizeMac(labelMac) != Validation.normalizeMac(item.mac)) {
