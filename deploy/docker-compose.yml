@@ -40,6 +40,9 @@ services:
       # self-signed HTTPS (Caddy local CA) on these addresses, space separated
       HTTPS_SITES: ${HTTPS_SITES:-https://localhost}
       HTTPS_DEFAULT_SNI: ${HTTPS_DEFAULT_SNI:-localhost}
+      # HTTPS only: plain HTTP on these addresses (e.g. "http://") answers just with a redirect to HTTP_REDIRECT
+      HTTP_REDIRECT_LISTEN: ${HTTP_REDIRECT_LISTEN:-http://redirect.invalid}
+      HTTP_REDIRECT: ${HTTP_REDIRECT:-https://localhost}
     ports:
       - "80:80"
       - "443:443"

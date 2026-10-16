@@ -27,6 +27,14 @@
 	import console
 }
 
+# HTTPS only (HTTP_REDIRECT_LISTEN="http://", HTTP_REDIRECT="https://app.example.it"): nothing is
+# served in clear, plain HTTP on any address answers with a permanent redirect to the HTTPS address.
+# The certificates of a public hostname (APP_LISTEN) still renew by themselves: the ACME challenge
+# on port 80 is answered before this. Unset, it only matches a name that never exists.
+{$HTTP_REDIRECT_LISTEN:http://redirect.invalid} {
+	redir {$HTTP_REDIRECT:https://localhost}{uri} permanent
+}
+
 # Self-signed HTTPS on the server's addresses, space separated, e.g. "https://185.198.209.31 https://172.31.0.29"
 # (set by the installer; the browser asks once to accept the certificate).
 {$HTTPS_SITES:https://localhost} {
