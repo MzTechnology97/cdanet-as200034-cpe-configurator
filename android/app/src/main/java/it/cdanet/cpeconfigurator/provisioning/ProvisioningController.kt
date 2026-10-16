@@ -50,6 +50,8 @@ data class ProvisionForm(
     /** Job of the broken CPE being replaced: customer, SSID, position and template come from it. */
     val replaces: String? = null,
     val replacesLabel: String = "",
+    /** MAC of the CPE being replaced: the discovery warns when the one on the Wi-Fi is still that one. */
+    val replacesMac: String = "",
     /** Work order of the office this installation comes from (PPPoE password from the server). */
     val workOrderId: Long? = null,
     val workOrderLabel: String = "",
@@ -447,6 +449,7 @@ class ProvisioningController(
             pppoeUser = j.pppoeUser,
             replaces = j.id,
             replacesLabel = "${j.deviceName.ifBlank { j.pppoeUser }} · ${j.mac}",
+            replacesMac = j.mac,
         )
     }
 

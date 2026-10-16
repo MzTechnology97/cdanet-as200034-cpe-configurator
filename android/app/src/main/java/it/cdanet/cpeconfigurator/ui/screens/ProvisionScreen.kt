@@ -40,6 +40,7 @@ import it.cdanet.cpeconfigurator.provisioning.ProvisioningController
 import it.cdanet.cpeconfigurator.provisioning.Validation
 import it.cdanet.cpeconfigurator.ui.Banner
 import it.cdanet.cpeconfigurator.ui.BusyButton
+import it.cdanet.cpeconfigurator.ui.CheckRow
 import it.cdanet.cpeconfigurator.ui.Dropdown
 import it.cdanet.cpeconfigurator.ui.ErrorBanner
 import it.cdanet.cpeconfigurator.ui.Field
@@ -212,30 +213,9 @@ fun ProvisionFormStep(c: AppContainer) {
         scanMsg?.let { Notice(it, NoticeKind.Warn) }
         Text("Scansiona MAC e seriale dall'etichetta della CPE con il tasto nel campo: prima di scrivere la configurazione l'app controlla che il MAC sia proprio quello della CPE collegata.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        // MAC and serial come only from the label: the MAC announced on the network can be the
-        // wireless one, while the label (and UISP) carry the LAN one. The CPE only tells its model.
-        var reading by remember { mutableStateOf(false) }
-        var readMsg by remember { mutableStateOf<String?>(null) }
-        BusyButton("Rileva il modello dalla CPE", reading, primary = false, tonal = true) {
-            scope.launch {
-                reading = true
-                readMsg = runCatching {
-                    val found = it.cdanet.cpeconfigurator.tools.UbntDiscovery.discover(c.network)
-                    when {
-                        found.isEmpty() -> "Nessuna CPE Ubiquiti risponde: collegati alla sua Wi-Fi di management"
-                        found.size > 1 -> "Rispondono ${found.size} CPE: scegli il modello a mano"
-                        else -> {
-                            val d = found.first()
-                            val model = Validation.modelFromDiscovery(d.model, d.fullModel)
-                            if (model != null) c.provisioning.updateForm { f -> f.copy(model = model) }
-                            model?.let { "Modello rilevato: $it" } ?: "Modello ${d.fullModel ?: d.model ?: "sconosciuto"} non supportato"
-                        }
-                    }
-                }.getOrElse { it.message }
-                reading = false
-            }
-        }
-        readMsg?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+        // MAC and serial come only from the label (or from the warehouse, where they come from the
+        // label): the discovery checks the CPE on the Wi-Fi is that one, its firmware and model
+        CpeDiscoveryCheck(c, form.mac, form.replacesMac)
     }
 
     SectionCard("Posizione CPE e AP consigliati") {
@@ -453,6 +433,53 @@ private fun SiteCpeCard(c: AppContainer, pkg: it.cdanet.cpeconfigurator.data.Pro
         } else {
             BusyButton("Conferma la CPE", false, Modifier.fillMaxWidth(), enabled = enabled) {
                 message = c.provisioning.setSiteCpe(mac, serial)
+            }
+        }
+    }
+}
+
+/**
+ * «Controlla la CPE collegata»: the Ubiquiti discovery on the CPE's Wi-Fi, before the configuration
+ * is written: model (set in the form), MAC against the label, firmware, factory or configured, and
+ * the CPE of the installer's warehouse (its MAC and serial filled in from there).
+ */
+@Composable
+private fun CpeDiscoveryCheck(c: AppContainer, labelMac: String, replacedMac: String) {
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(false) }
+    var msg by remember { mutableStateOf<String?>(null) }
+    var result by remember { mutableStateOf<it.cdanet.cpeconfigurator.provisioning.DiscoveryCheck.Result?>(null) }
+    val stock by c.provisioning.stock.state.collectAsState()
+    BusyButton("Controlla la CPE collegata", busy, primary = false, tonal = true) {
+        scope.launch {
+            busy = true
+            msg = null
+            result = null
+            runCatching { it.cdanet.cpeconfigurator.tools.UbntDiscovery.discover(c.network) }
+                .onSuccess { found ->
+                    // several on the Wi-Fi (a customer's LAN): the one of the label, if it is there
+                    val d = found.firstOrNull { d -> it.cdanet.cpeconfigurator.provisioning.DiscoveryCheck.sameDevice(d, labelMac) } ?: found.singleOrNull()
+                    when {
+                        found.isEmpty() -> msg = "Nessuna CPE Ubiquiti risponde: collegati alla sua Wi-Fi di management"
+                        d == null -> msg = "Rispondono ${found.size} apparati Ubiquiti: scansiona il MAC dall'etichetta per riconoscere la CPE"
+                        else -> {
+                            val r = it.cdanet.cpeconfigurator.provisioning.DiscoveryCheck.evaluate(d, labelMac, stock?.items.orEmpty(), c.field.targetFirmware ?: "8.7.4", replacedMac)
+                            r.model?.let { m -> c.provisioning.updateForm { f -> f.copy(model = m) } }
+                            result = r
+                        }
+                    }
+                }
+                .onFailure { msg = it.message }
+            busy = false
+        }
+    }
+    msg?.let { Text(it, style = MaterialTheme.typography.bodySmall) }
+    result?.let { r ->
+        r.checks.forEach { ch -> CheckRow(ch.title, ch.verdict, ch.detail) }
+        r.stock?.let { item ->
+            Text("CPE del tuo magazzino: ${item.model} · MAC ${item.mac}${item.serial.takeIf { s -> s.isNotBlank() }?.let { s -> " · S/N $s" }.orEmpty()}", style = MaterialTheme.typography.bodySmall)
+            if (Validation.normalizeMac(labelMac) != Validation.normalizeMac(item.mac)) {
+                SecondaryButton(onClick = { c.provisioning.updateForm { f -> f.copy(mac = item.mac, serial = item.serial.ifBlank { f.serial }) } }) { Text("Usa MAC e seriale del magazzino") }
             }
         }
     }

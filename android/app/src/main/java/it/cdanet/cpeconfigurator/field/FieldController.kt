@@ -52,6 +52,10 @@ data class FieldState(
     val authFailed: Boolean = false,
     /** Which credentials opened the CPE ("CDA Net", "di fabbrica", "inserite a mano"). */
     val credentialsUsed: String? = null,
+    /** The CPE was not at the usual addresses: the Ubiquiti discovery found it at this one. */
+    val discoveredHost: String? = null,
+    /** A device answers the discovery but not its web interface: probably stuck (reboot it). */
+    val stuck: it.cdanet.cpeconfigurator.tools.UbntDevice? = null,
 )
 
 /**
@@ -108,6 +112,17 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
         return false
     }
 
+    /**
+     * Reboots the CPE that answers the discovery but not its web interface ([FieldState.stuck]),
+     * with the protocol's challenge: the credentials typed by hand, else the CDA Net ones.
+     */
+    suspend fun rebootStuck() {
+        val d = _state.value.stuck ?: throw IllegalStateException("Nessuna CPE da riavviare")
+        val cr = manual ?: working ?: access?.credentials ?: throw IllegalStateException("Credenziali CPE non disponibili: inseriscile a mano")
+        it.cdanet.cpeconfigurator.tools.UbntDiscovery.reboot(network, d.mac!!, cr.username, cr.password)
+        _state.update { it.copy(stuck = null, error = "Riavvio richiesto: la CPE torna raggiungibile in circa un minuto") }
+    }
+
     /** The CDA Net CPE credentials on the phone (after [prefetch]), for tools outside the field session. */
     fun savedCredentials(): CredentialsDto? = access?.takeIf { valid(it) }?.credentials
 
@@ -122,9 +137,13 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
     /** Called at each start of a tool on the CPE (the app logs the ones done without Internet). */
     var onStart: ((FieldMode, String?) -> Unit)? = null
 
+    /** The discovery runs once per start, when the usual addresses do not answer. */
+    @Volatile private var discoveryTried = false
+
     fun start(mode: FieldMode, manualHost: String? = null) {
         onStart?.invoke(mode, manualHost)
         stop()
+        discoveryTried = false
         _state.value = FieldState(running = true, connecting = true)
         job = scope.launch(Dispatchers.IO) {
             val period = if (mode == FieldMode.Alignment) 1_000L else 3_000L
@@ -249,7 +268,9 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
         ).distinctBy { it.first }
         _state.update { it.copy(connecting = true) }
         var authError: Exception? = null
-        for (host in hosts) {
+        val tried = mutableSetOf<String>()
+        fun tryHost(host: String): AirosClient? {
+            tried += host
             for (url in AirosClient.candidates(host)) {
                 val port = url.substringAfterLast(':').toIntOrNull() ?: if (url.startsWith("https")) 443 else 80
                 val open = runCatching { wifi.socketFactory.createSocket().use { s: Socket -> s.connect(InetSocketAddress(host, port), 700) } }.isSuccess
@@ -260,8 +281,8 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
                         val cl = AirosClient(url, wifi.socketFactory).apply { login(cr.username, cr.password) }
                         clientNet = wifi
                         working = cr
-                        _state.update { it.copy(authFailed = false, credentialsUsed = label) }
-                        return@withContext cl
+                        _state.update { it.copy(authFailed = false, credentialsUsed = label, stuck = null) }
+                        return cl
                     } catch (e: AirosAuthException) {
                         authError = e
                         rejected = true
@@ -271,6 +292,23 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
                 }
                 if (rejected) break // same host, other port: same answers
             }
+            return null
+        }
+        for (host in hosts) tryHost(host)?.let { return@withContext it }
+        // not at the usual addresses (a CPE set by hand with another IP): the Ubiquiti discovery
+        // finds it on the LAN of this Wi-Fi, once per start
+        if (authError == null && manualHost == null && !discoveryTried) {
+            discoveryTried = true
+            val found = runCatching { it.cdanet.cpeconfigurator.tools.UbntDiscovery.discover(network, 3_000) }.getOrDefault(emptyList())
+            for (d in found) {
+                val ip = d.ip?.takeIf { Ip.isPrivate(it) && it !in tried } ?: continue
+                tryHost(ip)?.let { cl ->
+                    _state.update { it.copy(discoveredHost = ip) }
+                    return@withContext cl
+                }
+            }
+            // it answers the discovery, its web interface does not: stuck, a reboot may help
+            if (authError == null) found.firstOrNull { it.mac != null }?.let { d -> _state.update { it.copy(stuck = d) } }
         }
         if (authError != null) {
             _state.update { it.copy(authFailed = true) }

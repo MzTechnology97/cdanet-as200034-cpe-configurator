@@ -266,7 +266,18 @@ Azioni disponibili:
 - **Copia**;
 - **Riavvia**: usa la sfida del protocollo, con la risposta SHA-256(crypt(password, salt) || sfida), quindi la password non viaggia in rete. Le credenziali predefinite sono quelle CDA Net delle CPE salvate sul telefono, oppure altre inserite a mano. Prima di riavviare chiede conferma.
 
-La stessa discovery, più completa, serve anche a Scansione LAN, alla topologia e alla ricerca della CPE durante l'installazione. Dettagli del protocollo ripresi da [ubnt-discovery-next](https://github.com/Gaaraalex/ubnt-discovery-next) (licenza MIT).
+La stessa discovery serve anche negli altri flussi:
+- **Installazione**: **Controlla la CPE collegata**, prima di scrivere la configurazione, verifica:
+  - il modello, che imposta nel modulo;
+  - che il MAC coincida con l'etichetta. La discovery può dare il MAC wireless, a poche unità da quello LAN;
+  - il firmware rispetto all'8.7.4;
+  - se la CPE è di fabbrica o già configurata;
+  - nelle sostituzioni, che non sia ancora collegata la CPE da sostituire.
+
+  Se la CPE è nel **magazzino** dell'installatore, propone MAC e seriale registrati lì (che vengono dall'etichetta).
+- **CPE collegata** (diagnosi, puntamento, ripuntamento, collaudo): se la CPE non risponde agli indirizzi abituali, la discovery la cerca nella rete della Wi-Fi e l'app si collega all'IP trovato, segnalandolo.
+- **CPE bloccata**: se risponde alla discovery ma non alla sua interfaccia web, l'app lo dice e propone **Riavvia la CPE**, con conferma.
+- **Scansione LAN e topologia**: modello, modalità e apparati UniFi più completi. Dettagli del protocollo ripresi da [ubnt-discovery-next](https://github.com/Gaaraalex/ubnt-discovery-next) (licenza MIT).
 
 ## Strumenti di rete
 

@@ -143,6 +143,10 @@ fun FieldConnection(c: AppContainer, mode: FieldMode) {
             Field("IP della CPE", manual, { manual = it.trim() }, keyboardType = KeyboardType.Uri, placeholder = "es. 192.168.1.254")
             SecondaryButton(onClick = { c.field.start(mode, manual.ifBlank { null }) }, enabled = manual.isNotBlank()) { Text("Collega a questo IP") }
         }
+        st.discoveredHost?.takeIf { st.status != null }?.let {
+            Text("CPE trovata con la discovery Ubiquiti su $it (non era agli indirizzi abituali).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        st.stuck?.let { d -> StuckCpe(c, d) }
         st.credentialsUsed?.takeIf { st.status != null && it != "CDA Net" }?.let {
             Text("Collegata con credenziali $it: la CPE non usa le credenziali standard CDA Net.", style = MaterialTheme.typography.bodySmall, color = WarnAmber)
         }
@@ -158,6 +162,44 @@ fun FieldConnection(c: AppContainer, mode: FieldMode) {
                 }, enabled = user.isNotBlank() && pass.isNotEmpty()) { Text("Collega con queste credenziali") }
             }
         }
+    }
+}
+
+/**
+ * The CPE answers the Ubiquiti discovery but not its web interface (stuck): a reboot through the
+ * discovery, after a confirmation (the customer is offline for about a minute).
+ */
+@Composable
+private fun StuckCpe(c: AppContainer, d: it.cdanet.cpeconfigurator.tools.UbntDevice) {
+    val scope = rememberCoroutineScope()
+    var ask by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    SectionCard("La CPE non risponde") {
+        Text(
+            "${d.product ?: "La CPE"} ${d.ip.orEmpty()} (${d.mac}) risponde alla discovery Ubiquiti ma non alla sua interfaccia web: può essere bloccata. Un riavvio di solito la sblocca.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+        BusyButton("Riavvia la CPE", busy, primary = false, tonal = true) { ask = true }
+    }
+    if (ask) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { ask = false },
+            title = { Text("Riavviare la CPE?") },
+            text = { Text("La CPE si riavvia con le credenziali CDA Net (o quelle inserite a mano) e il cliente resta senza connessione per circa un minuto.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    ask = false
+                    scope.launch {
+                        busy = true
+                        error = runCatching { c.field.rebootStuck() }.exceptionOrNull()?.let { it.message ?: it.toString() }
+                        busy = false
+                    }
+                }) { Text("Riavvia") }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { ask = false }) { Text("Annulla") } },
+        )
     }
 }
 
