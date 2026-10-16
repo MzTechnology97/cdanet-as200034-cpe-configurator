@@ -694,6 +694,11 @@ const MIGRATIONS: string[] = [
   );
   CREATE INDEX login_bans_value ON login_bans(kind, value);
   `,
+  // a Claude connection with «lettura e scrittura» (chosen at the consent): the write tools too
+  `
+  ALTER TABLE mcp_codes ADD COLUMN can_write INTEGER NOT NULL DEFAULT 0;
+  ALTER TABLE mcp_tokens ADD COLUMN can_write INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function openDatabase(path: string): Db {
