@@ -86,6 +86,7 @@ const LABELS: Record<string, string> = {
   'connector.telegram.reset': 'Notifiche Telegram rimosse',
   'uisp.drift': 'Confronto configurazione con il template',
   'job.replace': 'Sostituzione CPE (nuovo job)',
+  'job.adopted': 'CPE installata prima dell’app registrata',
   'job.acceptance': 'Collaudo registrato',
   'rma.update': 'CPE smontata: stato aggiornato',
   'rma.condition': 'CPE smontata: condizione indicata dall’installatore',

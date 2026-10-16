@@ -98,9 +98,17 @@ describe('Telegram notifications', () => {
     };
     assert.equal((await call('PUT', `/api/provisioning/jobs/${j2}/acceptance`, acceptance)).statusCode, 200);
     await call('PUT', `/api/provisioning/jobs/${j2}/acceptance`, acceptance); // a new test: no second message
+    await ctx.notify.idle();
     await ctx.telegram.idle();
     assert.equal(f.sent.length, 2, JSON.stringify(f.sent));
     assert.match(f.sent[1]!.text, /pronta da accettare in UISP[\s\S]*Collaudo superato/);
+    // a CPE UISP has already accepted (installed before the app): nothing to accept, no message
+    const j3 = await mk('22:33:44:55:66:77');
+    await call('POST', `/api/provisioning/jobs/${j3}/result`, { result: 'success', stages: [], detected: {} });
+    assert.equal((await call('PUT', `/api/provisioning/jobs/${j3}/acceptance`, acceptance)).statusCode, 200);
+    await ctx.notify.idle();
+    await ctx.telegram.idle();
+    assert.equal(f.sent.length, 2, JSON.stringify(f.sent));
     assert.ok(f.sent.every((m) => !/rossi|ROSSI|Secret-Pppoe/.test(m.text)), 'no customer data or secrets');
     f.sent.length = 0;
 

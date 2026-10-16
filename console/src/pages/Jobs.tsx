@@ -64,6 +64,7 @@ function JobBadges({ j }: { j: Job }) {
   return (
     <>
       <Badge tone={stTone}>{st}</Badge>
+      {j.client === 'adopted' && <Badge tone="info">installata prima dell’app</Badge>}
       {(j.attempts ?? 0) > 1 && <span className="ui-muted ui-small">{j.attempts} tentativi</span>}
       {j.ko && <Badge tone={tone(KO_KIND, j.ko.kind)[1]}>{`${tone(KO_KIND, j.ko.kind)[0]} · ${KO_REASONS[j.ko.reason] ?? j.ko.reason}`}</Badge>}
       {j.review && <Badge tone={tone(REVIEW, j.review)[1]}>{tone(REVIEW, j.review)[0]}</Badge>}
@@ -286,6 +287,7 @@ function JobDrawer({ j, admin, onClose, onChange, onDeleted }: { j: Job; admin: 
       )}
       <JobKo job={j} admin={admin} />
       {j.replacesJobId && <p className="ui-muted ui-small">Sostituisce la CPE del job {j.replacesJobId}</p>}
+      {j.client === 'adopted' && <p className="ui-muted ui-small">CPE installata prima dell’app: registrata dall’installatore, non configurata dall’app. Il collaudo vale come nuova installazione.</p>}
       {j.status === 'success' && (
         <section className="jb-sec">
           <h3>{admin ? 'UISP' : 'Stato in rete'}</h3>
