@@ -52,6 +52,7 @@ describe('Connetti il tuo Claude (MCP, sola lettura)', () => {
     assert.match(pg.body, /tornerai a: <b>claude\.ai<\/b>/);
     assert.ok(!pg.body.includes('CDA Net ufficiale'));
     assert.match(String(pg.headers['content-security-policy']), /frame-ancestors 'none'/);
+    assert.match(String(pg.headers['content-security-policy']), /style-src 'unsafe-inline'/, 'its own policy, not the one of the console: the page keeps its style');
 
     // wrong password, an installer, no second step: refused; the admin with the code: a one-time code
     const post = (o: Record<string, string>) => t.app.inject({ method: 'POST', url: '/oauth/authorize', ...form({ ...q, decision: 'allow', ...o }) });
