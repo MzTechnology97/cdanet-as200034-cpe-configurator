@@ -124,6 +124,9 @@ function SettingsGroup({ title, settings, onSaved }: { title: string; settings: 
   };
   return (
     <Card title={title}>
+      {title === 'Credenziali delle CPE' && (
+        <Notice tone="info">Rete, DHCP, PPPoE, porte, NTP, watchdog, SNMP e chiave UISP delle CPE non sono più impostazioni del server: ogni template ha i suoi, in Profili airOS.</Notice>
+      )}
       <div className="ss-list">
         {settings.map((s) => {
           const meta: ReactNode = (

@@ -5,11 +5,12 @@ import { HttpError, createLoginLimiter } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { hashPassword, sha256Hex, verifyPassword } from '../crypto.ts';
 import { nowIso, recordEvent } from '../db.ts';
+import { applyForm, FIELDS, policyWarnings, readForm, skeletonFor, templateFacts } from '../domain/airos-form.ts';
 import { autoTemplate } from '../domain/autotemplate.ts';
 import { parseWirelessCsv, wirelessCsv } from '../domain/wireless-csv.ts';
 import { BOARD_MATCH_SUGGESTIONS, SSID_RX, SUPPORTED_MODELS, TARGET_FIRMWARE } from '../domain/policy.ts';
 import { PLACEHOLDERS, inspectTemplate } from '../domain/systemcfg.ts';
-import { validateBoardMatch } from '../services/templates.ts';
+import { DEFAULT_PARAMS, validateBoardMatch } from '../services/templates.ts';
 import { loadLatestRelease } from '../services/releases.ts';
 import { escapeHtml } from '../services/telegram.ts';
 import { isModuleKey, type ModuleKey } from '../services/modules.ts';
@@ -377,6 +378,22 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
     userIds: z.array(z.number().int().positive()).max(1000).optional(),
     defaultForAssigned: z.boolean().optional(),
   };
+  // the template's own values forced at every provisioning, and its secrets (write-only)
+  const paramsSchema = z.object({ watchdogHost: z.string().trim().max(253).optional(), snmpContact: z.string().trim().max(200).optional() }).strict();
+  const secretSchema = z.string().max(4096).nullable().optional();
+  const ownValues = {
+    params: paramsSchema.optional(),
+    secrets: z.object({ snmpCommunity: secretSchema, uispKey: secretSchema }).strict().optional(),
+  };
+  const formError = (e: unknown): never => {
+    const m = (e as Error).message;
+    throw /^form_/.test(m) ? new HttpError(400, m) : e;
+  };
+  /** The form of a text (with its report and the network rules it breaks). */
+  const formOf = (model: (typeof SUPPORTED_MODELS)[number], template: string, params: { watchdogHost: string; snmpContact: string }) => {
+    const { values, missing } = readForm(template, params, model);
+    return { template, params, values, missing, warnings: policyWarnings(values), facts: templateFacts(template), report: inspectTemplate(template) };
+  };
 
   app.get('/api/admin/profiles', admin, async () => {
     const all = ctx.templates.list();
@@ -384,6 +401,37 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   app.get('/api/admin/placeholders', admin, async () => Object.entries(PLACEHOLDERS).map(([name, description]) => ({ name, description })));
+
+  /** The fields of the template form (like the CPE's web interface), with each model's defaults. */
+  app.get('/api/admin/template-form', admin, async () => ({
+    fields: FIELDS.map(({ read: _r, write: _w, fallback, ...f }) => ({
+      ...f,
+      fallback: typeof fallback === 'function' ? Object.fromEntries(SUPPORTED_MODELS.map((m) => [m, fallback(m)])) : fallback,
+    })),
+  }));
+
+  /** The form of a template text; without a text, the one of a new template made from the form alone. */
+  app.post('/api/admin/profiles/:model/form/read', admin, async (req) => {
+    const { model } = modelParam.parse(req.params);
+    const b = z.object({ template: templateText.optional(), params: paramsSchema.optional() }).strict().parse(req.body ?? {});
+    return formOf(model, b.template ?? skeletonFor(model), { ...DEFAULT_PARAMS, ...b.params });
+  });
+
+  /** The form's changes written into the text (only what changed): nothing is stored here. */
+  app.post('/api/admin/profiles/:model/form/apply', admin, async (req) => {
+    const { model } = modelParam.parse(req.params);
+    const b = z
+      .object({ template: templateText, params: paramsSchema.optional(), changes: z.record(z.string().max(40), z.union([z.string().max(300), z.number(), z.boolean()])) })
+      .strict()
+      .parse(req.body);
+    let out: ReturnType<typeof applyForm>;
+    try {
+      out = applyForm(b.template, { ...DEFAULT_PARAMS, ...b.params }, model, b.changes);
+    } catch (e) {
+      return formError(e);
+    }
+    return formOf(model, out.text, out.params);
+  });
 
   /** Raw CPE backup -> template with placeholders + preview. Nothing is stored here. */
   app.post('/api/admin/profiles/:model/autotemplate', admin, async (req) => {
@@ -402,7 +450,10 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.post('/api/admin/profiles/:model/templates', admin, async (req, reply) => {
     const { model } = modelParam.parse(req.params);
-    const b = z.object({ name: templateName, template: templateText, boardMatch, isDefault: z.boolean().optional(), ...visibility }).strict().parse(req.body);
+    const b = z
+      .object({ name: templateName, template: templateText, boardMatch, isDefault: z.boolean().optional(), ...visibility, ...ownValues, secretsFrom: z.number().int().positive().optional() })
+      .strict()
+      .parse(req.body);
     const t = ctx.templates.create(model, b, actor(req));
     recordEvent(db, actor(req), 'template.create', `${model} · ${t.name}`, t.sha256);
     return reply.code(201).send(t);
@@ -413,11 +464,12 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
   app.patch('/api/admin/templates/:id', admin, async (req) => {
     const { id } = idParam.parse(req.params);
     const b = z
-      .object({ name: templateName.optional(), template: templateText.optional(), boardMatch: boardMatch.optional(), isDefault: z.literal(true).optional(), ...visibility })
+      .object({ name: templateName.optional(), template: templateText.optional(), boardMatch: boardMatch.optional(), isDefault: z.literal(true).optional(), ...visibility, ...ownValues })
       .strict()
       .refine((x) => Object.keys(x).length > 0, 'empty')
       .parse(req.body);
     const t = ctx.templates.update(id, b, actor(req));
+    // the keys changed, never the values (the secrets least of all)
     recordEvent(db, actor(req), b.template ? 'template.edit' : 'template.update', `${t.model} · ${t.name}`, Object.keys(b).join(','));
     return t;
   });
@@ -438,13 +490,10 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
       version: ctx.version,
       runtimeSecrets: {
         cpeAdminPassword: !!c.cpeSecrets.adminPassword,
-        uispEnrollment: !!c.cpeSecrets.uispEnrollment,
-        snmpCommunity: c.cpeSecrets.snmpCommunity === 'public' ? 'public (default)' : 'custom',
       },
       policy: {
         cpeAdminUsername: c.cpeSecrets.adminUsername,
-        snmpContact: c.cpeSecrets.snmpContact,
-        network: c.network,
+        factoryIp: c.network.factoryIp,
         jobTtlMinutes: c.jobTtlMinutes,
         minAndroidVersion: c.minAndroidVersion,
         auditRetentionDays: c.auditRetentionDays,

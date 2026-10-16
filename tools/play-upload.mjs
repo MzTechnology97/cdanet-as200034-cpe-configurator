@@ -2,7 +2,7 @@
 // Uploads the signed bundle (.aab) to a Google Play track, internal testing by default.
 // No dependencies: the service account's JWT is signed here and the Play Developer API is called
 // with fetch. Used by the Android workflow once PLAY_SERVICE_ACCOUNT_JSON is set; by hand too:
-//   PLAY_SERVICE_ACCOUNT_JSON="$(cat key.json)" node tools/play-upload.mjs app-play-release.aab 1.35.10
+//   PLAY_SERVICE_ACCOUNT_JSON="$(cat key.json)" node tools/play-upload.mjs app-play-release.aab 1.35.12
 // The key never leaves the environment and is never printed.
 import { createSign } from 'node:crypto';
 import { readFileSync } from 'node:fs';

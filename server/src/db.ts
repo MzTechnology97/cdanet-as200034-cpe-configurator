@@ -699,6 +699,14 @@ const MIGRATIONS: string[] = [
   ALTER TABLE mcp_codes ADD COLUMN can_write INTEGER NOT NULL DEFAULT 0;
   ALTER TABLE mcp_tokens ADD COLUMN can_write INTEGER NOT NULL DEFAULT 0;
   `,
+  // every airOS template has its own values (no more server-wide CPE settings): the two forced at
+  // every provisioning in params_json, the SNMP community and the UISP key sealed apart.
+  // params_version 0 = saved before: converted once at start with the old server values.
+  `
+  ALTER TABLE profile_templates ADD COLUMN params_json TEXT NOT NULL DEFAULT '{}';
+  ALTER TABLE profile_templates ADD COLUMN secrets_ciphertext TEXT NOT NULL DEFAULT '';
+  ALTER TABLE profile_templates ADD COLUMN params_version INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function openDatabase(path: string): Db {

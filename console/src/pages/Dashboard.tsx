@@ -9,11 +9,10 @@ import { Badge, Card, Notice, PageHeader, Skeleton, Stat } from '../ui';
 
 interface Status {
   version: string;
-  runtimeSecrets: { cpeAdminPassword: boolean; uispEnrollment: boolean; snmpCommunity: string };
+  runtimeSecrets: { cpeAdminPassword: boolean };
   policy: {
     cpeAdminUsername: string;
-    snmpContact: string;
-    network: { factoryIp: string; lanIp: string; lanNetmask: string; dhcpStart: string; dhcpEnd: string; dhcpLease: number; pppoeMtu: number; pppoeMru: number; watchdogHost: string; ntpServer: string };
+    factoryIp: string;
     jobTtlMinutes: number;
     minAndroidVersion: string;
     auditRetentionDays: number;
@@ -83,7 +82,6 @@ export function Dashboard() {
   const missing = (profiles.data ?? []).filter((p) => !p.templates.length).map((p) => p.model);
   const todo = [
     !s.runtimeSecrets.cpeAdminPassword && 'CPE_ADMIN_PASSWORD non configurata: il provisioning è bloccato.',
-    !s.runtimeSecrets.uispEnrollment && 'UISP_ENROLLMENT non configurata: i profili che usano ${UISP_ENROLLMENT} verranno rifiutati.',
     missing.length > 0 && `Profili airOS 8.7.4 mancanti: ${missing.join(', ')}.`,
     !s.counts.wirelessNetworks && 'Nessuna chiave WPA2 configurata.',
     !s.androidRelease && 'Nessuna release Android pubblicata nel canale aggiornamenti.',
@@ -91,7 +89,6 @@ export function Dashboard() {
   ].filter((x): x is string => !!x);
   const running = ia?.optimizations.find((r) => r.state === 'in_corso');
   const next = [...(ia?.optimizations ?? [])].sort((a, b) => a.startAt.localeCompare(b.startAt))[0];
-  const n = s.policy.network;
 
   return (
     <div className="ui-page">
@@ -173,17 +170,11 @@ export function Dashboard() {
       </div>
 
       <details className="ui-card ui-details">
-        <summary>Parametri delle CPE (dalle variabili d’ambiente del server)</summary>
+        <summary>Parametri delle CPE (rete, servizi, SNMP e UISP sono in ogni template airOS)</summary>
         <Facts
           rows={[
-            ['IP factory', n.factoryIp],
+            ['IP factory', s.policy.factoryIp],
             ['Utente admin CPE', s.policy.cpeAdminUsername],
-            ['LAN', `${n.lanIp} / ${n.lanNetmask}`],
-            ['DHCP', `${n.dhcpStart} – ${n.dhcpEnd} · ${n.dhcpLease} s`],
-            ['PPPoE MTU/MRU', `${n.pppoeMtu} / ${n.pppoeMru}`],
-            ['Watchdog', n.watchdogHost],
-            ['NTP', n.ntpServer],
-            ['SNMP', `${s.runtimeSecrets.snmpCommunity} · contatto ${s.policy.snmpContact}`],
             ['Validità job', `${s.policy.jobTtlMinutes} min`],
             ['Conservazione registro', `${s.policy.auditRetentionDays} giorni`],
           ]}

@@ -25,7 +25,7 @@ describe('template visibility and personal templates', () => {
     const pub = (await A('POST', LB, { name: 'Standard', template: SAMPLE_TEMPLATE, boardMatch: BM })).json();
     const personal = await A('POST', LB, {
       name: 'Mario personale',
-      template: SAMPLE_TEMPLATE.replace('netconf.3.ip=${LAN_IP}', 'netconf.3.ip=${LAN_IP}\nradio.1.txpower=8'),
+      template: SAMPLE_TEMPLATE.replace('netconf.3.ip=192.168.1.254', 'netconf.3.ip=192.168.1.254\nradio.1.txpower=8'),
       boardMatch: BM,
       audience: 'users',
       userIds: [mario.id],

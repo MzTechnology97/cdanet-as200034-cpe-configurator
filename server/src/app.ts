@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from 'node:fs';
-import { parseClientHeader, versionAtLeast } from './domain/policy.ts';
+import { MANAGEMENT_PORTS, parseClientHeader, versionAtLeast } from './domain/policy.ts';
 import { loadLatestRelease } from './services/releases.ts';
 import { dirname, join } from 'node:path';
 import fastifyStatic from '@fastify/static';
@@ -9,7 +9,7 @@ import { HttpError, createAuth } from './auth.ts';
 import type { Config } from './config.ts';
 import type { AppContext } from './context.ts';
 import { createSealer, hashPassword } from './crypto.ts';
-import { nowIso, openDatabase, type Db } from './db.ts';
+import { nowIso, openDatabase, recordEvent, type Db } from './db.ts';
 import { adminRoutes } from './routes/admin.ts';
 import { acceptanceRoutes } from './routes/acceptance.ts';
 import { koRoutes } from './routes/ko.ts';
@@ -24,8 +24,8 @@ import { outageRoutes } from './routes/outages.ts';
 import { statsRoutes } from './routes/stats.ts';
 import { publicRoutes } from './routes/public.ts';
 import { toolRoutes } from './routes/tools.ts';
-import { createProvisioning } from './services/provisioning.ts';
-import { createTemplates } from './services/templates.ts';
+import { createProvisioning, type Provisioning } from './services/provisioning.ts';
+import { createTemplates, type LegacyValues, type Templates } from './services/templates.ts';
 import { createGeocoder } from './services/geocode.ts';
 import { createModules } from './services/modules.ts';
 import { createOui } from './services/oui.ts';
@@ -121,6 +121,8 @@ export async function buildApp(
   const serverSettings = createServerSettings(db, cfg, sealer);
   serverSettings.applyAll();
   const templates = createTemplates(db, sealer);
+  const provisioning = createProvisioning(db, cfg, sealer, templates);
+  convertOldTemplates(db, cfg, templates, provisioning);
   const connectors = createConnectors(db, sealer, cfg, { fetchImpl: opts.fetchImpl });
   const uispCfg = connectors.uispSettings();
   const modules = createModules(db);
@@ -136,7 +138,7 @@ export async function buildApp(
     db,
     sealer,
     auth: createAuth(db, cfg.jwtSecret, cfg.jwtTtlHours),
-    provisioning: createProvisioning(db, cfg, sealer, templates),
+    provisioning,
     templates,
     uisp: opts.uisp !== undefined ? opts.uisp : uispCfg ? connectors.build(uispCfg) : null,
     uispSettings: { autoBackup: uispCfg?.autoBackup ?? cfg.uispAutoBackup, coverageMaxKm: uispCfg?.coverageMaxKm ?? cfg.coverageMaxKm },
@@ -391,4 +393,38 @@ export async function buildApp(
   });
 
   return { app, ctx };
+}
+
+/**
+ * v1.35.11: the CPE values of the server (LAN, DHCP, PPPoE MTU, ports, NTP, watchdog, SNMP, UISP)
+ * become each template's own. Once per template saved before, only if the configuration it
+ * produces stays the same byte for byte; each conversion goes in the activity log.
+ */
+function convertOldTemplates(db: Db, cfg: Config, templates: Templates, provisioning: Provisioning) {
+  const n = cfg.network;
+  const old: LegacyValues = {
+    retired: {
+      HTTP_PORT: String(MANAGEMENT_PORTS.http),
+      HTTPS_PORT: String(MANAGEMENT_PORTS.https),
+      SNMP_CONTACT: cfg.cpeSecrets.snmpContact,
+      LAN_IP: n.lanIp,
+      LAN_NETMASK: n.lanNetmask,
+      DHCP_START: n.dhcpStart,
+      DHCP_END: n.dhcpEnd,
+      DHCP_LEASE: String(n.dhcpLease),
+      PPPOE_MTU: String(n.pppoeMtu),
+      PPPOE_MRU: String(n.pppoeMru),
+      WATCHDOG_HOST: n.watchdogHost,
+      NTP_SERVER: n.ntpServer,
+      SSH_PORT: String(n.sshPort),
+      DISCOVERY_PORT: String(n.discoveryPort),
+    },
+    watchdogHost: n.watchdogHost,
+    snmpContact: cfg.cpeSecrets.snmpContact,
+    snmpCommunity: cfg.cpeSecrets.snmpCommunity,
+    uispKey: cfg.cpeSecrets.uispEnrollment,
+  };
+  const { done, failed } = templates.convertLegacy(old, provisioning.legacyCheck(old));
+  for (const t of done) recordEvent(db, null, 'template.convert', `${t.model} · ${t.name}`, 'valori del server copiati nel template (configurazione generata identica)');
+  for (const t of failed) recordEvent(db, null, 'template.convert_failed', `${t.model} · ${t.name}`, 'configurazione diversa dopo la conversione: template lasciato com’era');
 }
