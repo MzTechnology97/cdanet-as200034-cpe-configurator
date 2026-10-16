@@ -18,6 +18,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material3.AssistChip
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.clickable
 import androidx.compose.ui.res.painterResource
 import it.cdanet.cpeconfigurator.R
 import it.cdanet.cpeconfigurator.ui.CheckRow
@@ -120,6 +121,11 @@ fun FieldConnection(c: AppContainer, mode: FieldMode) {
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 AssistChip(
+                    onClick = { manual = ""; c.field.start(mode) },
+                    label = { Text("Cerca CPE") },
+                    leadingIcon = { Icon(painterResource(R.drawable.ic_radar), contentDescription = null, modifier = Modifier.size(18.dp)) },
+                )
+                AssistChip(
                     onClick = { showManual = !showManual },
                     label = { Text(if (showManual) "Nascondi IP" else "IP manuale") },
                     leadingIcon = { Icon(painterResource(R.drawable.ic_link), contentDescription = null, modifier = Modifier.size(18.dp)) },
@@ -131,10 +137,26 @@ fun FieldConnection(c: AppContainer, mode: FieldMode) {
                 )
             }
         }
+        if (st.candidates.isNotEmpty() && st.status == null) {
+            SectionCard("Trovate ${st.candidates.size} CPE: scegli quella da sistemare") {
+                st.candidates.forEach { d ->
+                    Column(
+                        Modifier.fillMaxWidth().clip(MaterialTheme.shapes.medium).clickable { manual = d.ip.orEmpty(); c.field.start(mode, d.ip) }.padding(vertical = 8.dp),
+                    ) {
+                        Text("${d.product ?: d.model ?: "CPE"} · ${d.ip}", style = MaterialTheme.typography.titleSmall)
+                        Text(
+                            listOfNotNull(d.hostname, d.mac, d.version?.let { "v$it" }, d.ssid?.let { "SSID $it" }).joinToString(" · "),
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        )
+                    }
+                }
+            }
+        }
         st.error?.let { Banner(it, BadRed) }
         if (st.status == null) {
             Text(
-                "Collega il telefono alla Wi-Fi di management della CPE oppure alla Wi-Fi del router del cliente: l'app prova da sola il gateway, l'IP LAN e l'IP di management della CPE.",
+                "Collega il telefono alla Wi-Fi di management della CPE oppure alla Wi-Fi del router del cliente: l'app cerca la CPE con la discovery Ubiquiti (qualunque IP abbia), poi prova il gateway, l'IP LAN e l'IP di management. Con più CPE in rete scegli quella da sistemare.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -143,6 +165,10 @@ fun FieldConnection(c: AppContainer, mode: FieldMode) {
             Field("IP della CPE", manual, { manual = it.trim() }, keyboardType = KeyboardType.Uri, placeholder = "es. 192.168.1.254")
             SecondaryButton(onClick = { c.field.start(mode, manual.ifBlank { null }) }, enabled = manual.isNotBlank()) { Text("Collega a questo IP") }
         }
+        st.discoveredHost?.takeIf { st.status != null }?.let {
+            Text("CPE trovata con la discovery Ubiquiti su $it (non era agli indirizzi abituali).", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        }
+        st.stuck?.let { d -> StuckCpe(c, d) }
         st.credentialsUsed?.takeIf { st.status != null && it != "CDA Net" }?.let {
             Text("Collegata con credenziali $it: la CPE non usa le credenziali standard CDA Net.", style = MaterialTheme.typography.bodySmall, color = WarnAmber)
         }
@@ -158,6 +184,44 @@ fun FieldConnection(c: AppContainer, mode: FieldMode) {
                 }, enabled = user.isNotBlank() && pass.isNotEmpty()) { Text("Collega con queste credenziali") }
             }
         }
+    }
+}
+
+/**
+ * The CPE answers the Ubiquiti discovery but not its web interface (stuck): a reboot through the
+ * discovery, after a confirmation (the customer is offline for about a minute).
+ */
+@Composable
+private fun StuckCpe(c: AppContainer, d: it.cdanet.cpeconfigurator.tools.UbntDevice) {
+    val scope = rememberCoroutineScope()
+    var ask by remember { mutableStateOf(false) }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    SectionCard("La CPE non risponde") {
+        Text(
+            "${d.product ?: "La CPE"} ${d.ip.orEmpty()} (${d.mac}) risponde alla discovery Ubiquiti ma non alla sua interfaccia web: può essere bloccata. Un riavvio di solito la sblocca.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        error?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error) }
+        BusyButton("Riavvia la CPE", busy, primary = false, tonal = true) { ask = true }
+    }
+    if (ask) {
+        androidx.compose.material3.AlertDialog(
+            onDismissRequest = { ask = false },
+            title = { Text("Riavviare la CPE?") },
+            text = { Text("La CPE si riavvia con le credenziali CDA Net (o quelle inserite a mano) e il cliente resta senza connessione per circa un minuto.") },
+            confirmButton = {
+                androidx.compose.material3.TextButton(onClick = {
+                    ask = false
+                    scope.launch {
+                        busy = true
+                        error = runCatching { c.field.rebootStuck() }.exceptionOrNull()?.let { it.message ?: it.toString() }
+                        busy = false
+                    }
+                }) { Text("Riavvia") }
+            },
+            dismissButton = { androidx.compose.material3.TextButton(onClick = { ask = false }) { Text("Annulla") } },
+        )
     }
 }
 
