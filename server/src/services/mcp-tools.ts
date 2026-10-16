@@ -42,6 +42,19 @@ const enc = (v: unknown, what: string) => encodeURIComponent(String(need(v, what
 /** Only the arguments the route takes, those given. */
 const pick = (a: Record<string, unknown>, keys: string[]) => Object.fromEntries(keys.filter((k) => a[k] !== undefined).map((k) => [k, a[k]]));
 const obj = (properties: Record<string, unknown>, required: string[] = []) => ({ type: 'object', properties, required, additionalProperties: false });
+/** A coordinate: a finite number in range. */
+const coord = (v: unknown, what: 'lat' | 'lon') => {
+  const n = typeof v === 'number' ? v : Number(v);
+  if (!Number.isFinite(n) || Math.abs(n) > (what === 'lat' ? 90 : 180)) throw new Error(`${what} non valida.`);
+  return n;
+};
+const LATLON = { lat: { type: 'number', description: 'Latitudine (es. 37.567)' }, lon: { type: 'number', description: 'Longitudine (es. 14.279)' } };
+const ADDRESS = {
+  city: { type: 'string', description: 'Comune, come restituito da indirizzi_operatori (es. ENNA)' },
+  street: { type: 'string' },
+  streetType: { type: 'string', description: 'VIA, PIAZZA…' },
+  number: { type: 'string', description: 'Civico' },
+};
 const WO_FIELDS = {
   day: { type: 'string', description: 'Giorno AAAA-MM-GG' },
   slot: { type: 'string', description: 'Fascia oraria, es. 09:00-10:30' },
@@ -215,6 +228,256 @@ export const MCP_TOOLS: McpTool[] = [
     description: 'Gli ultimi tentativi di accesso (web, app, Claude): IP, utente, esito. Mai le password.',
     inputSchema: obj({ failed: { type: 'boolean', description: 'Solo i falliti' } }),
     path: (a) => `/api/admin/login-attempts${qs({ failed: a.failed === true ? 1 : undefined, limit: 100 })}`,
+  },
+  // ---- read: coverage, address, pointing (every module, read-only) ----------------------------
+  {
+    name: 'copertura',
+    title: 'Copertura CDA Net in un punto',
+    description: 'Gli AP CDA Net che coprono un punto: distanza, azimut, segnale stimato, carico, giudizio.',
+    inputSchema: obj({ ...LATLON, km: { type: 'number', description: 'Raggio in km (predefinito del server)' }, limit: { type: 'integer', minimum: 1, maximum: 50 } }, ['lat', 'lon']),
+    path: (a) => `/api/coverage${qs({ lat: coord(a.lat, 'lat'), lon: coord(a.lon, 'lon'), km: typeof a.km === 'number' ? a.km : undefined, limit: int(a.limit, 1, 50) })}`,
+  },
+  {
+    name: 'copertura_altri_operatori',
+    title: 'Altri operatori (WIC)',
+    description: "Copertura degli altri operatori (FTTH, FTTC, FWA, radio) con il bollino AGCOM, in un punto (lat/lon) oppure a un indirizzo esatto (city, street, streetType, number, stair da indirizzi_operatori). Ogni verifica passa l'indirizzo al servizio esterno: il server la tiene in memoria qualche giorno.",
+    inputSchema: obj({ ...LATLON, ...ADDRESS, stair: { type: 'string', description: 'Scala, se presente' } }),
+    path: (a) => {
+      if (a.city && a.street && a.number) return `/api/admin/coverage/operators${qs({ city: str(a.city), street: str(a.street, 120), streetType: str(a.streetType, 40) ?? '', number: str(a.number, 20), stair: str(a.stair, 20) })}`;
+      return `/api/admin/coverage/operators${qs({ lat: coord(a.lat, 'lat'), lon: coord(a.lon, 'lon') })}`;
+    },
+  },
+  {
+    name: 'indirizzi_operatori',
+    title: 'Indirizzi per la verifica degli altri operatori',
+    description: "La ricerca guidata dell'indirizzo, un passo alla volta: q (≥2 lettere) per il comune; city+q per la via; city+street+streetType+q (prefisso del civico) per il civico; city+street+streetType+number per la scala.",
+    inputSchema: obj({ q: { type: 'string' }, ...ADDRESS }),
+    path: (a) => `/api/admin/coverage/operators/places${qs({ q: str(a.q, 60), city: str(a.city), street: str(a.street, 120), streetType: str(a.streetType, 40), number: str(a.number, 20) })}`,
+  },
+  {
+    name: 'fattibilita',
+    title: 'Verifica di fattibilità',
+    description: "Fattibilità per la vendita in un punto: copertura CDA Net, altri operatori, bollino AGCOM e la proposta.",
+    inputSchema: obj({ ...LATLON, label: { type: 'string', description: "Indirizzo o nome del punto (per il verbale)" } }, ['lat', 'lon']),
+    path: (a) => `/api/admin/feasibility${qs({ lat: coord(a.lat, 'lat'), lon: coord(a.lon, 'lon'), label: str(a.label, 200) })}`,
+  },
+  {
+    name: 'cerca_indirizzo',
+    title: 'Cerca un indirizzo',
+    description: 'Da un indirizzo scritto (via, civico, comune) alle coordinate.',
+    inputSchema: obj({ q: { type: 'string' } }, ['q']),
+    path: (a) => `/api/geocode${qs({ q: String(need(a.q, 'q')).slice(0, 200) })}`,
+  },
+  {
+    name: 'indirizzo_da_coordinate',
+    title: 'Indirizzo di un punto',
+    description: "Dalle coordinate all'indirizzo più vicino.",
+    inputSchema: obj(LATLON, ['lat', 'lon']),
+    path: (a) => `/api/geocode/reverse${qs({ lat: coord(a.lat, 'lat'), lon: coord(a.lon, 'lon') })}`,
+  },
+  {
+    name: 'puntamento',
+    title: 'Puntamento da un punto',
+    description: "Gli AP vicini a un punto con azimut, inclinazione, distanza e segnale atteso, per un'antenna all'altezza indicata.",
+    inputSchema: obj({ ...LATLON, height: { type: 'number', description: "Altezza dell'antenna dal suolo in metri" } }, ['lat', 'lon']),
+    path: (a) => `/api/pointing${qs({ lat: coord(a.lat, 'lat'), lon: coord(a.lon, 'lon'), height: typeof a.height === 'number' ? a.height : undefined })}`,
+  },
+  {
+    name: 'profilo_terreno',
+    title: 'Profilo del terreno verso un AP',
+    description: 'Il profilo del terreno e la zona di Fresnel tra un punto e un AP (apId da puntamento o copertura).',
+    inputSchema: obj({ ...LATLON, apId: { type: 'string' }, height: { type: 'number' } }, ['lat', 'lon', 'apId']),
+    path: (a) => `/api/pointing/profile${qs({ lat: coord(a.lat, 'lat'), lon: coord(a.lon, 'lon'), apId: String(need(a.apId, 'apId')).slice(0, 80), height: typeof a.height === 'number' ? a.height : undefined })}`,
+  },
+  {
+    name: 'orizzonte',
+    title: "L'orizzonte da un punto",
+    description: "Il profilo dei rilievi tutto intorno a un punto (montagne, ostacoli).",
+    inputSchema: obj({ ...LATLON, height: { type: 'number' } }, ['lat', 'lon']),
+    path: (a) => `/api/pointing/horizon${qs({ lat: coord(a.lat, 'lat'), lon: coord(a.lon, 'lon'), height: typeof a.height === 'number' ? a.height : undefined })}`,
+  },
+  {
+    name: 'simulazione_ap',
+    title: 'Simulazione di copertura di un AP',
+    description: "La copertura stimata di un AP (apId), con il modello di CPE scelto.",
+    inputSchema: obj({ apId: { type: 'string' }, cpe: { type: 'string', description: 'Modello di CPE' } }, ['apId']),
+    path: (a) => `/api/admin/coverage/simulation${qs({ apId: String(need(a.apId, 'apId')).slice(0, 80), cpe: str(a.cpe, 40) })}`,
+  },
+  {
+    name: 'precisione_copertura',
+    title: 'Precisione delle stime di copertura',
+    description: 'Quanto le stime di segnale si avvicinano alle misure dei collaudi.',
+    inputSchema: none,
+    path: () => '/api/admin/coverage/accuracy',
+  },
+  // ---- read: customers, installations, network --------------------------------------------------
+  {
+    name: 'clienti_crm',
+    title: 'Clienti del CRM',
+    description: 'Cerca i clienti (nome, codice, telefono, indirizzo, utente PPPoE); filter: with_accounts, suspended, offline, mismatch, nocoords, all.',
+    inputSchema: obj({ q: { type: 'string' }, filter: { type: 'string', enum: ['all', 'with_accounts', 'suspended', 'offline', 'mismatch', 'nocoords'] } }),
+    path: (a) => `/api/admin/crm/customers${qs({ q: str(a.q), filter: str(a.filter, 20), limit: 50 })}`,
+  },
+  {
+    name: 'cliente_crm',
+    title: 'Scheda di un cliente del CRM',
+    description: 'Un cliente con i suoi account, i siti e le CPE.',
+    inputSchema: obj({ id: { type: 'string', description: 'Id del cliente (da clienti_crm)' } }, ['id']),
+    path: (a) => `/api/admin/crm/customers/${enc(a.id, 'id cliente')}`,
+  },
+  {
+    name: 'account_pppoe',
+    title: 'Account PPPoE',
+    description: 'Gli account PPPoE (RADIUS): online, sessione, profilo, stato; filter: all, offline, suspended, unmatched, terminated.',
+    inputSchema: obj({ q: { type: 'string' }, filter: { type: 'string', enum: ['all', 'offline', 'suspended', 'unmatched', 'terminated'] } }),
+    path: (a) => `/api/admin/crm/radius${qs({ q: str(a.q), filter: str(a.filter, 20), limit: 100 })}`,
+  },
+  {
+    name: 'installazioni',
+    title: 'Installazioni',
+    description: 'Le installazioni (job) più recenti: CPE, cliente, stato, collaudo.',
+    inputSchema: obj({ limit: { type: 'integer', minimum: 1, maximum: 200 } }),
+    path: (a) => `/api/provisioning/jobs${qs({ limit: int(a.limit, 1, 200) ?? 100 })}`,
+  },
+  {
+    name: 'collaudo',
+    title: "Collaudo di un'installazione",
+    description: "Il collaudo corrente di un'installazione (jobId): misure, esito, decisione del NOC, foto.",
+    inputSchema: obj({ jobId: { type: 'string' } }, ['jobId']),
+    path: (a) => `/api/provisioning/jobs/${enc(a.jobId, 'jobId')}/acceptance`,
+  },
+  {
+    name: 'storico_collaudi',
+    title: "Collaudi precedenti di un'installazione",
+    description: "I collaudi archiviati (ripuntamenti) di un'installazione.",
+    inputSchema: obj({ jobId: { type: 'string' } }, ['jobId']),
+    path: (a) => `/api/provisioning/jobs/${enc(a.jobId, 'jobId')}/acceptance/history`,
+  },
+  {
+    name: 'installazione_uisp',
+    title: "Un'installazione in UISP",
+    description: "Lo stato in UISP della CPE di un'installazione: autorizzata, site, segnale.",
+    inputSchema: obj({ jobId: { type: 'string' } }, ['jobId']),
+    path: (a) => `/api/provisioning/jobs/${enc(a.jobId, 'jobId')}/uisp`,
+  },
+  {
+    name: 'ko_installazioni',
+    title: 'Installazioni KO o rimandate',
+    description: 'Le segnalazioni di KO e rinvii degli installatori (open: solo quelle aperte).',
+    inputSchema: obj({ open: { type: 'boolean' } }),
+    path: (a) => `/api/installs/ko${qs({ open: a.open === true ? 1 : undefined, limit: 100 })}`,
+  },
+  {
+    name: 'speedtest',
+    title: 'Speedtest',
+    description: "Gli speedtest fatti dall'app, di un'installazione (jobId) o di una CPE (mac).",
+    inputSchema: obj({ jobId: { type: 'string' }, mac: { type: 'string' } }),
+    path: (a) => `/api/speedtests${qs({ jobId: str(a.jobId, 64), mac: str(a.mac, 40), limit: 50 })}`,
+  },
+  {
+    name: 'statistiche_cpe',
+    title: 'Andamento di una CPE',
+    description: 'Segnale, capacità e ping di una CPE nel giorno, settimana o mese.',
+    inputSchema: obj({ deviceId: { type: 'string' }, range: { type: 'string', enum: ['day', 'week', 'month'] } }, ['deviceId']),
+    path: (a) => `/api/admin/cpe/${enc(a.deviceId, 'deviceId')}/statistics${qs({ range: str(a.range, 10) })}`,
+  },
+  {
+    name: 'consigli_rete',
+    title: 'Consigli sulla rete',
+    description: "I consigli dell'analisi della rete (AP carichi, canali, CPE da spostare), con il carico degli AP.",
+    inputSchema: none,
+    path: () => '/api/admin/advisor',
+  },
+  {
+    name: 'riepilogo_consigli',
+    title: 'Riepilogo dei consigli',
+    description: 'I numeri dei consigli sulla rete.',
+    inputSchema: none,
+    path: () => '/api/admin/advisor/summary',
+  },
+  {
+    name: 'ottimizzatore_proposte',
+    title: "Proposte dell'ottimizzatore",
+    description: "Le proposte dell'ottimizzatore degli AP (solo lettura: applicarle resta nella console, con l'OK del titolare).",
+    inputSchema: none,
+    path: () => '/api/admin/advisor/optimizer',
+  },
+  {
+    name: 'infrastruttura',
+    title: 'Infrastruttura',
+    description: 'Nodi, POP, AP e link della rete con il loro stato.',
+    inputSchema: none,
+    path: () => '/api/admin/infra',
+  },
+  {
+    name: 'mappa_guasti',
+    title: 'Mappa dei guasti di corrente',
+    description: 'Le interruzioni di corrente sulla mappa, con i nodi interessati.',
+    inputSchema: none,
+    path: () => '/api/outages/map',
+  },
+  {
+    name: 'siti_uisp',
+    title: 'Site di UISP',
+    description: 'I site di UISP (POP e clienti) con posizione.',
+    inputSchema: none,
+    path: () => '/api/admin/uisp/sites',
+  },
+  {
+    name: 'piani_servizio',
+    title: 'Piani di servizio',
+    description: 'I piani di servizio del CRM di UISP.',
+    inputSchema: none,
+    path: () => '/api/admin/uisp/service-plans',
+  },
+  {
+    name: 'firmware',
+    title: 'Firmware',
+    description: 'I firmware delle CPE disponibili e quello di riferimento.',
+    inputSchema: none,
+    path: () => '/api/admin/firmware',
+  },
+  {
+    name: 'antenne',
+    title: 'Antenne',
+    description: 'Le antenne degli AP con i diagrammi di radiazione.',
+    inputSchema: none,
+    path: () => '/api/admin/antennas',
+  },
+  {
+    name: 'stato_server',
+    title: 'Stato del server',
+    description: 'Versione, spazio, servizi e code del server della piattaforma.',
+    inputSchema: none,
+    path: () => '/api/admin/status',
+  },
+  {
+    name: 'magazzini',
+    title: 'Magazzini',
+    description: 'I magazzini (azienda, nodi, installatori, partner) con le giacenze.',
+    inputSchema: none,
+    path: () => '/api/admin/warehouse/sites',
+  },
+  {
+    name: 'movimenti_magazzino',
+    title: 'Movimenti di magazzino',
+    description: "Il registro dei movimenti di una CPE (mac) o di un magazzino (site).",
+    inputSchema: obj({ mac: { type: 'string' }, site: { type: 'string' } }),
+    path: (a) => `/api/admin/warehouse/movements${qs({ mac: str(a.mac, 40), site: str(a.site, 200), limit: 200 })}`,
+  },
+  {
+    name: 'storico_intervento',
+    title: "Cronologia di un intervento",
+    description: "Le modifiche di un intervento (chi, quando, cosa).",
+    inputSchema: obj({ id: { type: 'integer' } }, ['id']),
+    path: (a) => `/api/admin/work-orders/${id(a.id, 'id intervento')}/history`,
+  },
+  {
+    name: 'cerca_cliente_intervento',
+    title: 'Cliente per un intervento',
+    description: "Cerca un cliente del CRM per un intervento: nome, indirizzo e posizione, telefono, utente PPPoE.",
+    inputSchema: obj({ q: { type: 'string' } }, ['q']),
+    path: (a) => `/api/admin/work-orders/crm${qs({ q: String(need(a.q, 'q')).slice(0, 80) })}`,
   },
   // ---- write: work orders -----------------------------------------------------------------------
   {
