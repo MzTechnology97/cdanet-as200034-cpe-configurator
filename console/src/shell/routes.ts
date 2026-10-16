@@ -69,6 +69,7 @@ export const ROUTES: Array<Route | Group> = [
   { id: 'claude', icon: 'monitor_heart', label: 'Connetti il tuo Claude', admin: true, react: () => import('../pages/Claude').then((m) => m.Claude) },
   { id: 'server', icon: 'dns', label: 'Impostazioni server', admin: true, react: () => import('../pages/ServerSettings').then((m) => m.ServerSettings) },
   { id: 'modules', icon: 'handyman', label: 'Funzionalità', admin: true, react: () => import('../pages/Modules').then((m) => m.Modules) },
+  { id: 'bans', icon: 'lock', label: 'Accessi bloccati', admin: true, react: () => import('../pages/Bans').then((m) => m.Bans) },
   { id: 'privacy', icon: 'lock', label: 'Informativa privacy', admin: true, react: () => import('../pages/Privacy').then((m) => m.Privacy) },
   { id: 'platform', icon: 'check_circle', label: 'Salute piattaforma', admin: true, react: () => import('../pages/Platform').then((m) => m.Platform) },
   { id: 'events', icon: 'manage_search', label: 'Registro attività', admin: true, react: () => import('../pages/Events').then((m) => m.Events) },
