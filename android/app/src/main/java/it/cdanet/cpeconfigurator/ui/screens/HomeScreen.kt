@@ -91,7 +91,7 @@ fun screenIcon(s: Screen): Int? = when (s) {
     Screen.Wifi -> R.drawable.ic_wifi_find
     Screen.Speedtest -> R.drawable.ic_speed
     Screen.Network, Screen.Diag -> R.drawable.ic_speed
-    Screen.IpScanner, Screen.Lan -> R.drawable.ic_radar
+    Screen.IpScanner, Screen.Lan, Screen.UbntDiscovery -> R.drawable.ic_radar
     Screen.PortScanner -> R.drawable.ic_manage_search
     Screen.NetDiag -> R.drawable.ic_query_stats
     Screen.Discovery -> R.drawable.ic_device_hub

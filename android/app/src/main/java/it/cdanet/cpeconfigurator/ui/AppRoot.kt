@@ -113,7 +113,8 @@ import kotlinx.coroutines.launch
 enum class Screen(val title: String, val scroll: Boolean = true, val wide: Boolean = false) {
     Home("CDA Net CPE"),
     Provision("Installazione CPE"),
-    CpeWeb("Primo avvio airOS", scroll = false),
+    CpeWeb("Interfaccia airOS", scroll = false),
+    UbntDiscovery("Discovery Ubiquiti", scroll = false),
     Wifi("Wi-Fi Analyzer"),
     Speedtest("Speedtest"),
     Network("Strumenti di rete"),
@@ -529,6 +530,9 @@ fun AppRoot(c: AppContainer) {
                     }
                     Screen.CpeWeb -> WifiRequired(c, "alla Wi-Fi di management della CPE", "Il primo avvio si fa sull'interfaccia web della CPE, raggiungibile solo in rete locale.") { CpeWebScreen(c) }
                     Screen.Wifi -> WifiScreen(c)
+                    Screen.UbntDiscovery -> WifiRequired(c, "alla Wi-Fi della LAN con gli apparati Ubiquiti (quella della CPE o del cliente)", "La discovery funziona solo nella rete locale: non attraversa i router.", cpe = false) {
+                        it.cdanet.cpeconfigurator.ui.screens.UbntDiscoveryScreen(c, onOpenWeb = { url -> c.cpeWebUrl.value = url; go(Screen.CpeWeb) })
+                    }
                     Screen.Speedtest -> it.cdanet.cpeconfigurator.ui.screens.SpeedtestToolScreen(c)
                     Screen.Network -> NetworkScreen(c)
                     Screen.Discovery -> WifiRequired(c, "alla Wi-Fi della rete locale da analizzare", "La discovery funziona solo sulla stessa LAN.") { DiscoveryScreen(c) }
@@ -642,6 +646,7 @@ private fun toolGroups(m: Map<String, Boolean>, offline: Boolean, go: (Screen) -
     return listOf(
         "Con la CPE" to listOfNotNull(
             if (cpe) ToolEntry("CPE collegata", "Diagnosi, puntamento, AP visibili e collaudo con un solo collegamento", R.drawable.ic_cell_tower) { go(Screen.CpeHub) } else null,
+            if (net) ToolEntry("Discovery Ubiquiti", "CPE e apparati airOS/UniFi in rete: modello, firmware, di fabbrica, web e riavvio", R.drawable.ic_radar) { go(Screen.UbntDiscovery) } else null,
         ),
         "Rete del cliente" to listOfNotNull(
             if (net) ToolEntry("Scansione LAN", "Host attivi, topologia, discovery multi-vendor, porte", R.drawable.ic_radar) { go(Screen.Lan) } else null,
