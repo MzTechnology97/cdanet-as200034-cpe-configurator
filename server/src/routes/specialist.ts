@@ -23,6 +23,12 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
   const s = () => ctx.specialist;
   const me = (req: FastifyRequest) => req.user!;
   const log = (req: FastifyRequest, action: string, target: string, detail = '') => recordEvent(ctx.db, me(req).id, action, target, detail);
+  /** The work groups of the specialist, for the log (issue #275): who shares this piece of work. */
+  const groups = (req: FastifyRequest) => {
+    const names = ctx.workGroups.ofUser(me(req).id).map((g) => g.name);
+    return names.length ? `gruppo ${names.join(', ')}` : '';
+  };
+  const detailOf = (...parts: Array<string | null | undefined>) => parts.filter(Boolean).join(' · ');
 
   const modelParam = z.object({ model: z.enum(SUPPORTED_MODELS) });
   const idParam = z.object({ id: z.coerce.number().int().positive() });
@@ -100,7 +106,7 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
       .strict()
       .parse(req.body);
     const t = s().templates.create(me(req).id, b);
-    log(req, 'specialist.template_create', `${t.model} · ${t.name}`, t.sha256);
+    log(req, 'specialist.template_create', `${t.model} · ${t.name}`, detailOf(t.sha256, groups(req)));
     return reply.code(201).send(t);
   });
 
@@ -118,7 +124,7 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
       notes: `Copia del template CDA Net «${src.name}»`,
       cdaSourceId: src.id,
     });
-    log(req, 'specialist.template_copy', `${t.model} · ${t.name}`, `da CDA Net «${src.name}»`);
+    log(req, 'specialist.template_copy', `${t.model} · ${t.name}`, detailOf(`da CDA Net «${src.name}»`, groups(req)));
     return reply.code(201).send(t);
   });
 
@@ -131,13 +137,13 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
       .parse(req.body);
     const t = s().templates.update(me(req).id, id, b);
     // the keys changed, never the values (the community least of all)
-    log(req, b.template ? 'specialist.template_edit' : 'specialist.template_update', `${t.model} · ${t.name}`, Object.keys(b).join(','));
+    log(req, b.template ? 'specialist.template_edit' : 'specialist.template_update', `${t.model} · ${t.name}`, detailOf(Object.keys(b).join(','), t.mine ? '' : `template di ${t.author}`, groups(req)));
     return t;
   });
 
   app.delete('/api/specialist/templates/:id', spec, async (req) => {
     const t = s().templates.remove(me(req).id, idParam.parse(req.params).id);
-    log(req, 'specialist.template_delete', `${t.model} · ${t.name}`);
+    log(req, 'specialist.template_delete', `${t.model} · ${t.name}`, groups(req));
     return { ok: true };
   });
 
@@ -253,7 +259,9 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!versionAtLeast(client.version, ctx.cfg.minAndroidVersion)) throw new HttpError(426, 'client_upgrade_required', { minVersion: ctx.cfg.minAndroidVersion });
     const b = jobBody.parse(req.body);
     const pkg = s().jobs.create(me(req), b, `${client.platform}/${client.version}`);
-    log(req, 'specialist.job', `${b.model} · ${b.mac ?? 'CPE letta alla scrittura'}`, [pkg.summary.template, b.customer, pkg.summary.deviceName].filter(Boolean).join(' · '));
+    // with a template of another member: whose it was (issue #275)
+    const tpl = s().templates.get(me(req).id, b.templateId);
+    log(req, 'specialist.job', `${b.model} · ${b.mac ?? 'CPE letta alla scrittura'}`, detailOf(pkg.summary.template, tpl.mine ? '' : `template di ${tpl.author}`, b.customer, pkg.summary.deviceName, groups(req)));
     reply.header('Cache-Control', 'no-store');
     return reply.code(201).send(pkg);
   });

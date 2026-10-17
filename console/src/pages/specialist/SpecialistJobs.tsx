@@ -4,6 +4,7 @@ import { api, download } from '../../lib/api';
 import { toast } from '../../lib/toast';
 import type { PageContext } from '../../shell/routes';
 import { AsyncButton, Badge, Button, Card, Drawer, EmptyState, Field, Icon, Notice, PageHeader, Segmented, Skeleton, Stat, Table } from '../../ui';
+import { MyGroups } from './MyGroups';
 import { date, myId, type SpecAcceptance, type SpecConnector, type SpecJob, type SpecSummary, STATUS, VERDICT } from './types';
 
 /**
@@ -67,6 +68,7 @@ export function SpecialistJobs({ params }: PageContext) {
           </AsyncButton>
         }
       />
+      <MyGroups shared="lo storico delle installazioni, in sola lettura, e il calendario" />
       <section className="ui-stats" aria-label="Riepilogo">
         <Stat label="installazioni negli ultimi 30 giorni" value={s ? s.jobs30d : '…'} onClick={() => filterBy('')} />
         <Stat label="scritte" value={s ? s.success30d : '…'} tone="good" onClick={() => filterBy('success')} />

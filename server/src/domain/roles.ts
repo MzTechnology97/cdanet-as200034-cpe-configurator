@@ -22,5 +22,13 @@ export const isStaff = (role: string | undefined | null): boolean => role === 'a
 export const seesAll = (u: { role: string; fullView?: boolean | number | null } | null | undefined): boolean =>
   !!u && (u.role === 'admin' || (u.role === 'specialist' && !!u.fullView));
 
+/**
+ * Who does CDA Net's own field work, with its secrets (its provisioning and templates, the Wi-Fi keys
+ * of its networks, the password of its CPEs): admins, installers and the specialists with «visibilità
+ * piena». A specialist without it works for his companies only, in his own section (issue #275).
+ */
+export const doesCdaWork = (u: { role: string; fullView?: boolean | number | null } | null | undefined): boolean =>
+  !!u && (u.role === 'admin' || u.role === 'installer' || seesAll(u));
+
 /** The role in the words of the console and of the notices. */
 export const roleLabel = (role: string): string => (role === 'admin' ? 'amministratore' : role === 'specialist' ? 'specialist' : 'installatore');

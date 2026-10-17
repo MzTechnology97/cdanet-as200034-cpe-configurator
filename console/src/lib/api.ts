@@ -118,6 +118,7 @@ const MESSAGES: Record<string, string> = {
   invalid_placeholders: 'Segnaposto non validi: usa ${NOME} con lettere maiuscole, cifre e _',
   too_many_placeholders: 'Troppi segnaposto (al massimo 40)',
   template_secret_invalid_snmpCommunity: 'Community SNMP non valida',
+  template_secrets_author_only: 'La community SNMP la imposta solo chi ha creato il template: nelle tue installazioni la scrivi nell’app',
   connector_not_found: 'Connettore non trovato: forse è stato eliminato',
   connector_name_exists: 'Esiste già un connettore con questo nome',
   connector_disabled: 'Connettore disattivato: riattivalo per usarlo',

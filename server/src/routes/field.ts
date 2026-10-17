@@ -28,7 +28,9 @@ export const FIELD_THRESHOLDS = {
 } as const;
 
 export function fieldRoutes(app: FastifyInstance, ctx: AppContext) {
-  const user = { preHandler: [ctx.auth.requireUser, ctx.modules.require('field_alignment', 'field_diagnosis', 'acceptance')] };
+  // CDA Net's CPEs and their keys: not for a specialist without «visibilità piena» (issue #275); his
+  // own CPEs have the credentials typed in his flow
+  const user = { preHandler: [ctx.auth.requireCdaWork, ctx.modules.require('field_alignment', 'field_diagnosis', 'acceptance')] };
 
   /** Secrets go only to the Android app, at the minimum version. */
   const trustedClient = (header: string | undefined) => {

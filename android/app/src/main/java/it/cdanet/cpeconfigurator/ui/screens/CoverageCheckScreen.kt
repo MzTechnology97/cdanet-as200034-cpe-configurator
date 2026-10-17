@@ -127,7 +127,7 @@ private data class BaseAp(val id: String, val name: String, val lat: Double, val
 fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? = null, onAim: ((CompassTarget) -> Unit)? = null) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val admin = c.session.isStaff
+    val admin = c.session.seesAll
     val modules by c.modules.collectAsState()
     val gps = remember { it.cdanet.cpeconfigurator.network.LocationHelper(context) }
     var query by remember { mutableStateOf("") }

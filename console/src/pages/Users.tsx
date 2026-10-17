@@ -336,7 +336,7 @@ function AccountDrawer({ u, me, templates, initialTab = 'access', onClose, onCha
                     checked={!!u.fullView}
                     onChange={async (e) => {
                       const on = e.target.checked;
-                      if (on && !confirm(`Dare a ${u.username} la visibilità piena (direttore tecnico)? Vedrà clienti, rete, interventi e lavoro di CDA Net come un amministratore, il lavoro di tutti gli specialist e gestirà i gruppi di lavoro. La visibilità non passa ai membri dei suoi gruppi. Da dare solo a uno specialist interno all’azienda. Le sue sessioni verranno chiuse.`)) return;
+                      if (on && !confirm(`Dare a ${u.username} la visibilità piena (direttore tecnico)? Vedrà clienti, rete, interventi e lavoro di CDA Net come un amministratore, potrà fare installazioni CDA Net (con le chiavi Wi-Fi delle reti e la password delle CPE di CDA Net), vedrà il lavoro di tutti gli specialist e gestirà i gruppi di lavoro. La visibilità non passa ai membri dei suoi gruppi. Da dare solo a uno specialist interno all’azienda. Le sue sessioni verranno chiuse.`)) return;
                       try {
                         await patch({ fullView: on }, on ? 'Visibilità piena data' : 'Visibilità piena tolta');
                       } catch (err) {
@@ -550,7 +550,7 @@ function RoleHint({ role }: { role: string }) {
   if (role === 'specialist') {
     return (
       <p className="ui-muted ui-small us-p">
-        Specialist: lavora in autonomia per altre aziende, anche esterno a CDA Net. Ha la sua sezione (template suoi, connettori UISP delle aziende, storico a parte), gli strumenti tecnici e il flusso Specialist nell’app: niente magazzino, collaudo facoltativo, nessuna approvazione del NOC. Vede solo il proprio lavoro e quello dei suoi gruppi di lavoro (template, storico, calendario); clienti, rete e lavoro di CDA Net solo con la visibilità piena. Account, connettori, impostazioni, privacy, Claude, accessi bloccati e decisioni sul lavoro CDA Net restano agli admin.
+        Specialist: lavora in autonomia per altre aziende, anche esterno a CDA Net. Ha la sua sezione (template suoi, connettori UISP delle aziende, storico a parte), gli strumenti tecnici e il flusso Specialist nell’app: niente magazzino, collaudo facoltativo, nessuna approvazione del NOC. Vede solo il proprio lavoro e quello dei suoi gruppi di lavoro (template, storico, calendario); clienti, rete e lavoro di CDA Net, comprese le installazioni CDA Net con le chiavi Wi-Fi e la password delle CPE, solo con la visibilità piena. Account, connettori, impostazioni, privacy, Claude, accessi bloccati e decisioni sul lavoro CDA Net restano agli admin.
       </p>
     );
   }

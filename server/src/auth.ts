@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { SignJWT, jwtVerify } from 'jose';
 import { nowIso, type Db } from './db.ts';
-import { isStaff, seesAll, type Role } from './domain/roles.ts';
+import { doesCdaWork, isStaff, seesAll, type Role } from './domain/roles.ts';
 
-export { isStaff, seesAll };
+export { doesCdaWork, isStaff, seesAll };
 export type { Role };
 
 export interface AuthUser {
@@ -187,6 +187,14 @@ export function createAuth(db: Db, secret: Uint8Array, ttlHours: number, mfaDays
     if (!seesAll(req.user)) throw new HttpError(403, 'forbidden');
     if (!req.user.totp && totpRequiredForAdmins()) throw new HttpError(403, 'mfa_setup_required');
   };
+  /**
+   * CDA Net's own field work and its secrets (provisioning, Wi-Fi keys, the CPEs' password): not for
+   * a specialist without «visibilità piena», who works for his companies only (issue #275).
+   */
+  const requireCdaWork = async (req: FastifyRequest, _reply: FastifyReply) => {
+    req.user = await authenticate(req);
+    if (!doesCdaWork(req.user)) throw new HttpError(403, 'forbidden');
+  };
   /** The Specialist's own section (his templates, connectors and installations). */
   const requireSpecialist = async (req: FastifyRequest, _reply: FastifyReply) => {
     req.user = await authenticate(req);
@@ -207,6 +215,7 @@ export function createAuth(db: Db, secret: Uint8Array, ttlHours: number, mfaDays
     requireAdmin,
     requireStaff,
     requireSeesAll,
+    requireCdaWork,
     requireSpecialist,
   };
 }

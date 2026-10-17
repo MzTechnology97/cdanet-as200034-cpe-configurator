@@ -60,6 +60,27 @@ describe('Specialist', () => {
     const cal = (await call('GET', '/api/work-orders/calendar?from=2026-10-19&to=2026-10-25', S)).json();
     assert.deepEqual([cal.items.length, cal.installers], [0, undefined], 'nothing of the team');
     assert.equal((await call('GET', `/api/work-orders/calendar?from=2026-10-19&to=2026-10-25&user=${inst}`, S)).json().items.length, 0, 'not even asking for someone');
+    // CDA Net's field work and its keys (Wi-Fi keys of its networks, the password of its CPEs, its
+    // templates), its APs and the operators' names on CDA Net's account: never without full view
+    const cdaWork = [
+      ['POST', '/api/field/access', {}],
+      ['POST', '/api/field/relink', { ssid: 'CDA-Net-AP-1' }],
+      ['GET', '/api/field/cpe?macs=AA:BB:CC:00:00:09', undefined],
+      ['POST', '/api/field/cpe/claim', { macs: ['AA:BB:CC:00:00:09'] }],
+      ['GET', '/api/wireless-networks', undefined],
+      ['GET', '/api/provisioning/templates', undefined],
+      ['POST', '/api/provisioning/plan', { model: 'LiteBeam 5AC', ssid: 'CDA-Net-AP-1' }],
+      ['POST', '/api/provisioning/jobs', { model: 'LiteBeam 5AC', ssid: 'CDA-Net-AP-1', alternativeSsids: ['CDA-Net-AP-2'] }],
+      ['GET', '/api/admin/antennas', undefined],
+      ['POST', '/api/admin/antennas/import', {}],
+      ['GET', '/api/admin/coverage/operators?lat=37.5&lon=14.2', undefined],
+    ] as const;
+    for (const [method, url, body] of cdaWork) {
+      const r = await call(method, url, { ...S, ...APP }, body);
+      assert.equal(r.statusCode, 403, `${method} ${url}: ${r.statusCode} ${r.body}`);
+    }
+    assert.equal((await call('GET', '/api/wireless-networks', I)).statusCode, 200, 'the installers keep them');
+    assert.equal((await call('POST', '/api/field/access', { ...I, ...APP }, {})).statusCode, 200);
     // «visibilità piena», given by an admin: the views of the NOC (his sessions start again)
     assert.equal((await call('PATCH', `/api/admin/users/${inst}`, A, { fullView: true })).json().error, 'full_view_specialist_only');
     assert.equal((await call('PATCH', `/api/admin/users/${spec.user.id}`, S, { fullView: true })).statusCode, 403, 'not by himself');
@@ -73,6 +94,9 @@ describe('Specialist', () => {
       assert.equal(r.statusCode, 200, `with full view ${url}: ${r.body}`);
     }
     assert.equal((await call('GET', '/api/work-orders/calendar?from=2026-10-19&to=2026-10-25', F)).json().items.length, 1);
+    // an internal specialist with full view works for CDA Net too, like an installer
+    assert.equal((await call('GET', '/api/wireless-networks', F)).statusCode, 200);
+    assert.equal((await call('POST', '/api/field/access', { ...F, ...APP }, {})).statusCode, 200);
     assert.equal((await call('POST', '/api/admin/platform/backup', F, { password: 'Password-Backup-123' })).statusCode, 403, 'the backup stays with the admins');
     const users = (await call('GET', '/api/admin/users', A)).json() as Array<{ username: string; fullView: boolean }>;
     assert.equal(users.find((u) => u.username === SPEC.username)?.fullView, true);
@@ -131,13 +155,19 @@ describe('Specialist', () => {
     // the same template text refused by CDA Net's archive (VLAN): his archive is apart
     assert.equal((await call('POST', '/api/admin/profiles/LiteBeam%205AC/templates', A, { name: 'Con VLAN', template: text, boardMatch: 'board\\.name=LiteBeam' })).json().error, 'profile_contains_vlan');
 
-    // a CDA Net template as a start: the copy is his, without CDA Net's secrets
+    // a CDA Net template as a start: CDA Net's work, so only with «visibilità piena», not even one
+    // for everyone (issue #275); the copy is his, without CDA Net's secrets
     const cda = await call('POST', '/api/admin/profiles/LiteBeam%205AC/templates', A, { name: 'Standard', template: SAMPLE_TEMPLATE, boardMatch: 'board\\.name=LiteBeam', secrets: { snmpCommunity: 'community-cda-net' } });
     assert.equal(cda.statusCode, 201, cda.body);
-    const copy = await call('POST', '/api/specialist/templates/copy', S, { fromId: cda.json().id, name: 'Da CDA Net' });
+    assert.equal((await call('POST', '/api/specialist/templates/copy', S, { fromId: cda.json().id, name: 'Da CDA Net' })).statusCode, 404, 'not without full view');
+    const director = { username: 'direttore.tecnico', password: 'Direttore-Password-123' };
+    const d = await call('POST', '/api/admin/users', A, { ...director, role: 'specialist' });
+    assert.equal((await call('PATCH', `/api/admin/users/${d.json().id}`, A, { fullView: true })).statusCode, 200);
+    const D = { authorization: `Bearer ${(await app.inject({ method: 'POST', url: '/api/auth/login', payload: director })).json().token}` };
+    const copy = await call('POST', '/api/specialist/templates/copy', D, { fromId: cda.json().id, name: 'Da CDA Net' });
     assert.equal(copy.statusCode, 201, copy.body);
     assert.equal(copy.json().secretsSet.snmpCommunity, false);
-    const copied = (await call('GET', `/api/specialist/templates/${copy.json().id}`, S)).json();
+    const copied = (await call('GET', `/api/specialist/templates/${copy.json().id}`, D)).json();
     assert.equal(parseKeys(copied.template).get('pwdog.status'), 'enabled', 'what CDA Net forces becomes the text');
     assert.ok(!JSON.stringify(copied).includes('community-cda-net'));
     assert.equal((await call('GET', `/api/admin/templates/${cda.json().id}`, A)).json().name, 'Standard', 'the original stays');
@@ -219,7 +249,8 @@ describe('Specialist', () => {
     assert.equal(hist.total, 1);
     assert.equal(hist.items[0].company, 'Azienda X');
     assert.equal((await call('GET', '/api/specialist/jobs?status=to_authorize', S)).json().total, 1);
-    assert.deepEqual((await call('GET', '/api/specialist/summary', S)).json(), { templates: 2, connectors: 1, jobs30d: 1, success30d: 1, toAuthorize: 1, failed30d: 0 });
+    // his one template (the copy of CDA Net's is the director's)
+    assert.deepEqual((await call('GET', '/api/specialist/summary', S)).json(), { templates: 1, connectors: 1, jobs30d: 1, success30d: 1, toAuthorize: 1, failed30d: 0 });
 
     // ---- the CPE in the company's UISP: found by MAC, authorized in the site of its AP
     const state = (await call('GET', `/api/specialist/jobs/${pkg.jobId}/uisp`, S)).json();

@@ -167,6 +167,7 @@ fun SpecialistTemplateList(c: AppContainer, onEdit: () -> Unit) {
                                                 template = full.template,
                                                 boardMatch = full.boardMatch,
                                                 snmpSet = full.secretsSet.snmpCommunity,
+                                                author = full.author.takeIf { !full.mine },
                                                 sha256 = full.sha256,
                                                 updatedAt = full.updatedAt,
                                             ),
@@ -182,6 +183,8 @@ fun SpecialistTemplateList(c: AppContainer, onEdit: () -> Unit) {
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(t.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        // a template of another member of the group (issue #275)
+                        if (!t.mine) StatusChip("di ${t.author}", NoticeKind.Info)
                         if (t.own.isNotEmpty()) StatusChip("${t.own.size} tuoi", NoticeKind.Info)
                     }
                     Text(
@@ -230,7 +233,8 @@ private fun NewTemplateDialog(c: AppContainer, meta: SpecTemplateFormDto, onDism
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Dropdown("Modello della CPE", meta.models, model, { it }, { model = it; cdaPick = null }, Modifier.fillMaxWidth())
-                Segmented(listOf("form" to "Modulo", "cpe" to "Dalla CPE", "cda" to "CDA Net"), from, { from = it })
+                // CDA Net's templates: CDA Net's work, only with «visibilità piena» (issue #275)
+                Segmented(listOfNotNull("form" to "Modulo", "cpe" to "Dalla CPE", ("cda" to "CDA Net").takeIf { c.session.seesAll }), from, { from = it })
                 when (from) {
                     "form" -> Text("Una configurazione airOS completa (Station, Router, PPPoE): la modifichi dal modulo come l'interfaccia della CPE.", style = MaterialTheme.typography.bodySmall)
                     "cpe" -> {
@@ -531,14 +535,16 @@ private fun TemplateEditorBody(c: AppContainer, open: SpecEditorOpen, onClose: (
                                 dirty = true
                             },
                             password = true,
-                            readOnly = removeSnmp,
+                            readOnly = removeSnmp || open.author != null,
                             supporting = when {
-                                snmpSet && !removeSnmp -> "Impostata: lascia vuoto per non cambiarla. Cifrata, mai mostrata."
+                                // the secrets of a template are its author's (issue #275)
+                                open.author != null -> "La imposta solo ${open.author}, che ha creato il template, e vale solo per le sue installazioni: nelle tue la scrivi nel flusso per ogni CPE."
+                                snmpSet && !removeSnmp -> "Impostata: lascia vuoto per non cambiarla. Cifrata, mai mostrata. Vale solo per le tue installazioni."
                                 uses -> "Facoltativa: senza, la scrivi nel flusso per ogni CPE. Cifrata, mai mostrata."
                                 else -> "Il template non usa \${SNMP_COMMUNITY}."
                             },
                         )
-                        if (snmpSet) {
+                        if (snmpSet && open.author == null) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Switch(checked = removeSnmp, onCheckedChange = {
                                     removeSnmp = it

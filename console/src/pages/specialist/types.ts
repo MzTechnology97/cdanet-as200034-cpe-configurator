@@ -23,6 +23,8 @@ export interface SpecTemplate {
   /** Who made it: himself or another specialist of his work groups (issue #275). */
   authorId: number;
   author: string;
+  /** His own: he deletes it and sets its secrets (the others of the group type them). */
+  mine?: boolean;
   createdAt: string;
   updatedAt: string;
   template?: string;

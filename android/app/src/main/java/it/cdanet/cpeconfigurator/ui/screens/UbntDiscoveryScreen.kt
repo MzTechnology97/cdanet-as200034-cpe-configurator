@@ -234,7 +234,8 @@ private fun UbntDetails(c: AppContainer, d: UbntDevice, onDismiss: () -> Unit, o
 @Composable
 internal fun RebootDialog(c: AppContainer, d: UbntDevice, busy: Boolean, onDismiss: () -> Unit, onConfirm: (String, String) -> Unit) {
     var saved by remember { mutableStateOf<it.cdanet.cpeconfigurator.data.CredentialsDto?>(null) }
-    LaunchedEffect(Unit) { if (c.session.state.value != null && c.field.prefetch()) saved = c.field.savedCredentials() }
+    // CDA Net's CPE credentials: not for a specialist without «visibilità piena» (issue #275)
+    LaunchedEffect(Unit) { if (c.session.state.value != null && c.session.doesCdaWork && c.field.prefetch()) saved = c.field.savedCredentials() }
     var useSaved by remember { mutableStateOf(true) }
     var user by remember { mutableStateOf("ubnt") }
     var pass by remember { mutableStateOf("") }

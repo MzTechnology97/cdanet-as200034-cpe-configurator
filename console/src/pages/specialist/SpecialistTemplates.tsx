@@ -1,9 +1,12 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api';
+import { seesAll } from '../../lib/roles';
 import { toast } from '../../lib/toast';
+import type { PageContext } from '../../shell/routes';
 import { downloadText, type Facts, type FieldDef, FormField, modeText, type Section, SECTIONS, type Value } from '../../templates/form';
 import { AsyncButton, Badge, Button, Card, Drawer, EmptyState, Field, Notice, PageHeader, Segmented, Skeleton, Tabs } from '../../ui';
+import { MyGroups } from './MyGroups';
 import { date, FROM_TEXT, myId, type SpecPlaceholder, type SpecTemplate } from './types';
 
 /**
@@ -46,6 +49,8 @@ interface EditorOpts {
   template?: string;
   boardMatch?: string;
   snmpSet?: boolean;
+  /** Of another member of the group (issue #275): its secrets stay with [author]. */
+  author?: string;
   updatedAt?: string;
   sha256?: string;
   /** Made from a backup: what was replaced with placeholders. */
@@ -64,7 +69,21 @@ const ERRORS: Record<string, string> = {
 };
 const errText = (c: string) => ERRORS[c] ?? c;
 
-export function SpecialistTemplates() {
+/** The editor of a template as it is: its secrets only to its author. */
+const editorOf = (t: SpecTemplate): EditorOpts => ({
+  model: t.model,
+  id: t.id,
+  name: t.name,
+  notes: t.notes,
+  template: t.template,
+  boardMatch: t.boardMatch,
+  snmpSet: t.secretsSet.snmpCommunity,
+  ...(t.authorId !== myId() ? { author: t.author } : {}),
+  updatedAt: t.updatedAt,
+  sha256: t.sha256,
+});
+
+export function SpecialistTemplates({ user }: PageContext) {
   const qc = useQueryClient();
   const list = useQuery({ queryKey: ['specialist', 'templates'], queryFn: () => api<SpecTemplate[]>('/api/specialist/templates') });
   const form = useQuery({ queryKey: ['specialist', 'template-form'], queryFn: () => api<FormData>('/api/specialist/template-form'), staleTime: 10 * 60_000 });
@@ -73,8 +92,7 @@ export function SpecialistTemplates() {
   const [dirty, setDirty] = useState(false);
   const reload = () => qc.invalidateQueries({ queryKey: ['specialist'] });
   const open = async (t: SpecTemplate) => {
-    const full = await api<SpecTemplate>(`/api/specialist/templates/${t.id}`);
-    setEditing({ model: full.model, id: full.id, name: full.name, notes: full.notes, template: full.template, boardMatch: full.boardMatch, snmpSet: full.secretsSet.snmpCommunity, updatedAt: full.updatedAt, sha256: full.sha256 });
+    setEditing(editorOf(await api<SpecTemplate>(`/api/specialist/templates/${t.id}`)));
   };
   const remove = async (t: SpecTemplate) => {
     if (!confirm(`Eliminare il template «${t.name}» (${t.model})? Le installazioni fatte con esso restano nello storico.`)) return;
@@ -110,7 +128,7 @@ export function SpecialistTemplates() {
           onSaved={async (t) => {
             setDirty(false);
             await reload();
-            setEditing({ model: t.model, id: t.id, name: t.name, notes: t.notes, template: t.template, boardMatch: t.boardMatch, snmpSet: t.secretsSet.snmpCommunity, updatedAt: t.updatedAt, sha256: t.sha256 });
+            setEditing(editorOf(t));
           }}
         />
       </div>
@@ -131,6 +149,7 @@ export function SpecialistTemplates() {
           </Button>
         }
       />
+      <MyGroups shared="i template" />
       {list.error ? (
         <Notice tone="bad">{(list.error as Error).message}</Notice>
       ) : !list.data ? (
@@ -185,6 +204,7 @@ export function SpecialistTemplates() {
       {creating && form.data && (
         <NewTemplate
           models={models}
+          canCopyCda={seesAll(user)}
           onClose={() => setCreating(false)}
           onStart={async (o) => {
             setCreating(false);
@@ -197,15 +217,18 @@ export function SpecialistTemplates() {
   );
 }
 
-/** Where a new template starts from: the form alone, a CPE backup, or a copy of a CDA Net template. */
-function NewTemplate({ models, onClose, onStart }: { models: string[]; onClose: () => void; onStart: (o: EditorOpts) => Promise<void> }) {
+/**
+ * Where a new template starts from: the form alone, a CPE backup, or a copy of a CDA Net template
+ * ([canCopyCda]: CDA Net's work, only with «visibilità piena», issue #275).
+ */
+function NewTemplate({ models, canCopyCda, onClose, onStart }: { models: string[]; canCopyCda: boolean; onClose: () => void; onStart: (o: EditorOpts) => Promise<void> }) {
   const [model, setModel] = useState(models[0] ?? '');
   const [from, setFrom] = useState<'form' | 'backup' | 'cda'>('form');
   const [file, setFile] = useState<File | null>(null);
   const [cdaId, setCdaId] = useState('');
   const [name, setName] = useState('');
-  // the CDA Net templates he may use (all of them only with «visibilità piena», issue #275)
-  const cda = useQuery({ queryKey: ['provisioning', 'templates'], queryFn: () => api<Array<{ id: number; model: string; name: string }>>('/api/provisioning/templates'), enabled: from === 'cda', retry: false });
+  // the CDA Net templates: only with «visibilità piena» (issue #275)
+  const cda = useQuery({ queryKey: ['provisioning', 'templates'], queryFn: () => api<Array<{ id: number; model: string; name: string }>>('/api/provisioning/templates'), enabled: canCopyCda && from === 'cda', retry: false });
   const cdaOfModel = (cda.data ?? []).filter((t) => t.model === model);
   const start = async () => {
     if (!model) throw new Error('Scegli il modello');
@@ -256,7 +279,7 @@ function NewTemplate({ models, onClose, onStart }: { models: string[]; onClose: 
         options={[
           { value: 'form', label: 'Modulo' },
           { value: 'backup', label: 'Backup della CPE' },
-          { value: 'cda', label: 'Template CDA Net' },
+          ...(canCopyCda ? [{ value: 'cda' as const, label: 'Template CDA Net' }] : []),
         ]}
       />
       {from === 'form' && <p className="ui-muted ui-small">Una configurazione airOS 8.7.4 completa (Station, Router, PPPoE): la modifichi dal modulo come l’interfaccia della CPE.</p>}
@@ -485,11 +508,19 @@ function TemplateEditor({ opts, data, onDirty, onClose, onSaved }: { opts: Edito
             <div>
               <Field
                 label="SNMP: community"
-                hint={opts.snmpSet ? 'Impostata: lascia vuoto per non cambiarla. Cifrata, mai mostrata.' : usesCommunity ? 'Facoltativa: senza, la scrivi nell’app per ogni CPE. Cifrata, mai mostrata.' : 'Il template non usa ${SNMP_COMMUNITY}.'}
+                hint={
+                  opts.author
+                    ? `La imposta solo ${opts.author}, che ha creato il template, e vale solo per le sue installazioni: nelle tue la scrivi nell’app per ogni CPE.`
+                    : opts.snmpSet
+                      ? 'Impostata: lascia vuoto per non cambiarla. Cifrata, mai mostrata. Vale solo per le tue installazioni: gli altri del gruppo la scrivono nell’app.'
+                      : usesCommunity
+                        ? 'Facoltativa: senza, la scrivi nell’app per ogni CPE. Cifrata, mai mostrata.'
+                        : 'Il template non usa ${SNMP_COMMUNITY}.'
+                }
               >
-                <input type="password" autoComplete="new-password" value={snmp} disabled={removeSnmp} onChange={(e) => (setSnmp(e.target.value), mark())} />
+                <input type="password" autoComplete="new-password" value={snmp} disabled={removeSnmp || !!opts.author} onChange={(e) => (setSnmp(e.target.value), mark())} />
               </Field>
-              {opts.snmpSet && (
+              {opts.snmpSet && !opts.author && (
                 <label className="ui-check ui-small">
                   <input type="checkbox" checked={removeSnmp} onChange={(e) => (setRemoveSnmp(e.target.checked), setSnmp(''), mark())} />
                   Rimuovi la community da questo template

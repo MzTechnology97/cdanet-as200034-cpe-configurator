@@ -178,8 +178,14 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
           : `Visibilità piena tolta allo specialist <b>${escapeHtml(target.username)}</b> da ${escapeHtml(req.user!.username)}`,
       );
     }
-    // a specialist no more: no «visibilità piena» left behind
+    // a specialist no more: no «visibilità piena» and no work group left behind (if he becomes a
+    // specialist again, an admin decides again what he sees)
     if (b.role !== undefined && b.role !== 'specialist' && target.fullView) db.prepare('UPDATE users SET full_view = 0 WHERE id = ?').run(id);
+    if (b.role !== undefined && b.role !== 'specialist' && target.role === 'specialist') {
+      const left = ctx.workGroups.ofUser(id).map((g) => g.name);
+      db.prepare('DELETE FROM work_group_members WHERE user_id = ?').run(id);
+      if (left.length) ctx.notify.security(`<b>${escapeHtml(target.username)}</b> non è più specialist: tolto dai gruppi di lavoro ${escapeHtml(left.join(', '))}`);
+    }
     if (b.active !== undefined) db.prepare('UPDATE users SET active = ?, token_version = token_version + 1 WHERE id = ?').run(b.active ? 1 : 0, id);
     if (b.role !== undefined) db.prepare('UPDATE users SET role = ?, token_version = token_version + 1 WHERE id = ?').run(b.role, id);
     // warehouse and bypass: no new login needed, the app reads them with «Le mie CPE»

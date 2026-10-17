@@ -195,4 +195,92 @@ describe('Gruppi di lavoro degli Specialist (issue #275)', () => {
     assert.ok(b !== c);
     await app.close();
   });
+
+  // the secrets of a template are its author's (titolare, 17/10/2026): only his installations use
+  // them, another member types his own and changes neither; the NOC hears of every group change
+  it('a shared template keeps its secrets with its author; the log and the NOC say who and which group', async () => {
+    const TOKEN = '000000:token_finto_dei_test_non_un_segreto';
+    const sent: Array<{ text: string }> = [];
+    const fetchImpl = (async (input: string | URL, init?: RequestInit) => {
+      const url = new URL(String(input));
+      if (url.host !== 'api.telegram.org') return new Response('{}', { status: 404 });
+      const method = url.pathname.split('/')[2];
+      if (method === 'sendMessage') sent.push(JSON.parse(String(init?.body ?? '{}')));
+      return Response.json({ ok: true, result: method === 'getMe' ? { username: 'noc_bot' } : method === 'getUpdates' ? [] : {} });
+    }) as typeof fetch;
+    const db = openDatabase(':memory:');
+    const { app, ctx } = await buildApp(testConfig(), 'test', { db, logger: false, uisp: null, fetchImpl, telegramIntervalMs: 0 });
+    const call = (method: 'GET' | 'POST' | 'PATCH' | 'PUT' | 'DELETE', url: string, headers: Record<string, string>, payload?: object) => app.inject({ method, url, headers, payload });
+    const login = async (u: { username: string; password: string }) => {
+      const r = await app.inject({ method: 'POST', url: '/api/auth/login', payload: u });
+      assert.equal(r.statusCode, 200, r.body);
+      return { authorization: `Bearer ${r.json().token}` };
+    };
+    const ADM = await login(ADMIN);
+    const tg = await call('PUT', '/api/admin/connectors/telegram', ADM, { enabled: true, token: TOKEN, chatId: '-1001234567890', events: ['security'], summaryHour: 19 });
+    assert.equal(tg.statusCode, 200, tg.body);
+    const ids: Record<string, number> = {};
+    for (const u of [A_, B_]) ids[u.username] = (await call('POST', '/api/admin/users', ADM, { ...u, role: 'specialist' })).json().id;
+    const a = ids['spec.a']!;
+    const b = ids['spec.b']!;
+    const g = await call('POST', '/api/admin/work-groups', ADM, { name: 'Squadra Est', members: [a, b] });
+    assert.equal(g.statusCode, 201, g.body);
+    const A = await login(A_);
+    const B = await login(B_);
+    const APP = { 'x-cda-client': 'android/9.9.9' };
+
+    // A's template with his company's SNMP community, sealed
+    const t = await call('POST', '/api/specialist/templates', A, { model: 'LiteBeam 5AC', name: 'Azienda X · SNMP', template: `${SAMPLE_TEMPLATE}snmp.community=\${SNMP_COMMUNITY}\n`, snmpCommunity: 'community-di-a' });
+    assert.equal(t.statusCode, 201, t.body);
+    const tid = t.json().id as number;
+    const view = (h: Record<string, string>) => call('GET', `/api/specialist/templates/${tid}`, h).then((r) => r.json() as { mine: boolean; secretsSet: { snmpCommunity: boolean } });
+    assert.deepEqual([(await view(A)).mine, (await view(B)).mine], [true, false]);
+    const asked = async (h: Record<string, string>) => (await call('GET', `/api/specialist/templates/${tid}/values`, h)).json().asked as Array<{ name: string; secret: boolean }>;
+    assert.ok(!(await asked(A)).some((x) => x.name === 'SNMP_COMMUNITY'), 'the author: his own, sealed');
+    assert.equal((await asked(B)).find((x) => x.name === 'SNMP_COMMUNITY')?.secret, true, 'a member types it, hidden');
+
+    // B installs with A's template: his own community, never A's
+    const values = { SSID: 'AZIENDA-X-AP1', WPA2_PSK: 'Chiave-WiFi-Azienda-1', PPPOE_USER: 'rossi', PPPOE_PASSWORD: 'Pppoe-Segreta-1' };
+    const job = (h: Record<string, string>, extra: Record<string, string> = {}) =>
+      call('POST', '/api/specialist/jobs', { ...h, ...APP }, { templateId: tid, model: 'LiteBeam 5AC', cpe: { username: 'admin-x', password: 'Cpe-Password-X-1' }, values: { ...values, ...extra }, customer: 'Rossi' });
+    assert.equal((await job(B)).json().error, 'missing_value_SNMP_COMMUNITY');
+    const pkgB = await job(B, { SNMP_COMMUNITY: 'community-di-b' });
+    assert.equal(pkgB.statusCode, 201, pkgB.body);
+    assert.match(pkgB.json().config.text, /^snmp\.community=community-di-b$/m);
+    assert.ok(!pkgB.body.includes('community-di-a'), "the author's community never reaches another member");
+    // only the author sets or clears it; the rest of the template stays shared
+    assert.equal((await call('PATCH', `/api/specialist/templates/${tid}`, B, { snmpCommunity: 'community-scelta-da-b' })).json().error, 'template_secrets_author_only');
+    assert.equal((await call('PATCH', `/api/specialist/templates/${tid}`, B, { snmpCommunity: null })).json().error, 'template_secrets_author_only');
+    assert.equal((await call('PATCH', `/api/specialist/templates/${tid}`, B, { notes: 'rivisto da B' })).statusCode, 200);
+    const pkgA = await job(A);
+    assert.equal(pkgA.statusCode, 201, pkgA.body);
+    assert.match(pkgA.json().config.text, /^snmp\.community=community-di-a$/m, "the author's installations keep his");
+
+    // the log: whose template and which group, never a secret
+    const ev = db.prepare("SELECT u.username who, e.action, e.detail FROM events e JOIN users u ON u.id = e.user_id WHERE e.action LIKE 'specialist.%' ORDER BY e.id").all() as Array<{ who: string; action: string; detail: string }>;
+    const byB = ev.filter((e) => e.who === 'spec.b');
+    assert.match(byB.find((e) => e.action === 'specialist.template_update')!.detail, /template di spec\.a · gruppo Squadra Est/);
+    assert.match(byB.find((e) => e.action === 'specialist.job')!.detail, /template di spec\.a.*gruppo Squadra Est/);
+    assert.match(ev.find((e) => e.who === 'spec.a' && e.action === 'specialist.template_create')!.detail, /gruppo Squadra Est/);
+    for (const secret of ['community-di-a', 'community-di-b', 'community-scelta-da-b', 'Chiave-WiFi-Azienda-1', 'Pppoe-Segreta-1', 'Cpe-Password-X-1']) {
+      assert.ok(!JSON.stringify(ev).includes(secret), secret);
+    }
+
+    // the NOC: who enters, who leaves, who is no specialist anymore, the group deleted
+    assert.equal((await call('PUT', `/api/admin/work-groups/${g.json().id}`, ADM, { members: [a] })).statusCode, 200);
+    assert.equal((await call('PUT', `/api/admin/work-groups/${g.json().id}`, ADM, { members: [a, b] })).statusCode, 200);
+    assert.equal((await call('PATCH', `/api/admin/users/${b}`, ADM, { role: 'installer' })).statusCode, 200);
+    assert.deepEqual(db.prepare('SELECT user_id FROM work_group_members WHERE user_id = ?').all(b), [], 'out of the groups with the role');
+    assert.equal((await call('PATCH', `/api/admin/users/${b}`, ADM, { role: 'specialist' })).statusCode, 200);
+    const users = (await call('GET', '/api/admin/users', ADM)).json() as Array<{ username: string; workGroups: unknown[] }>;
+    assert.deepEqual(users.find((u) => u.username === 'spec.b')?.workGroups, [], 'a specialist again: in no group until an admin decides');
+    assert.equal((await call('DELETE', `/api/admin/work-groups/${g.json().id}`, ADM)).statusCode, 200);
+    await ctx.telegram.idle();
+    const noc = sent.map((m) => m.text).join('\n');
+    for (const line of [/Squadra Est<\/b>: creato con spec\.a, spec\.b/, /Squadra Est<\/b>: usciti spec\.b/, /Squadra Est<\/b>: entrati spec\.b/, /spec\.b<\/b> non è più specialist: tolto dai gruppi di lavoro Squadra Est/, /Squadra Est<\/b>: eliminato \(1 membro\)/]) {
+      assert.match(noc, line);
+    }
+    assert.ok(!/community-di|Chiave-WiFi|Pppoe-Segreta/.test(noc), 'no secret to the NOC');
+    await app.close();
+  });
 });

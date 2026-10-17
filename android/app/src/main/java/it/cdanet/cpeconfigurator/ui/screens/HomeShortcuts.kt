@@ -51,15 +51,17 @@ val DEFAULT_SHORTCUTS = listOf("cpe", "alignment", "coverage", "near_aps", "ar",
  * Every shortcut this account can have now: only features enabled for it, and without login only
  * the tools that work on the phone alone. Same order as the editor shows them.
  */
-fun shortcutCatalog(m: Map<String, Boolean>, admin: Boolean, offline: Boolean, specialist: Boolean = false): List<Shortcut> = buildList {
+fun shortcutCatalog(m: Map<String, Boolean>, admin: Boolean, offline: Boolean, specialist: Boolean = false, cdaWork: Boolean = true): List<Shortcut> = buildList {
     val on = !offline
+    // CDA Net's CPEs and installations: not for a specialist without «visibilità piena» (issue #275)
+    val cda = on && cdaWork
     // the Specialist's own work (owner, 17/10/2026): his flow, history and templates
     if (on && specialist) {
         add(Shortcut("spec_new", "Configura una CPE", "Flusso Specialist: CPE di altre aziende, con i tuoi template", R.drawable.ic_settings_input_antenna, Area.Field, Dest(Screen.Specialist, SPECIALIST_TABS[0])))
         add(Shortcut("spec_history", "Storico Specialist", "Le CPE che hai configurato, collaudo e UISP", R.drawable.ic_history, Area.Work, Dest(Screen.Specialist, SPECIALIST_TABS[1])))
         add(Shortcut("spec_templates", "I miei template", "Template airOS tuoi, separati da quelli di CDA Net", R.drawable.ic_memory, Area.Work, Dest(Screen.Specialist, SPECIALIST_TABS[2])))
     }
-    val cpe = cpeTabTitles(m)
+    val cpe = if (cdaWork) cpeTabTitles(m) else emptyList()
     val net = networkTabTitles(m, admin)
     val install = installTabTitles(m, admin)
     val tools = m["network_tools"] != false
@@ -79,11 +81,11 @@ fun shortcutCatalog(m: Map<String, Boolean>, admin: Boolean, offline: Boolean, s
     if (on && "Guasti" in net) add(Shortcut("outages", "Guasti Enel", if (admin) "Guasti e lavori della rete elettrica" else "Guasti e lavori nelle tue zone", R.drawable.ic_power_off, Area.Network, Dest(Screen.NetHub, "Guasti")))
     if (on && "Aree e avvisi" in net) add(Shortcut("areas", "Aree e avvisi", "Zone da seguire e notifiche dei guasti", R.drawable.ic_my_location, Area.Network, Dest(Screen.NetHub, "Aree e avvisi")))
     // my work
-    if (on) add(Shortcut("todo", "Da completare", "Installazioni lasciate a metà o rifiutate", R.drawable.ic_pending_actions, Area.Work, Dest(Screen.Installations, "Da completare")))
-    if (on) add(Shortcut("history", "Storico", "I miei provisioning e i loro esiti", R.drawable.ic_history, Area.Work, Dest(Screen.Installations, "Storico")))
+    if (cda) add(Shortcut("todo", "Da completare", "Installazioni lasciate a metà o rifiutate", R.drawable.ic_pending_actions, Area.Work, Dest(Screen.Installations, "Da completare")))
+    if (cda) add(Shortcut("history", "Storico", "I miei provisioning e i loro esiti", R.drawable.ic_history, Area.Work, Dest(Screen.Installations, "Storico")))
     if (on && m["work_orders"] != false) add(Shortcut("calendar", "Calendario", if (admin) "Gli interventi di tutti: pianifica, sposta, crea" else "I tuoi interventi per giorno, settimana e mese", R.drawable.ic_calendar_month, Area.Work, Dest(Screen.Calendar)))
     install.firstOrNull { it == "Salute CPE" || it == "Stato CPE" }?.let { t ->
-        if (on) add(Shortcut("cpe_health", t, if (admin) "CPE con problemi in tutta la rete" else "Le CPE che ho installato", R.drawable.ic_monitor_heart, Area.Work, Dest(Screen.Installations, t)))
+        if (cda) add(Shortcut("cpe_health", t, if (admin) "CPE con problemi in tutta la rete" else "Le CPE che ho installato", R.drawable.ic_monitor_heart, Area.Work, Dest(Screen.Installations, t)))
     }
     if (on) add(Shortcut("notifications", "Notifiche", "Esiti del NOC, interventi e avvisi", R.drawable.ic_notifications, Area.Work, Dest(Screen.Notifications)))
     // customer's network: these work without login too

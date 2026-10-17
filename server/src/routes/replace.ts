@@ -45,7 +45,8 @@ export function cfgValue(cfg: string, key: string): string | null {
  * reaches the app except inside the rendered system.cfg, exactly as in a normal job.
  */
 export function replaceRoutes(app: FastifyInstance, ctx: AppContext) {
-  const user = { preHandler: [ctx.auth.requireUser, ctx.modules.require('replacement')] };
+  // a new CPE with CDA Net's keys: not for a specialist without «visibilità piena» (issue #275)
+  const user = { preHandler: [ctx.auth.requireCdaWork, ctx.modules.require('replacement')] };
   const { db } = ctx;
 
   async function passwordFromUisp(old: OldJob, key: string): Promise<string> {

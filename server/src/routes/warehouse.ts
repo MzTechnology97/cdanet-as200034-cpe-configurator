@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { HttpError, isStaff, seesAll } from '../auth.ts';
+import { HttpError, seesAll } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
 import { parseMac } from '../domain/policy.ts';
@@ -165,10 +165,11 @@ export type StockCheck = { result: 'ok' | 'not_linked' | 'not_loaded' | 'other_w
  * account's bypass. Admins are never stopped.
  */
 export function stockCheck(ctx: AppContext, userId: number, mac: string): StockCheck & { allowed: boolean } {
-  const u = ctx.db.prepare('SELECT role, warehouse_site_id siteId, stock_bypass bypass FROM users WHERE id = ?').get(userId) as
-    | { role: string; siteId: number | null; bypass: number }
+  const u = ctx.db.prepare('SELECT role, full_view fullView, warehouse_site_id siteId, stock_bypass bypass FROM users WHERE id = ?').get(userId) as
+    | { role: string; fullView: number; siteId: number | null; bypass: number }
     | undefined;
-  const bypass = !u || isStaff(u.role) || !!u.bypass;
+  // the specialists with «visibilità piena» like the admins (issue #275)
+  const bypass = !u || seesAll(u) || !!u.bypass;
   const done = (result: StockCheck['result']) => ({ result, bypass, allowed: result === 'ok' || result === 'not_linked' || result === 'not_loaded' || bypass });
   if (!u || u.siteId === null) return done('not_linked');
   if (!ctx.warehouse.loaded()) return done('not_loaded');

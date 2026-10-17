@@ -767,6 +767,9 @@ private fun SpecJobRow(c: AppContainer, j: SpecJobDto, expanded: Boolean, onTogg
     val scope = rememberCoroutineScope()
     var confirmDelete by remember(j.id) { mutableStateOf(false) }
     val (label, kind) = statusOf(j.status)
+    // an installation of another member of the group (issue #275): read only, its author tests and authorizes it
+    val me = c.session.state.collectAsState().value?.user?.id
+    val mine = j.authorId == null || j.authorId == me
     Column(
         Modifier
             .fillMaxWidth()
@@ -780,7 +783,7 @@ private fun SpecJobRow(c: AppContainer, j: SpecJobDto, expanded: Boolean, onTogg
             Column(Modifier.weight(1f)) {
                 Text(j.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    listOf(j.company, j.model, j.macLabel).filter { it.isNotBlank() }.joinToString(" · "),
+                    listOf(j.company, j.model, j.macLabel, if (mine) "" else "di ${j.author}").filter { it.isNotBlank() }.joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -825,11 +828,15 @@ private fun SpecJobRow(c: AppContainer, j: SpecJobDto, expanded: Boolean, onTogg
                 KeyValue("UISP", "autorizzata " + localTime(at) + (j.uisp.site.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""))
             }
             val conn = j.connector
-            if (j.status == "success" && conn != null && j.uisp.authorizedAt == null) {
+            if (mine && j.status == "success" && conn != null && j.uisp.authorizedAt == null) {
                 SpecUispPanel(c, j.id, conn.id) { onChanged() }
             }
             if (j.stages.isNotEmpty()) Text(j.stages.joinToString("\n") { "✓ $it" }, style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = { confirmDelete = true }) { Text("Elimina dallo storico") }
+            if (mine) {
+                TextButton(onClick = { confirmDelete = true }) { Text("Elimina dallo storico") }
+            } else {
+                Notice("Installazione di ${j.author.ifBlank { "un altro specialist" }} del tuo gruppo di lavoro: in sola lettura. Collaudo e autorizzazione in UISP li fa chi l'ha installata, con i suoi connettori.", NoticeKind.Info)
+            }
         }
     }
     if (confirmDelete) {

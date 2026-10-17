@@ -46,6 +46,11 @@ data class SpecTemplateDto(
     val own: List<String> = emptyList(),
     val secretsSet: SpecSecretsSetDto = SpecSecretsSetDto(),
     val jobs: Int = 0,
+    /** Who made it: he, or another specialist of his work groups (issue #275). */
+    val authorId: Int? = null,
+    val author: String = "",
+    /** His own: he deletes it and sets its secrets; with another's he types them in the flow. */
+    val mine: Boolean = true,
     val createdAt: String = "",
     val updatedAt: String = "",
     /** The text, only when one template is read. */
@@ -172,6 +177,9 @@ data class SpecUispDto(val deviceId: String? = null, val siteId: String? = null,
 @Serializable
 data class SpecJobDto(
     val id: String,
+    /** Who installed it: he, or another specialist of his work groups (read only for him, issue #275). */
+    val authorId: Int? = null,
+    val author: String = "",
     val createdAt: String = "",
     val completedAt: String? = null,
     val status: String = "prepared",

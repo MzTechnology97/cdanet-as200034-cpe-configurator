@@ -211,7 +211,12 @@ export function createSpecialist(
 
   // ---- templates -------------------------------------------------------------------------------
   const templateSecrets = (r: TemplateRow): { snmpCommunity?: string } => (r.secrets_ciphertext ? json(sealer.open(r.secrets_ciphertext), {}) : {});
-  const templateMeta = (r: TemplateRow) => {
+  /**
+   * A template as [viewerId] sees it. Its secrets (the SNMP community) belong to its author: only he
+   * sets them and only his installations use them; another member of the group types them in his
+   * own flow (titolare, 17/10/2026). Never returned to anyone.
+   */
+  const templateMeta = (r: TemplateRow, viewerId: number) => {
     const text = sealer.open(r.template_ciphertext);
     const report = inspectFreeTemplate(text);
     const secrets = templateSecrets(r);
@@ -230,6 +235,8 @@ export function createSpecialist(
       /** Who made it: another member of a work group, or the specialist himself. */
       authorId: r.user_id,
       author: r.author ?? '',
+      /** His own: he deletes it and sets its secrets, his installations use them. */
+      mine: r.user_id === viewerId,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     };
@@ -262,12 +269,12 @@ export function createSpecialist(
       const ids = visible(userId);
       return (db.prepare(`${TEMPLATE_SELECT} WHERE t.user_id IN (${inList(ids)}) ORDER BY t.model, t.name COLLATE NOCASE`).all(...ids) as unknown as TemplateRow[])
         .filter((r) => sharedOk(userId, r))
-        .map(templateMeta);
+        .map((r) => templateMeta(r, userId));
     },
 
     get(userId: number, id: number) {
       const r = templateRow(userId, id);
-      return { ...templateMeta(r), template: sealer.open(r.template_ciphertext) };
+      return { ...templateMeta(r, userId), template: sealer.open(r.template_ciphertext) };
     },
 
     create(userId: number, input: SpecialistTemplateInput & { model: CpeModel; name: string; template: string; cdaSourceId?: number | undefined }) {
@@ -291,6 +298,10 @@ export function createSpecialist(
       // names are unique for each author: a member renaming a shared template checks the author's
       if (input.name !== undefined && nameTaken(cur.user_id, cur.model, input.name, id)) throw new HttpError(409, 'template_name_exists');
       if (input.boardMatch !== undefined) validateBoardMatch(input.boardMatch);
+      // the secrets are the author's: another member neither sets nor clears them
+      if ((input.snmpCommunity === null || (typeof input.snmpCommunity === 'string' && input.snmpCommunity !== '')) && cur.user_id !== userId) {
+        throw new HttpError(403, 'template_secrets_author_only');
+      }
       const checked = input.template !== undefined ? checkedText(input.template) : null;
       let secretsCipher = cur.secrets_ciphertext;
       if (input.snmpCommunity === null) secretsCipher = '';
@@ -315,7 +326,7 @@ export function createSpecialist(
     remove(userId: number, id: number) {
       const cur = templateRow(userId, id, false);
       db.prepare('DELETE FROM specialist_templates WHERE id = ? AND user_id = ?').run(id, userId);
-      return templateMeta(cur);
+      return templateMeta(cur, userId);
     },
   };
 
@@ -498,15 +509,18 @@ export function createSpecialist(
 
   const isPrivateHost = (h: string) => isPrivateIPv4(h) || isPrivateIPv6(h);
 
-  /** The values of the placeholders of a job: typed ones, then those the server fills in. */
-  function jobValues(input: JobInput, tpl: TemplateRow, uispKey: string | null) {
+  /**
+   * The values of the placeholders of a job: typed ones, then those the server fills in. The
+   * template's secrets only for its author ([mine]): the others type them.
+   */
+  function jobValues(input: JobInput, tpl: TemplateRow, uispKey: string | null, mine: boolean) {
     const typed = Object.fromEntries(Object.entries(input.values).map(([k, v]) => [k, v.trim() === '' ? '' : v]));
     for (const [k, v] of Object.entries(typed)) {
       if (v.length > 4096 || /[\r\n\0]/.test(v)) throw new HttpError(400, `invalid_value_${k}`);
     }
     if (typed.WPA2_PSK && !isWpa2Key(typed.WPA2_PSK)) throw new HttpError(400, 'invalid_value_WPA2_PSK');
     if (typed.SSID && !isSsid(typed.SSID)) throw new HttpError(400, 'invalid_value_SSID');
-    const secrets = templateSecrets(tpl);
+    const secrets = mine ? templateSecrets(tpl) : {};
     const name = (typed.DEVICE_NAME ?? '').trim();
     return {
       ...typed,
@@ -528,7 +542,9 @@ export function createSpecialist(
       const tpl = templateRow(userId, templateId);
       const report = inspectFreeTemplate(sealer.open(tpl.template_ciphertext));
       const uispKey = connectorId ? !!connectorSecrets(connectorRow(userId, connectorId)).uispKey : false;
-      return { placeholders: report.placeholders, asked: askedFor(report.placeholders, { snmpCommunity: !!templateSecrets(tpl).snmpCommunity, uispKey }) };
+      // a template of another member: its community is his author's, typed here
+      const mine = tpl.user_id === userId;
+      return { placeholders: report.placeholders, asked: askedFor(report.placeholders, { snmpCommunity: mine && !!templateSecrets(tpl).snmpCommunity, uispKey }) };
     },
 
     /**
@@ -544,7 +560,7 @@ export function createSpecialist(
       const host = input.host?.trim() || cfg.network.factoryIp;
       if (!isPrivateHost(host)) throw new HttpError(400, 'target_not_private');
       const text0 = sealer.open(tpl.template_ciphertext);
-      const values = jobValues(input, tpl, uispKey);
+      const values = jobValues(input, tpl, uispKey, tpl.user_id === user.id);
       const extra: Array<[string, string]> = input.location
         ? [
             ['system.latitude', input.location.latitude.toFixed(6)],

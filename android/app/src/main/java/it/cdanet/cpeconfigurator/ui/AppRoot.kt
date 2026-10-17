@@ -1,6 +1,8 @@
 package it.cdanet.cpeconfigurator.ui
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.fillMaxHeight
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
@@ -165,6 +167,26 @@ enum class Screen(val title: String, val scroll: Boolean = true, val wide: Boole
 /** The areas of the bottom bar (the Specialist's in place of Installa for his account). */
 private val TOP = listOf(Screen.Home, Screen.Installations, Screen.Coverage, Screen.NetHub, Screen.Tools, Screen.Specialist)
 
+/**
+ * CDA Net's own field work, with its Wi-Fi keys and the password of its CPEs: closed to a specialist
+ * without «visibilità piena» (issue #275), however it is opened (Oggi, Cerca, a notice). The server
+ * refuses it the same way.
+ */
+private val CDA_WORK = setOf(Screen.Provision, Screen.Installations, Screen.CpeHub, Screen.Alignment, Screen.Diagnosis, Screen.Acceptance)
+
+/** What a specialist without «visibilità piena» sees in place of CDA Net's field work. */
+@Composable
+private fun CdaWorkClosed(onSpecialist: () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(16.dp)) {
+        EmptyState(
+            R.drawable.ic_lock,
+            "Installazioni e CPE di CDA Net",
+            "Servono le chiavi Wi-Fi e la password delle CPE di CDA Net: sono per gli installatori e per gli specialist con la visibilità piena, che dà un amministratore.",
+        )
+        PrimaryButton(onClick = onSpecialist, modifier = Modifier.fillMaxWidth()) { Text("Vai alla sezione Specialist") }
+    }
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AppRoot(c: AppContainer) {
@@ -194,7 +216,7 @@ fun AppRoot(c: AppContainer) {
 
     /** Opens a screen, on a given tab for the areas with tabs. */
     fun open(d: Dest) {
-        val titles = hubTabTitles(d.screen, modules, c.session.isStaff)
+        val titles = hubTabTitles(d.screen, modules, c.session.seesAll)
         d.tab?.let { t -> titles.indexOf(t).takeIf { it >= 0 }?.let { hubTabs[d.screen.name] = it } }
         if (d.screen in TOP) top(d.screen) else go(d.screen)
     }
@@ -324,8 +346,13 @@ fun AppRoot(c: AppContainer) {
                     wasOnline = online
                 }
             }
-            // CPE credentials for alignment/diagnosis, so they also work later without Internet.
-            scope.launch { if (listOf("field_alignment", "field_diagnosis", "acceptance").any { c.moduleOn(it) }) c.field.prefetch() }
+            // CPE credentials for alignment/diagnosis, so they also work later without Internet; never
+            // on the phone of a specialist without «visibilità piena» (issue #275), not even an old copy
+            if (c.session.doesCdaWork) {
+                scope.launch { if (listOf("field_alignment", "field_diagnosis", "acceptance").any { c.moduleOn(it) }) c.field.prefetch() }
+            } else {
+                c.field.forget()
+            }
         } else if (everSignedIn) {
             c.field.forget()
         }
@@ -344,7 +371,7 @@ fun AppRoot(c: AppContainer) {
         return
     }
     // Salute CPE asks for the admin CPE screen (admins only, the list offers it only to them)
-    LaunchedEffect(Unit) { c.openAdminCpe.collect { if (c.session.isStaff) go(Screen.CpeAdmin) } }
+    LaunchedEffect(Unit) { c.openAdminCpe.collect { if (c.session.seesAll) go(Screen.CpeAdmin) } }
     LaunchedEffect(session?.user?.id) {
         if (session != null) {
             allowAutoLogin()
@@ -429,7 +456,7 @@ fun AppRoot(c: AppContainer) {
                                 }
                                 Spacer(Modifier.width(12.dp))
                             }
-                            val title = if (screen == Screen.CpeHealth && c.session.isStaff) "Salute CPE" else screen.title
+                            val title = if (screen == Screen.CpeHealth && c.session.seesAll) "Salute CPE" else screen.title
                             androidx.compose.runtime.SideEffect { c.currentScreen.value = title }
                             Text(
                                 title,
@@ -500,7 +527,9 @@ fun AppRoot(c: AppContainer) {
         }
         Box(Modifier.weight(1f).fillMaxHeight()) {
             val body: @Composable () -> Unit = {
-                when (screen) {
+                if (screen in CDA_WORK && !c.session.doesCdaWork) {
+                    CdaWorkClosed(onSpecialist = { top(Screen.Specialist) })
+                } else when (screen) {
                     Screen.Home -> HomeScreen(c, offline = session == null, unread = unread, onOpen = ::open, onLogin = { offline = false })
                     Screen.Calendar -> CalendarScreen(c, onOpen = ::open)
                     Screen.Installations -> InstallationsHub(
@@ -523,7 +552,7 @@ fun AppRoot(c: AppContainer) {
                     Screen.Lan -> LanHub(c, hubTabs[screen.name], { hubTabs[screen.name] = it }, onPortScan = { c.portScanTarget.value = it; hubTabs[Screen.Lan.name] = 2 })
                     Screen.Diag -> DiagHub(c, hubTabs[screen.name]) { hubTabs[screen.name] = it }
                     Screen.Devices -> DevicesHub(c, hubTabs[screen.name]) { hubTabs[screen.name] = it }
-                    Screen.Tools -> ToolsList(toolGroups(modules, offline = session == null, ::go))
+                    Screen.Tools -> ToolsList(toolGroups(modules, offline = session == null, cdaWork = c.session.doesCdaWork, ::go))
                     Screen.Search -> SearchScreen(c, onAcceptance = { c.selectedJob.value = it; go(Screen.Acceptance) })
                     Screen.Provision -> GpsGate {
                         InstallScreen(
@@ -655,9 +684,10 @@ private fun ScreenEnter(forward: Boolean, content: @Composable () -> Unit) {
 }
 
 /** The tools area: fewer, grouped entries (scansione LAN, diagnostica and apparati merge the old ones). */
-private fun toolGroups(m: Map<String, Boolean>, offline: Boolean, go: (Screen) -> Unit): List<Pair<String, List<ToolEntry>>> {
+private fun toolGroups(m: Map<String, Boolean>, offline: Boolean, cdaWork: Boolean, go: (Screen) -> Unit): List<Pair<String, List<ToolEntry>>> {
     val net = m["network_tools"] != false
-    val cpe = !offline && cpeTabTitles(m).isNotEmpty()
+    // the tools on CDA Net's CPEs: not for a specialist without «visibilità piena» (issue #275)
+    val cpe = !offline && cdaWork && cpeTabTitles(m).isNotEmpty()
     return listOf(
         "Con la CPE" to listOfNotNull(
             if (cpe) ToolEntry("CPE collegata", "Diagnosi, puntamento, AP visibili e collaudo con un solo collegamento", R.drawable.ic_cell_tower) { go(Screen.CpeHub) } else null,
