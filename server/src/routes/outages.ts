@@ -1,7 +1,7 @@
 import { randomBytes } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { HttpError, isStaff, type AuthUser } from '../auth.ts';
+import { HttpError, type AuthUser, seesAll } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { approxPoint, roughDistance } from '../domain/approx.ts';
@@ -14,17 +14,17 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
   const user = { preHandler: [ctx.auth.requireUser, ctx.modules.require('power_outages')] };
   const admin = { preHandler: [ctx.auth.requireAdmin, ctx.modules.require('power_outages')] };
   // what the specialist sees like an admin (the settings and zones of CDA Net stay with the admins)
-  const staff = { preHandler: [ctx.auth.requireStaff, ctx.modules.require('power_outages')] };
+  const staff = { preHandler: [ctx.auth.requireSeesAll, ctx.modules.require('power_outages')] };
   const { db } = ctx;
 
   /**
    * Admins see everything. Installers see the outages in their own zones and in what the admin assigned
    * to them; the potentially affected POPs/APs only for the assigned ones.
    */
-  const keysFor = (u: AuthUser) => ctx.outages.keysFor(u.id, u.role);
+  const keysFor = (u: AuthUser) => ctx.outages.keysFor(u.id, u);
   /** Installers: distances from POPs/APs rounded (no way back to the real position). */
   const shown = <T extends { impact: Array<{ distanceM: number; stations: number | null }>; zones: Array<{ distanceM?: number }> }>(u: AuthUser, list: T[]): T[] =>
-    isStaff(u.role)
+    seesAll(u)
       ? list
       : list.map((o) => ({
           ...o,
@@ -40,7 +40,7 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
       for (const i of o.impact) {
         const pop = i.type === 'pop' ? i.id : (i.popId ?? null);
         const p = pop ? all.get(pop) : undefined;
-        if (pop && p) out[pop] = isStaff(u.role) ? p : installerPower(p);
+        if (pop && p) out[pop] = seesAll(u) ? p : installerPower(p);
       }
     return out;
   };
@@ -55,11 +55,11 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
     const active = offGrid(shown(u, ctx.outages.active(keysFor(u))));
     return {
     generatedAt: ctx.outages.status()?.at ?? null,
-    lastRun: isStaff(u.role) ? ctx.outages.status() : null,
+    lastRun: seesAll(u) ? ctx.outages.status() : null,
     // the data source is for admins only (installers never see where the data comes from)
-    source: isStaff(u.role) ? 'e-distribuzione' : null,
+    source: seesAll(u) ? 'e-distribuzione' : null,
     labels: KIND_LABEL,
-    scope: isStaff(u.role) ? { all: true, assigned: [], zones: [] } : { all: false, assigned: ctx.outages.assignments(u.id), zones: ctx.outages.manualZones(u.id) },
+    scope: seesAll(u) ? { all: true, assigned: [], zones: [] } : { all: false, assigned: ctx.outages.assignments(u.id), zones: ctx.outages.manualZones(u.id) },
     active,
     // only the POPs with a battery system linked (missing: nothing to show)
     popPower: popPowerOf(u, active),
@@ -246,7 +246,7 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
     // planned works of the assigned POPs/APs: the phone's own switch (apps before 1.32.10 filter it themselves)
     const { planned } = z.object({ planned: z.enum(['0', '1']).default('1') }).parse(req.query);
     const notify = ctx.outages.active(keysFor(u)).filter((o) => {
-      const keys = ctx.outages.notifyKeysFor(u.id, u.role, o.kind, planned === '1');
+      const keys = ctx.outages.notifyKeysFor(u.id, u, o.kind, planned === '1');
       if (!keys) return o.kind !== 'lavoro' || planned === '1';
       return scopeOutage(o, keys) !== null;
     });
@@ -309,7 +309,7 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
 
   // POP/AP assignments are general (Guasti Enel and coverage check): admin only, whatever the modules.
   const adminOnly = { preHandler: [ctx.auth.requireAdmin] };
-  const staffOnly = { preHandler: [ctx.auth.requireStaff] };
+  const staffOnly = { preHandler: [ctx.auth.requireSeesAll] };
 
   /** POPs and APs of UISP for the assignment picker. */
   app.get('/api/admin/infrastructure', staffOnly, async () => {
@@ -342,7 +342,7 @@ export function outageRoutes(app: FastifyInstance, ctx: AppContext) {
     const userId = z.coerce.number().int().positive().parse((req.params as { userId: string }).userId);
     const u = db.prepare('SELECT username, role FROM users WHERE id = ?').get(userId) as { username: string; role: string } | undefined;
     if (!u) throw new HttpError(404, 'user_not_found');
-    if (isStaff(u.role)) throw new HttpError(400, 'admin_sees_all');
+    if (seesAll(u)) throw new HttpError(400, 'admin_sees_all');
     const b = z.object({ items }).strict().parse(req.body);
     const r = ctx.outages.setAssignments(userId, b.items);
     recordEvent(db, req.user!.id, 'outages.assign', u.username, `${r.length} POP/AP/zone`);

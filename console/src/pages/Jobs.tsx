@@ -9,7 +9,7 @@ import { SpeedTests } from '../jobs/SpeedTests';
 import { UispPanel } from '../jobs/UispPanel';
 import { api, download } from '../lib/api';
 import { keys } from '../lib/query';
-import { canManage, isStaff } from '../lib/roles';
+import { canManage, seesAll } from '../lib/roles';
 import type { PageContext } from '../shell/routes';
 import { AsyncButton, Badge, Button, Card, Drawer, EmptyState, Field, Icon, Notice, PageHeader, Skeleton } from '../ui';
 
@@ -80,7 +80,7 @@ const macText = (j: { status?: string; mac?: string | null }) => j.mac || (onSit
 
 export function Jobs({ user, params }: PageContext) {
   // admins and specialists see every installation; deleting an attempt stays with the admins
-  const admin = isStaff(user);
+  const admin = seesAll(user);
   const qc = useQueryClient();
   const initialStatus = FILTERS.some(([v]) => v === params.get('status')) ? params.get('status')! : '';
   const [form, setForm] = useState({ q: params.get('q') ?? '', status: initialStatus, from: '', to: '' });

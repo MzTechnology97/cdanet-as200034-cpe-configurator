@@ -91,6 +91,8 @@ interface TemplateRow {
   created_at: string;
   updated_at: string;
   jobs?: number;
+  author?: string | null;
+  cda_source_id?: number | null;
 }
 
 interface ConnectorRow {
@@ -170,7 +172,31 @@ const clean = (text: string) =>
     .replace(/[\r\n\t]+/g, ' ')
     .slice(0, 500);
 
-export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fetchImpl?: typeof fetch | undefined } = {}) {
+/**
+ * The specialists of a work group may change each other's templates (true) or only use them (false):
+ * a choice left to the review of issue #275. Deleting a template is always for its author only.
+ */
+export const GROUP_EDITS_TEMPLATES = true;
+
+export function createSpecialist(
+  db: Db,
+  cfg: Config,
+  sealer: Sealer,
+  opts: {
+    fetchImpl?: typeof fetch | undefined;
+    /** Whose work a specialist sees: himself and the members of his work groups (issue #275). */
+    visibleIds?: ((userId: number) => number[]) | undefined;
+    /** Whether a specialist may use a CDA Net template himself (his own visibility, never a member's). */
+    canUseCda?: ((userId: number, templateId: number) => boolean) | undefined;
+  } = {},
+) {
+  const visible = (userId: number) => opts.visibleIds?.(userId) ?? [userId];
+  /**
+   * A template of another member made as a copy of a CDA Net template: shared only with whoever may
+   * use that original himself. «Visibilità piena» is personal, never passed on through a group.
+   */
+  const sharedOk = (userId: number, r: TemplateRow) => r.user_id === userId || r.cda_source_id == null || (opts.canUseCda?.(userId, r.cda_source_id) ?? false);
+  const inList = (ids: number[]) => ids.map(() => '?').join(',');
   const tx = <T>(fn: () => T): T => {
     db.exec('BEGIN');
     try {
@@ -201,14 +227,20 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
       own: report.own,
       secretsSet: { snmpCommunity: !!secrets.snmpCommunity },
       jobs: r.jobs ?? 0,
+      /** Who made it: another member of a work group, or the specialist himself. */
+      authorId: r.user_id,
+      author: r.author ?? '',
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     };
   };
-  const TEMPLATE_SELECT = 'SELECT t.*, (SELECT count(*) FROM specialist_jobs j WHERE j.template_id = t.id) jobs FROM specialist_templates t';
-  const templateRow = (userId: number, id: number) => {
-    const r = db.prepare(`${TEMPLATE_SELECT} WHERE t.id = ? AND t.user_id = ?`).get(id, userId) as TemplateRow | undefined;
-    if (!r) throw new HttpError(404, 'template_not_found');
+  const TEMPLATE_SELECT =
+    'SELECT t.*, (SELECT count(*) FROM specialist_jobs j WHERE j.template_id = t.id) jobs, (SELECT username FROM users u WHERE u.id = t.user_id) author FROM specialist_templates t';
+  /** A template of the specialist, or ([shared]) of a member of his work groups too. */
+  const templateRow = (userId: number, id: number, shared = true) => {
+    const ids = shared ? visible(userId) : [userId];
+    const r = db.prepare(`${TEMPLATE_SELECT} WHERE t.id = ? AND t.user_id IN (${inList(ids)})`).get(id, ...ids) as TemplateRow | undefined;
+    if (!r || !sharedOk(userId, r)) throw new HttpError(404, 'template_not_found');
     return r;
   };
   const checkedText = (raw: string) => {
@@ -225,8 +257,12 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
     !!db.prepare('SELECT 1 FROM specialist_templates WHERE user_id = ? AND model = ? AND name = ? COLLATE NOCASE AND id <> ?').get(userId, model, name, exceptId);
 
   const templates = {
+    /** His templates and those of the members of his work groups. */
     list(userId: number) {
-      return (db.prepare(`${TEMPLATE_SELECT} WHERE t.user_id = ? ORDER BY t.model, t.name COLLATE NOCASE`).all(userId) as unknown as TemplateRow[]).map(templateMeta);
+      const ids = visible(userId);
+      return (db.prepare(`${TEMPLATE_SELECT} WHERE t.user_id IN (${inList(ids)}) ORDER BY t.model, t.name COLLATE NOCASE`).all(...ids) as unknown as TemplateRow[])
+        .filter((r) => sharedOk(userId, r))
+        .map(templateMeta);
     },
 
     get(userId: number, id: number) {
@@ -234,7 +270,7 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
       return { ...templateMeta(r), template: sealer.open(r.template_ciphertext) };
     },
 
-    create(userId: number, input: SpecialistTemplateInput & { model: CpeModel; name: string; template: string }) {
+    create(userId: number, input: SpecialistTemplateInput & { model: CpeModel; name: string; template: string; cdaSourceId?: number | undefined }) {
       if (nameTaken(userId, input.model, input.name)) throw new HttpError(409, 'template_name_exists');
       const boardMatch = input.boardMatch ?? BOARD_MATCH_SUGGESTIONS[input.model];
       validateBoardMatch(boardMatch);
@@ -243,16 +279,17 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
       const now = nowIso();
       const r = db
         .prepare(
-          `INSERT INTO specialist_templates(user_id, model, name, board_match, notes, template_ciphertext, template_sha256, secrets_ciphertext, created_at, updated_at)
-           VALUES(?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO specialist_templates(user_id, model, name, board_match, notes, template_ciphertext, template_sha256, secrets_ciphertext, created_at, updated_at, cda_source_id)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
         )
-        .run(userId, input.model, input.name, boardMatch, input.notes ?? '', sealer.seal(text), sha, secrets.snmpCommunity ? sealer.seal(JSON.stringify(secrets)) : '', now, now);
+        .run(userId, input.model, input.name, boardMatch, input.notes ?? '', sealer.seal(text), sha, secrets.snmpCommunity ? sealer.seal(JSON.stringify(secrets)) : '', now, now, input.cdaSourceId ?? null);
       return { ...templates.get(userId, Number(r.lastInsertRowid)), report };
     },
 
     update(userId: number, id: number, input: SpecialistTemplateInput) {
-      const cur = templateRow(userId, id);
-      if (input.name !== undefined && nameTaken(userId, cur.model, input.name, id)) throw new HttpError(409, 'template_name_exists');
+      const cur = templateRow(userId, id, GROUP_EDITS_TEMPLATES);
+      // names are unique for each author: a member renaming a shared template checks the author's
+      if (input.name !== undefined && nameTaken(cur.user_id, cur.model, input.name, id)) throw new HttpError(409, 'template_name_exists');
       if (input.boardMatch !== undefined) validateBoardMatch(input.boardMatch);
       const checked = input.template !== undefined ? checkedText(input.template) : null;
       let secretsCipher = cur.secrets_ciphertext;
@@ -269,13 +306,14 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
         secretsCipher,
         nowIso(),
         id,
-        userId,
+        cur.user_id,
       );
       return { ...templates.get(userId, id), report: checked?.report ?? null };
     },
 
+    /** Only its author deletes a template, also when it is shared in a work group. */
     remove(userId: number, id: number) {
-      const cur = templateRow(userId, id);
+      const cur = templateRow(userId, id, false);
       db.prepare('DELETE FROM specialist_templates WHERE id = ? AND user_id = ?').run(id, userId);
       return templateMeta(cur);
     },
@@ -416,13 +454,21 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
 
   // ---- installations ---------------------------------------------------------------------------
   const JOB_SELECT = 'SELECT j.*, c.name connector_name FROM specialist_jobs j LEFT JOIN specialist_connectors c ON c.id = j.connector_id';
-  const jobRow = (userId: number, id: string) => {
-    const r = db.prepare(`${JOB_SELECT} WHERE j.id = ? AND j.user_id = ?`).get(id, userId) as JobRow | undefined;
+  /**
+   * An installation of the specialist, or ([shared]) of a member of his work groups too: those are
+   * read only (the outcome, the test and UISP stay with their author and his connectors).
+   */
+  const jobRow = (userId: number, id: string, shared = false) => {
+    const ids = shared ? visible(userId) : [userId];
+    const r = db.prepare(`${JOB_SELECT} WHERE j.id = ? AND j.user_id IN (${inList(ids)})`).get(id, ...ids) as JobRow | undefined;
     if (!r) throw new HttpError(404, 'job_not_found');
     return r;
   };
   const jobView = (r: JobRow) => ({
     id: r.id,
+    /** Who installed it: the specialist or another member of his work groups. */
+    authorId: r.user_id,
+    author: r.username,
     createdAt: r.created_at,
     completedAt: r.completed_at,
     status: r.status,
@@ -617,15 +663,17 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
     },
 
     get(userId: number, id: string) {
-      return jobView(jobRow(userId, id));
+      return jobView(jobRow(userId, id, true));
     },
 
     list(
       userId: number,
       f: { q?: string | undefined; status?: string | undefined; connectorId?: number | undefined; from?: string | undefined; to?: string | undefined; limit: number },
     ) {
-      const where = ['j.user_id = ?'];
-      const params: Array<string | number> = [userId];
+      // his installations and those of the members of his work groups
+      const ids = visible(userId);
+      const where = [`j.user_id IN (${inList(ids)})`];
+      const params: Array<string | number> = [...ids];
       if (f.status === 'to_authorize') where.push("j.status = 'success' AND j.connector_id IS NOT NULL AND j.uisp_authorized_at IS NULL");
       else if (f.status === 'no_acceptance') where.push("j.status = 'success' AND j.acceptance_json IS NULL");
       else if (f.status) {

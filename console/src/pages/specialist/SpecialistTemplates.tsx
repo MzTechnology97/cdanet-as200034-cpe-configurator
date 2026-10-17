@@ -4,7 +4,7 @@ import { api } from '../../lib/api';
 import { toast } from '../../lib/toast';
 import { downloadText, type Facts, type FieldDef, FormField, modeText, type Section, SECTIONS, type Value } from '../../templates/form';
 import { AsyncButton, Badge, Button, Card, Drawer, EmptyState, Field, Notice, PageHeader, Segmented, Skeleton, Tabs } from '../../ui';
-import { date, FROM_TEXT, type SpecPlaceholder, type SpecTemplate } from './types';
+import { date, FROM_TEXT, myId, type SpecPlaceholder, type SpecTemplate } from './types';
 
 /**
  * I miei template: the specialist's airOS templates for the companies he works for, apart from
@@ -155,6 +155,7 @@ export function SpecialistTemplates() {
                         <div className="hl-main">
                           <div className="hl-name">
                             <strong>{t.name}</strong>
+                            {t.authorId !== myId() && <Badge tone="neutral">{`gruppo · di ${t.author}`}</Badge>}
                             {t.own.map((p) => (
                               <Badge key={p} tone="info">{`\${${p}}`}</Badge>
                             ))}
@@ -168,9 +169,11 @@ export function SpecialistTemplates() {
                           <AsyncButton onClick={() => open(t)} onError={fail}>
                             Modifica
                           </AsyncButton>
-                          <AsyncButton variant="ghost" icon="delete" onClick={() => remove(t)} onError={fail}>
-                            Elimina
-                          </AsyncButton>
+                          {t.authorId === myId() && (
+                            <AsyncButton variant="ghost" icon="delete" onClick={() => remove(t)} onError={fail}>
+                              Elimina
+                            </AsyncButton>
+                          )}
                         </div>
                       </li>
                     ))}
@@ -201,8 +204,9 @@ function NewTemplate({ models, onClose, onStart }: { models: string[]; onClose: 
   const [file, setFile] = useState<File | null>(null);
   const [cdaId, setCdaId] = useState('');
   const [name, setName] = useState('');
-  const cda = useQuery({ queryKey: ['admin', 'profiles'], queryFn: () => api<Array<{ model: string; templates: Array<{ id: number; name: string }> }>>('/api/admin/profiles'), enabled: from === 'cda', retry: false });
-  const cdaOfModel = cda.data?.find((m) => m.model === model)?.templates ?? [];
+  // the CDA Net templates he may use (all of them only with «visibilità piena», issue #275)
+  const cda = useQuery({ queryKey: ['provisioning', 'templates'], queryFn: () => api<Array<{ id: number; model: string; name: string }>>('/api/provisioning/templates'), enabled: from === 'cda', retry: false });
+  const cdaOfModel = (cda.data ?? []).filter((t) => t.model === model);
   const start = async () => {
     if (!model) throw new Error('Scegli il modello');
     if (from === 'form') return onStart({ model, name: name.trim() });

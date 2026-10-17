@@ -136,7 +136,7 @@ const MESSAGES: Record<string, string> = {
 
 export interface StoredSession {
   token: string;
-  user: { id: number; username: string; role: string };
+  user: { id: number; username: string; role: string; fullView?: boolean };
   expiresAt: string;
   /**
    * Opened with the password and the two-step code, «Resta connesso» on (titolare, 17/10/2026):

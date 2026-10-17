@@ -8,7 +8,7 @@ import { AsyncButton, Badge, Button, Drawer, EmptyState, Field, Notice, PageHead
 import { Calendar, type NewAt } from '../workorders/Calendar';
 import { OfficeList, StatusBadges } from '../workorders/Office';
 import { dayLabel, KIND_TONE, KINDS, type Order, romeDay } from '../workorders/shared';
-import { canManage, isStaff } from '../lib/roles';
+import { canManage, seesAll } from '../lib/roles';
 
 /**
  * Interventi: the office plans the day of each installer with the customer's data and the PPPoE
@@ -44,7 +44,7 @@ const LAYOUTS = [
 
 export function WorkOrders({ user }: PageContext) {
   // the specialist sees the office's agenda; planning the work orders stays with the admins
-  return isStaff(user) ? <Office /> : <Mine />;
+  return seesAll(user) ? <Office /> : <Mine />;
 }
 
 /** Installers: their orders of a day plus the ones left open. */

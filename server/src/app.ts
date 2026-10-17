@@ -38,6 +38,8 @@ import { createCrmSettings } from './services/crm.ts';
 import { createVrmSettings } from './services/victron.ts';
 import { createMyWicSettings } from './services/mywic.ts';
 import { createNas, type reachSmb, type SmbClient } from './services/nas.ts';
+import { createWorkGroups } from './services/work-groups.ts';
+import { workGroupRoutes } from './routes/work-groups.ts';
 import { createVictronSync, type VictronSync } from './services/victron-sync.ts';
 import { createImagery } from './services/imagery.ts';
 import { createCrmSync, type CrmSync } from './services/crm-sync.ts';
@@ -149,6 +151,7 @@ export async function buildApp(
     crm: createCrmSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
     victron: createVrmSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
     mywic: createMyWicSettings(db, sealer, { fetchImpl: opts.fetchImpl }),
+    workGroups: createWorkGroups(db),
     nas: createNas(db, sealer, { version, masterKey: cfg.masterKey, smb: opts.smb, reach: opts.reachSmb, log: (m) => pushLog(m) }),
     imagery: createImagery(db, sealer, {
       fetchImpl: opts.fetchImpl,
@@ -182,7 +185,12 @@ export async function buildApp(
     anncsu: createAnncsu({ dir: join(dirname(cfg.terrainDir), 'anncsu'), ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
     notify: undefined as unknown as Notifier,
     loginGuard: createLoginGuard(db, { ignore: cfg.loginBanIgnore, notify: (html) => ctx.notify.security(html) }),
-    specialist: createSpecialist(db, cfg, sealer, { fetchImpl: opts.fetchImpl }),
+    specialist: createSpecialist(db, cfg, sealer, { fetchImpl: opts.fetchImpl, visibleIds: (u) => ctx.workGroups.visibleIds(u),
+      canUseCda: (userId, templateId) => {
+        const u = db.prepare('SELECT id, role, full_view fullView FROM users WHERE id = ?').get(userId) as { id: number; role: string; fullView: number } | undefined;
+        return !!u && ctx.templates.visibleTo({ id: u.id, role: u.role, fullView: !!u.fullView }).some((t) => t.id === templateId);
+      },
+    }),
     version,
   };
   ctx.crmSync = createCrmSync(db, ctx.crm);
@@ -354,6 +362,7 @@ export async function buildApp(
   coverageOpsRoutes(app, ctx);
   platformRoutes(app, ctx);
   nasRoutes(app, ctx);
+  workGroupRoutes(app, ctx);
   diagnosisRoutes(app, ctx);
   feasibilityRoutes(app, ctx);
   savedCheckRoutes(app, ctx);

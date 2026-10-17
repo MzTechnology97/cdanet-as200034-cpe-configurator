@@ -6,7 +6,7 @@ import { recordEvent } from '../db.ts';
 
 /** Assistente rete (admins and specialists: a tool): findings on APs and CPEs, dismissing one, a refresh on demand. */
 export function advisorRoutes(app: FastifyInstance, ctx: AppContext) {
-  const admin = { preHandler: [ctx.auth.requireStaff] };
+  const admin = { preHandler: [ctx.auth.requireSeesAll] };
 
   app.get('/api/admin/advisor', admin, async () => ({ ...ctx.advisor.view(), loadAt: ctx.apLoad.at() }));
 
