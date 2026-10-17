@@ -1,5 +1,6 @@
 import { type FormEvent, type ReactNode, useRef, useState } from 'react';
 import { OperatorsCard } from '../coverage/Operators';
+import { OpenedCheck, SaveCheckButton, SavedChecksCard, type SavedCheck } from '../coverage/SavedChecks';
 import { type Ap, dec, EstimateCell, km, LoadCell, type Point, type Profile, RATING, type Result, type Tone } from '../coverage/parts';
 import { toast } from '../lib/toast';
 import { drawCoverage, MAP_COLORS as C } from '../map/leaflet';
@@ -13,8 +14,9 @@ import { AsyncButton, Badge, Button, Card, Field, Icon, Notice, PageHeader, Skel
 /**
  * Copertura. Installers: the APs advised for an address, coordinates or this device's position
  * (only their assigned APs, within the limits of Impostazioni server, as approximate areas), and the
- * link with one of them: pointing, tilt, expected signal and the terrain profile. Admins: the full
- * page with the map of every AP and the radio simulation (CoverageAdmin).
+ * link with one of them: pointing, tilt, expected signal and the terrain profile. A check is saved
+ * with a name written (the customer, the job) and taken up again from «Verifiche salvate». Admins:
+ * the full page with the map of every AP and the radio simulation (CoverageAdmin).
  */
 
 export function Coverage({ user }: PageContext) {
@@ -33,6 +35,9 @@ function InstallerCoverage() {
   const [result, setResult] = useState<{ r?: Result; loading?: boolean; error?: string } | null>(null);
   const [link, setLink] = useState<{ a: Ap; p?: Profile; error?: string } | null>(null);
   const [gpsBusy, setGpsBusy] = useState(false);
+  // the saved checks: the list reads itself again after a save; the one opened from it
+  const [version, setVersion] = useState(0);
+  const [opened, setOpened] = useState<SavedCheck | null>(null);
   const linkRef = useRef<HTMLDivElement>(null);
   // the latest choices, for a check started by a change (no waiting for a render)
   const cur = useRef({ cpe, height, link });
@@ -71,12 +76,14 @@ function InstallerCoverage() {
   }
 
   const findAddress = async () => {
+    setOpened(null);
     const list = await api<Array<{ lat: number; lon: number; label: string }>>(`/api/geocode?q=${encodeURIComponent(addr)}`);
     setChoices(list);
     if (list.length === 1) await check(list[0]!.lat, list[0]!.lon, list[0]!.label);
   };
   const checkCoords = (e: FormEvent) => {
     e.preventDefault();
+    setOpened(null);
     const la = Number(lat.replace(',', '.'));
     const lo = Number(lon.replace(',', '.'));
     if (!lat || !lon || !Number.isFinite(la) || !Number.isFinite(lo)) return void setResult({ error: 'Coordinate non valide' });
@@ -85,6 +92,7 @@ function InstallerCoverage() {
   const gps = () => {
     if (!('geolocation' in navigator) || !window.isSecureContext) return void setResult({ error: 'Il browser consente la posizione solo su HTTPS: usa l’indirizzo, le coordinate o l’app Android.' });
     setGpsBusy(true);
+    setOpened(null);
     navigator.geolocation.getCurrentPosition(
       (p) => {
         setGpsBusy(false);
@@ -185,18 +193,49 @@ function InstallerCoverage() {
         </Card>
       )}
       {result?.error && <Notice tone="bad">{result.error}</Notice>}
-      {r && point && <Results r={r} point={point} onLink={(a) => void openLink(a)} openId={link?.a.id ?? null} />}
+      {opened && point && opened.point.lat === point.la && opened.point.lon === point.lo && <OpenedCheck c={opened} onClose={() => setOpened(null)} />}
+      {r && point && (
+        <Results
+          r={r}
+          point={point}
+          onLink={(a) => void openLink(a)}
+          openId={link?.a.id ?? null}
+          actions={
+            <SaveCheckButton
+              kind="coverage"
+              point={{ lat: point.la, lon: point.lo, label: point.label }}
+              params={{ cpe, ...(Number(height) >= 1 && Number(height) <= 100 ? { height: Number(height) } : {}) }}
+              admin={false}
+              onSaved={() => setVersion((v) => v + 1)}
+            />
+          }
+        />
+      )}
       {point && <OperatorsCard key={`${point.la},${point.lo}`} point={point} admin={false} />}
       <div ref={linkRef}>{link && point && <LinkCard link={link} onHeight={(v) => (setHeight(v), recheck({ height: v }))} />}</div>
+      <SavedChecksCard
+        kind="coverage"
+        admin={false}
+        version={version}
+        onOpen={(c) => {
+          // the same point with the same CPE and height, the other operators with it
+          const o = { cpe: c.params.cpe ?? 'auto', height: c.params.height ? String(c.params.height) : '' };
+          setCpe(o.cpe);
+          setHeight(o.height);
+          setOpened(c);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          void check(c.point.lat, c.point.lon, c.point.label || c.name, o);
+        }}
+      />
     </div>
   );
 }
 
 /** The APs advised for the point: the map, then one row each (a tap opens the link). */
-function Results({ r, point, onLink, openId }: { r: Result; point: Point; onLink: (a: Ap) => void; openId: string | null }) {
+function Results({ r, point, onLink, openId, actions }: { r: Result; point: Point; onLink: (a: Ap) => void; openId: string | null; actions?: ReactNode }) {
   const restricted = r.aps.some((a) => a.approx);
   return (
-    <Card title="AP consigliati" padded={!r.aps.length}>
+    <Card title="AP consigliati" padded={!r.aps.length} actions={actions}>
       <div className={r.aps.length ? 'cv-pad' : undefined}>
         <p className="ui-muted ui-small">
           {point.label} · {point.la.toFixed(5)}, {point.lo.toFixed(5)}

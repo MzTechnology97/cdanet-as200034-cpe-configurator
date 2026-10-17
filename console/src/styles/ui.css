@@ -687,3 +687,18 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .fz-verdict.ui-tone-bad { border-left-color: var(--bad); }
 .rma-note { min-width: 160px; }
 .us-min { align-items: flex-end; margin-top: var(--sp-3); }
+/* Verifiche salvate (Copertura, Fattibilità): the list, the drawer to save or rename */
+.sv-search { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--line); }
+.sv-pad { padding: var(--sp-3) var(--sp-4); }
+.sv-actions { flex-wrap: wrap; justify-content: flex-end; }
+.sv-form { display: grid; gap: var(--sp-3); }
+.sv-chosen { display: flex; align-items: center; gap: var(--sp-2); padding: var(--sp-2) var(--sp-3); border-radius: var(--radius); background: var(--brand-soft); }
+.sv-chosen > span { flex: 1; min-width: 0; }
+.sv-customers { display: grid; gap: var(--sp-1); }
+.sv-customers .hl-list { border: 1px solid var(--line); border-radius: var(--radius); overflow: hidden; }
+.sv-customers li + li { border-top: 1px solid var(--line); }
+.sv-customer { display: grid; gap: 2px; width: 100%; padding: var(--sp-2) var(--sp-3); border: 0; background: var(--surface); color: var(--ink); font: inherit; text-align: left; cursor: pointer; }
+.sv-customer:hover, .sv-customer:focus-visible { background: var(--surface-2); }
+@media (max-width: 760px) {
+  .sv-actions { justify-content: flex-start; margin-left: 0; }
+}

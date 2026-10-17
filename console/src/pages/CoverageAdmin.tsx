@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { OperatorsCard } from '../coverage/Operators';
+import { OpenedCheck, SaveCheckButton, SavedChecksCard, type SavedCheck } from '../coverage/SavedChecks';
 import { type ReactNode, useEffect, useRef, useState } from 'react';
 import { toast } from '../lib/toast';
 import { drawFresnelLink, pointPicker, simulationOverlay, towards, MAP_COLORS as C } from '../map/leaflet';
@@ -142,6 +143,9 @@ export function CoverageAdmin() {
   const [showKo, setShowKo] = useState(false);
   const [tab, setTab] = useState<'accuracy' | 'terrain' | 'antennas'>('accuracy');
   const [gpsBusy, setGpsBusy] = useState(false);
+  // the saved checks: the list reads itself again after a save; the one opened from it
+  const [version, setVersion] = useState(0);
+  const [opened, setOpened] = useState<SavedCheck | null>(null);
   // what the map and the 3D view read without waiting for a render
   const cur = useRef({ height, cpe, radius, point, link, aps: [] as NetAp[] });
   const view3d = useRef<{ sim: Record<string, unknown> | null; link: Record<string, unknown> | null }>({ sim: null, link: null });
@@ -162,7 +166,10 @@ export function CoverageAdmin() {
     : [];
   cur.current = { height, cpe, radius, point, link, aps };
   handlers.current = {
-    onPick: (la, lo) => void check(la, lo, 'Punto scelto sulla mappa'),
+    onPick: (la, lo) => {
+      setOpened(null);
+      void check(la, lo, 'Punto scelto sulla mappa');
+    },
     view3d: () => ({ aps: cur.current.aps, sim: view3d.current.sim, link: view3d.current.link }),
   };
 
@@ -355,6 +362,7 @@ export function CoverageAdmin() {
     const q = query.trim();
     if (!q) return;
     setChoices(null);
+    setOpened(null);
     const coords = parseCoords(q);
     if (coords) return check(coords[0], coords[1], 'Coordinate inserite');
     const ql = q.toLowerCase();
@@ -371,6 +379,7 @@ export function CoverageAdmin() {
   const gps = () => {
     if (!('geolocation' in navigator) || !window.isSecureContext) return void toast('Il browser dà la posizione solo su HTTPS: usa l’indirizzo o le coordinate.');
     setGpsBusy(true);
+    setOpened(null);
     navigator.geolocation.getCurrentPosition(
       (p) => {
         setGpsBusy(false);
@@ -519,9 +528,45 @@ export function CoverageAdmin() {
         </Card>
       )}
       {result?.error && <Notice tone="bad">{result.error}</Notice>}
-      {result?.r && point && <Results r={result.r} point={point} onLink={(a) => void openLink(a)} onSimulate={(id) => void simulate(id)} />}
+      {opened && point && opened.point.lat === point.la && opened.point.lon === point.lo && <OpenedCheck c={opened} onClose={() => setOpened(null)} />}
+      {result?.r && point && (
+        <Results
+          r={result.r}
+          point={point}
+          onLink={(a) => void openLink(a)}
+          onSimulate={(id) => void simulate(id)}
+          actions={(() => {
+            const hM = Number(String(height).replace(',', '.'));
+            return (
+              <SaveCheckButton
+                kind="coverage"
+                point={{ lat: point.la, lon: point.lo, label: point.label }}
+                params={{ limit: 50, km: radius, cpe, ...(hM >= 0.5 && hM <= 100 ? { height: hM } : {}) }}
+                admin
+                onSaved={() => setVersion((v) => v + 1)}
+              />
+            );
+          })()}
+        />
+      )}
       {result?.r && point && <OperatorsCard key={`${point.la},${point.lo}`} point={point} />}
       <div ref={linkCardRef}>{link && point && <LinkDetails link={link} point={point} on3d={show3dLink} />}</div>
+
+      <SavedChecksCard
+        kind="coverage"
+        admin
+        version={version}
+        onOpen={(c) => {
+          // the same point with the same radius, CPE and height, the other operators with it
+          const o = { radius: c.params.km && [5, 10, 15, 20].includes(c.params.km) ? c.params.km : radius, cpe: c.params.cpe ?? 'auto', height: c.params.height != null ? String(c.params.height) : height };
+          setRadius(o.radius);
+          setCpe(o.cpe);
+          setHeight(o.height);
+          setOpened(c);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          void check(c.point.lat, c.point.lon, c.point.label || c.name, o);
+        }}
+      />
 
       <Card>
         <Segmented label="Strumenti" options={TABS} value={tab} onChange={setTab} />
@@ -816,7 +861,7 @@ function SimulationPanel({ sim, mode, onMode, onClear, on3d }: { sim: { d?: Sim;
 }
 
 /** The answer for the point: the verdict in evidence, then the APs ranked by the server. */
-function Results({ r, point, onLink, onSimulate }: { r: AdminResult; point: Point; onLink: (a: Ap) => void; onSimulate: (id: string) => void }) {
+function Results({ r, point, onLink, onSimulate, actions }: { r: AdminResult; point: Point; onLink: (a: Ap) => void; onSimulate: (id: string) => void; actions?: ReactNode }) {
   const useful = r.aps.filter((a) => a.rating !== 'improbabile' && a.rating !== 'non attivo');
   const others = r.aps.filter((a) => !useful.includes(a));
   const best = useful[0] ?? r.aps[0];
@@ -829,7 +874,7 @@ function Results({ r, point, onLink, onSimulate }: { r: AdminResult; point: Poin
     </ul>
   );
   return (
-    <Card title="AP consigliati per il punto">
+    <Card title="AP consigliati per il punto" actions={actions}>
       <p className="ui-muted ui-small">
         {point.label} · {point.la.toFixed(5)}, {point.lo.toFixed(5)}
       </p>

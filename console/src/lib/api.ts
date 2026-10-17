@@ -106,6 +106,10 @@ const MESSAGES: Record<string, string> = {
   acceptance_not_found: 'Collaudo non ancora inviato dall’app',
   warehouse_not_found: 'Magazzino non trovato nell’ultima lettura: aggiornalo in Magazzino e riprova',
   cpe_not_in_stock: 'La CPE non risulta nel magazzino del tecnico',
+  saved_check_not_found: 'Verifica salvata non trovata: forse è stata eliminata',
+  customer_not_found: 'Cliente non trovato tra quelli di ISP Billing: aggiorna i clienti e riprova',
+  invalid_position: 'Posizione non valida',
+  saved_check_unreadable: 'La verifica salvata non si può leggere: rifalla e salvala di nuovo',
 };
 
 export interface StoredSession {

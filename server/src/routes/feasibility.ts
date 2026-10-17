@@ -73,25 +73,38 @@ export function feasibilityRoutes(app: FastifyInstance, ctx: AppContext) {
 
   app.get('/api/admin/feasibility', admin, async (req) => feasibility(req));
 
-  let logo: string | null | undefined;
-  const logoSvg = () => {
-    if (logo === undefined) {
-      try {
-        logo = readFileSync(join(ctx.cfg.staticDir, 'assets', 'cda-net-logo.svg'), 'utf8');
-      } catch {
-        logo = null;
-      }
-    }
-    return logo;
-  };
-
   app.get('/api/admin/feasibility.pdf', admin, async (req, reply) => {
     const f = await feasibility(req);
     recordEvent(ctx.db, req.user!.id, 'feasibility.pdf', f.operators?.address?.city || 'punto', f.ours.title);
     reply.header('Content-Type', 'application/pdf').header('Content-Disposition', `attachment; filename="fattibilita-${new Date().toISOString().slice(0, 10)}.pdf"`);
-    return reply.send(feasibilityPdf(f, logoSvg()));
+    return reply.send(feasibilityPdf(f, feasibilityLogo(ctx.cfg.staticDir)));
   });
 }
+
+const logos = new Map<string, string | null>();
+/** The CDA Net logo of the PDFs, read once (null when the web files are not there). */
+export function feasibilityLogo(staticDir: string): string | null {
+  if (!logos.has(staticDir)) {
+    try {
+      logos.set(staticDir, readFileSync(join(staticDir, 'assets', 'cda-net-logo.svg'), 'utf8'));
+    } catch {
+      logos.set(staticDir, null);
+    }
+  }
+  return logos.get(staticDir) ?? null;
+}
+
+/** A filename made of the name of a saved check: letters, digits and dashes only. */
+export const pdfFileName = (name: string, at: string) =>
+  `fattibilita-${
+    name
+      .normalize('NFD')
+      .replace(/[̀-ͯ]/g, '')
+      .replace(/[^A-Za-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60)
+      .toLowerCase() || 'punto'
+  }-${at.slice(0, 10)}.pdf`;
 
 const BRAND: Rgb = [241, 90, 44];
 const BRAND_INK: Rgb = [194, 68, 26];
@@ -103,17 +116,21 @@ const M = 40;
 const CW = A4.w - 2 * M;
 const STATE: Record<string, string> = { available: 'attivabile', planned: 'in studio', none: 'non disponibile' };
 
-function feasibilityPdf(
-  f: {
-    at: string;
-    point: { lat: number; lon: number };
-    address: string;
-    ours: { verdict: Verdict; title: string; eveningMbps: number | null; sticker: Sticker | null; aps: OurAp[] };
-    operators: { groups: Array<{ sticker: Sticker; label: string; color: string; rows: Array<{ operator?: string; technologyLabel: string; state: string; maxMbps: number | null }> }> } | null;
-    operatorsError: string | null;
-  },
-  logoSvg: string | null,
-): Buffer {
+/** The answer of a feasibility check, as the route gives it and as a saved check keeps it. */
+export interface FeasibilityAnswer {
+  at: string;
+  point: { lat: number; lon: number };
+  address: string;
+  ours: { verdict: Verdict; title: string; eveningMbps: number | null; sticker: Sticker | null; aps: OurAp[] };
+  operators: { groups: Array<{ sticker: Sticker; label: string; color: string; rows: Array<{ operator?: string; technologyLabel: string; state: string; maxMbps: number | null }> }> } | null;
+  operatorsError: string | null;
+}
+
+/**
+ * The PDF of a feasibility check. [who]: the name of a saved check (the customer of ISP Billing
+ * with its code, or the name written), on top, above the address.
+ */
+export function feasibilityPdf(f: FeasibilityAnswer, logoSvg: string | null, who: { name: string; code?: string } | null = null): Buffer {
   const doc = new PdfDoc();
   let y = M;
   drawLogo(doc, logoSvg, M, y, 40);
@@ -122,7 +139,11 @@ function feasibilityPdf(
   y += 52;
   doc.rect(M, y, CW, 2.5, BRAND);
   y += 16;
-  doc.text(M, y, f.address || `${f.point.lat.toFixed(5)}, ${f.point.lon.toFixed(5)}`, { size: 12, font: 'bold' });
+  if (who?.name) {
+    doc.text(M, y, `${who.name}${who.code ? ` · cliente ${who.code}` : ''}`, { size: 13, font: 'bold' });
+    y += 18;
+    doc.text(M, y, f.address || `${f.point.lat.toFixed(5)}, ${f.point.lon.toFixed(5)}`, { size: 10.5 });
+  } else doc.text(M, y, f.address || `${f.point.lat.toFixed(5)}, ${f.point.lon.toFixed(5)}`, { size: 12, font: 'bold' });
   y += 16;
   doc.text(M, y, `${f.point.lat.toFixed(5)}, ${f.point.lon.toFixed(5)}`, { size: 8.5, color: MUTED });
   y += 20;
