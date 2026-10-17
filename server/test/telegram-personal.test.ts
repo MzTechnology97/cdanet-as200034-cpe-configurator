@@ -4,7 +4,7 @@ import { buildApp } from '../src/app.ts';
 import { openDatabase } from '../src/db.ts';
 import { ADMIN, testConfig } from './helpers.ts';
 
-const TOKEN = '123456789:AAbbCCddEEffGGhhIIjjKKllMMnnOOppQQr';
+const TOKEN = '000000:token_finto_dei_test_non_un_segreto';
 
 describe('Telegram personale per tutti gli account', () => {
   it('works with the bot token alone, for every user, and the admin can switch it off', async () => {

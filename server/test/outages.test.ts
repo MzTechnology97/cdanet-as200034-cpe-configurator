@@ -123,7 +123,7 @@ describe('Guasti Enel (e-distribuzione)', () => {
 
     assert.equal((await call('GET', '/api/outages')).json().error, 'module_disabled');
     await call('PUT', '/api/admin/modules', { power_outages: true });
-    await call('PUT', '/api/admin/connectors/telegram', { enabled: true, token: '123456789:AAHfake-token-for-tests-0123456789abcd', chatId: '-1001', events: ['power_outage'], summaryHour: 19 });
+    await call('PUT', '/api/admin/connectors/telegram', { enabled: true, token: '000000:token_finto_dei_test_non_un_segreto', chatId: '-1001', events: ['power_outage'], summaryHour: 19 });
 
     // a manual zone + AP zones from UISP (3 km)
     assert.equal((await call('POST', '/api/admin/outages/zones', { name: 'Centro Enna', lat: 37.58, lon: 14.12, radiusKm: 1 })).statusCode, 201);
