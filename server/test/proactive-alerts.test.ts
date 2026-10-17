@@ -35,7 +35,7 @@ describe('Avvisi proattivi', () => {
     assert.equal(autonomyHours([{ t: t0, soc: 80 }, { t: t0 + HOUR, soc: 80 }]), null, 'not dropping');
   });
 
-  it('tells the NOC once, after a drop seen twice; the POPs at the start, when little is left, when power is back', async () => {
+  it('tells the NOC once, after a drop seen twice; the POPs only when critical, and back on charge after that', async () => {
     const t = await testApp();
     const A = t.auth(await t.login());
     const call = (method: 'GET' | 'POST' | 'PUT', url: string, payload?: object, headers: Record<string, string> = A) => t.app.inject({ method, url, headers, payload });
@@ -60,33 +60,46 @@ describe('Avvisi proattivi', () => {
     assert.equal(said.length, 1, 'not again within the week');
     signal = -59;
 
-    // a POP goes on battery: 60% → 55% in half an hour (≈5.5 h), then down to 18% (≈1.8 h), then charging
+    // a solar POP: on battery every night, back on charge in the morning, never critical: silence
     const real = Date.now;
     let now = Date.parse('2026-10-15T20:00:00Z');
     Date.now = () => now;
     try {
-      let pop = { status: 'warn', soc: 60, batteryState: 'discharging', offGrid: false };
+      let pop = { status: 'warn', soc: 90, batteryState: 'discharging', offGrid: false };
       (t.ctx.victronSync as { byPop: () => Map<string, unknown> }).byPop = () => new Map([['pop1', pop]]);
+      for (const soc of [90, 88, 86, 84]) {
+        pop = { ...pop, soc };
+        await t.ctx.proactive.power();
+        now += 60 * 60_000;
+      }
+      pop = { ...pop, batteryState: 'charging' };
+      await t.ctx.proactive.power();
+      assert.equal(said.length, 1, 'a normal night on battery says nothing, nor the morning charge');
+
+      // a real outage: 60% → 55% in half an hour (≈5.5 h), then down to 18% (≈1.8 h): critical, once
+      pop = { ...pop, soc: 60, batteryState: 'discharging' };
+      now += 60 * 60_000;
       await t.ctx.proactive.power();
       now += 30 * 60_000;
       pop = { ...pop, soc: 55 };
       await t.ctx.proactive.power();
-      assert.equal(said.at(-1)!.title, '🔋 POP Demo Monte a batteria');
-      assert.equal(said.at(-1)!.power, true, 'also to the group, with the Enel outages');
-      now += 30 * 60_000;
-      pop = { ...pop, soc: 50 };
-      await t.ctx.proactive.power();
-      assert.equal(said.length, 2, 'nothing new while it lasts');
-      for (const soc of [40, 30, 22, 18]) {
+      assert.equal(said.length, 1, 'on battery but plenty left: nothing');
+      for (const soc of [40, 30, 22, 18, 15]) {
         now += 30 * 60_000;
         pop = { ...pop, soc };
         await t.ctx.proactive.power();
       }
-      assert.equal(said.at(-1)!.title, '⚠️ POP Demo Monte: autonomia quasi finita');
+      assert.deepEqual(said.slice(1).map((s) => s.title), ['⚠️ POP Demo Monte: batteria critica'], 'one critical alert');
+      assert.equal(said.at(-1)!.power, true, 'also to the group, with the Enel outages');
       pop = { ...pop, soc: 20, batteryState: 'charging' };
       now += 5 * 60_000;
       await t.ctx.proactive.power();
-      assert.equal(said.at(-1)!.title, '✅ POP Demo Monte: batteria in carica');
+      assert.equal(said.at(-1)!.title, '✅ POP Demo Monte: di nuovo in carica');
+      // swinging around the threshold right after: no new alert within 2 hours
+      pop = { ...pop, soc: 18, batteryState: 'discharging' };
+      now += 10 * 60_000;
+      await t.ctx.proactive.power();
+      assert.equal(said.length, 3);
     } finally {
       Date.now = real;
     }
