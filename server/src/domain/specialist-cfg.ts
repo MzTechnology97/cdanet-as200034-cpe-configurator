@@ -86,6 +86,8 @@ export function askedFor(placeholders: string[], filled: { snmpCommunity: boolea
       if (known.from === 'typed') return true;
       if (known.from === 'template') return !filled.snmpCommunity;
       if (known.from === 'connector') return !filled.uispKey;
+      // the SNMP location is the device name: typed when the template has no ${DEVICE_NAME}
+      if (known.from === 'name') return !placeholders.includes('DEVICE_NAME');
       return false;
     })
     .map((p) => {

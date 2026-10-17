@@ -37,6 +37,8 @@ class AppContainer(context: Context) {
     val firmware = it.cdanet.cpeconfigurator.firmware.FirmwareStore(appContext)
     val pointingCache = it.cdanet.cpeconfigurator.data.PointingCache(appContext)
     val install = it.cdanet.cpeconfigurator.install.InstallController(api, field, pointingCache, session)
+    /** The Specialist's own flow (owner, 17/10/2026), apart from CDA Net's installation. */
+    val specialist = it.cdanet.cpeconfigurator.specialist.SpecialistController(api, network, scope, secure, session)
     val quickLogin = it.cdanet.cpeconfigurator.security.QuickLogin(appContext)
     /** The web interface to open in the app (a device found by the Ubiquiti discovery), else the factory one. */
     val cpeWebUrl = kotlinx.coroutines.flow.MutableStateFlow<String?>(null)
@@ -94,6 +96,7 @@ class AppContainer(context: Context) {
                 provisioning.reset()
                 provisioning.field.clear()
                 install.close()
+                specialist.reset()
             }
             runCatching { screenPrefs.edit().putInt("owner", userId).apply() }
         }

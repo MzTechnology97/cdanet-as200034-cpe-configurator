@@ -78,7 +78,7 @@ fun RemoteDiagnosisCard(c: AppContainer, workOrderId: Long, kind: String) {
     var data by remember(workOrderId) { mutableStateOf<DiagnosisDto?>(null) }
     var busy by remember(workOrderId) { mutableStateOf(false) }
     var error by remember(workOrderId) { mutableStateOf<String?>(null) }
-    val path = (if (c.session.isAdmin) "/api/admin/diagnosis" else "/api/field/diagnosis") + "?workOrderId=$workOrderId"
+    val path = (if (c.session.isStaff) "/api/admin/diagnosis" else "/api/field/diagnosis") + "?workOrderId=$workOrderId"
     fun load() {
         busy = true
         error = null

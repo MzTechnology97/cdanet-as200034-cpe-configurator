@@ -22,25 +22,38 @@ class CpeProvisioner(private val onStage: (String) -> Unit) {
         /** airOS factory credentials: a CPE just reset keeps them until the configuration sets the CDA Net ones. */
         val FACTORY = CredentialsDto("ubnt", "ubnt")
 
+        /** Every credential refused, in CDA Net's installation. */
+        const val REFUSED_CDA = "Autenticazione SSH rifiutata con le credenziali CDA Net e con quelle di fabbrica: fai il primo avvio airOS dalla card qui sotto, poi riprova"
+
         /**
          * SSH to the package's CPE with its credentials and, when they are refused, with the factory
          * ones: a new or reset CPE needs no manual first access, the written configuration sets the
          * CDA Net credentials. The message of a refusal starts with "Autenticazione".
+         *
+         * [extra]: the credentials the CPE may still have, tried before the factory ones (the
+         * Specialist's flow: a CPE configured by another company); [refused] is the message when
+         * every one is refused.
          */
-        fun connect(pkg: ProvisionPackage, onStage: (String) -> Unit = {}): SshConnection {
+        fun connect(pkg: ProvisionPackage, onStage: (String) -> Unit = {}, extra: List<CredentialsDto> = emptyList(), refused: String = REFUSED_CDA): SshConnection {
             val host = pkg.target.host
             try {
                 return SshConnection.connect(host, pkg.target.sshPort, pkg.credentials.username, pkg.credentials.password)
             } catch (e: IOException) {
-                if (!e.message.orEmpty().startsWith("Autenticazione") || pkg.credentials == FACTORY) throw e
-                val ssh = try {
-                    SshConnection.connect(host, pkg.target.sshPort, FACTORY.username, FACTORY.password)
-                } catch (f: IOException) {
-                    if (!f.message.orEmpty().startsWith("Autenticazione")) throw f
-                    throw IOException("Autenticazione SSH rifiutata con le credenziali CDA Net e con quelle di fabbrica: fai il primo avvio airOS dalla card qui sotto, poi riprova", f)
+                if (!e.message.orEmpty().startsWith("Autenticazione")) throw e
+                val others = (extra + FACTORY).distinct().filter { it != pkg.credentials }
+                if (others.isEmpty()) throw e
+                var last: IOException = e
+                for (cr in others) {
+                    try {
+                        val ssh = SshConnection.connect(host, pkg.target.sshPort, cr.username, cr.password)
+                        onStage(if (cr == FACTORY) "CPE nuova o resettata: accesso con le credenziali di fabbrica" else "Accesso con le credenziali attuali della CPE")
+                        return ssh
+                    } catch (f: IOException) {
+                        if (!f.message.orEmpty().startsWith("Autenticazione")) throw f
+                        last = f
+                    }
                 }
-                onStage("CPE nuova o resettata: accesso con le credenziali di fabbrica")
-                return ssh
+                throw IOException(refused, last)
             }
         }
     }
@@ -52,7 +65,8 @@ class CpeProvisioner(private val onStage: (String) -> Unit) {
         }
     }
 
-    fun provision(pkg: ProvisionPackage, allowFirmware: String? = null): DetectedDto {
+    /** [extra] and [refused]: see [connect] (the Specialist's flow; CDA Net's uses neither). */
+    fun provision(pkg: ProvisionPackage, allowFirmware: String? = null, extra: List<CredentialsDto> = emptyList(), refused: String = REFUSED_CDA): DetectedDto {
         if (Instant.parse(pkg.expiresAt).isBefore(Instant.now())) {
             throw ProvisioningFailure("Pacchetto scaduto: torna online e preparalo di nuovo", null)
         }
@@ -66,7 +80,7 @@ class CpeProvisioner(private val onStage: (String) -> Unit) {
         var detected: DetectedDto? = null
         try {
             onStage("Connessione SSH a $host")
-            connect(pkg, onStage).use { ssh ->
+            connect(pkg, onStage, extra, refused).use { ssh ->
                 onStage("Lettura firmware, board e MAC")
                 val rb = DeviceCheck.parse(ssh.exec(DeviceCheck.READBACK_COMMAND, 8_000).stdout)
                 detected = rb.detected()

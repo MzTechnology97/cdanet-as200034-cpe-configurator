@@ -544,7 +544,8 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
       return {
         jobId: id,
         expiresAt,
-        target: { host, sshPort: input.sshPort ?? facts.sshPort ?? 22 },
+        // the port of the CPE as it is now (factory: 22, else what the discovery read), not the template's
+        target: { host, sshPort: input.sshPort ?? 22 },
         credentials: { username: input.cpe.username, password: input.cpe.password },
         // an expert: after failed updates he may write on the firmware the CPE has
         checks: { firmware: TARGET_FIRMWARE, boardMatch: tpl.board_match, mac: input.mac, firmwareBypass: true },

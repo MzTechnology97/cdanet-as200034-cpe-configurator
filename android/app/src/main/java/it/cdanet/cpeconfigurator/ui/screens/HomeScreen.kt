@@ -63,6 +63,7 @@ import it.cdanet.cpeconfigurator.ui.CdaOrange
 import it.cdanet.cpeconfigurator.ui.Notice
 import it.cdanet.cpeconfigurator.ui.NoticeKind
 import it.cdanet.cpeconfigurator.ui.Screen
+import it.cdanet.cpeconfigurator.data.specSummary
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -103,6 +104,8 @@ fun screenIcon(s: Screen): Int? = when (s) {
     Screen.Tools -> R.drawable.ic_handyman
     Screen.CpeHub -> R.drawable.ic_cell_tower
     Screen.Search -> R.drawable.ic_search
+    Screen.Specialist -> R.drawable.ic_rocket_launch
+    Screen.SpecTemplate -> R.drawable.ic_memory
 }
 
 /** Counters of the day (null = not loaded or not available). */
@@ -117,7 +120,12 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
     val prov by c.provisioning.state.collectAsState()
     val install by c.install.state.collectAsState()
     val modules by c.modules.collectAsState()
-    val admin = session?.user?.role == "admin"
+    // admins and the specialist see the whole network (the decisions on CDA Net's work stay with the admins)
+    val admin = session?.user?.role.let { it == "admin" || it == "specialist" }
+    val specialist = session?.user?.role == "specialist"
+    val spec = c.specialist.state.collectAsState().value
+    val specPending = c.specialist.results.pending.collectAsState().value
+    var specToAuthorize by remember { mutableStateOf<Int?>(null) }
     val lastUser by c.settings.lastUsername.collectAsState(initial = "")
     val backend by c.settings.backendUrl.collectAsState(initial = "")
     // shortcuts are per account (server + username) on this phone; offline: the last one logged in
@@ -137,6 +145,7 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
         today = Today(today.todo, out, today.cpeIssues)
         val issues = if (modules["cpe_health"] != false) runCatching { c.api.cpeHealth().totals.let { it.cpes - it.ok } }.getOrNull() else null
         today = Today(today.todo, today.outages, issues)
+        if (specialist) specToAuthorize = runCatching { c.api.specSummary().toAuthorize }.getOrNull()
     }
 
     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 12.dp)) {
@@ -144,17 +153,31 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
         Enter(order++) {
             Hero(
                 name = session?.user?.username,
-                role = if (admin) "Amministratore" else "Installatore",
+                role = when (session?.user?.role) {
+                    "admin" -> "Amministratore"
+                    "specialist" -> "Specialist"
+                    else -> "Installatore"
+                },
                 offline = offline,
                 resume = install.mode != null || (prov.pkg != null && prov.phase != Phase.Done),
                 onNew = { c.activeWorkOrder.value = null; c.provisioning.reset(); c.install.start(InstallMode.New); onOpen(Dest(Screen.Provision)) },
                 onRepoint = { c.install.start(InstallMode.Repoint); onOpen(Dest(Screen.Provision)) },
                 onResume = { onOpen(Dest(Screen.Provision)) },
                 onLogin = onLogin,
+                specialist = if (specialist) {
+                    SpecialistActions(
+                        resume = spec.inProgress,
+                        onConfigure = { onOpen(Dest(Screen.Specialist, SPECIALIST_TABS[0])) },
+                        onHistory = { onOpen(Dest(Screen.Specialist, SPECIALIST_TABS[1])) },
+                    )
+                } else {
+                    null
+                },
             )
         }
         if (acc.isNotEmpty()) Notice("${acc.size} collaudi in attesa di invio (foto comprese): partiranno appena c'è rete.", NoticeKind.Info)
         if (pending.isNotEmpty()) Notice("${pending.size} esiti in attesa di invio al server: partiranno appena torni online.", NoticeKind.Info)
+        if (specPending.isNotEmpty()) Notice("${specPending.size} esiti Specialist in attesa di invio al server: partiranno appena torni online.", NoticeKind.Info)
         if (refused.isNotEmpty()) Notice(
             if (refused.size == 1) "L'esito di ${refused[0].label} è stato rifiutato dal server: vedi Installazioni → Da completare."
             else "${refused.size} esiti rifiutati dal server: vedi Installazioni → Da completare.",
@@ -162,7 +185,7 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
         )
 
         if (!offline && modules["work_orders"] != false) {
-            if (admin) Enter(order++) { TeamOrdersToday(c, onOpen) }
+            if (admin) Enter(order++) { TeamOrdersToday(c, onOpen, canCreate = c.session.isAdmin) }
             Enter(order++) { WorkOrdersToday(c, onOpen) }
         }
 
@@ -173,6 +196,7 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
                 add(Counter(unread, "notifiche da leggere", R.drawable.ic_notifications, Tone.Brand, Dest(Screen.Notifications)))
                 if (modules["power_outages"] != false) add(Counter(today.outages, if (admin) "guasti Enel attivi" else "guasti nelle tue zone", R.drawable.ic_power_off, Tone.Warn, Dest(Screen.NetHub, "Guasti")))
                 if (modules["cpe_health"] != false) add(Counter(today.cpeIssues, "CPE con problemi", R.drawable.ic_monitor_heart, Tone.Warn, Dest(Screen.Installations, if (admin) "Salute CPE" else "Stato CPE")))
+                if (specialist) add(Counter(specToAuthorize, "CPE Specialist da autorizzare in UISP", R.drawable.ic_cell_tower, Tone.Warn, Dest(Screen.Specialist, SPECIALIST_TABS[1])))
             }
             counters.chunked(2).forEach { pair ->
                 Enter(order++) {
@@ -185,7 +209,7 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
         }
 
         // shortcuts: the ones this account chose, in its order (Modifica)
-        val catalog = shortcutCatalog(modules, admin, offline)
+        val catalog = shortcutCatalog(modules, admin, offline, specialist)
         val shortcuts = if (saved == null) emptyList() else resolveShortcuts(savedShortcuts, catalog)
         Enter(order++) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -240,6 +264,9 @@ private fun CounterTile(k: Counter, modifier: Modifier, onClick: () -> Unit) {
     StatTile(k.label, k.value?.toString(), modifier, tone = if ((k.value ?: 0) > 0) k.tone else Tone.Neutral, icon = k.icon, onClick = onClick)
 }
 
+/** The Specialist's actions on the hero card: his flow (or the CPE in progress) and his history. */
+private class SpecialistActions(val resume: Boolean, val onConfigure: () -> Unit, val onHistory: () -> Unit)
+
 /** Brand card on top: greeting and the main actions of the day. */
 @Composable
 private fun Hero(
@@ -251,6 +278,7 @@ private fun Hero(
     onRepoint: () -> Unit,
     onResume: () -> Unit,
     onLogin: () -> Unit,
+    specialist: SpecialistActions? = null,
 ) {
     val shape = MaterialTheme.shapes.large
     Box(
@@ -306,6 +334,17 @@ private fun Hero(
             } else if (resume) {
                 Text("Hai un intervento in corso.", style = MaterialTheme.typography.bodyMedium, color = Color.White)
                 HeroButton("Riprendi l'intervento", R.drawable.ic_arrow_forward, onResume, primary = true, modifier = Modifier.fillMaxWidth())
+            } else if (specialist != null && specialist.resume) {
+                Text("Hai una CPE in configurazione.", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                HeroButton("Riprendi la configurazione", R.drawable.ic_arrow_forward, specialist.onConfigure, primary = true, modifier = Modifier.fillMaxWidth())
+                HeroButton("Storico Specialist", R.drawable.ic_history, specialist.onHistory, primary = false, modifier = Modifier.fillMaxWidth())
+            } else if (specialist != null) {
+                Text("Che lavoro fai oggi?", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.9f))
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    HeroButton("Configura una CPE", R.drawable.ic_settings_input_antenna, specialist.onConfigure, primary = true, modifier = Modifier.fillMaxWidth())
+                    HeroButton("Storico Specialist", R.drawable.ic_history, specialist.onHistory, primary = false, modifier = Modifier.fillMaxWidth())
+                    HeroButton("Installazione CDA Net", R.drawable.ic_add_circle, onNew, primary = false, modifier = Modifier.fillMaxWidth())
+                }
             } else {
                 Text("Che intervento fai oggi?", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.9f))
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -404,7 +443,7 @@ private fun Enter(index: Int, content: @Composable () -> Unit) {
  * no orders of their own.
  */
 @Composable
-private fun TeamOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
+private fun TeamOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit, canCreate: Boolean = true) {
     var day by remember { mutableStateOf<it.cdanet.cpeconfigurator.data.CalendarDto?>(null) }
     LaunchedEffect(c.refresh.collectAsState().value) {
         val today = java.time.LocalDate.now().toString()
@@ -439,7 +478,8 @@ private fun TeamOrdersToday(c: AppContainer, onOpen: (Dest) -> Unit) {
                 }
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     PrimaryButton(onClick = { onOpen(Dest(Screen.Calendar)) }, modifier = Modifier.weight(1f)) { Text("Calendario") }
-                    SecondaryButton(onClick = { c.calendarNewOrder = true; onOpen(Dest(Screen.Calendar)) }, modifier = Modifier.weight(1f)) { Text("Nuovo intervento") }
+                    // the orders are created by the admins (the specialist sees them)
+                    if (canCreate) SecondaryButton(onClick = { c.calendarNewOrder = true; onOpen(Dest(Screen.Calendar)) }, modifier = Modifier.weight(1f)) { Text("Nuovo intervento") }
                 }
             }
         }

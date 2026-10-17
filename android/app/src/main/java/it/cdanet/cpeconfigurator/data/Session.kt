@@ -20,6 +20,15 @@ class Session {
 
     val token: String? get() = _state.value?.takeIf { !it.offline }?.token
     val isAdmin: Boolean get() = _state.value?.user?.role == "admin"
+
+    /**
+     * Admins and specialists: the specialist (owner, 17/10/2026) sees everything like an admin and uses
+     * every tool; the decisions on CDA Net's work stay with the admins ([isAdmin]).
+     */
+    val isStaff: Boolean get() = _state.value?.user?.role.let { it == "admin" || it == "specialist" }
+
+    /** The specialist's own section (his templates, connectors and installations for other companies). */
+    val isSpecialist: Boolean get() = _state.value?.user?.role == "specialist"
     val isOffline: Boolean get() = _state.value?.offline == true
 
     fun set(s: SessionState) {
