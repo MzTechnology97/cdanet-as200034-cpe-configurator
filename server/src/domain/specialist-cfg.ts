@@ -58,12 +58,13 @@ export function inspectFreeTemplate(raw: string): FreeTemplateReport {
 /**
  * How the specialist fills each placeholder CDA Net knows. [from]: typed for each CPE (`typed`), or
  * filled by the server: the CPE found by the discovery (`mac`, `serial`), the CPE's credentials
- * typed in the flow (`cpe`), the template's SNMP community and the connector's UISP key (when
- * set; else typed), the device name for the SNMP location.
+ * typed in the flow (`cpe`), the template's secrets (`template`: its SNMP community and the Wi-Fi
+ * key of the AP, sealed, its author's) and the connector's UISP key (when set; else typed), the
+ * device name for the SNMP location.
  */
 export const SPECIALIST_PLACEHOLDERS: Record<PlaceholderName, { label: string; secret?: boolean; from: 'typed' | 'mac' | 'serial' | 'cpe' | 'template' | 'connector' | 'name' }> = {
   SSID: { label: 'SSID dell’AP', from: 'typed' },
-  WPA2_PSK: { label: 'Chiave Wi-Fi (WPA2) dell’AP', secret: true, from: 'typed' },
+  WPA2_PSK: { label: 'Chiave Wi-Fi (WPA2) dell’AP', secret: true, from: 'template' },
   PPPOE_USER: { label: 'Utente PPPoE', from: 'typed' },
   PPPOE_PASSWORD: { label: 'Password PPPoE', secret: true, from: 'typed' },
   UISP_ENROLLMENT: { label: 'Chiave UISP dell’azienda', secret: true, from: 'connector' },
@@ -78,13 +79,14 @@ export const SPECIALIST_PLACEHOLDERS: Record<PlaceholderName, { label: string; s
 };
 
 /** The placeholders of a template the specialist types for each CPE (and whether to hide them). */
-export function askedFor(placeholders: string[], filled: { snmpCommunity: boolean; uispKey: boolean }) {
+export function askedFor(placeholders: string[], filled: { snmpCommunity: boolean; wpa2Psk?: boolean; uispKey: boolean }) {
   return placeholders
     .filter((p) => {
       const known = SPECIALIST_PLACEHOLDERS[p as PlaceholderName];
       if (!known) return true;
       if (known.from === 'typed') return true;
-      if (known.from === 'template') return !filled.snmpCommunity;
+      // the secrets kept in the template (its author's): the community, the Wi-Fi key of the AP
+      if (known.from === 'template') return p === 'WPA2_PSK' ? !filled.wpa2Psk : !filled.snmpCommunity;
       if (known.from === 'connector') return !filled.uispKey;
       // the SNMP location is the device name: typed when the template has no ${DEVICE_NAME}
       if (known.from === 'name') return !placeholders.includes('DEVICE_NAME');

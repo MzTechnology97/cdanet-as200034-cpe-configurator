@@ -177,10 +177,13 @@ class SpecialistFlowTest {
         // a template of another member: its author's, with its secrets
         val shared = AppJson.decodeFromString(
             SpecTemplateDto.serializer(),
-            """{"id":9,"model":"LiteBeam 5AC","name":"Azienda X","authorId":6,"author":"spec.b","mine":false,"secretsSet":{"snmpCommunity":true}}""",
+            """{"id":9,"model":"LiteBeam 5AC","name":"Azienda X","authorId":6,"author":"spec.b","mine":false,"secretsSet":{"snmpCommunity":true,"wpa2Psk":true}}""",
         )
         assertFalse(shared.mine)
         assertEquals("spec.b", shared.author)
+        // the Wi-Fi key of the AP kept in the template (v1.36.4): only that it is there
+        assertTrue(shared.secretsSet.wpa2Psk && shared.secretsSet.snmpCommunity)
+        assertFalse("an older server", template.secretsSet.wpa2Psk)
         assertTrue("an older server: his own", template.mine)
         // Oggi: his flow, none of CDA Net's CPE tools and installations
         val ids = shortcutCatalog(emptyMap(), admin = false, offline = false, specialist = true, cdaWork = false).map { it.id }

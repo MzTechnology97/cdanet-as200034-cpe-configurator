@@ -29,8 +29,9 @@ data class SpecFactsDto(
     val mode: String get() = (if (wirelessMode == "ap") "Access Point" else "Station") + (if (ptp) " PtP" else " PtMP") + " · " + (if (netMode == "bridge") "Bridge" else "Router")
 }
 
+/** Which secrets the template keeps (sealed on the server, never returned): its author's. */
 @Serializable
-data class SpecSecretsSetDto(val snmpCommunity: Boolean = false)
+data class SpecSecretsSetDto(val snmpCommunity: Boolean = false, val wpa2Psk: Boolean = false)
 
 @Serializable
 data class SpecTemplateDto(
@@ -399,7 +400,7 @@ suspend fun ApiClient.specAutoTemplate(model: String, backup: String): SpecFormS
     AppJson.decodeFromString(SpecFormStateDto.serializer(), request("POST", "/api/specialist/form/${enc(model)}/autotemplate", buildJsonObject { put("backup", backup) }))
 
 /** A new template of his ([snmpCommunity]: sealed apart, never returned). */
-suspend fun ApiClient.specCreateTemplate(model: String, name: String, template: String, boardMatch: String, notes: String, snmpCommunity: String?): SpecTemplateDto =
+suspend fun ApiClient.specCreateTemplate(model: String, name: String, template: String, boardMatch: String, notes: String, snmpCommunity: String?, wpa2Psk: String? = null): SpecTemplateDto =
     AppJson.decodeFromString(
         SpecTemplateDto.serializer(),
         request("POST", "/api/specialist/templates", buildJsonObject {
@@ -409,11 +410,25 @@ suspend fun ApiClient.specCreateTemplate(model: String, name: String, template: 
             if (boardMatch.isNotBlank()) put("boardMatch", boardMatch)
             put("notes", notes)
             snmpCommunity?.takeIf { it.isNotEmpty() }?.let { put("snmpCommunity", it) }
+            wpa2Psk?.takeIf { it.isNotEmpty() }?.let { put("wpa2Psk", it) }
         }),
     )
 
-/** Changes to a template: [snmpCommunity] a value replaces it, [removeCommunity] removes it, else it stays. */
-suspend fun ApiClient.specUpdateTemplate(id: Int, name: String, template: String, boardMatch: String, notes: String, snmpCommunity: String?, removeCommunity: Boolean): SpecTemplateDto =
+/**
+ * Changes to a template: [snmpCommunity] a value replaces it, [removeCommunity] removes it, else it
+ * stays; the same for the Wi-Fi key of the AP ([wpa2Psk], [removeKey]).
+ */
+suspend fun ApiClient.specUpdateTemplate(
+    id: Int,
+    name: String,
+    template: String,
+    boardMatch: String,
+    notes: String,
+    snmpCommunity: String?,
+    removeCommunity: Boolean,
+    wpa2Psk: String? = null,
+    removeKey: Boolean = false,
+): SpecTemplateDto =
     AppJson.decodeFromString(
         SpecTemplateDto.serializer(),
         request("PATCH", "/api/specialist/templates/$id", buildJsonObject {
@@ -424,6 +439,10 @@ suspend fun ApiClient.specUpdateTemplate(id: Int, name: String, template: String
             when {
                 !snmpCommunity.isNullOrEmpty() -> put("snmpCommunity", snmpCommunity)
                 removeCommunity -> put("snmpCommunity", kotlinx.serialization.json.JsonNull)
+            }
+            when {
+                !wpa2Psk.isNullOrEmpty() -> put("wpa2Psk", wpa2Psk)
+                removeKey -> put("wpa2Psk", kotlinx.serialization.json.JsonNull)
             }
         }),
     )

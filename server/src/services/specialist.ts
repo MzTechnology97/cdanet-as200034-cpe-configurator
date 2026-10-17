@@ -3,7 +3,7 @@ import { HttpError } from '../auth.ts';
 import type { Config } from '../config.ts';
 import { md5Crypt, sha256Hex, type Sealer } from '../crypto.ts';
 import { nowIso, type Db } from '../db.ts';
-import { templateFacts } from '../domain/airos-form.ts';
+import { templateFacts, templateSsid } from '../domain/airos-form.ts';
 import { BOARD_MATCH_SUGGESTIONS, TARGET_FIRMWARE, macSiblings, type CpeModel } from '../domain/policy.ts';
 import { askedFor, inspectFreeTemplate, isSsid, isWpa2Key, renderFreeCfg } from '../domain/specialist-cfg.ts';
 import { normalizeTemplate } from '../domain/systemcfg.ts';
@@ -33,6 +33,8 @@ export interface SpecialistTemplateInput {
   notes?: string;
   /** A value replaces the community, null removes it, absent keeps it. */
   snmpCommunity?: string | null;
+  /** The Wi-Fi key of the company's AP (titolare, 17/10/2026): sealed like the community, never returned. */
+  wpa2Psk?: string | null;
 }
 
 export interface ConnectorInput {
@@ -210,7 +212,10 @@ export function createSpecialist(
   };
 
   // ---- templates -------------------------------------------------------------------------------
-  const templateSecrets = (r: TemplateRow): { snmpCommunity?: string } => (r.secrets_ciphertext ? json(sealer.open(r.secrets_ciphertext), {}) : {});
+  /** The secrets of a template, sealed apart from its text and never returned: its author's (issue #275). */
+  type TemplateSecrets = { snmpCommunity?: string; wpa2Psk?: string };
+  const templateSecrets = (r: TemplateRow): TemplateSecrets => (r.secrets_ciphertext ? json(sealer.open(r.secrets_ciphertext), {}) : {});
+  const sealSecrets = (x: TemplateSecrets) => (x.snmpCommunity || x.wpa2Psk ? sealer.seal(JSON.stringify(x)) : '');
   /**
    * A template as [viewerId] sees it. Its secrets (the SNMP community) belong to its author: only he
    * sets them and only his installations use them; another member of the group types them in his
@@ -230,7 +235,7 @@ export function createSpecialist(
       facts: templateFacts(text),
       placeholders: report.placeholders,
       own: report.own,
-      secretsSet: { snmpCommunity: !!secrets.snmpCommunity },
+      secretsSet: { snmpCommunity: !!secrets.snmpCommunity, wpa2Psk: !!secrets.wpa2Psk },
       jobs: r.jobs ?? 0,
       /** Who made it: another member of a work group, or the specialist himself. */
       authorId: r.user_id,
@@ -260,6 +265,19 @@ export function createSpecialist(
     if (v.length > 200 || /[\r\n\0]/.test(v) || v.includes('${')) throw new HttpError(400, 'template_secret_invalid_snmpCommunity');
     return v;
   };
+  /** A value replaces a secret, null removes it, absent (or empty) keeps it. */
+  const changesSecrets = (input: SpecialistTemplateInput) => [input.snmpCommunity, input.wpa2Psk].some((v) => v === null || (typeof v === 'string' && v !== ''));
+  const nextSecrets = (cur: TemplateSecrets, input: SpecialistTemplateInput): TemplateSecrets => {
+    const out: TemplateSecrets = { ...cur };
+    if (input.snmpCommunity === null) delete out.snmpCommunity;
+    else if (typeof input.snmpCommunity === 'string' && input.snmpCommunity !== '') out.snmpCommunity = checkedCommunity(input.snmpCommunity);
+    if (input.wpa2Psk === null) delete out.wpa2Psk;
+    else if (typeof input.wpa2Psk === 'string' && input.wpa2Psk !== '') {
+      if (!isWpa2Key(input.wpa2Psk)) throw new HttpError(400, 'template_secret_invalid_wpa2Psk');
+      out.wpa2Psk = input.wpa2Psk;
+    }
+    return out;
+  };
   const nameTaken = (userId: number, model: string, name: string, exceptId = 0) =>
     !!db.prepare('SELECT 1 FROM specialist_templates WHERE user_id = ? AND model = ? AND name = ? COLLATE NOCASE AND id <> ?').get(userId, model, name, exceptId);
 
@@ -282,14 +300,14 @@ export function createSpecialist(
       const boardMatch = input.boardMatch ?? BOARD_MATCH_SUGGESTIONS[input.model];
       validateBoardMatch(boardMatch);
       const { text, sha, report } = checkedText(input.template);
-      const secrets = input.snmpCommunity ? { snmpCommunity: checkedCommunity(input.snmpCommunity) } : {};
+      const secrets = nextSecrets({}, input);
       const now = nowIso();
       const r = db
         .prepare(
           `INSERT INTO specialist_templates(user_id, model, name, board_match, notes, template_ciphertext, template_sha256, secrets_ciphertext, created_at, updated_at, cda_source_id)
            VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
         )
-        .run(userId, input.model, input.name, boardMatch, input.notes ?? '', sealer.seal(text), sha, secrets.snmpCommunity ? sealer.seal(JSON.stringify(secrets)) : '', now, now, input.cdaSourceId ?? null);
+        .run(userId, input.model, input.name, boardMatch, input.notes ?? '', sealer.seal(text), sha, sealSecrets(secrets), now, now, input.cdaSourceId ?? null);
       return { ...templates.get(userId, Number(r.lastInsertRowid)), report };
     },
 
@@ -299,13 +317,9 @@ export function createSpecialist(
       if (input.name !== undefined && nameTaken(cur.user_id, cur.model, input.name, id)) throw new HttpError(409, 'template_name_exists');
       if (input.boardMatch !== undefined) validateBoardMatch(input.boardMatch);
       // the secrets are the author's: another member neither sets nor clears them
-      if ((input.snmpCommunity === null || (typeof input.snmpCommunity === 'string' && input.snmpCommunity !== '')) && cur.user_id !== userId) {
-        throw new HttpError(403, 'template_secrets_author_only');
-      }
+      if (changesSecrets(input) && cur.user_id !== userId) throw new HttpError(403, 'template_secrets_author_only');
       const checked = input.template !== undefined ? checkedText(input.template) : null;
-      let secretsCipher = cur.secrets_ciphertext;
-      if (input.snmpCommunity === null) secretsCipher = '';
-      else if (typeof input.snmpCommunity === 'string' && input.snmpCommunity !== '') secretsCipher = sealer.seal(JSON.stringify({ snmpCommunity: checkedCommunity(input.snmpCommunity) }));
+      const secretsCipher = changesSecrets(input) ? sealSecrets(nextSecrets(templateSecrets(cur), input)) : cur.secrets_ciphertext;
       db.prepare(
         'UPDATE specialist_templates SET name = ?, board_match = ?, notes = ?, template_ciphertext = ?, template_sha256 = ?, secrets_ciphertext = ?, updated_at = ? WHERE id = ? AND user_id = ?',
       ).run(
@@ -532,6 +546,8 @@ export function createSpecialist(
       ...(input.mac ? { EXPECTED_MAC: input.mac, EXPECTED_SERIAL: input.serial || input.mac.replace(/:/g, '') } : {}),
       SNMP_LOCATION: typed.SNMP_LOCATION || name,
       SNMP_COMMUNITY: typed.SNMP_COMMUNITY || secrets.snmpCommunity || '',
+      // the key of the company's AP kept in the template (its author's), else typed for this CPE
+      WPA2_PSK: typed.WPA2_PSK || secrets.wpa2Psk || '',
       UISP_ENROLLMENT: typed.UISP_ENROLLMENT || uispKey || '',
     } as Record<string, string>;
   }
@@ -542,9 +558,10 @@ export function createSpecialist(
       const tpl = templateRow(userId, templateId);
       const report = inspectFreeTemplate(sealer.open(tpl.template_ciphertext));
       const uispKey = connectorId ? !!connectorSecrets(connectorRow(userId, connectorId)).uispKey : false;
-      // a template of another member: its community is his author's, typed here
+      // a template of another member: its secrets are his author's, typed here
       const mine = tpl.user_id === userId;
-      return { placeholders: report.placeholders, asked: askedFor(report.placeholders, { snmpCommunity: mine && !!templateSecrets(tpl).snmpCommunity, uispKey }) };
+      const secrets = mine ? templateSecrets(tpl) : {};
+      return { placeholders: report.placeholders, asked: askedFor(report.placeholders, { snmpCommunity: !!secrets.snmpCommunity, wpa2Psk: !!secrets.wpa2Psk, uispKey }) };
     },
 
     /**
@@ -584,7 +601,8 @@ export function createSpecialist(
       const sha = sha256Hex(text);
       const facts = templateFacts(text);
       const deviceName = values.DEVICE_NAME ?? '';
-      const ssid = values.SSID ?? '';
+      // the SSID written: the one of the template (fixed for the company's AP) or typed for this CPE
+      const ssid = templateSsid(text) ?? values.SSID ?? '';
       const pppoeUser = values.PPPOE_USER ?? '';
       const mac = input.mac ?? '';
       db.prepare(

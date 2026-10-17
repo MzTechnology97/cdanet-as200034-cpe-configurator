@@ -17,7 +17,7 @@ La visibilità scende dall'alto verso il basso, mai al contrario.
 
 ## Cosa si condivide in un gruppo
 
-- **Template delle CPE**: i membri li vedono, li usano per installare e li modificano. Li elimina solo chi li ha creati. I **segreti del template** (la community SNMP) restano del suo autore: solo lui li imposta o li toglie (`template_secrets_author_only` per gli altri) e solo le sue installazioni li usano. Gli altri membri, e anche il direttore, li scrivono nel flusso per ogni CPE: il server li chiede (`asked`) come per le chiavi Wi-Fi.
+- **Template delle CPE**: i membri li vedono, li usano per installare e li modificano. Li elimina solo chi li ha creati. I **segreti del template** (la community SNMP e, dalla v1.36.4, la chiave Wi-Fi dell'AP) restano del suo autore: solo lui li imposta o li toglie (`template_secrets_author_only` per gli altri) e solo le sue installazioni li usano. Gli altri membri, e anche il direttore, li scrivono nel flusso per ogni CPE: il server li chiede (`asked`) come per le chiavi Wi-Fi.
 - **Storico provisioning**: le installazioni dei membri, in sola lettura. Collaudo e autorizzazione in UISP restano a chi ha installato, con i suoi connettori. Il CSV ha la colonna «Specialist».
 - **Calendario**: gli interventi assegnati ai membri.
 

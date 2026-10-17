@@ -353,4 +353,64 @@ describe('Specialist', () => {
     assert.equal((await call('POST', `/api/specialist/jobs/${read.json().jobId}/result`, S, { result: 'success' })).statusCode, 200);
     await app.close();
   });
+
+  // SSID and Wi-Fi key in his templates (titolare, 17/10/2026): the company's AP may be always the
+  // same; the key is sealed like the community, never returned, and only his installations use it
+  it('a template with the SSID of the company and its Wi-Fi key sealed, or both typed for each CPE', async () => {
+    const { app, db, call, S } = await setup();
+    const form = (await call('GET', '/api/specialist/template-form', S)).json();
+    assert.ok(form.fields.some((f: { id: string; section: string }) => f.id === 'ssid' && f.section === 'wireless'), 'in the Wireless section');
+    const draft = (await call('POST', '/api/specialist/form/LiteBeam%205AC/read', S, {})).json();
+    assert.equal(draft.values.ssid, '', 'typed for each CPE by default');
+    const apply = (template: string, changes: object) => call('POST', '/api/specialist/form/LiteBeam%205AC/apply', S, { template, changes });
+    assert.equal((await apply(draft.template, { ssid: 'x'.repeat(33) })).json().error, 'form_invalid_ssid');
+    const fixed = (await apply(draft.template, { ssid: 'AZIENDA-X-AP1' })).json();
+    const k = parseKeys(fixed.template);
+    assert.equal(k.get('wireless.1.ssid'), 'AZIENDA-X-AP1');
+    assert.equal(k.get('wpasupplicant.profile.1.network.1.ssid'), 'AZIENDA-X-AP1');
+    assert.equal(fixed.values.ssid, 'AZIENDA-X-AP1');
+    assert.ok(!fixed.report.placeholders.includes('SSID'));
+    // as an Access Point the SSID it transmits stays the one chosen
+    const ap = parseKeys((await apply(fixed.template, { wirelessMode: 'ap' })).json().template);
+    assert.equal(ap.get('aaa.1.ssid'), 'AZIENDA-X-AP1');
+    // emptied: typed for each CPE again
+    assert.equal(parseKeys((await apply(fixed.template, { ssid: '' })).json().template).get('wireless.1.ssid'), '${SSID}');
+
+    // the key: sealed apart, never in the text nor returned
+    const create = (name: string, wpa2Psk: string | undefined) => call('POST', '/api/specialist/templates', S, { model: 'LiteBeam 5AC', name, template: fixed.template, ...(wpa2Psk ? { wpa2Psk } : {}) });
+    assert.equal((await create('Corta', 'corta')).json().error, 'template_secret_invalid_wpa2Psk');
+    const t = await create('Azienda X · AP1', WIFI);
+    assert.equal(t.statusCode, 201, t.body);
+    const id = t.json().id as number;
+    assert.deepEqual(t.json().secretsSet, { snmpCommunity: false, wpa2Psk: true });
+    const got = await call('GET', `/api/specialist/templates/${id}`, S);
+    assert.ok(!got.body.includes(WIFI), 'never returned');
+    assert.match(got.json().template, /^wpasupplicant\.profile\.1\.network\.1\.psk=\$\{WPA2_PSK\}$/m, 'the text keeps the placeholder');
+
+    // the flow asks neither the SSID nor the key: both from the template
+    const askedOf = async () => ((await call('GET', `/api/specialist/templates/${id}/values`, S)).json().asked as Array<{ name: string }>).map((a) => a.name);
+    const asked = await askedOf();
+    assert.ok(!asked.includes('SSID') && !asked.includes('WPA2_PSK'), asked.join(','));
+    const values = Object.fromEntries(asked.map((n) => [n, `${n.toLowerCase()}-1`]));
+    const job = (extra: Record<string, string> = {}) =>
+      call('POST', '/api/specialist/jobs', { ...S, ...APP }, { templateId: id, model: 'LiteBeam 5AC', cpe: { username: 'admin-x', password: CPE_PASSWORD }, values: { ...values, ...extra } });
+    const prep = await job();
+    assert.equal(prep.statusCode, 201, prep.body);
+    const cfg = parseKeys(prep.json().config.text);
+    assert.equal(cfg.get('wpasupplicant.profile.1.network.1.psk'), WIFI, 'to the CPE, from the phone of its author');
+    assert.equal(cfg.get('wpasupplicant.profile.1.network.1.ssid'), 'AZIENDA-X-AP1');
+    assert.equal(prep.json().summary.ssid, 'AZIENDA-X-AP1');
+    assert.equal((await call('GET', `/api/specialist/jobs/${prep.json().jobId}`, S)).json().ssid, 'AZIENDA-X-AP1', 'the history says which AP');
+    // a key typed for this CPE wins over the template's
+    assert.equal(parseKeys((await job({ WPA2_PSK: 'Altra-Chiave-WiFi-9' })).json().config.text).get('wpasupplicant.profile.1.network.1.psk'), 'Altra-Chiave-WiFi-9');
+    // nothing of the key in the history nor in the log
+    for (const table of ['specialist_jobs', 'specialist_templates', 'events']) {
+      assert.ok(!JSON.stringify(db.prepare(`SELECT * FROM ${table}`).all()).includes(WIFI), table);
+    }
+    // removed: typed in the flow again
+    assert.deepEqual((await call('PATCH', `/api/specialist/templates/${id}`, S, { wpa2Psk: null })).json().secretsSet, { snmpCommunity: false, wpa2Psk: false });
+    assert.ok((await askedOf()).includes('WPA2_PSK'));
+    assert.equal((await job()).json().error, 'missing_value_WPA2_PSK');
+    await app.close();
+  });
 });

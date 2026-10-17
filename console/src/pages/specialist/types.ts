@@ -18,7 +18,8 @@ export interface SpecTemplate {
   placeholders: string[];
   /** Placeholders of his own (not CDA Net's): typed for each CPE. */
   own: string[];
-  secretsSet: { snmpCommunity: boolean };
+  /** Which secrets the template keeps (sealed, never returned): its author's. */
+  secretsSet: { snmpCommunity: boolean; wpa2Psk?: boolean };
   jobs: number;
   /** Who made it: himself or another specialist of his work groups (issue #275). */
   authorId: number;
@@ -112,7 +113,7 @@ export const FROM_TEXT: Record<SpecPlaceholder['from'], string> = {
   mac: 'dalla CPE trovata (discovery)',
   serial: 'dalla CPE trovata (discovery)',
   cpe: 'dalle credenziali scritte nell’app',
-  template: 'dalla community del template, o scritta nell’app',
+  template: 'dal template (cifrata, la imposta chi l’ha creato), o scritta nell’app',
   connector: 'dal connettore UISP dell’azienda, o scritta nell’app',
   name: 'dal nome della CPE',
 };

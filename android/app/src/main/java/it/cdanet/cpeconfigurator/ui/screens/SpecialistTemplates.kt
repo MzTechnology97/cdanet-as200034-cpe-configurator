@@ -101,7 +101,7 @@ private val FILLED_FROM = mapOf(
     "mac" to "dalla CPE letta (MAC)",
     "serial" to "dalla CPE letta (seriale)",
     "cpe" to "dalle credenziali scritte nel flusso",
-    "template" to "dalla community del template, o scritta nel flusso",
+    "template" to "dal template (cifrata, la imposta chi l'ha creato), o scritta nel flusso",
     "connector" to "dal connettore UISP dell'azienda, o scritta nel flusso",
     "name" to "dal nome della CPE",
 )
@@ -167,6 +167,7 @@ fun SpecialistTemplateList(c: AppContainer, onEdit: () -> Unit) {
                                                 template = full.template,
                                                 boardMatch = full.boardMatch,
                                                 snmpSet = full.secretsSet.snmpCommunity,
+                                                wpa2Set = full.secretsSet.wpa2Psk,
                                                 author = full.author.takeIf { !full.mine },
                                                 sha256 = full.sha256,
                                                 updatedAt = full.updatedAt,
@@ -341,6 +342,10 @@ private fun TemplateEditorBody(c: AppContainer, open: SpecEditorOpen, onClose: (
     var snmp by remember { mutableStateOf("") }
     var snmpSet by remember { mutableStateOf(open.snmpSet) }
     var removeSnmp by remember { mutableStateOf(false) }
+    // the Wi-Fi key of the company's AP (titolare, 17/10/2026): sealed like the community
+    var wpa2 by remember { mutableStateOf("") }
+    var wpa2Set by remember { mutableStateOf(open.wpa2Set) }
+    var removeWpa2 by remember { mutableStateOf(false) }
     var section by remember { mutableStateOf("wireless") }
     var text by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf<String?>(null) }
@@ -406,14 +411,17 @@ private fun TemplateEditorBody(c: AppContainer, open: SpecEditorOpen, onClose: (
         }
         val id = savedId
         val r = if (id == null) {
-            c.api.specCreateTemplate(open.model, name.trim(), cur.template, boardMatch.trim(), notes.trim(), snmp.ifEmpty { null })
+            c.api.specCreateTemplate(open.model, name.trim(), cur.template, boardMatch.trim(), notes.trim(), snmp.ifEmpty { null }, wpa2.ifEmpty { null })
         } else {
-            c.api.specUpdateTemplate(id, name.trim(), cur.template, boardMatch.trim(), notes.trim(), snmp.ifEmpty { null }, removeSnmp)
+            c.api.specUpdateTemplate(id, name.trim(), cur.template, boardMatch.trim(), notes.trim(), snmp.ifEmpty { null }, removeSnmp, wpa2.ifEmpty { null }, removeWpa2)
         }
         savedId = r.id
         snmpSet = r.secretsSet.snmpCommunity
         snmp = ""
         removeSnmp = false
+        wpa2Set = r.secretsSet.wpa2Psk
+        wpa2 = ""
+        removeWpa2 = false
         dirty = false
         saved = "Template «${r.name}» salvato · ${r.sha256.take(12)}…"
         c.specialist.templatesChanged()
@@ -523,6 +531,37 @@ private fun TemplateEditorBody(c: AppContainer, open: SpecEditorOpen, onClose: (
                                 },
                                 supporting = hint.ifBlank { null },
                             )
+                        }
+                    }
+                    if (section == "wireless") {
+                        val uses = "WPA2_PSK" in fs.report.placeholders
+                        Field(
+                            "Chiave Wi-Fi (WPA2)",
+                            wpa2,
+                            {
+                                wpa2 = it.take(64)
+                                dirty = true
+                            },
+                            password = true,
+                            readOnly = removeWpa2 || open.author != null,
+                            supporting = when {
+                                // the secrets of a template are its author's (issue #275)
+                                open.author != null -> "La imposta solo ${open.author}, che ha creato il template, e vale solo per le sue installazioni: nelle tue la scrivi nel flusso per ogni CPE."
+                                wpa2Set && !removeWpa2 -> "Impostata: lascia vuoto per non cambiarla. Cifrata, mai mostrata. Vale solo per le tue installazioni."
+                                uses -> "Facoltativa: la chiave dell'AP dell'azienda, da 8 a 63 caratteri. Senza, la scrivi nel flusso per ogni CPE. Cifrata, mai mostrata."
+                                else -> "Il template non usa \${WPA2_PSK}."
+                            },
+                        )
+                        if (wpa2Set && open.author == null) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Switch(checked = removeWpa2, onCheckedChange = {
+                                    removeWpa2 = it
+                                    if (it) wpa2 = ""
+                                    dirty = true
+                                })
+                                Spacer(Modifier.width(10.dp))
+                                Text("Rimuovi la chiave da questo template", style = MaterialTheme.typography.bodyMedium)
+                            }
                         }
                     }
                     if (section == "services") {

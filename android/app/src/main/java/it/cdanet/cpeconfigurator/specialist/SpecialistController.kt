@@ -181,6 +181,8 @@ data class SpecEditorOpen(
     val template: String? = null,
     val boardMatch: String? = null,
     val snmpSet: Boolean = false,
+    /** The template keeps the Wi-Fi key of the AP (sealed, never returned). */
+    val wpa2Set: Boolean = false,
     /** A template of another member of the group (issue #275): its secrets stay with him. */
     val author: String? = null,
     val sha256: String = "",

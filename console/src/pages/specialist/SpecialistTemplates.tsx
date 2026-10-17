@@ -49,6 +49,8 @@ interface EditorOpts {
   template?: string;
   boardMatch?: string;
   snmpSet?: boolean;
+  /** The template keeps the Wi-Fi key of the AP (sealed, never returned). */
+  wpa2Set?: boolean;
   /** Of another member of the group (issue #275): its secrets stay with [author]. */
   author?: string;
   updatedAt?: string;
@@ -78,6 +80,7 @@ const editorOf = (t: SpecTemplate): EditorOpts => ({
   template: t.template,
   boardMatch: t.boardMatch,
   snmpSet: t.secretsSet.snmpCommunity,
+  wpa2Set: !!t.secretsSet.wpa2Psk,
   ...(t.authorId !== myId() ? { author: t.author } : {}),
   updatedAt: t.updatedAt,
   sha256: t.sha256,
@@ -327,6 +330,9 @@ function TemplateEditor({ opts, data, onDirty, onClose, onSaved }: { opts: Edito
   const [boardMatch, setBoardMatch] = useState(opts.boardMatch ?? data.boardMatch[opts.model] ?? '');
   const [snmp, setSnmp] = useState('');
   const [removeSnmp, setRemoveSnmp] = useState(false);
+  // the Wi-Fi key of the company's AP (titolare, 17/10/2026): sealed like the community
+  const [wpa2, setWpa2] = useState('');
+  const [removeWpa2, setRemoveWpa2] = useState(false);
   const [form, setFormState] = useState<FormState | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -422,12 +428,15 @@ function TemplateEditor({ opts, data, onDirty, onClose, onSaved }: { opts: Edito
       boardMatch: boardMatch.trim(),
       notes: notes.trim(),
       ...(snmp ? { snmpCommunity: snmp } : removeSnmp ? { snmpCommunity: null } : {}),
+      ...(wpa2 ? { wpa2Psk: wpa2 } : removeWpa2 ? { wpa2Psk: null } : {}),
     };
     const t = isNew ? await api<SpecTemplate>('/api/specialist/templates', { method: 'POST', body: { model: opts.model, ...body } }) : await api<SpecTemplate>(`/api/specialist/templates/${opts.id}`, { method: 'PATCH', body });
     toast(`Template «${t.name}» salvato · ${t.sha256.slice(0, 12)}…`);
     setDirtyState(false);
     setSnmp('');
     setRemoveSnmp(false);
+    setWpa2('');
+    setRemoveWpa2(false);
     await onSaved(t);
   };
 
@@ -443,6 +452,7 @@ function TemplateEditor({ opts, data, onDirty, onClose, onSaved }: { opts: Edito
     !(f.id.startsWith('watchdog') && f.id !== 'watchdog' && values.watchdog === false);
   const known = new Map(data.placeholders.map((p) => [p.name, p]));
   const usesCommunity = form.report.placeholders.includes('SNMP_COMMUNITY');
+  const usesKey = form.report.placeholders.includes('WPA2_PSK');
 
   return (
     <Card title={isNew ? `Nuovo template · ${opts.model}` : `Modifica · ${opts.model} · ${opts.name}`}>
@@ -504,6 +514,30 @@ function TemplateEditor({ opts, data, onDirty, onClose, onSaved }: { opts: Edito
                 onCommit={() => void flush().catch(fail)}
               />
             ))}
+          {tab === 'wireless' && (
+            <div>
+              <Field
+                label="Chiave Wi-Fi (WPA2)"
+                hint={
+                  opts.author
+                    ? `La imposta solo ${opts.author}, che ha creato il template, e vale solo per le sue installazioni: nelle tue la scrivi nell’app per ogni CPE.`
+                    : opts.wpa2Set
+                      ? 'Impostata: lascia vuoto per non cambiarla. Cifrata, mai mostrata. Vale solo per le tue installazioni: gli altri del gruppo la scrivono nell’app.'
+                      : usesKey
+                        ? 'Facoltativa: la chiave dell’AP dell’azienda, da 8 a 63 caratteri. Senza, la scrivi nell’app per ogni CPE. Cifrata, mai mostrata.'
+                        : 'Il template non usa ${WPA2_PSK}.'
+                }
+              >
+                <input type="password" autoComplete="new-password" value={wpa2} maxLength={64} disabled={removeWpa2 || !!opts.author} onChange={(e) => (setWpa2(e.target.value), mark())} />
+              </Field>
+              {opts.wpa2Set && !opts.author && (
+                <label className="ui-check ui-small">
+                  <input type="checkbox" checked={removeWpa2} onChange={(e) => (setRemoveWpa2(e.target.checked), setWpa2(''), mark())} />
+                  Rimuovi la chiave da questo template
+                </label>
+              )}
+            </div>
+          )}
           {tab === 'services' && (
             <div>
               <Field
