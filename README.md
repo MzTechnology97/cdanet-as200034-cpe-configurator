@@ -62,7 +62,7 @@ SECRETS_KEY_FILE=.dev/master.key DB_PATH=.dev/dev.sqlite STATIC_DIR=web node ser
 
 Per l'app Android:
 - apri `android/` in Android Studio (usa Gradle 8.11.1 da `gradle-wrapper.properties`);
-- oppure, con Gradle installato: `gradle -p android testDebugUnitTest assembleDebug`.
+- oppure, con Gradle installato: `gradle -p android testServerDebugUnitTest assembleServerDebug` (bundle per Google Play: `bundlePlayRelease`, vedi [docs/GOOGLE-PLAY.md](docs/GOOGLE-PLAY.md)).
 
 ## Documentazione
 

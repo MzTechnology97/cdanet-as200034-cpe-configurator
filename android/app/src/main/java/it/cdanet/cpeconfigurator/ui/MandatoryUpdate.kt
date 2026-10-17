@@ -30,6 +30,12 @@ import kotlinx.coroutines.launch
 
 /** Downloads the APK (SHA-256 checked) and opens the Android installer; reports each step. */
 suspend fun startUpdate(c: AppContainer, info: UpdateInfo, onState: (UpdateState) -> Unit) {
+    // installed from Google Play: the update comes from there
+    if (c.updater.fromStore) {
+        c.updater.openStore()
+        onState(UpdateState.ReadyToInstall(info))
+        return
+    }
     if (!c.updater.canInstall()) {
         onState(UpdateState.PermissionRequired)
         c.updater.openInstallPermissionSettings()
@@ -85,8 +91,8 @@ fun MandatoryUpdateScreen(c: AppContainer, info: UpdateInfo?, minVersion: String
                 LinearProgressIndicator(Modifier.fillMaxWidth())
             }
             is UpdateState.ReadyToInstall -> {
-                Text("Conferma l'installazione nella schermata di Android. Al termine riapri l'app.")
-                SecondaryButton(onClick = { scope.launch { startUpdate(c, state.info, onState) } }, modifier = Modifier.fillMaxWidth()) { Text("Installa di nuovo") }
+                Text(if (c.updater.fromStore) "Aggiorna l'app dal Play Store, poi riaprila." else "Conferma l'installazione nella schermata di Android. Al termine riapri l'app.")
+                SecondaryButton(onClick = { scope.launch { startUpdate(c, state.info, onState) } }, modifier = Modifier.fillMaxWidth()) { Text(if (c.updater.fromStore) "Apri il Play Store" else "Installa di nuovo") }
             }
             is UpdateState.PermissionRequired -> {
                 Text("Consenti a CDA Net di installare app (\"Installa app sconosciute\"), poi torna qui.")
@@ -99,7 +105,7 @@ fun MandatoryUpdateScreen(c: AppContainer, info: UpdateInfo?, minVersion: String
                 BusyButton("Riprova", false, Modifier.fillMaxWidth()) { onRecheck() }
             }
             else -> if (info != null) {
-                BusyButton("Scarica e installa", false, Modifier.fillMaxWidth()) { scope.launch { startUpdate(c, info, onState) } }
+                BusyButton(if (c.updater.fromStore) "Aggiorna dal Play Store" else "Scarica e installa", false, Modifier.fillMaxWidth()) { scope.launch { startUpdate(c, info, onState) } }
             } else {
                 Text("Non riesco a scaricare l'aggiornamento dal server: controlla la connessione.", color = MaterialTheme.colorScheme.error)
                 BusyButton("Riprova", false, Modifier.fillMaxWidth()) { onRecheck() }

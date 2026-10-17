@@ -229,7 +229,8 @@ fun AppRoot(c: AppContainer) {
         val u = update
         // in the scope of the app, not of this effect: the download changes [update], and the new
         // key would cancel the effect and the download with it ("left the composition")
-        if (u is UpdateState.Available) scope.launch { startUpdate(c, u.info) { update = it } }
+        // from Google Play: the store updates the app by itself, no Play page opened every 15 minutes
+        if (u is UpdateState.Available && !c.updater.fromStore) scope.launch { startUpdate(c, u.info) { update = it } }
     }
     if (mandatory != null || required != null) {
         MandatoryUpdateScreen(c, mandatory, required, update, onState = { update = it }, onRecheck = { recheck++ })

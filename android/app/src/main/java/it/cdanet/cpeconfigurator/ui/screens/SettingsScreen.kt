@@ -52,11 +52,11 @@ fun UpdateBanner(c: AppContainer, state: UpdateState, onState: (UpdateState) -> 
     when (state) {
         is UpdateState.Available -> SectionCard("Aggiornamento disponibile", icon = it.cdanet.cpeconfigurator.R.drawable.ic_rocket_launch) {
             Text("Versione ${state.info.versionName}${if (state.info.mandatory) " (obbligatorio)" else ""}")
-            BusyButton("Scarica e installa", busy = false, modifier = Modifier.fillMaxWidth()) { install(state.info) }
+            BusyButton(if (c.updater.fromStore) "Aggiorna dal Play Store" else "Scarica e installa", busy = false, modifier = Modifier.fillMaxWidth()) { install(state.info) }
         }
         is UpdateState.Downloading -> Banner("Download ${state.info.versionName} e verifica SHA-256…", WarnAmber)
         is UpdateState.ReadyToInstall -> SectionCard("Aggiornamento pronto", icon = it.cdanet.cpeconfigurator.R.drawable.ic_rocket_launch) {
-            Text("Conferma l'installazione nella schermata di Android.")
+            Text(if (c.updater.fromStore) "Aggiorna l'app dal Play Store, poi riaprila." else "Conferma l'installazione nella schermata di Android.")
             SecondaryButton(onClick = { install(state.info) }) { Text("Riprova") }
         }
         is UpdateState.PermissionRequired -> SectionCard("Autorizzazione richiesta", icon = it.cdanet.cpeconfigurator.R.drawable.ic_lock) {

@@ -103,6 +103,17 @@ export const noticeSha256 = (c: Controller) => createHash('sha256').update(notic
 
 const esc = (s: string) => s.replace(/[&<>"']/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[ch]!);
 
+/** The notice as a public page (the privacy policy link Google Play asks for). */
+export function noticeHtml(c: Controller): string {
+  const n = privacyNotice(c);
+  return `<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Informativa privacy · App CDA Net CPE</title>
+<style>:root{color-scheme:light dark}body{font:15px/1.6 system-ui,sans-serif;max-width:760px;margin:32px auto;padding:0 16px}h1{font-size:21px;text-wrap:balance}h2{font-size:16px;margin-top:22px}.v{opacity:.7;font-size:13px}</style></head><body>
+<h1>${esc(n.title)}</h1>
+<p class="v">Versione ${esc(PRIVACY_VERSION)} · titolare ${esc(c.name)}</p>
+${n.sections.map((s) => `<h2>${esc(s.title)}</h2>${s.paragraphs.map((p) => `<p>${esc(p)}</p>`).join('')}`).join('\n')}
+</body></html>`;
+}
+
 /** Printable attestation kept with the acceptance: who, when, from where, which text. */
 export function attestationHtml(a: { id: number; username: string; acceptedAt: string; ip: string; device: string; appVersion: string; sha256: string; version: string }, c: Controller): string {
   const n = privacyNotice(c);

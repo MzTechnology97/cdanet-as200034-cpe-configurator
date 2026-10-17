@@ -6,6 +6,7 @@ import android.net.Uri
 import android.provider.Settings as AndroidSettings
 import androidx.core.content.FileProvider
 import androidx.core.content.pm.PackageInfoCompat
+import it.cdanet.cpeconfigurator.BuildConfig
 import it.cdanet.cpeconfigurator.data.AppJson
 import it.cdanet.cpeconfigurator.data.Settings
 import kotlinx.coroutines.Dispatchers
@@ -59,6 +60,17 @@ class AppUpdater(private val context: Context, private val settings: Settings) {
             if (!r.isSuccessful) throw IOException("Canale aggiornamenti HTTP ${r.code}")
             val info = AppJson.decodeFromString(UpdateInfo.serializer(), r.body?.string().orEmpty())
             info.takeIf { it.available && it.versionCode > installedVersionCode() }
+        }
+    }
+
+    /** The Google Play build: Play installs the updates, the app only points to its page. */
+    val fromStore: Boolean get() = BuildConfig.STORE == "play"
+
+    fun openStore() {
+        val id = context.packageName
+        val market = Intent(Intent.ACTION_VIEW, Uri.parse("market://details?id=$id")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        runCatching { context.startActivity(market) }.onFailure {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://play.google.com/store/apps/details?id=$id")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         }
     }
 
