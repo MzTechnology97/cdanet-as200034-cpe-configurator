@@ -4,6 +4,7 @@ import { toast } from '../lib/toast';
 import { api } from '../lib/api';
 import { AsyncButton, Button, Field, Notice, Skeleton, Table } from '../ui';
 import { ALT_FROM } from './link';
+import { canManage } from '../lib/roles';
 
 /**
  * The tools under the map of Copertura (admins), as tabs: how reliable the estimate is on the real
@@ -318,6 +319,8 @@ export function TerrainTab() {
           ? `Alberi veri: altezza di ogni albero dalla mappa Meta/WRI su ${s.canopyTiles} riquadri (${date(s.canopyAt)}), al posto della classe «alberi» di ESA con l’altezza media.`
           : 'Alberi: oggi la classe «alberi» di ESA con l’altezza media. Con «Altezze degli alberi» il calcolo usa l’altezza di ogni albero della mappa Meta/WRI (circa 1 m, letta a 4 m).'}
       </p>
+      {/* the downloads of the terrain and of the data stay with the admins */}
+      {canManage() && (
       <div className="ui-row cov-actions">
         <AsyncButton
           disabled={off}
@@ -347,12 +350,14 @@ export function TerrainTab() {
           {s.canopyTiles ? 'Aggiorna le altezze degli alberi' : 'Altezze degli alberi'}
         </AsyncButton>
       </div>
+      )}
       <p>
         {civics
           ? `Civici ANNCSU (${s.anncsu!.regionName}, ${s.anncsu!.file}): ${civics.toLocaleString('it-IT')} numeri civici con coordinate nell’area della rete. Quando un indirizzo cercato ha via e numero, la ricerca lo mette sulla casa invece che sulla via.`
           : 'Civici: la ricerca di un indirizzo usa OpenStreetMap, che spesso conosce la via ma non il numero. Con l’archivio nazionale dei civici (ANNCSU, Agenzia delle Entrate – ISTAT) il punto cade sulla casa.'}
       </p>
       {s.anncsu?.import?.running ? <Notice>{s.anncsu.import.phase}…</Notice> : s.anncsu?.import?.error ? <Notice tone="bad">Civici: {s.anncsu.import.error}</Notice> : null}
+      {canManage() && (
       <div className="ui-row cov-actions cov-civics">
         <Field label="Regione dei civici">
           <select value={reg} onChange={(e) => setRegion(e.target.value)}>
@@ -375,6 +380,7 @@ export function TerrainTab() {
           {civics ? 'Aggiorna i civici' : 'Scarica i civici ANNCSU'}
         </AsyncButton>
       </div>
+      )}
       <p className="ui-small ui-muted">
         Area della rete: {area}, cioè gli AP più 20 km intorno. Le altezze medie di edifici e vegetazione si impostano in Impostazioni server → Simulazione radio. Fonti: TINITALY 1.1, Tarquini et al. (2023), INGV, doi:10.13127/tinitaly/1.1 (CC BY 4.0); ESA WorldCover 10 m 2021 v200, doi:10.5281/zenodo.7254221 (CC BY 4.0); edifici ©
         OpenStreetMap contributors (ODbL) tramite Protomaps; alberi: Meta e World Resources Institute, Canopy Height Maps v2 (CC BY 4.0).
@@ -492,9 +498,12 @@ function AntennaRow({ a, lib, onSaved }: { a: ApAntenna; lib: Pattern[]; onSaved
         <input type="number" className="ant-num" min={-30} max={30} step={0.5} value={tilt} aria-label={`Tilt di ${a.name}`} placeholder="°" onChange={(e) => setTilt(e.target.value)} />
       </td>
       <td className="end">
-        <AsyncButton onClick={save} onError={fail}>
-          Salva
-        </AsyncButton>
+        {/* the antennas of CDA Net's APs: the admins set them */}
+        {canManage() && (
+          <AsyncButton onClick={save} onError={fail}>
+            Salva
+          </AsyncButton>
+        )}
       </td>
     </tr>
   );

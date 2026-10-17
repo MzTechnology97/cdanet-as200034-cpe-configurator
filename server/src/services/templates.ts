@@ -1,4 +1,5 @@
 import { HttpError } from '../auth.ts';
+import { isStaff } from '../domain/roles.ts';
 import { sha256Hex, type Sealer } from '../crypto.ts';
 import { nowIso, type Db } from '../db.ts';
 import { templateFacts, type TemplateParams } from '../domain/airos-form.ts';
@@ -10,7 +11,7 @@ import { inspectTemplate, normalizeTemplate, RETIRED_PLACEHOLDERS, type RetiredP
  *
  * Visibility: audience 'all' (every installer) or 'users' (only the assigned users;
  * a template assigned to one installer is that installer's personal template).
- * Admins always see and may use every template.
+ * Admins and specialists always see and may use every template.
  *
  * Defaults: one global default per model, always visible to everyone. A restricted
  * template can additionally be the default for its assigned users (default_for_assigned).
@@ -223,7 +224,7 @@ export function createTemplates(db: Db, sealer: Sealer) {
     return { audience, userIds, defaultForAssigned };
   };
   const canUse = (r: Row, viewer: Viewer) =>
-    viewer.role === 'admin' || r.audience === 'all' || !!db.prepare('SELECT 1 FROM template_users WHERE template_id = ? AND user_id = ?').get(r.id, viewer.id);
+    isStaff(viewer.role) || r.audience === 'all' || !!db.prepare('SELECT 1 FROM template_users WHERE template_id = ? AND user_id = ?').get(r.id, viewer.id);
   const personalDefault = (model: string, viewer: Viewer) =>
     db
       .prepare(

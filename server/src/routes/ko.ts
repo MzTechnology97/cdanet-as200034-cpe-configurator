@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { HttpError } from '../auth.ts';
+import { HttpError, isStaff } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent, type Db } from '../db.ts';
 import { parseMac } from '../domain/policy.ts';
@@ -72,7 +72,7 @@ export function koRoutes(app: FastifyInstance, ctx: AppContext) {
       const job = db.prepare('SELECT id, user_id, mac FROM provisioning_jobs WHERE id = ?').get(b.jobId) as { id: string; user_id: number; mac: string } | undefined;
       if (!job) throw new HttpError(404, 'job_not_found');
       const assigned = !!db.prepare('SELECT 1 FROM cpe_assignments WHERE mac = ? AND user_id = ?').get(job.mac, req.user!.id);
-      if (job.user_id !== req.user!.id && req.user!.role !== 'admin' && !assigned) throw new HttpError(403, 'forbidden');
+      if (job.user_id !== req.user!.id && !isStaff(req.user!.role) && !assigned) throw new HttpError(403, 'forbidden');
       jobMac = job.mac;
     }
     mac = mac ?? (jobMac || null);
@@ -93,7 +93,7 @@ export function koRoutes(app: FastifyInstance, ctx: AppContext) {
       .parse(req.query);
     const where: string[] = [];
     const params: Array<string | number> = [];
-    if (req.user!.role !== 'admin') {
+    if (!isStaff(req.user!.role)) {
       where.push('k.user_id = ?');
       params.push(req.user!.id);
     }

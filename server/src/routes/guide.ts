@@ -12,7 +12,7 @@ const DIR = fileURLToPath(new URL('../guide-admin/', import.meta.url));
  * images alike (the installer guide is the static /wiki/ page).
  */
 export function guideRoutes(app: FastifyInstance, ctx: AppContext) {
-  const admin = { preHandler: [ctx.auth.requireAdmin] };
+  const admin = { preHandler: [ctx.auth.requireStaff] };
 
   app.get('/api/admin/guide', admin, async (_req, reply) => {
     reply.header('Cache-Control', 'no-store');

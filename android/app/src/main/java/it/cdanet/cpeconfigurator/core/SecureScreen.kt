@@ -7,7 +7,8 @@ object SecureScreen {
      * on. Not known yet ([modules] null, no role) means blocked.
      */
     fun blocked(role: String?, modules: Map<String, Boolean>?): Boolean = when (role) {
-        "admin" -> false
+        // admins and specialists always may
+        "admin", "specialist" -> false
         null -> true
         else -> modules?.get("screenshots") != true
     }

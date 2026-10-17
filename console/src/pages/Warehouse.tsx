@@ -5,6 +5,7 @@ import { api } from '../lib/api';
 import { toast } from '../lib/toast';
 import type { PageContext } from '../shell/routes';
 import { AsyncButton, Badge, Card, EmptyState, Field, Notice, PageHeader, Skeleton, Stat, Table } from '../ui';
+import { canManage, isStaff } from '../lib/roles';
 
 /**
  * Magazzino. The NOC: the CPEs of every warehouse of ISP Billing by model, who is short of CPEs,
@@ -27,7 +28,8 @@ const SYNC_ERRORS: Record<string, string> = {
 const syncError = (code: string) => SYNC_ERRORS[code] ?? code;
 
 export function Warehouse({ user }: PageContext) {
-  return user.role === 'admin' ? <Office /> : <Mine />;
+  // the specialist sees the office's view (his own CPEs come from other companies, never from here)
+  return isStaff(user) ? <Office /> : <Mine />;
 }
 
 interface Overview {
@@ -63,9 +65,11 @@ function Office() {
         title="Magazzino"
         subtitle="Le CPE nei magazzini ISPBilling di installatori e partner: chi ne ha poche, quelle installate da scaricare e la storia di ogni CPE."
         actions={
-          <AsyncButton icon="refresh" onClick={refresh} onError={fail}>
-            Aggiorna ora
-          </AsyncButton>
+          canManage() ? (
+            <AsyncButton icon="refresh" onClick={refresh} onError={fail}>
+              Aggiorna ora
+            </AsyncButton>
+          ) : undefined
         }
       />
       {q.error ? (

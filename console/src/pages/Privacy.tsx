@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { toast } from '../lib/toast';
 import { api } from '../lib/api';
 import { AsyncButton, Badge, Card, Field, Notice, PageHeader, Skeleton, Table } from '../ui';
+import { roleWord } from '../lib/roles';
 
 /**
  * Informativa privacy (admins): the controller's details that complete the notice of the app, who
@@ -137,7 +138,7 @@ export function Privacy() {
                     </span>
                   ),
                 },
-                { label: 'Ruolo', render: (u) => (u.role === 'admin' ? 'amministratore' : 'installatore') },
+                { label: 'Ruolo', render: (u) => roleWord(u.role) },
                 { label: 'Informativa in vigore', render: (u) => (d.notice ? u.current ? <Badge tone="good">accettata</Badge> : <Badge tone="warn">da accettare</Badge> : '—') },
               ]}
             />

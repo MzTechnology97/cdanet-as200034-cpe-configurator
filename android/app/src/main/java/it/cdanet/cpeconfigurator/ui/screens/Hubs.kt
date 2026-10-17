@@ -141,7 +141,7 @@ fun InstallationsHub(
     onRepoint: (() -> Unit)?,
 ) {
     val modules by c.modules.collectAsState()
-    val tabs = installTabTitles(modules, c.session.isAdmin).map { t ->
+    val tabs = installTabTitles(modules, c.session.isStaff).map { t ->
         when (t) {
             "Da completare" -> HubTab(t, R.drawable.ic_pending_actions) { ToDoPanel(c, onResume, onAcceptance) }
             "Storico" -> HubTab(t, R.drawable.ic_history, scroll = false) { HistoryScreen(c, onAcceptance = onAcceptance, onReplace = onReplace) }
@@ -155,7 +155,7 @@ fun InstallationsHub(
 @Composable
 fun NetworkHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit, onAim: (CompassTarget) -> Unit, onCompass: (CompassTarget) -> Unit) {
     val modules by c.modules.collectAsState()
-    val tabs = networkTabTitles(modules, c.session.isAdmin).map { t ->
+    val tabs = networkTabTitles(modules, c.session.isStaff).map { t ->
         when (t) {
             "Stato" -> HubTab(t, R.drawable.ic_hub) { NetworkStatusScreen(c) }
             "IA-AP" -> HubTab(t, R.drawable.ic_troubleshoot) { AdvisorScreen(c) }
@@ -207,6 +207,7 @@ fun hubTabTitles(s: Screen, m: Map<String, Boolean>, admin: Boolean): List<Strin
     Screen.Lan -> LAN_TABS
     Screen.Diag -> DIAG_TABS
     Screen.Devices -> DEVICES_TABS
+    Screen.Specialist -> SPECIALIST_TABS
     else -> emptyList()
 }
 

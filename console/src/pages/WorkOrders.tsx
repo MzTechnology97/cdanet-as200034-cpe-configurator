@@ -8,6 +8,7 @@ import { AsyncButton, Badge, Button, Drawer, EmptyState, Field, Notice, PageHead
 import { Calendar, type NewAt } from '../workorders/Calendar';
 import { OfficeList, StatusBadges } from '../workorders/Office';
 import { dayLabel, KIND_TONE, KINDS, type Order, romeDay } from '../workorders/shared';
+import { canManage, isStaff } from '../lib/roles';
 
 /**
  * Interventi: the office plans the day of each installer with the customer's data and the PPPoE
@@ -42,7 +43,8 @@ const LAYOUTS = [
 ];
 
 export function WorkOrders({ user }: PageContext) {
-  return user.role === 'admin' ? <Office /> : <Mine />;
+  // the specialist sees the office's agenda; planning the work orders stays with the admins
+  return isStaff(user) ? <Office /> : <Mine />;
 }
 
 /** Installers: their orders of a day plus the ones left open. */
@@ -88,9 +90,9 @@ function Office() {
   const [editing, setEditing] = useState<Order | 'new' | NewAt | null>(null);
   const [layout, setLayout] = useLayout();
 
-  const users = useQuery({ queryKey: ['admin', 'users'], queryFn: () => api<Array<{ id: number; username: string; role: string; active?: boolean }>>('/api/admin/users') });
+  const users = useQuery({ queryKey: ['admin', 'users'], queryFn: () => api<Array<{ id: number; username: string; role: string; active?: boolean }>>('/api/admin/users'), enabled: canManage() });
   const models = useQuery({ queryKey: ['admin', 'profiles'], queryFn: () => api<Array<{ model: string }>>('/api/admin/profiles') });
-  const installers = (users.data ?? []).filter((u) => u.active !== false && u.role !== 'admin');
+  const installers = (users.data ?? []).filter((u) => u.active !== false && u.role === 'installer');
   const refresh = () => qc.invalidateQueries({ queryKey: ['work-orders'] });
 
   return (
@@ -102,14 +104,16 @@ function Office() {
         actions={
           <>
             <Segmented label="Vista" value={layout} onChange={setLayout} options={LAYOUTS} />
-            <Button variant="primary" icon="add_circle" onClick={() => setEditing('new')}>
-              Nuovo intervento
-            </Button>
+            {canManage() && (
+              <Button variant="primary" icon="add_circle" onClick={() => setEditing('new')}>
+                Nuovo intervento
+              </Button>
+            )}
           </>
         }
       />
       {layout === 'calendar' ? (
-        <Calendar admin onNew={(at) => setEditing(at)} onOpen={(o) => setEditing(o as unknown as Order)} />
+        <Calendar admin onNew={canManage() ? (at) => setEditing(at) : undefined} onOpen={(o) => (canManage() ? setEditing(o as unknown as Order) : undefined)} />
       ) : (
         <OfficeList
           installers={installers}

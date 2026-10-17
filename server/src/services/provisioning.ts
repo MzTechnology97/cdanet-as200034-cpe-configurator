@@ -1,6 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { HttpError } from '../auth.ts';
+import { isStaff } from '../domain/roles.ts';
 import type { Config } from '../config.ts';
 import { md5Crypt, sha256Hex, type Sealer } from '../crypto.ts';
 import { nowIso, type Db } from '../db.ts';
@@ -236,7 +237,7 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
     const o = db.prepare('SELECT id, assigned_to assignedTo, status, pppoe_ciphertext ciphertext FROM work_orders WHERE id = ?').get(id) as
       | { id: number; assignedTo: number | null; status: string; ciphertext: string }
       | undefined;
-    if (!o || (o.assignedTo !== viewer.id && viewer.role !== 'admin')) throw new HttpError(404, 'work_order_not_found');
+    if (!o || (o.assignedTo !== viewer.id && !isStaff(viewer.role))) throw new HttpError(404, 'work_order_not_found');
     if (o.status === 'done' || o.status === 'cancelled') throw new HttpError(409, 'work_order_closed');
     return o;
   }
@@ -404,7 +405,7 @@ export function createProvisioning(db: Db, cfg: Config, sealer: Sealer, template
   ) {
     const where: string[] = [];
     const params: Array<string | number> = [];
-    if (user.role !== 'admin') {
+    if (!isStaff(user.role)) {
       where.push('j.user_id = ?');
       params.push(user.id);
     }

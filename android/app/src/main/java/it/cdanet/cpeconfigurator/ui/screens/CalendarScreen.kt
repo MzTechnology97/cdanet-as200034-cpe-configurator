@@ -181,10 +181,12 @@ fun CalendarScreen(c: AppContainer, onOpen: (Dest) -> Unit) {
     val items = data?.takeIf { it.from <= from.toString() && it.to >= to.toString() }?.items.orEmpty()
     val today = data?.today?.takeIf { it.isNotBlank() }?.let { LocalDate.parse(it) } ?: LocalDate.now()
     val planner = data?.installers != null
+    // the specialist sees the whole team's calendar; only admins create, move or cancel the orders
+    val canPlan = planner && c.session.isAdmin
     val create: (LocalDate, Int?) -> Unit = { d, h -> editing = OrderDraftMath.at(d, h, user) to null }
     // «Nuovo intervento» from Oggi opens the calendar with the editor
-    LaunchedEffect(planner) {
-        if (planner && c.calendarNewOrder) {
+    LaunchedEffect(canPlan) {
+        if (canPlan && c.calendarNewOrder) {
             c.calendarNewOrder = false
             create(anchor, null)
         }
@@ -202,19 +204,19 @@ fun CalendarScreen(c: AppContainer, onOpen: (Dest) -> Unit) {
             val all = listOf<Pair<Long?, String>>(null to "Tutti gli installatori") + list.map { it.id to it.username }
             Dropdown("Installatore", all, all.firstOrNull { it.first == user } ?: all.first(), { it.second }, { user = it.first }, Modifier.fillMaxWidth())
         }
-        if (planner) PrimaryButton(onClick = { create(anchor, null) }, modifier = Modifier.fillMaxWidth()) { Text("Nuovo intervento") }
+        if (canPlan) PrimaryButton(onClick = { create(anchor, null) }, modifier = Modifier.fillMaxWidth()) { Text("Nuovo intervento") }
         ErrorBanner(error) { error = null }
         notice?.let { Banner(it, GoodGreen) }
         when (view) {
             CalView.Day -> {
                 Untimed(items.filter { it.day == anchor.toString() }) { open = it }
-                Timeline(listOf(anchor), items, today, showAssignee = planner, onEmpty = if (planner) create else null) { open = it }
+                Timeline(listOf(anchor), items, today, showAssignee = planner, onEmpty = if (canPlan) create else null) { open = it }
             }
             CalView.Week -> {
                 val days = (0L until 7L).map { CalendarMath.weekStart(anchor).plusDays(it) }
                 WeekHeader(days, today) { d -> anchor = d; view = CalView.Day }
                 Untimed(items.filter { o -> days.any { it.toString() == o.day } }, withDay = true) { open = it }
-                Timeline(days, items, today, showAssignee = false, onEmpty = if (planner) create else null) { open = it }
+                Timeline(days, items, today, showAssignee = false, onEmpty = if (canPlan) create else null) { open = it }
             }
             CalView.Month -> {
                 MonthGrid(YearMonth.from(anchor), anchor, today, items) { d -> anchor = d }
@@ -226,7 +228,7 @@ fun CalendarScreen(c: AppContainer, onOpen: (Dest) -> Unit) {
         }
         Text(
             "Colori: arancio nuova installazione, blu ripuntamento, giallo riparazione, verde sopralluogo. Gli interventi fatti sono sbiaditi." +
-                if (planner) " Tocca un'ora libera per creare un intervento lì." else "",
+                if (canPlan) " Tocca un'ora libera per creare un intervento lì." else "",
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -234,8 +236,8 @@ fun CalendarScreen(c: AppContainer, onOpen: (Dest) -> Unit) {
     open?.let { o ->
         OrderDialog(
             c, o, today, onOpen,
-            onEdit = if (planner && o.status != "done") ({ open = null; editing = OrderDraftMath.of(o) to o }) else null,
-            onCancelled = if (planner) ({ open = null; notice = "Intervento annullato: ${o.customer}."; saved++ }) else null,
+            onEdit = if (canPlan && o.status != "done") ({ open = null; editing = OrderDraftMath.of(o) to o }) else null,
+            onCancelled = if (canPlan) ({ open = null; notice = "Intervento annullato: ${o.customer}."; saved++ }) else null,
         ) { open = null }
     }
     editing?.let { (draft, original) ->

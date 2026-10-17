@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { HttpError } from '../auth.ts';
+import { HttpError, isStaff } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { parseMac } from '../domain/policy.ts';
@@ -75,7 +75,7 @@ export function speedtestRoutes(app: FastifyInstance, ctx: AppContext) {
    * installations, the CPEs assigned to them and the work orders assigned to them.
    */
   const subject = (req: FastifyRequest, q: { jobId?: string; mac?: string; workOrderId?: number }) => {
-    const admin = req.user!.role === 'admin';
+    const admin = isStaff(req.user!.role);
     const me = req.user!.id;
     let mac = q.mac ? parseMac(q.mac) : null;
     if (q.mac && !mac) throw new HttpError(400, 'invalid_mac');

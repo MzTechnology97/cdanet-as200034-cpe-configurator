@@ -51,8 +51,14 @@ val DEFAULT_SHORTCUTS = listOf("cpe", "alignment", "coverage", "near_aps", "ar",
  * Every shortcut this account can have now: only features enabled for it, and without login only
  * the tools that work on the phone alone. Same order as the editor shows them.
  */
-fun shortcutCatalog(m: Map<String, Boolean>, admin: Boolean, offline: Boolean): List<Shortcut> = buildList {
+fun shortcutCatalog(m: Map<String, Boolean>, admin: Boolean, offline: Boolean, specialist: Boolean = false): List<Shortcut> = buildList {
     val on = !offline
+    // the Specialist's own work (owner, 17/10/2026): his flow, history and templates
+    if (on && specialist) {
+        add(Shortcut("spec_new", "Configura una CPE", "Flusso Specialist: CPE di altre aziende, con i tuoi template", R.drawable.ic_settings_input_antenna, Area.Field, Dest(Screen.Specialist, SPECIALIST_TABS[0])))
+        add(Shortcut("spec_history", "Storico Specialist", "Le CPE che hai configurato, collaudo e UISP", R.drawable.ic_history, Area.Work, Dest(Screen.Specialist, SPECIALIST_TABS[1])))
+        add(Shortcut("spec_templates", "I miei template", "Template airOS tuoi, separati da quelli di CDA Net", R.drawable.ic_memory, Area.Work, Dest(Screen.Specialist, SPECIALIST_TABS[2])))
+    }
     val cpe = cpeTabTitles(m)
     val net = networkTabTitles(m, admin)
     val install = installTabTitles(m, admin)

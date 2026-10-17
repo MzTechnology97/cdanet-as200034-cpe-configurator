@@ -10,6 +10,7 @@ import { MapView } from '../map/MapView';
 import { CoverageAdmin, LinkCharts } from './CoverageAdmin';
 import type { PageContext } from '../shell/routes';
 import { AsyncButton, Badge, Button, Card, Field, Icon, Notice, PageHeader, Skeleton } from '../ui';
+import { isStaff } from '../lib/roles';
 
 /**
  * Copertura. Installers: the APs advised for an address, coordinates or this device's position
@@ -20,7 +21,8 @@ import { AsyncButton, Badge, Button, Card, Field, Icon, Notice, PageHeader, Skel
  */
 
 export function Coverage({ user }: PageContext) {
-  return user.role === 'admin' ? <CoverageAdmin /> : <InstallerCoverage />;
+  // admins and specialists: the tools without limits
+  return isStaff(user) ? <CoverageAdmin /> : <InstallerCoverage />;
 }
 
 function InstallerCoverage() {

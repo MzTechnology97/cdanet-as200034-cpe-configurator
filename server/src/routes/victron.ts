@@ -15,6 +15,8 @@ const SUGGEST_M = 1000;
  */
 export function victronRoutes(app: FastifyInstance, ctx: AppContext) {
   const admin = { preHandler: ctx.auth.requireAdmin };
+  // the specialist sees the systems and reads them again; linking them to the POPs stays with the admins
+  const staff = { preHandler: ctx.auth.requireStaff };
 
   const pops = async () =>
     ctx.uisp
@@ -36,7 +38,7 @@ export function victronRoutes(app: FastifyInstance, ctx: AppContext) {
         .filter((w) => w.length >= 3 && !['pop', 'cda', 'net', 'cdanet', 'sito', 'victron'].includes(w)),
     );
 
-  app.get('/api/admin/victron', admin, async () => {
+  app.get('/api/admin/victron', staff, async () => {
     const list = await pops().catch(() => []);
     const byId = new Map(list.map((p) => [p.id, p]));
     const now = Date.now() / 1000;
@@ -122,7 +124,7 @@ export function victronRoutes(app: FastifyInstance, ctx: AppContext) {
     return { idSite, popId, popName: pop?.name ?? null, offGrid: now?.offGrid ?? false };
   });
 
-  app.post('/api/admin/victron/sync', admin, async () => {
+  app.post('/api/admin/victron/sync', staff, async () => {
     if (!ctx.victron.client()) throw new HttpError(400, 'vrm_incomplete');
     return ctx.victronSync.syncNow();
   });

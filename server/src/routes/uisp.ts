@@ -5,7 +5,7 @@ import { eveningShare, expectedModulation } from '../domain/ap-load.ts';
 import { apModels } from '../services/model-inputs.ts';
 import { z } from 'zod';
 import { CPE_MODELS, cpeModelById, recommendCpe } from '../domain/cpe-models.ts';
-import { HttpError } from '../auth.ts';
+import { HttpError, isStaff } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { toCsv } from '../domain/csv.ts';
@@ -47,6 +47,9 @@ export const subscriberTiming = { pollMs: 1500 };
 export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
   const user = { preHandler: ctx.auth.requireUser };
   const admin = { preHandler: ctx.auth.requireAdmin };
+  // what the specialist sees and the tools he uses like an admin (subscribers and the activation of
+  // CDA Net's CPEs in UISP stay with the admins: his own CPEs are authorized from his section)
+  const staff = { preHandler: ctx.auth.requireStaff };
   const mod = (k: ModuleKey, base: typeof user | typeof admin = user) => ({ preHandler: [base.preHandler, ctx.modules.require(k)] });
   const { db } = ctx;
 
@@ -59,7 +62,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     const id = z.string().uuid().parse((req.params as { id: string }).id);
     const job = db.prepare('SELECT * FROM provisioning_jobs WHERE id = ?').get(id) as JobRow | undefined;
     if (!job) throw new HttpError(404, 'job_not_found');
-    if (job.user_id !== req.user!.id && req.user!.role !== 'admin') throw new HttpError(403, 'forbidden');
+    if (job.user_id !== req.user!.id && !isStaff(req.user!.role)) throw new HttpError(403, 'forbidden');
     return job;
   };
 
@@ -114,13 +117,13 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     if (q.cpe !== 'auto' && !chosenCpe) throw new HttpError(400, 'unknown_cpe_model');
     // admins: no limits (up to 50 APs, the distance they ask up to 200 km); installers, from the
     // web or the app alike: the number set in Impostazioni server, within the configured radius
-    const isAdmin = req.user!.role === 'admin';
+    const isAdmin = isStaff(req.user!.role);
     const limit = isAdmin ? q.limit : ctx.cfg.installerCoverageAps;
     // never beyond the farthest realistic link (20 km), whatever is asked or configured
     const maxKm = Math.min(MAX_LINK_M / 1000, isAdmin ? (q.km ?? ctx.uispSettings.coverageMaxKm) : ctx.uispSettings.coverageMaxKm);
     if (!isValidLatLon(q.lat, q.lon)) throw new HttpError(400, 'invalid_position');
     // Installers check coverage only on the POPs/APs assigned to them by the admin.
-    const keys = req.user!.role === 'admin' ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
+    const keys = isStaff(req.user!.role) ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
     const allow = keys ? (a: { id: string; siteId: string | null }) => keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`)) : undefined;
     // every AP within range is rated, the limit comes last: a good AP a bit farther away is not
     // hidden by closer ones with a worse signal
@@ -215,7 +218,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
    * has the azimuth) and the terrain between every cell and the AP (hills, not buildings or trees).
    * Out to where the signal falls to −80 dBm in the main lobe, at most 20 km (farthest real link).
    */
-  app.get('/api/admin/coverage/simulation', mod('coverage', admin), async (req) => {
+  app.get('/api/admin/coverage/simulation', mod('coverage', staff), async (req) => {
     const q = z.object({ apId: z.string().min(1).max(80), cpe: z.string().max(40).optional() }).parse(req.query);
     const simCpe = cpeModelById(q.cpe) ?? cpeModelById('lbe5ac')!;
     const ap = (await uisp().apsWithLocation()).find((a) => a.id === q.apId && !isPtp(a));
@@ -332,10 +335,10 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
            WHERE j.status = 'success'
              AND NOT EXISTS (SELECT 1 FROM provisioning_jobs r WHERE r.replaces_job_id = j.id AND r.status = 'success')
              AND NOT EXISTS (SELECT 1 FROM provisioning_jobs n WHERE n.mac = j.mac AND n.status = 'success' AND n.created_at > j.created_at)
-             ${viewer.role !== 'admin' ? 'AND j.user_id = ?' : installer ? 'AND u.username = ?' : ''}
+             ${!isStaff(viewer.role) ? 'AND j.user_id = ?' : installer ? 'AND u.username = ?' : ''}
            ORDER BY j.created_at DESC LIMIT 5000`,
         )
-        .all(...(viewer.role !== 'admin' ? [viewer.id] : installer ? [installer] : [])) as unknown as InstalledJob[]
+        .all(...(!isStaff(viewer.role) ? [viewer.id] : installer ? [installer] : [])) as unknown as InstalledJob[]
     );
 
   /** CPEs assigned to installers (MAC → user): customers installed before the app or by someone else. */
@@ -370,7 +373,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       .object({ installer: z.string().trim().max(80).optional(), scope: z.enum(['all', 'app']).default('all'), stale: z.coerce.boolean().default(false) })
       .parse(req.query);
     const viewer = req.user!;
-    const admin = viewer.role === 'admin';
+    const admin = isStaff(viewer.role);
     const jobs = installedJobs(viewer, q.installer);
     const assigned = assignmentsByMac(admin ? undefined : viewer.id);
     const byMac = new Map<string, UispDevice>();
@@ -462,7 +465,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     if (b.userId !== null) {
       const u = db.prepare('SELECT username, role FROM users WHERE id = ?').get(b.userId) as { username: string; role: string } | undefined;
       if (!u) throw new HttpError(404, 'user_not_found');
-      if (u.role === 'admin') throw new HttpError(400, 'admin_sees_all');
+      if (isStaff(u.role)) throw new HttpError(400, 'admin_sees_all');
       username = u.username;
     }
     const names = new Map<string, string>();
@@ -516,7 +519,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   // ---- Admin actions ------------------------------------------------------------------------
-  app.get('/api/admin/uisp/status', admin, async () => {
+  app.get('/api/admin/uisp/status', staff, async () => {
     if (!ctx.uisp) return { configured: false };
     try {
       return { configured: true, ...(await ctx.uisp.test()) };
@@ -526,7 +529,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     }
   });
 
-  app.get('/api/admin/uisp/sites', admin, async () => (await uisp().sites()).filter((s) => s.type !== 'endpoint').map((s) => ({ id: s.id, name: s.name })));
+  app.get('/api/admin/uisp/sites', staff, async () => (await uisp().sites()).filter((s) => s.type !== 'endpoint').map((s) => ({ id: s.id, name: s.name })));
 
   // ---- New subscriber at acceptance (UISP CRM) -------------------------------------------------
   const crm = () => {
@@ -546,13 +549,13 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
   };
 
   /** The service plans of UISP: the NOC picks the customer's one when accepting the CPE. */
-  app.get('/api/admin/uisp/service-plans', admin, async () => (await crm().servicePlans()).filter((p) => p.periodId !== null));
+  app.get('/api/admin/uisp/service-plans', staff, async () => (await crm().servicePlans()).filter((p) => p.periodId !== null));
 
   /**
    * What the "Crea subscriber" form starts from: name from the PPPoE user, address and position of
    * the installation, and the plan of the PPPoE profile in ISPBilling (null = the NOC picks it).
    */
-  app.get('/api/admin/provisioning/jobs/:id/uisp/subscriber', admin, async (req) => {
+  app.get('/api/admin/provisioning/jobs/:id/uisp/subscriber', staff, async (req) => {
     const job = loadJob(req);
     const c = ctx.connectors.crm();
     const order = job.work_order_id
@@ -675,7 +678,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   /** What changed on the CPE compared with the CDA Net configuration (latest UISP backup). */
-  app.get('/api/admin/provisioning/jobs/:id/uisp/drift', mod('config_drift', admin), async (req) => {
+  app.get('/api/admin/provisioning/jobs/:id/uisp/drift', mod('config_drift', staff), async (req) => {
     const job = loadJob(req);
     if (job.status !== 'success') throw new HttpError(409, 'job_not_completed');
     const full = db.prepare('SELECT model, mac, serial, ssid, pppoe_user, template_name, latitude, longitude FROM provisioning_jobs WHERE id = ?').get(job.id) as {
@@ -708,13 +711,13 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     return { backup: { id: latest.id, timestamp: latest.timestamp }, template: full.template_name, ...report };
   });
 
-  app.get('/api/admin/provisioning/jobs/:id/uisp/backups', admin, async (req) => {
+  app.get('/api/admin/provisioning/jobs/:id/uisp/backups', staff, async (req) => {
     const device = await deviceOf(loadJob(req));
     if (!device) throw new HttpError(409, 'uisp_device_not_found');
     return uisp().backups(device.id);
   });
 
-  app.post('/api/admin/provisioning/jobs/:id/uisp/backups', admin, async (req) => {
+  app.post('/api/admin/provisioning/jobs/:id/uisp/backups', staff, async (req) => {
     const job = loadJob(req);
     const device = await deviceOf(job);
     if (!device) throw new HttpError(409, 'uisp_device_not_found');
@@ -723,7 +726,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     return { ok: true };
   });
 
-  app.get('/api/admin/provisioning/jobs/:id/uisp/backups/:backupId', admin, async (req, reply) => {
+  app.get('/api/admin/provisioning/jobs/:id/uisp/backups/:backupId', staff, async (req, reply) => {
     const job = loadJob(req);
     const backupId = z.string().min(1).max(100).parse((req.params as { backupId: string }).backupId);
     const device = await deviceOf(job);

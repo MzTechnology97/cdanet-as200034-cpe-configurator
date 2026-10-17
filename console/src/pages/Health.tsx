@@ -7,6 +7,7 @@ import { keys } from '../lib/query';
 import type { PageContext } from '../shell/routes';
 import { matches } from '../shell/search';
 import { AsyncButton, Badge, Button, Card, EmptyState, Field, Icon, Notice, PageHeader, Skeleton, Stat } from '../ui';
+import { canManage, isStaff } from '../lib/roles';
 
 /**
  * Salute CPE (admins: every customer CPE in UISP, with assignment to installers) / Le mie CPE
@@ -95,7 +96,8 @@ const offline = (c: Cpe) => !!c.now && c.now.status !== 'active';
 const date = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('it-IT') : '');
 
 export function Health({ user, params }: PageContext) {
-  const admin = user.role === 'admin';
+  // admins and specialists see every customer CPE; assigning them to installers stays with the admins
+  const admin = isStaff(user);
   const qc = useQueryClient();
   const [showStale, setShowStale] = useState(false);
   const health = useQuery({
@@ -347,7 +349,7 @@ export function Health({ user, params }: PageContext) {
         ) : (
           <ul className="hl-list">
             {rows.slice(0, limit).map((c) => (
-              <CpeRow key={c.mac} c={c} admin={admin} withRadius={withRadius} selected={selected.has(c.mac)} onSelect={admin ? () => toggle(c.mac) : undefined} />
+              <CpeRow key={c.mac} c={c} admin={admin} withRadius={withRadius} selected={selected.has(c.mac)} onSelect={admin && canManage() ? () => toggle(c.mac) : undefined} />
             ))}
           </ul>
         )}
@@ -358,7 +360,7 @@ export function Health({ user, params }: PageContext) {
         )}
       </Card>
 
-      {admin && (
+      {admin && canManage() && (
         <AssignBar
           installers={d.installers ?? []}
           selected={selected}

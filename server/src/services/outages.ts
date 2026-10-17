@@ -2,6 +2,7 @@ import { distanceM, type LatLon } from '../domain/geo.ts';
 import { nowIso, type Db } from '../db.ts';
 import { escapeHtml as e } from './telegram.ts';
 import type { Uisp } from './uisp.ts';
+import { isStaff } from '../domain/roles.ts';
 
 /**
  * Power outages of the Italian distribution network (e-distribuzione public outage map,
@@ -327,14 +328,14 @@ export function createOutages(
    * POPs/APs/zones assigned by the admin (impacts only for the assigned ones).
    */
   const keysFor = (userId: number, role: string): Set<string> | undefined =>
-    role === 'admin' ? undefined : new Set([...assignments(userId).map((i) => i.key), ...manualZones(userId).map((z) => z.id)]);
+    isStaff(role) ? undefined : new Set([...assignments(userId).map((i) => i.key), ...manualZones(userId).map((z) => z.id)]);
 
   /**
    * What a user is notified about for one kind of outage: the assigned POPs/APs (planned works only
    * if the user wants them) and the personal zones whose rules accept that kind. Admins: everything.
    */
   const notifyKeysFor = (userId: number, role: string, kind: PowerOutage['kind'], plannedForAssigned: boolean): Set<string> | undefined => {
-    if (role === 'admin') return undefined;
+    if (isStaff(role)) return undefined;
     const keys = new Set<string>();
     if (kind !== 'lavoro' || plannedForAssigned) for (const i of assignments(userId)) keys.add(i.key);
     for (const z of manualZones(userId)) if (zoneNotifies(z, kind)) keys.add(z.id);
@@ -354,7 +355,7 @@ export function createOutages(
     }>;
     for (const u of users) {
       if (opts.userOn && !opts.userOn(u.id)) continue;
-      if (u.role === 'admin' && rec.kind === 'lavoro' && !u.planned) continue;
+      if (isStaff(u.role) && rec.kind === 'lavoro' && !u.planned) continue;
       const keys = notifyKeysFor(u.id, u.role, rec.kind, !!u.planned);
       const v = keys ? scopeOutage(rec, keys) : rec;
       if (!v) continue;

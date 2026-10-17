@@ -4,9 +4,9 @@ import { HttpError } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
 
-/** Assistente rete (admins): findings on APs and CPEs, dismissing one, a refresh on demand. */
+/** Assistente rete (admins and specialists: a tool): findings on APs and CPEs, dismissing one, a refresh on demand. */
 export function advisorRoutes(app: FastifyInstance, ctx: AppContext) {
-  const admin = { preHandler: [ctx.auth.requireAdmin] };
+  const admin = { preHandler: [ctx.auth.requireStaff] };
 
   app.get('/api/admin/advisor', admin, async () => ({ ...ctx.advisor.view(), loadAt: ctx.apLoad.at() }));
 

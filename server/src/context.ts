@@ -34,6 +34,7 @@ import type { Optimizer } from './services/ap-optimizer.ts';
 import type { Live } from './services/live.ts';
 import type { Push } from './services/push.ts';
 import type { ServerSettings } from './services/server-settings.ts';
+import type { Specialist } from './services/specialist.ts';
 
 export interface AppContext {
   cfg: Config;
@@ -91,5 +92,7 @@ export interface AppContext {
   notify: Notifier;
   /** Login attempts and bans (fail2ban-like). */
   loginGuard: LoginGuard;
+  /** The specialist's own section: his templates, the connectors of his companies, his installations. */
+  specialist: Specialist;
   version: string;
 }

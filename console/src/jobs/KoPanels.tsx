@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { toast } from '../lib/toast';
 import { api } from '../lib/api';
+import { canManage } from '../lib/roles';
 import { AsyncButton, Badge, Card, Field, Notice, Skeleton, Table } from '../ui';
 
 /**
@@ -113,7 +114,7 @@ function KoTable({ rows, admin, onChanged }: { rows: Ko[]; admin: boolean; onCha
                   {k.resolvedBy ? ` · ${k.resolvedBy}` : ''}
                 </div>
               </div>
-            ) : admin ? (
+            ) : admin && canManage() ? (
               <AsyncButton variant="ghost" onClick={() => resolve(k)} onError={fail}>
                 Segna come risolto
               </AsyncButton>
@@ -160,7 +161,7 @@ export function FollowUp({ admin, onOpenJob }: { admin: boolean; onOpenJob: (j: 
               },
               { label: 'CPE', render: (j) => <span className="ui-mono ui-small">{[j.mac, j.ssid].filter(Boolean).join(' · ') || '—'}</span> },
               ...(admin ? [{ label: 'Installatore', render: (j: Job) => j.installer ?? '—' }] : []),
-              { label: '', end: true, render: () => (admin ? <span className="ui-small">Apri per decidere →</span> : <ReviewBadge state="pending" />) },
+              { label: '', end: true, render: () => (admin && canManage() ? <span className="ui-small">Apri per decidere →</span> : <ReviewBadge state="pending" />) },
             ]}
           />
         </section>
@@ -227,7 +228,7 @@ export function ReviewPanel({ job, admin, onChange }: { job: Job; admin: boolean
           {r.note ? `: ${r.note}` : ''}
         </p>
       )}
-      {admin && r.state === 'pending' && (
+      {admin && canManage() && r.state === 'pending' && (
         <div className="jb-review">
           <Field label="Nota" hint="Per l’installatore: obbligatoria se rifiuti.">
             <input value={note} maxLength={500} onChange={(e) => setNote(e.target.value)} placeholder="Nota per l’installatore" />

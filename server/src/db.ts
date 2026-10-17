@@ -1,15 +1,57 @@
 import { mkdirSync } from 'node:fs';
 import { dirname } from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { ROLES } from './domain/roles.ts';
 
 export type Db = DatabaseSync;
+
+/**
+ * A migration that is code, not SQL text. [foreignKeysOff]: it rebuilds a table other tables point
+ * to, so foreign keys stay off while it runs (a DROP TABLE would otherwise run their ON DELETE
+ * actions); their check runs before the commit and must find nothing new.
+ */
+interface CodeMigration {
+  foreignKeysOff?: boolean;
+  run: (db: Db) => void;
+}
+
+/**
+ * The roles of the accounts: the CHECK of users.role written by migration 1 (and by v0.5.x)
+ * admitted only admin and installer; the table is rebuilt with the specialist too (SQLite cannot
+ * change a CHECK in place). Everything else of the table stays as it is, read from its own SQL.
+ */
+const ROLE_CHECK = /CHECK\s*\(\s*role\s+IN\s*\(([^)]*)\)\s*\)/i;
+
+function widenRoles(db: Db): void {
+  const row = db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'users'").get() as { sql: string } | undefined;
+  if (!row) throw new Error('users table missing');
+  const m = ROLE_CHECK.exec(row.sql);
+  // no constraint on the role, or already with every role: nothing to rebuild
+  if (!m) return;
+  const listed = new Set([...(m[1] as string).matchAll(/['"]([a-z_]+)['"]/gi)].map((x) => (x[1] as string).toLowerCase()));
+  if (ROLES.every((r) => listed.has(r))) return;
+  const sql = row.sql
+    .replace(ROLE_CHECK, `CHECK(role IN(${ROLES.map((r) => `'${r}'`).join(',')}))`)
+    .replace(/^\s*CREATE\s+TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?(?:"users"|`users`|\[users\]|users)/i, 'CREATE TABLE users_new');
+  if (!/^CREATE TABLE users_new\b/.test(sql)) throw new Error('users table definition not recognised');
+  const columns = (db.prepare('PRAGMA table_info(users)').all() as Array<{ name: string }>).map((c) => `"${c.name.replace(/"/g, '""')}"`).join(', ');
+  const extras = db
+    .prepare("SELECT sql FROM sqlite_master WHERE tbl_name = 'users' AND type IN ('index', 'trigger') AND sql IS NOT NULL")
+    .all() as Array<{ sql: string }>;
+  db.exec('DROP TABLE IF EXISTS users_new');
+  db.exec(sql);
+  db.exec(`INSERT INTO users_new(${columns}) SELECT ${columns} FROM users`);
+  db.exec('DROP TABLE users');
+  db.exec('ALTER TABLE users_new RENAME TO users');
+  for (const x of extras) db.exec(x.sql);
+}
 
 /**
  * Ordered schema migrations tracked with PRAGMA user_version.
  * Migration 1 recreates the v0.5.x schema with IF NOT EXISTS, so an existing
  * production database is adopted in place without data loss.
  */
-const MIGRATIONS: string[] = [
+const MIGRATIONS: Array<string | CodeMigration> = [
   `
   CREATE TABLE IF NOT EXISTS users(
     id INTEGER PRIMARY KEY,
@@ -732,6 +774,86 @@ const MIGRATIONS: string[] = [
   CREATE INDEX saved_checks_user ON saved_checks(user_id, kind);
   CREATE INDEX saved_checks_customer ON saved_checks(customer_id);
   `,
+  // the Specialist role (owner, 17/10/2026): an account that works on its own for other companies
+  { foreignKeysOff: true, run: widenRoles },
+  // the Specialist's own archive, apart from CDA Net's: his airOS templates (the text sealed like
+  // CDA Net's, the SNMP community sealed apart), the connectors of the companies he works for (UISP
+  // to begin with, others later: kind checked by the server; token and device key sealed) and his
+  // installations. What he types for each CPE (Wi-Fi key, PPPoE and CPE passwords) is never
+  // stored: only the SHA-256 of the file written.
+  `
+  CREATE TABLE specialist_templates(
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    model TEXT NOT NULL,
+    name TEXT NOT NULL,
+    board_match TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    template_ciphertext TEXT NOT NULL,
+    template_sha256 TEXT NOT NULL,
+    params_json TEXT NOT NULL DEFAULT '{}',
+    secrets_ciphertext TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX specialist_templates_name ON specialist_templates(user_id, model, name COLLATE NOCASE);
+  CREATE TABLE specialist_connectors(
+    id INTEGER PRIMARY KEY,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    kind TEXT NOT NULL,
+    name TEXT NOT NULL,
+    url TEXT NOT NULL,
+    secrets_ciphertext TEXT NOT NULL DEFAULT '',
+    options_json TEXT NOT NULL DEFAULT '{}',
+    enabled INTEGER NOT NULL DEFAULT 1,
+    last_test_at TEXT,
+    last_test_ok INTEGER,
+    last_test_detail TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX specialist_connectors_name ON specialist_connectors(user_id, name COLLATE NOCASE);
+  CREATE TABLE specialist_jobs(
+    id TEXT PRIMARY KEY,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    username TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    expires_at TEXT NOT NULL,
+    completed_at TEXT,
+    status TEXT NOT NULL DEFAULT 'prepared' CHECK(status IN('prepared','success','failed')),
+    attempts INTEGER NOT NULL DEFAULT 0,
+    client TEXT NOT NULL DEFAULT '',
+    connector_id INTEGER REFERENCES specialist_connectors(id) ON DELETE SET NULL,
+    company TEXT NOT NULL DEFAULT '',
+    template_id INTEGER REFERENCES specialist_templates(id) ON DELETE SET NULL,
+    template_name TEXT NOT NULL DEFAULT '',
+    model TEXT NOT NULL,
+    mac TEXT NOT NULL,
+    serial TEXT NOT NULL DEFAULT '',
+    firmware TEXT NOT NULL DEFAULT '',
+    device_name TEXT NOT NULL DEFAULT '',
+    ssid TEXT NOT NULL DEFAULT '',
+    pppoe_user TEXT NOT NULL DEFAULT '',
+    customer TEXT NOT NULL DEFAULT '',
+    notes TEXT NOT NULL DEFAULT '',
+    latitude REAL,
+    longitude REAL,
+    location_source TEXT NOT NULL DEFAULT '',
+    config_sha256 TEXT NOT NULL DEFAULT '',
+    stages TEXT NOT NULL DEFAULT '[]',
+    detected TEXT NOT NULL DEFAULT '{}',
+    error TEXT NOT NULL DEFAULT '',
+    acceptance_json TEXT,
+    acceptance_at TEXT,
+    uisp_device_id TEXT,
+    uisp_site_id TEXT,
+    uisp_site TEXT NOT NULL DEFAULT '',
+    uisp_authorized_at TEXT,
+    uisp_error TEXT NOT NULL DEFAULT ''
+  );
+  CREATE INDEX specialist_jobs_user ON specialist_jobs(user_id, created_at);
+  CREATE INDEX specialist_jobs_mac ON specialist_jobs(mac);
+  `,
 ];
 
 export function openDatabase(path: string): Db {
@@ -746,14 +868,25 @@ export function openDatabase(path: string): Db {
 export function migrate(db: Db, target = MIGRATIONS.length): void {
   const row = db.prepare('PRAGMA user_version').get() as { user_version: number };
   for (let v = row.user_version; v < Math.min(target, MIGRATIONS.length); v++) {
+    const m = MIGRATIONS[v] as string | CodeMigration;
+    const keysOff = typeof m !== 'string' && !!m.foreignKeysOff;
+    // PRAGMA foreign_keys does nothing inside a transaction: switched before it, back after it
+    const keysWereOn = keysOff && (db.prepare('PRAGMA foreign_keys').get() as { foreign_keys: number }).foreign_keys === 1;
+    if (keysWereOn) db.exec('PRAGMA foreign_keys = OFF');
     db.exec('BEGIN');
     try {
-      db.exec(MIGRATIONS[v] as string);
+      const broken = () => (db.prepare('PRAGMA foreign_key_check').all() as unknown[]).length;
+      const before = keysOff ? broken() : 0;
+      if (typeof m === 'string') db.exec(m);
+      else m.run(db);
+      if (keysOff && broken() > before) throw new Error('foreign_key_check');
       db.exec(`PRAGMA user_version = ${v + 1}`);
       db.exec('COMMIT');
     } catch (err) {
       db.exec('ROLLBACK');
       throw new Error(`Database migration ${v + 1} failed: ${(err as Error).message}`);
+    } finally {
+      if (keysWereOn) db.exec('PRAGMA foreign_keys = ON');
     }
   }
 }

@@ -25,8 +25,10 @@ export function suggestedAzimuth(ap: { lat: number; lon: number }, clients: Arra
  */
 export function antennaRoutes(app: FastifyInstance, ctx: AppContext) {
   const admin = { preHandler: [ctx.auth.requireAdmin] };
+  // the specialist sees the antennas and loads the library; the APs' own data stay with the admins
+  const staff = { preHandler: [ctx.auth.requireStaff] };
 
-  app.get('/api/admin/antennas', admin, async () => {
+  app.get('/api/admin/antennas', staff, async () => {
     const lib = ctx.antennas.library().map(({ az: _a, el: _e, ...p }) => p);
     const assigned = ctx.antennas.assigned();
     const aps = ctx.uisp
@@ -54,14 +56,14 @@ export function antennaRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   /** One pattern with its two cuts (the console draws it). */
-  app.get('/api/admin/antennas/pattern/:id', admin, async (req) => {
+  app.get('/api/admin/antennas/pattern/:id', staff, async (req) => {
     const p = ctx.antennas.pattern(z.object({ id: z.string().max(80) }).parse(req.params).id);
     if (!p) throw new HttpError(404, 'not_found');
     return p;
   });
 
   /** Downloads the patterns of Ubiquiti and RF elements (about 1 MB) and rebuilds the library. */
-  app.post('/api/admin/antennas/import', admin, async (req) => {
+  app.post('/api/admin/antennas/import', staff, async (req) => {
     if (ctx.antennas.state().running) throw new HttpError(409, 'import_running');
     recordEvent(ctx.db, req.user!.id, 'antennas.import', 'Diagrammi delle antenne', 'Ubiquiti airMAX e RF elements');
     void ctx.antennas.importLibrary();

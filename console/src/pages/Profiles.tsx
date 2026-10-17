@@ -4,6 +4,7 @@ import { toast } from '../lib/toast';
 import { api } from '../lib/api';
 import type { PageContext } from '../shell/routes';
 import { AsyncButton, Badge, Button, Card, Field, Notice, PageHeader, Segmented, Skeleton, Table, Tabs } from '../ui';
+import { downloadText, type Facts, type FieldDef, FormField, modeText, type Section, SECTIONS, type Value } from '../templates/form';
 
 /**
  * Profili airOS (admins): several templates per CPE model, each with all its own values (Wireless,
@@ -31,32 +32,9 @@ const msg = (c: string) => MESSAGES[c] ?? (c.startsWith('missing_placeholder_') 
 const date = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '—');
 const fail = (e: unknown) => toast((e as Error).message, 'bad');
 
-type Section = 'wireless' | 'network' | 'services' | 'system';
-type Value = string | number | boolean;
-interface FieldDef {
-  id: string;
-  section: Section;
-  label: string;
-  hint: string;
-  type: 'bool' | 'int' | 'ip' | 'host' | 'text' | 'select';
-  options?: Array<{ value: string; label: string }>;
-  min?: number;
-  max?: number;
-  only?: { wirelessMode?: 'station' | 'ap'; netMode?: 'router' | 'bridge' };
-  policy?: { value: Value; message: string };
-  experimental?: boolean;
-  param?: true;
-  fallback: Value | Record<string, Value>;
-}
 interface Params {
   watchdogHost: string;
   snmpContact: string;
-}
-interface Facts {
-  lanIp: string | null;
-  wirelessMode: 'station' | 'ap';
-  netMode: 'router' | 'bridge';
-  ptp: boolean;
 }
 interface FormState {
   template: string;
@@ -116,25 +94,9 @@ interface EditorOpts {
   sha256?: string;
 }
 
-const SECTIONS: Array<{ value: Section; label: string }> = [
-  { value: 'wireless', label: 'Wireless' },
-  { value: 'network', label: 'Rete' },
-  { value: 'services', label: 'Servizi' },
-  { value: 'system', label: 'Sistema' },
-];
 type Tab = Section | 'access' | 'advanced';
 
-const modeText = (f: Facts) => `${f.wirelessMode === 'ap' ? 'Access Point' : 'Station'} ${f.ptp ? 'PtP' : 'PtMP'} · ${f.netMode === 'bridge' ? 'Bridge' : 'Router'}`;
 
-function downloadText(name: string, text: string) {
-  const a = document.createElement('a');
-  a.href = URL.createObjectURL(new Blob([text], { type: 'text/plain' }));
-  a.download = name;
-  document.body.append(a);
-  a.click();
-  a.remove();
-  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
-}
 
 function ReportView({ r }: { r: Report }) {
   if (r.ok && !r.warnings.length) return null;
@@ -387,53 +349,6 @@ function PersonalShortcut({ userId, models, users, onOpen }: { userId: number; m
 }
 
 /** One field of the form, like the airOS web interface: the network rule and the bench note under it. */
-function FormField({ f, value, missing, warn, error, onChange, onCommit }: { f: FieldDef; value: Value; missing: boolean; warn?: string; error?: string; onChange: (v: Value) => void; onCommit: () => void }) {
-  const hint = [f.hint, missing ? 'Non presente nel template: verrà scritto solo se lo cambi.' : '', f.experimental ? 'Chiave da provare al banco.' : ''].filter(Boolean).join(' ');
-  if (f.type === 'bool') {
-    return (
-      <div className={`tp-bool${warn ? ' tp-warn' : ''}`}>
-        <label className="ui-check">
-          <input type="checkbox" checked={!!value} onChange={(e) => onChange(e.target.checked)} />
-          <span>
-            <strong>{f.label}</strong>
-            <span className="ui-field-hint">{hint}</span>
-          </span>
-        </label>
-        {warn && <span className="tp-policy">{warn}</span>}
-      </div>
-    );
-  }
-  return (
-    <div className={warn ? 'tp-warn' : ''}>
-      <Field label={f.label} hint={hint} {...(error ? { error } : {})}>
-        {f.type === 'select' && (f.options?.length ?? 0) <= 3 ? (
-          <Segmented label={f.label} value={String(value)} options={f.options ?? []} onChange={(v) => onChange(v)} />
-        ) : f.type === 'select' ? (
-          <select value={String(value)} onChange={(e) => onChange(e.target.value)}>
-            {f.options?.map((o) => (
-              <option key={o.value} value={o.value}>
-                {o.label}
-              </option>
-            ))}
-          </select>
-        ) : (
-          <input
-            className={f.type === 'ip' || f.type === 'host' ? 'ui-mono' : undefined}
-            type={f.type === 'int' ? 'number' : 'text'}
-            inputMode={f.type === 'int' ? 'numeric' : f.type === 'ip' ? 'decimal' : undefined}
-            min={f.min}
-            max={f.max}
-            value={String(value)}
-            onChange={(e) => onChange(f.type === 'int' && e.target.value !== '' ? Number(e.target.value) : e.target.value)}
-            onBlur={onCommit}
-          />
-        )}
-      </Field>
-      {warn && <span className="tp-policy">{warn}</span>}
-    </div>
-  );
-}
-
 /** A new template (from the form, a CPE backup or a copy) or an existing one. */
 function TemplateEditor({
   opts,
@@ -736,7 +651,7 @@ function TemplateEditor({
                         }}
                       />
                       {u.username}
-                      {u.role === 'admin' ? ' (admin)' : ''}
+                      {u.role === 'admin' ? ' (admin)' : u.role === 'specialist' ? ' (specialist)' : ''}
                     </label>
                   ))
                 ) : (
