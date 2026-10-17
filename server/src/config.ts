@@ -39,6 +39,8 @@ const envSchema = z.object({
 
   JWT_SECRET: z.string().min(32, 'JWT_SECRET must be at least 32 characters'),
   JWT_TTL_HOURS: int(8, 1, 72),
+  // a login with the password and the code of the two-step verification stays signed in this long
+  JWT_MFA_TTL_DAYS: int(30, 1, 90),
   // the app keeps working without Internet for this long after its last contact (0 = never offline)
   OFFLINE_SESSION_HOURS: int(24, 0, 72),
   ADMIN_USERNAME: z.string().regex(/^[A-Za-z0-9._-]{3,80}$/).default('admin'),
@@ -167,6 +169,8 @@ export interface Config {
   masterKey: Buffer;
   jwtSecret: Uint8Array;
   jwtTtlHours: number;
+  /** A session opened with the password and the two-step code (titolare, 17/10/2026: 30 days). */
+  jwtMfaTtlDays: number;
   offlineSessionHours: number;
   bootstrapAdmin: { username: string; password: string | undefined };
   cpeSecrets: {
@@ -280,6 +284,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     masterKey: masterKey ?? loadMasterKey(e.SECRETS_KEY_FILE),
     jwtSecret: new TextEncoder().encode(e.JWT_SECRET),
     jwtTtlHours: e.JWT_TTL_HOURS,
+    jwtMfaTtlDays: e.JWT_MFA_TTL_DAYS,
     offlineSessionHours: e.OFFLINE_SESSION_HOURS,
     bootstrapAdmin: { username: e.ADMIN_USERNAME, password: e.ADMIN_PASSWORD },
     cpeSecrets: {

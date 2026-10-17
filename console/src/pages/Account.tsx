@@ -19,6 +19,8 @@ interface Me {
   totpEnabled: boolean;
   totpRequired: boolean;
   recoveryCodesLeft: number;
+  /** The days a login with the two-step code lasts (Impostazioni server). */
+  rememberDays?: number;
 }
 
 const date = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' }) : '—');
@@ -56,6 +58,7 @@ export function Account() {
       <PhonesCard />
       <PrivacyCard />
       <Card title="Sessioni">
+        <SessionNote days={a?.rememberDays ?? 30} />
         <p className="ui-muted ui-small ac-p">Telefono perso o accesso da un PC condiviso? Chiudi tutte le sessioni: servirà un nuovo accesso ovunque.</p>
         <div className="ui-row">
           <AsyncButton
@@ -76,6 +79,20 @@ export function Account() {
   );
 }
 
+/** How long this browser stays signed in: [days] with the two-step code and «Resta connesso», else this session. */
+function SessionNote({ days }: { days: number }) {
+  const s = session.get();
+  if (!s) return null;
+  const until = date(s.expiresAt);
+  return (
+    <p className="ui-small ac-p">
+      {s.remember
+        ? `Questo browser resta connesso fino al ${until} (accesso con la verifica in due passaggi), anche se lo chiudi. «Esci» lo scollega subito, anche sul server.`
+        : `Questa sessione dura fino al ${until} e si chiude con il browser. Con la verifica in due passaggi e «Resta connesso» dura ${days === 1 ? '1 giorno' : `${days} giorni`}.`}
+    </p>
+  );
+}
+
 function PasswordCard() {
   const [f, setF] = useState({ current: '', next: '', again: '' });
   const [msg, setMsg] = useState<{ tone: 'good' | 'bad'; text: string } | null>(null);
@@ -87,8 +104,10 @@ function PasswordCard() {
     if (f.next !== f.again) return setMsg({ tone: 'bad', text: 'Le due password nuove non coincidono.' });
     setBusy(true);
     try {
-      const r = await api<{ token: string; expiresAt: string }>('/api/auth/password', { method: 'POST', body: { currentPassword: f.current, newPassword: f.next } });
-      session.set({ ...session.get()!, token: r.token, expiresAt: r.expiresAt });
+      const r = await api<{ token: string; expiresAt: string; remember?: boolean }>('/api/auth/password', { method: 'POST', body: { currentPassword: f.current, newPassword: f.next } });
+      // the session stays as it was opened (kept in the browser only when it was)
+      const cur = session.get()!;
+      session.set({ ...cur, token: r.token, expiresAt: r.expiresAt, remember: !!cur.remember && !!r.remember });
       setF({ current: '', next: '', again: '' });
       toast('Password cambiata');
       setMsg({ tone: 'good', text: 'Password cambiata. Le altre sessioni sono state chiuse.' });

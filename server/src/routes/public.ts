@@ -50,23 +50,36 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
       throw new HttpError(401, 'invalid_credentials');
     }
     ctx.loginGuard.record(req, body.username, 'password', true);
-    // Two-step verification: the password alone only buys a 5-minute token for the code step.
-    if (u.totp_enabled) return { mfaRequired: true, mfaToken: await ctx.auth.issueMfaToken(u) };
+    // Two-step verification: the password alone only buys a 5-minute token for the code step;
+    // rememberDays: how long the session lasts with the code («Resta connesso» of the console)
+    if (u.totp_enabled) return { mfaRequired: true, mfaToken: await ctx.auth.issueMfaToken(u), rememberDays: ctx.cfg.jwtMfaTtlDays };
     return session(u, req.ip);
   };
 
-  async function session(u: { id: number; username: string; role: Role; token_version: number; totp_enabled?: number }, ip: string, notify = true) {
+  /**
+   * A new session. [mfa]: opened with the password and the two-step code, and kept (titolare,
+   * 17/10/2026): it lasts the days of Impostazioni server (30), and the console keeps it in the
+   * browser beyond its closing (remember).
+   */
+  async function session(u: { id: number; username: string; role: Role; token_version: number; totp_enabled?: number }, ip: string, notify = true, mfa = false) {
     ctx.db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').run(nowIso(), u.id);
-    const { token, expiresAt } = await ctx.auth.issueToken(u);
+    const { token, expiresAt } = await ctx.auth.issueToken(u, { mfa });
     // admins and specialists see everything: a login from a new address is told to the NOC
     if (isStaff(u.role) && notify) ctx.notify.adminLogin(u.id, u.username, ip, roleLabel(u.role));
     const mfaSetupRequired = isStaff(u.role) && ctx.auth.totpRequiredForAdmins() && !u.totp_enabled;
-    return { token, expiresAt, user: { id: u.id, username: u.username, role: u.role }, ...(mfaSetupRequired ? { mfaSetupRequired: true } : {}) };
+    return {
+      token,
+      expiresAt,
+      user: { id: u.id, username: u.username, role: u.role },
+      ...(mfaSetupRequired ? { mfaSetupRequired: true } : {}),
+      ...(mfa ? { remember: true } : {}),
+    };
   }
 
   /** Second step: TOTP code (or a one-time recovery code). */
   app.post('/api/auth/login/totp', async (req) => {
-    const b = z.object({ mfaToken: z.string().min(10).max(2000), code: z.string().trim().min(6).max(12) }).strict().parse(req.body);
+    // remember: false = an ordinary session (a shared computer); absent or true = the long one
+    const b = z.object({ mfaToken: z.string().min(10).max(2000), code: z.string().trim().min(6).max(12), remember: z.boolean().optional() }).strict().parse(req.body);
     const t = await ctx.auth.verifyMfaToken(b.mfaToken);
     const u = ctx.db.prepare('SELECT * FROM users WHERE id = ?').get(t.id) as TotpRow | undefined;
     if (!u || !u.active || u.token_version !== t.tv || !u.totp_enabled) throw new HttpError(401, 'mfa_expired');
@@ -76,7 +89,9 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
       throw new HttpError(401, 'invalid_code');
     }
     ctx.loginGuard.record(req, u.username, 'totp', true);
-    return session(u, req.ip);
+    const remember = b.remember !== false;
+    if (remember) recordEvent(ctx.db, u.id, 'account.session_long', u.username, `sessione di ${ctx.cfg.jwtMfaTtlDays} giorni con la verifica in due passaggi`);
+    return session(u, req.ip, true, remember);
   });
 
   type TotpRow = {
@@ -117,6 +132,8 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
       totpEnabled: !!t.totp_enabled,
       totpRequired: isStaff(u.role) && ctx.auth.totpRequiredForAdmins(),
       recoveryCodesLeft: t.totp_enabled ? (JSON.parse(t.recovery_codes) as string[]).length : 0,
+      // the days a login with the two-step code lasts (Impostazioni server)
+      rememberDays: ctx.cfg.jwtMfaTtlDays,
     };
   });
 
@@ -215,8 +232,16 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     ctx.db.prepare('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?').run(hashPassword(b.newPassword), u.id);
     recordEvent(ctx.db, u.id, 'account.password', u.username, 'cambio password personale');
     if (isStaff(u.role)) ctx.notify.security(`Password ${u.role === 'admin' ? "dell'amministratore" : 'dello specialist'} <b>${escapeHtml(u.username)}</b> cambiata dall'interessato`);
-    const { token, expiresAt } = await ctx.auth.issueToken({ ...u, token_version: u.token_version + 1 });
-    return { ok: true, token, expiresAt };
+    // the session that changed it stays as it was opened (with the two-step code: the long one)
+    const mfa = !!req.user!.mfaSession;
+    const { token, expiresAt } = await ctx.auth.issueToken({ ...u, token_version: u.token_version + 1 }, { mfa });
+    return { ok: true, token, expiresAt, ...(mfa ? { remember: true } : {}) };
+  });
+
+  /** «Esci»: this session ends on the server too; the account's other sessions and phones go on. */
+  app.post('/api/auth/logout', { preHandler: ctx.auth.requireUser }, async (req) => {
+    await ctx.auth.revokeSession(req);
+    return { ok: true };
   });
 
   /** Revokes every session of the account (lost phone, shared PC). */

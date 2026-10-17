@@ -16,11 +16,19 @@ function rememberCredentials(id: string, password: string) {
   }
 }
 
-export function Login({ onLogin, onTotp }: { onLogin: (u: string, p: string) => Promise<{ mfaToken?: string } | void>; onTotp: (t: string, c: string) => Promise<void> }) {
+export function Login({
+  onLogin,
+  onTotp,
+}: {
+  onLogin: (u: string, p: string) => Promise<{ mfaToken?: string; rememberDays?: number } | void>;
+  onTotp: (t: string, c: string, remember: boolean) => Promise<void>;
+}) {
   const [user, setUser] = useState('');
   const [pass, setPass] = useState('');
   const [code, setCode] = useState('');
-  const [mfa, setMfa] = useState<{ token: string; id: string; password: string } | null>(null);
+  // with the two-step code the console stays signed in for 30 days (titolare, 17/10/2026)
+  const [remember, setRemember] = useState(true);
+  const [mfa, setMfa] = useState<{ token: string; id: string; password: string; days: number } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const codeRef = useRef<HTMLInputElement>(null);
@@ -46,7 +54,7 @@ export function Login({ onLogin, onTotp }: { onLogin: (u: string, p: string) => 
     void run(async () => {
       try {
         const r = await onLogin(id, password);
-        if (r && r.mfaToken) setMfa({ token: r.mfaToken, id, password });
+        if (r && r.mfaToken) setMfa({ token: r.mfaToken, id, password, days: r.rememberDays ?? 30 });
         else rememberCredentials(id, password);
       } finally {
         setPass('');
@@ -56,7 +64,7 @@ export function Login({ onLogin, onTotp }: { onLogin: (u: string, p: string) => 
   const verify = (e: FormEvent) => {
     e.preventDefault();
     void run(async () => {
-      await onTotp(mfa!.token, code.trim());
+      await onTotp(mfa!.token, code.trim(), remember);
       rememberCredentials(mfa!.id, mfa!.password);
     });
   };
@@ -89,6 +97,13 @@ export function Login({ onLogin, onTotp }: { onLogin: (u: string, p: string) => 
               <Field label="Codice dell’app di autenticazione" hint="Hai perso il telefono? Inserisci uno dei codici di recupero (es. 7KQ2-M9XD).">
                 <input ref={codeRef} autoComplete="one-time-code" inputMode="numeric" required maxLength={9} placeholder="123456" value={code} onChange={(e) => setCode(e.target.value)} />
               </Field>
+              <label className="ui-check">
+                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+                <span>
+                  Resta connesso per {mfa.days === 1 ? '1 giorno' : `${mfa.days} giorni`} su questo browser
+                  <span className="ui-field-hint">Anche chiudendo il browser. Su un computer condiviso toglilo: la sessione si chiude con il browser.</span>
+                </span>
+              </label>
               {error && <Notice tone="bad">{error}</Notice>}
               <Button type="submit" variant="primary" busy={busy}>
                 Verifica

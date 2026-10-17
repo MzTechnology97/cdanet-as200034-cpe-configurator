@@ -138,22 +138,76 @@ export interface StoredSession {
   token: string;
   user: { id: number; username: string; role: string };
   expiresAt: string;
+  /**
+   * Opened with the password and the two-step code, «Resta connesso» on (titolare, 17/10/2026):
+   * kept in this browser beyond its closing until it expires (30 days), else only in this tab.
+   */
+  remember?: boolean;
+}
+
+const read = (store: Storage): StoredSession | null => {
+  try {
+    return JSON.parse(store.getItem(KEY) || 'null') as StoredSession | null;
+  } catch {
+    return null;
+  }
+};
+const expired = (s: StoredSession) => !!s.expiresAt && Date.parse(s.expiresAt) <= Date.now();
+function clearStored(): void {
+  sessionStorage.removeItem(KEY);
+  try {
+    localStorage.removeItem(KEY);
+  } catch {
+    /* nothing kept */
+  }
 }
 
 export const session = {
+  /** The tab's own session first, then the one kept in the browser (dropped once expired). */
   get(): StoredSession | null {
-    try {
-      return JSON.parse(sessionStorage.getItem(KEY) || 'null') as StoredSession | null;
-    } catch {
+    const tab = read(sessionStorage);
+    if (tab && !expired(tab)) return tab;
+    const kept = (() => {
+      try {
+        return read(localStorage);
+      } catch {
+        return null;
+      }
+    })();
+    if (kept && expired(kept)) {
+      clearStored();
       return null;
     }
+    return kept ?? tab;
   },
-  set(s: StoredSession) {
+  set(s: StoredSession): void {
+    try {
+      if (s.remember) {
+        localStorage.setItem(KEY, JSON.stringify(s));
+        sessionStorage.removeItem(KEY);
+        return;
+      }
+      localStorage.removeItem(KEY);
+    } catch {
+      /* no browser storage (private window): the tab keeps it */
+    }
     sessionStorage.setItem(KEY, JSON.stringify(s));
   },
-  clear() {
-    sessionStorage.removeItem(KEY);
+  /**
+   * No [token] (Esci): from this tab and from the browser, the other tabs follow (see App).
+   * [token] (a session the server refused): only where that one is kept, never another account's.
+   */
+  clear(token?: string): void {
+    if (token === undefined) return clearStored();
+    if (read(sessionStorage)?.token === token) sessionStorage.removeItem(KEY);
+    try {
+      if (read(localStorage)?.token === token) localStorage.removeItem(KEY);
+    } catch {
+      /* nothing kept */
+    }
   },
+  /** The key in the browser's storage (the tabs listen to its changes). */
+  key: KEY,
 };
 
 /** Installers get neutral messages (no data sources, no module names). */
@@ -224,8 +278,9 @@ async function call(path: string, { method = 'GET', body, raw = false, headers =
   });
   if (raw) return r;
   const data = (await r.json().catch(() => ({}))) as ApiErrorBody;
-  if (r.status === 401 && path !== '/api/auth/login') {
-    session.clear();
+  // the session was refused (expired, revoked): it ends here; a wrong code at the login is not one
+  if (r.status === 401 && path !== '/api/auth/login' && s?.token) {
+    session.clear(s.token);
     window.dispatchEvent(new Event('cda:logout'));
   }
   if (!r.ok) throw new ApiError(r.status, data);
@@ -245,6 +300,24 @@ export async function api<T = any>(path: string, opts?: ApiOptions): Promise<T> 
     if ((e as ApiError).body?.error === 'mfa_setup_required' && !location.hash.startsWith('#/account')) location.hash = '#/account';
     throw e;
   }
+}
+
+/**
+ * «Esci»: the server closes this session (with the two-step code it would last 30 days), then
+ * this tab and the browser forget it. Best effort: without Internet the session still goes from here.
+ */
+export function endSession(): void {
+  const s = session.get();
+  if (s?.token) {
+    void fetch('/api/auth/logout', {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${s.token}`, 'Content-Type': 'application/json', 'X-CDA-Device': deviceId() },
+      body: '{}',
+      cache: 'no-store',
+      keepalive: true,
+    }).catch(() => {});
+  }
+  session.clear();
 }
 
 /** Authenticated file download (name from Content-Disposition). */
