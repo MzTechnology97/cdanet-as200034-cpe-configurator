@@ -129,7 +129,7 @@ export function mapRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   // ---- Aerial imagery (admins only): providers of Connettori through this server, keys never leave it ----
-  app.get('/api/admin/map/satellite', { preHandler: ctx.auth.requireAdmin }, async () => {
+  app.get('/api/admin/map/satellite', { preHandler: ctx.auth.requireStaff }, async () => {
     const layers = ctx.imagery.layers();
     const t = ctx.terrain.status();
     // the 3D map: elevation tiles of the coverage terrain (TINITALY where imported, else SRTM)
@@ -138,7 +138,7 @@ export function mapRoutes(app: FastifyInstance, ctx: AppContext) {
 
   // kept on disk next to the terrain: the first 3D view of an area makes them, the next ones read them
   const terrainTiles = createTerrainTiles({ sampler: (b) => ctx.terrain.sampler(b), version: () => ctx.terrain.status().updatedAt ?? '0', dir: join(ctx.cfg.terrainDir, 'tiles3d') });
-  app.get('/api/admin/map/terrain/:z/:x/:y', { preHandler: ctx.auth.requireAdmin }, async (req, reply) => {
+  app.get('/api/admin/map/terrain/:z/:x/:y', { preHandler: ctx.auth.requireStaff }, async (req, reply) => {
     const p = z.object({ z: z.coerce.number().int().min(TERRAIN_MIN_ZOOM).max(TERRAIN_MAX_ZOOM), x: z.coerce.number().int().min(0), y: z.coerce.number().int().min(0) }).parse(req.params);
     if (p.x >= 2 ** p.z || p.y >= 2 ** p.z) throw new HttpError(400, 'invalid_tile');
     const png = await terrainTiles.tile(p.z, p.x, p.y);
@@ -147,7 +147,7 @@ export function mapRoutes(app: FastifyInstance, ctx: AppContext) {
     return reply.type('image/png').send(png);
   });
 
-  app.get('/api/admin/map/imagery/:provider/:part/:z/:x/:y', { preHandler: ctx.auth.requireAdmin }, async (req, reply) => {
+  app.get('/api/admin/map/imagery/:provider/:part/:z/:x/:y', { preHandler: ctx.auth.requireStaff }, async (req, reply) => {
     const p = z
       .object({ provider: z.enum(PROVIDERS), part: z.string().max(20), z: z.coerce.number().int().min(0).max(21), x: z.coerce.number().int().min(0), y: z.coerce.number().int().min(0) })
       .parse(req.params);

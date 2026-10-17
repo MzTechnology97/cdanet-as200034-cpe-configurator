@@ -1,7 +1,7 @@
 import { createHash, randomBytes } from 'node:crypto';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { HttpError } from '../auth.ts';
+import { HttpError, type Role } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { DUMMY_PASSWORD_HASH, verifyPassword } from '../crypto.ts';
 import { nowIso, recordEvent } from '../db.ts';
@@ -71,7 +71,7 @@ export function clientName(uris: string[]): string {
 
 type ClientRow = { id: string; name: string; redirect_uris: string };
 type TokenRow = { id: number; user_id: number; token_version: number; access_expires: string; revoked_at: string | null; client_id: string; can_write: number };
-type UserRow = SecondFactorUser & { role: 'admin' | 'installer'; active: number; token_version: number; totp_enabled: number; password_hash: string };
+type UserRow = SecondFactorUser & { role: Role; active: number; token_version: number; totp_enabled: number; password_hash: string };
 
 export function mcpRoutes(app: FastifyInstance, ctx: AppContext) {
   const { db } = ctx;

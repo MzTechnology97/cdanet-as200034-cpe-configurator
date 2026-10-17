@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { eveningShare, expectedModulation } from '../domain/ap-load.ts';
 import { apModels } from '../services/model-inputs.ts';
-import { HttpError } from '../auth.ts';
+import { HttpError, isStaff } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { approxPoint, roughDistance } from '../domain/approx.ts';
@@ -28,7 +28,7 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
   const config = () => pointingConfig(db);
 
   // with how many APs actually use the configured antenna height (those without altitude in UISP)
-  app.get('/api/admin/pointing/config', { preHandler: ctx.auth.requireAdmin }, async () => ({
+  app.get('/api/admin/pointing/config', { preHandler: ctx.auth.requireStaff }, async () => ({
     ...config(),
     dem: ctx.dem.enabled,
     apSources: ctx.uisp ? await ctx.uisp.apAltitudeSources().catch(() => null) : null,
@@ -56,7 +56,7 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
       .parse(req.query);
     if (!isValidLatLon(q.lat, q.lon)) throw new HttpError(400, 'invalid_position');
     if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
-    const keys = req.user!.role === 'admin' ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
+    const keys = isStaff(req.user!.role) ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
     const allow = keys ? (a: { id: string; siteId: string | null }) => keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`)) : undefined;
     // same choice as Copertura: every AP within range rated by estimated signal, the limit last
     // (installers: the number set in Impostazioni server, no inactive or hopeless APs)
@@ -127,7 +127,7 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
       .parse(req.query);
     if (!isValidLatLon(q.lat, q.lon)) throw new HttpError(400, 'invalid_position');
     if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
-    const keys = req.user!.role === 'admin' ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
+    const keys = isStaff(req.user!.role) ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
     const allow = keys ? (a: { id: string; siteId: string | null }) => keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`)) : undefined;
     // any AP within range: the list may have ranked a farther one first (admins: as far as Copertura goes)
     const aps = await ctx.uisp.nearestAps({ lat: q.lat, lon: q.lon }, 500, keys ? ctx.uispSettings.coverageMaxKm : 200, allow);

@@ -13,7 +13,8 @@ import { radiusView } from '../domain/health.ts';
  * list with the CPE each one is matched to in UISP (session MAC) or in the app (PPPoE user).
  */
 export function crmRoutes(app: FastifyInstance, ctx: AppContext) {
-  const admin = { preHandler: [ctx.auth.requireAdmin] };
+  // admins and specialists (read only, and a refresh of the RADIUS copy)
+  const admin = { preHandler: [ctx.auth.requireStaff] };
 
   app.get('/api/admin/crm/radius/status', admin, async () => ({ configured: ctx.crm.client() !== null, ...ctx.crmSync.state() }));
 

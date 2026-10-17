@@ -5,6 +5,7 @@ import { recordEvent } from '../db.ts';
 import { orderStart } from '../domain/work-order-time.ts';
 import { todayRome, WORK_ORDER_KIND_LABEL } from './work-orders.ts';
 import { NOTIFY_KINDS, isNotifyKind, type NotifyKind } from '../services/inbox.ts';
+import { isStaff } from '../auth.ts';
 
 /** Kinds a user can receive: the NOC's ones only for admins. */
 const kindsFor = (role: string) => (Object.keys(NOTIFY_KINDS) as NotifyKind[]).filter((k) => role === 'admin' || NOTIFY_KINDS[k].audience === 'installer');
@@ -121,7 +122,7 @@ export function notificationRoutes(app: FastifyInstance, ctx: AppContext) {
       .object({ screen: z.string().trim().max(80).default(''), at: z.string().datetime().optional(), kind: z.enum(['screenshot', 'recording']).default('screenshot') })
       .strict()
       .parse(req.body);
-    if (req.user!.role === 'admin' || ctx.modules.stateFor(req.user!.id).screenshots) return { ok: true, notified: false };
+    if (isStaff(req.user!.role) || ctx.modules.stateFor(req.user!.id).screenshots) return { ok: true, notified: false };
     const recording = b.kind === 'recording';
     // sent later by the phone's queue (no network at the time): the notice says when it happened
     const when = b.at && Date.now() - Date.parse(b.at) > 5 * 60_000

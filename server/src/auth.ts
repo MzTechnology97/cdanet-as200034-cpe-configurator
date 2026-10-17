@@ -1,8 +1,10 @@
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { SignJWT, jwtVerify } from 'jose';
 import type { Db } from './db.ts';
+import { isStaff, type Role } from './domain/roles.ts';
 
-export type Role = 'admin' | 'installer';
+export { isStaff };
+export type { Role };
 
 export interface AuthUser {
   id: number;
@@ -128,8 +130,21 @@ export function createAuth(db: Db, secret: Uint8Array, ttlHours: number) {
     // Policy on: admin pages are closed until the admin enables two-step verification (Il mio account stays open).
     if (!req.user.totp && totpRequiredForAdmins()) throw new HttpError(403, 'mfa_setup_required');
   };
+  /** Admins and specialists: what they see and the tools they use (the specialist sees everything). */
+  const requireStaff = async (req: FastifyRequest, _reply: FastifyReply) => {
+    req.user = await authenticate(req);
+    if (!isStaff(req.user.role)) throw new HttpError(403, 'forbidden');
+    // the same policy as the admins: a specialist sees the customers and the network too
+    if (!req.user.totp && totpRequiredForAdmins()) throw new HttpError(403, 'mfa_setup_required');
+  };
+  /** The Specialist's own section (his templates, connectors and installations). */
+  const requireSpecialist = async (req: FastifyRequest, _reply: FastifyReply) => {
+    req.user = await authenticate(req);
+    if (req.user.role !== 'specialist') throw new HttpError(403, 'forbidden');
+    if (!req.user.totp && totpRequiredForAdmins()) throw new HttpError(403, 'mfa_setup_required');
+  };
 
-  return { issueToken, issueMfaToken, verifyMfaToken, issueFeedToken, verifyFeedToken, totpRequiredForAdmins, authenticate, requireUser, requireAdmin };
+  return { issueToken, issueMfaToken, verifyMfaToken, issueFeedToken, verifyFeedToken, totpRequiredForAdmins, authenticate, requireUser, requireAdmin, requireStaff, requireSpecialist };
 }
 export type Auth = ReturnType<typeof createAuth>;
 
