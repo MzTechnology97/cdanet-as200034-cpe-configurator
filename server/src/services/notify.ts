@@ -164,7 +164,8 @@ export function createNotifier(
   }
 
   /** Admin logged in from an address never seen for that account (last 20 kept). */
-  function adminLogin(userId: number, username: string, ip: string) {
+  /** [who]: the role in the notice (an administrator, or a specialist, who sees everything too). */
+  function adminLogin(userId: number, username: string, ip: string, who = 'amministratore') {
     const key = `seen_ips.${userId}`;
     const row = db.prepare('SELECT value FROM settings WHERE key = ?').get(key) as { value: string } | undefined;
     const seen: string[] = row ? JSON.parse(row.value) : [];
@@ -174,7 +175,7 @@ export function createNotifier(
        ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at`,
     ).run(key, JSON.stringify([ip, ...seen].slice(0, 20)), nowIso(), userId);
     // The very first login of an account only records the address.
-    if (seen.length) security(`Accesso amministratore <b>${e(username)}</b> da un indirizzo nuovo: ${e(ip)}`);
+    if (seen.length) security(`Accesso ${who} <b>${e(username)}</b> da un indirizzo nuovo: ${e(ip)}`);
   }
 
   // ---- UISP reachability (state changes only) -------------------------------------------

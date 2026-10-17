@@ -28,19 +28,21 @@ export function networkArea(aps: Array<{ location: { lat: number; lon: number } 
  */
 export function terrainRoutes(app: FastifyInstance, ctx: AppContext) {
   const admin = { preHandler: [ctx.auth.requireAdmin] };
+  // what the specialist sees (the imports of terrain and data stay with the admins)
+  const staff = { preHandler: [ctx.auth.requireStaff] };
   const accuracy = createCoverageAccuracy(ctx);
 
   /** Reliability of the coverage estimate on the real customers: last run, history, running. */
-  app.get('/api/admin/coverage/accuracy', admin, async () => accuracy.view());
+  app.get('/api/admin/coverage/accuracy', staff, async () => accuracy.view());
 
-  app.post('/api/admin/coverage/accuracy', admin, async (req) => {
+  app.post('/api/admin/coverage/accuracy', staff, async (req) => {
     if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
     const started = accuracy.start();
     if (started) recordEvent(ctx.db, req.user!.id, 'coverage.accuracy', 'Affidabilità della copertura', 'misura avviata');
     return { started, running: true };
   });
 
-  app.get('/api/admin/terrain', admin, async () => {
+  app.get('/api/admin/terrain', staff, async () => {
     const aps = ctx.uisp ? await ctx.uisp.apsWithLocation().catch(() => []) : [];
     return { ...ctx.terrain.status(), basemap: existsSync(ctx.cfg.mapFile), anncsu: { ...ctx.anncsu.status(), import: ctx.anncsu.state() }, area: networkArea(aps.filter((a) => !isPtp(a))) };
   });

@@ -92,7 +92,8 @@ enum class OutageSection { List, Areas }
 fun OutagesScreen(c: AppContainer, section: OutageSection = OutageSection.List) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val admin = c.session.isAdmin
+    // admins and specialists see every outage; the shared zones stay with the admins
+    val admin = c.session.isStaff
     var data by remember { mutableStateOf<OutagesDto?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }
@@ -205,7 +206,7 @@ private fun AreasAndAlerts(c: AppContainer, admin: Boolean, alerts: Boolean, pla
         }
         Text("Le notifiche su Telegram si collegano in Impostazioni.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         if (!admin) MyZones(c, onChanged)
-        if (admin) ZoneEditor(c, personal = false, onAdded = onChanged)
+        if (c.session.isAdmin) ZoneEditor(c, personal = false, onAdded = onChanged)
 }
 
 private val SHORT = mapOf("guasto_mt" to "Guasto MT", "guasto_bt" to "Guasto BT", "lavoro" to "Lavoro programmato", "altro" to "Interruzione")
@@ -298,7 +299,7 @@ fun PersonalTelegramCard(c: AppContainer) {
             s.linked -> {
                 Text("Telegram collegato (chat ${s.chatHint}): ricevi qui $what.", style = MaterialTheme.typography.bodySmall)
                 if (s.outages) Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text(if (sessionRole == "admin") "Anche i lavori programmati" else "Anche i lavori sui POP/AP assegnati", modifier = Modifier.weight(1f))
+                    Text(if (sessionRole == "admin" || sessionRole == "specialist") "Anche i lavori programmati" else "Anche i lavori sui POP/AP assegnati", modifier = Modifier.weight(1f))
                     Switch(checked = s.planned, onCheckedChange = { p -> act { c.api.outageTelegramSet(null, p) } })
                 }
                 BusyButton("Scollega Telegram", busy, Modifier.fillMaxWidth(), primary = false) { act { c.api.outageTelegramUnlink() } }

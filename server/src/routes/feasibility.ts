@@ -36,7 +36,7 @@ export function ourVerdict(aps: Array<Pick<OurAp, 'rating'>>): Verdict {
 }
 
 export function feasibilityRoutes(app: FastifyInstance, ctx: AppContext) {
-  const admin = { preHandler: [ctx.auth.requireAdmin, ctx.modules.require('coverage')] };
+  const admin = { preHandler: [ctx.auth.requireStaff, ctx.modules.require('coverage')] };
   const q = z.object({ lat: z.coerce.number(), lon: z.coerce.number(), label: z.string().trim().max(200).default('') });
 
   async function feasibility(req: FastifyRequest) {

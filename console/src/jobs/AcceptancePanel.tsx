@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { useEffect, useState } from 'react';
 import { api, download } from '../lib/api';
 import { toast } from '../lib/toast';
+import { canManage } from '../lib/roles';
 import { AsyncButton, Badge, Button, Field, Skeleton } from '../ui';
 
 /**
@@ -175,7 +176,7 @@ export function AcceptancePanel({ j, admin = false, onChange }: { j: Job; admin?
               <strong>Superato per decisione del NOC</strong> ({a.override.by}, {date(a.override.at)}): le misure dicevano «{a.override.from === 'bad' ? 'non superato' : 'con riserva'}». Motivo: {a.override.note}
             </p>
           )}
-          {admin && a.verdict !== 'ok' && <PassOverride jobId={j.id} was={a.verdict} onDone={async () => {
+          {admin && canManage() && a.verdict !== 'ok' && <PassOverride jobId={j.id} was={a.verdict} onDone={async () => {
             await q.refetch();
             await onChange?.();
           }} />}

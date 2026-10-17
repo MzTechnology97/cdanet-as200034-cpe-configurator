@@ -95,12 +95,40 @@ private val ERRORS = mapOf(
     "password_unchanged" to "La nuova password è uguale a quella attuale",
     "password_contains_username" to "La password non può contenere il nome utente",
     "uisp_device_not_found" to "CPE non ancora vista dalla rete: i dati compaiono dopo che il NOC l'ha accettata",
+    // the Specialist's section (his templates, connectors and installations)
+    "template_not_found" to "Template non trovato: forse è stato eliminato",
+    "template_name_exists" to "Esiste già un template con questo nome per il modello",
+    "template_model_mismatch" to "Il template è di un altro modello di CPE",
+    "template_size" to "Template troppo corto o troppo lungo",
+    "profile_not_system_cfg" to "Non sembra una configurazione airOS (mancano radio./wireless./netconf./users.)",
+    "profile_contains_nul" to "Il testo del template contiene caratteri non validi",
+    "invalid_placeholders" to "Segnaposto non validi: \${NOME} con lettere maiuscole, cifre e _",
+    "too_many_placeholders" to "Troppi segnaposto (al massimo 40)",
+    "users_password_requires_hash_placeholder" to "users.N.password deve usare \${CPE_PASSWORD_HASH}, non \${CPE_PASSWORD}",
+    "template_secret_invalid_snmpCommunity" to "Community SNMP non valida",
+    "board_match_invalid_regex" to "Board match non valido (espressione regolare)",
+    "profile_render_failed" to "Configurazione non generabile da questo template",
+    "target_not_private" to "L'indirizzo della CPE deve essere privato",
+    "connector_not_found" to "Connettore non trovato: forse è stato eliminato",
+    "connector_name_exists" to "Esiste già un connettore con questo nome",
+    "connector_disabled" to "Connettore disattivato: riattivalo nella console",
+    "connector_incomplete" to "Connettore incompleto: servono indirizzo e token",
+    "job_without_connector" to "Installazione senza connettore",
+    "client_upgrade_required" to "Aggiorna l'app per continuare",
 )
+
+/** Codes that carry a name (a placeholder of the template, a field of the form). */
+private fun namedMessage(code: String): String? = when {
+    code.startsWith("missing_value_") -> "Manca il valore di " + code.removePrefix("missing_value_")
+    code.startsWith("invalid_value_") -> "Valore non valido per " + code.removePrefix("invalid_value_")
+    code.startsWith("form_invalid_") -> "Valore non valido nel campo " + code.removePrefix("form_invalid_")
+    else -> null
+}
 
 /** Codes that name a data source (uisp_…, crm_…): never shown as they are. */
 private val SOURCE_CODE = Regex("^(uisp|crm|ispbilling|edistribuzione)_")
 
-fun apiMessage(code: String): String = ERRORS[code] ?: if (SOURCE_CODE.containsMatchIn(code)) "Servizio di rete non disponibile in questo momento, riprova più tardi" else code
+fun apiMessage(code: String): String = ERRORS[code] ?: namedMessage(code) ?: if (SOURCE_CODE.containsMatchIn(code)) "Servizio di rete non disponibile in questo momento, riprova più tardi" else code
 
 /** Thin JSON client for the CDA Net server. */
 class ApiClient(

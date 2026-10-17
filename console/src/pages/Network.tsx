@@ -9,6 +9,7 @@ import { type Leaflet, type LMap, MapView, mapPopup } from '../map/MapView';
 import type { PageContext } from '../shell/routes';
 import { ago, isStale } from '../shell/UispBanner';
 import { Badge, Button, Card, Icon, Notice, PageHeader, Skeleton, Stat } from '../ui';
+import { isStaff } from '../lib/roles';
 
 /**
  * Stato rete: POPs and APs (installers: the assigned ones), refreshed every minute and on the
@@ -273,7 +274,8 @@ function NetworkMap({ data, shown, q, open, setOpen, apiRef, tools }: { data: Da
 type MutableRef<T> = { current: T };
 
 export function Network({ user }: PageContext) {
-  const admin = user.role === 'admin';
+  // admins and specialists: every POP and AP
+  const admin = isStaff(user);
   const query = useQuery({ queryKey: keys.network, queryFn: () => api<Data>('/api/network/status'), refetchInterval: 60_000 });
   const [shown, setShown] = useState<Set<State>>(() => new Set(ALL));
   const [text, setText] = useState('');

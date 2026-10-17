@@ -1,0 +1,716 @@
+import { randomUUID } from 'node:crypto';
+import { HttpError } from '../auth.ts';
+import type { Config } from '../config.ts';
+import { md5Crypt, sha256Hex, type Sealer } from '../crypto.ts';
+import { nowIso, type Db } from '../db.ts';
+import { templateFacts } from '../domain/airos-form.ts';
+import { BOARD_MATCH_SUGGESTIONS, TARGET_FIRMWARE, macSiblings, type CpeModel } from '../domain/policy.ts';
+import { askedFor, inspectFreeTemplate, isSsid, isWpa2Key, renderFreeCfg } from '../domain/specialist-cfg.ts';
+import { normalizeTemplate } from '../domain/systemcfg.ts';
+import { isPrivateIPv4, isPrivateIPv6 } from '../net/ip.ts';
+import { insecureFetch } from './connectors.ts';
+import { validateBoardMatch } from './templates.ts';
+import { createUisp, type Uisp, type UispDevice } from './uisp.ts';
+
+/**
+ * The Specialist's section (owner, 17/10/2026): he works on his own for other companies, with CPEs
+ * that are not CDA Net's. Everything here belongs to the specialist who made it and is apart from
+ * CDA Net's history, statistics, NOC, warehouse and Salute CPE:
+ *
+ * - his airOS templates (the text sealed like CDA Net's, the SNMP community sealed apart);
+ * - the connectors of the companies he works for (UISP to begin with, one per company: token and
+ *   device key sealed, never returned);
+ * - his installations: what was written into which CPE, the optional acceptance test and the
+ *   authorization in the company's UISP. The Wi-Fi key, the PPPoE and CPE passwords he types for
+ *   each CPE go into the file written and are never stored: only its SHA-256 is.
+ */
+
+export interface SpecialistTemplateInput {
+  model?: CpeModel;
+  name?: string;
+  template?: string;
+  boardMatch?: string;
+  notes?: string;
+  /** A value replaces the community, null removes it, absent keeps it. */
+  snmpCommunity?: string | null;
+}
+
+export interface ConnectorInput {
+  name?: string;
+  url?: string;
+  /** Empty or absent: the saved one stays. */
+  token?: string;
+  /** The UISP key of the company's devices (wss://…): empty keeps it, null removes it. */
+  uispKey?: string | null;
+  ignoreTls?: boolean;
+  enabled?: boolean;
+}
+
+export interface JobInput {
+  templateId: number;
+  connectorId?: number | null | undefined;
+  company?: string | undefined;
+  model: CpeModel;
+  mac: string;
+  serial?: string | undefined;
+  firmware?: string | undefined;
+  host?: string | undefined;
+  sshPort?: number | undefined;
+  /** The CPE's credentials after the configuration (they also fill the template's placeholders). */
+  cpe: { username: string; password: string };
+  values: Record<string, string>;
+  customer?: string | undefined;
+  notes?: string | undefined;
+  location?: { latitude: number; longitude: number; accuracy?: number | undefined; source: 'gps' | 'address' | 'manual' } | undefined;
+}
+
+export interface JobResultInput {
+  result: 'success' | 'failed';
+  stages: string[];
+  error: string;
+  detected: { firmware?: string | undefined; board?: string | undefined; mac?: string | undefined };
+  completedAt?: string | undefined;
+}
+
+interface TemplateRow {
+  id: number;
+  user_id: number;
+  model: CpeModel;
+  name: string;
+  board_match: string;
+  notes: string;
+  template_ciphertext: string;
+  template_sha256: string;
+  secrets_ciphertext: string;
+  created_at: string;
+  updated_at: string;
+  jobs?: number;
+}
+
+interface ConnectorRow {
+  id: number;
+  user_id: number;
+  kind: string;
+  name: string;
+  url: string;
+  secrets_ciphertext: string;
+  options_json: string;
+  enabled: number;
+  last_test_at: string | null;
+  last_test_ok: number | null;
+  last_test_detail: string;
+  created_at: string;
+  updated_at: string;
+  jobs?: number;
+}
+
+interface JobRow {
+  id: string;
+  user_id: number | null;
+  username: string;
+  created_at: string;
+  expires_at: string;
+  completed_at: string | null;
+  status: 'prepared' | 'success' | 'failed';
+  attempts: number;
+  client: string;
+  connector_id: number | null;
+  company: string;
+  template_id: number | null;
+  template_name: string;
+  model: string;
+  mac: string;
+  serial: string;
+  firmware: string;
+  device_name: string;
+  ssid: string;
+  pppoe_user: string;
+  customer: string;
+  notes: string;
+  latitude: number | null;
+  longitude: number | null;
+  location_source: string;
+  config_sha256: string;
+  stages: string;
+  detected: string;
+  error: string;
+  acceptance_json: string | null;
+  acceptance_at: string | null;
+  uisp_device_id: string | null;
+  uisp_site_id: string | null;
+  uisp_site: string;
+  uisp_authorized_at: string | null;
+  uisp_error: string;
+  connector_name?: string | null;
+}
+
+/** Kinds of connector of the specialist: UISP now, the next ones to be decided. */
+export const CONNECTOR_KINDS = ['uisp'] as const;
+
+const json = <T>(text: string | null | undefined, fallback: T): T => {
+  try {
+    return text ? (JSON.parse(text) as T) : fallback;
+  } catch {
+    return fallback;
+  }
+};
+
+/** Strips anything that looks like a credential from text sent by the app. */
+const clean = (text: string) =>
+  text
+    .replace(/((?:password|passwd|secret|psk|token|community|key)\s*[=:]\s*)\S+/gi, '$1***')
+    .replace(/[\r\n\t]+/g, ' ')
+    .slice(0, 500);
+
+export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fetchImpl?: typeof fetch | undefined } = {}) {
+  const tx = <T>(fn: () => T): T => {
+    db.exec('BEGIN');
+    try {
+      const out = fn();
+      db.exec('COMMIT');
+      return out;
+    } catch (e) {
+      db.exec('ROLLBACK');
+      throw e;
+    }
+  };
+
+  // ---- templates -------------------------------------------------------------------------------
+  const templateSecrets = (r: TemplateRow): { snmpCommunity?: string } => (r.secrets_ciphertext ? json(sealer.open(r.secrets_ciphertext), {}) : {});
+  const templateMeta = (r: TemplateRow) => {
+    const text = sealer.open(r.template_ciphertext);
+    const report = inspectFreeTemplate(text);
+    const secrets = templateSecrets(r);
+    return {
+      id: r.id,
+      model: r.model,
+      name: r.name,
+      boardMatch: r.board_match,
+      notes: r.notes,
+      sha256: r.template_sha256,
+      facts: templateFacts(text),
+      placeholders: report.placeholders,
+      own: report.own,
+      secretsSet: { snmpCommunity: !!secrets.snmpCommunity },
+      jobs: r.jobs ?? 0,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    };
+  };
+  const TEMPLATE_SELECT = 'SELECT t.*, (SELECT count(*) FROM specialist_jobs j WHERE j.template_id = t.id) jobs FROM specialist_templates t';
+  const templateRow = (userId: number, id: number) => {
+    const r = db.prepare(`${TEMPLATE_SELECT} WHERE t.id = ? AND t.user_id = ?`).get(id, userId) as TemplateRow | undefined;
+    if (!r) throw new HttpError(404, 'template_not_found');
+    return r;
+  };
+  const checkedText = (raw: string) => {
+    const report = inspectFreeTemplate(raw);
+    if (!report.ok) throw new HttpError(400, report.errors[0] as string, { report });
+    const text = normalizeTemplate(raw);
+    return { text, sha: sha256Hex(text), report };
+  };
+  const checkedCommunity = (v: string) => {
+    if (v.length > 200 || /[\r\n\0]/.test(v) || v.includes('${')) throw new HttpError(400, 'template_secret_invalid_snmpCommunity');
+    return v;
+  };
+  const nameTaken = (userId: number, model: string, name: string, exceptId = 0) =>
+    !!db.prepare('SELECT 1 FROM specialist_templates WHERE user_id = ? AND model = ? AND name = ? COLLATE NOCASE AND id <> ?').get(userId, model, name, exceptId);
+
+  const templates = {
+    list(userId: number) {
+      return (db.prepare(`${TEMPLATE_SELECT} WHERE t.user_id = ? ORDER BY t.model, t.name COLLATE NOCASE`).all(userId) as unknown as TemplateRow[]).map(templateMeta);
+    },
+
+    get(userId: number, id: number) {
+      const r = templateRow(userId, id);
+      return { ...templateMeta(r), template: sealer.open(r.template_ciphertext) };
+    },
+
+    create(userId: number, input: SpecialistTemplateInput & { model: CpeModel; name: string; template: string }) {
+      if (nameTaken(userId, input.model, input.name)) throw new HttpError(409, 'template_name_exists');
+      const boardMatch = input.boardMatch ?? BOARD_MATCH_SUGGESTIONS[input.model];
+      validateBoardMatch(boardMatch);
+      const { text, sha, report } = checkedText(input.template);
+      const secrets = input.snmpCommunity ? { snmpCommunity: checkedCommunity(input.snmpCommunity) } : {};
+      const now = nowIso();
+      const r = db
+        .prepare(
+          `INSERT INTO specialist_templates(user_id, model, name, board_match, notes, template_ciphertext, template_sha256, secrets_ciphertext, created_at, updated_at)
+           VALUES(?,?,?,?,?,?,?,?,?,?)`,
+        )
+        .run(userId, input.model, input.name, boardMatch, input.notes ?? '', sealer.seal(text), sha, secrets.snmpCommunity ? sealer.seal(JSON.stringify(secrets)) : '', now, now);
+      return { ...templates.get(userId, Number(r.lastInsertRowid)), report };
+    },
+
+    update(userId: number, id: number, input: SpecialistTemplateInput) {
+      const cur = templateRow(userId, id);
+      if (input.name !== undefined && nameTaken(userId, cur.model, input.name, id)) throw new HttpError(409, 'template_name_exists');
+      if (input.boardMatch !== undefined) validateBoardMatch(input.boardMatch);
+      const checked = input.template !== undefined ? checkedText(input.template) : null;
+      let secretsCipher = cur.secrets_ciphertext;
+      if (input.snmpCommunity === null) secretsCipher = '';
+      else if (typeof input.snmpCommunity === 'string' && input.snmpCommunity !== '') secretsCipher = sealer.seal(JSON.stringify({ snmpCommunity: checkedCommunity(input.snmpCommunity) }));
+      db.prepare(
+        'UPDATE specialist_templates SET name = ?, board_match = ?, notes = ?, template_ciphertext = ?, template_sha256 = ?, secrets_ciphertext = ?, updated_at = ? WHERE id = ? AND user_id = ?',
+      ).run(
+        input.name ?? cur.name,
+        input.boardMatch ?? cur.board_match,
+        input.notes ?? cur.notes,
+        checked ? sealer.seal(checked.text) : cur.template_ciphertext,
+        checked ? checked.sha : cur.template_sha256,
+        secretsCipher,
+        nowIso(),
+        id,
+        userId,
+      );
+      return { ...templates.get(userId, id), report: checked?.report ?? null };
+    },
+
+    remove(userId: number, id: number) {
+      const cur = templateRow(userId, id);
+      db.prepare('DELETE FROM specialist_templates WHERE id = ? AND user_id = ?').run(id, userId);
+      return templateMeta(cur);
+    },
+  };
+
+  // ---- connectors ------------------------------------------------------------------------------
+  const connectorSecrets = (r: ConnectorRow): { token?: string; uispKey?: string } => (r.secrets_ciphertext ? json(sealer.open(r.secrets_ciphertext), {}) : {});
+  const connectorView = (r: ConnectorRow) => {
+    const s = connectorSecrets(r);
+    const o = json<{ ignoreTls?: boolean }>(r.options_json, {});
+    return {
+      id: r.id,
+      kind: r.kind,
+      name: r.name,
+      url: r.url,
+      enabled: !!r.enabled,
+      ignoreTls: !!o.ignoreTls,
+      tokenSet: !!s.token,
+      tokenHint: s.token ? `…${s.token.slice(-4)}` : '',
+      uispKeySet: !!s.uispKey,
+      lastTest: r.last_test_at ? { at: r.last_test_at, ok: !!r.last_test_ok, detail: r.last_test_detail } : null,
+      jobs: r.jobs ?? 0,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    };
+  };
+  const CONNECTOR_SELECT = 'SELECT c.*, (SELECT count(*) FROM specialist_jobs j WHERE j.connector_id = c.id) jobs FROM specialist_connectors c';
+  const connectorRow = (userId: number, id: number) => {
+    const r = db.prepare(`${CONNECTOR_SELECT} WHERE c.id = ? AND c.user_id = ?`).get(id, userId) as ConnectorRow | undefined;
+    if (!r) throw new HttpError(404, 'connector_not_found');
+    return r;
+  };
+  const checkedUispKey = (v: string) => {
+    if (v.length > 2000 || /[\r\n\0\s]/.test(v) || !/^wss:\/\//i.test(v)) throw new HttpError(400, 'uisp_key_invalid');
+    return v;
+  };
+  // one client per connector and version of it (a saved change makes a new one)
+  const clients = new Map<number, { at: string; client: Uisp }>();
+  const build = (url: string, token: string, ignoreTls: boolean): Uisp =>
+    createUisp({ url, token, cacheSeconds: 20, fetchImpl: ignoreTls ? insecureFetch() : opts.fetchImpl });
+
+  const connectors = {
+    list(userId: number) {
+      return (db.prepare(`${CONNECTOR_SELECT} WHERE c.user_id = ? ORDER BY c.name COLLATE NOCASE`).all(userId) as unknown as ConnectorRow[]).map(connectorView);
+    },
+
+    get(userId: number, id: number) {
+      return connectorView(connectorRow(userId, id));
+    },
+
+    create(userId: number, input: ConnectorInput & { name: string; url: string; token: string }) {
+      if (db.prepare('SELECT 1 FROM specialist_connectors WHERE user_id = ? AND name = ? COLLATE NOCASE').get(userId, input.name)) throw new HttpError(409, 'connector_name_exists');
+      const secrets = { token: input.token, ...(input.uispKey ? { uispKey: checkedUispKey(input.uispKey) } : {}) };
+      const now = nowIso();
+      const r = db
+        .prepare('INSERT INTO specialist_connectors(user_id, kind, name, url, secrets_ciphertext, options_json, enabled, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?)')
+        .run(userId, 'uisp', input.name, input.url, sealer.seal(JSON.stringify(secrets)), JSON.stringify({ ignoreTls: !!input.ignoreTls }), input.enabled === false ? 0 : 1, now, now);
+      return connectors.get(userId, Number(r.lastInsertRowid));
+    },
+
+    update(userId: number, id: number, input: ConnectorInput) {
+      const cur = connectorRow(userId, id);
+      if (input.name !== undefined && db.prepare('SELECT 1 FROM specialist_connectors WHERE user_id = ? AND name = ? COLLATE NOCASE AND id <> ?').get(userId, input.name, id)) {
+        throw new HttpError(409, 'connector_name_exists');
+      }
+      const s = connectorSecrets(cur);
+      if (input.token) s.token = input.token;
+      if (input.uispKey === null) delete s.uispKey;
+      else if (input.uispKey) s.uispKey = checkedUispKey(input.uispKey);
+      const o = json<{ ignoreTls?: boolean }>(cur.options_json, {});
+      if (input.ignoreTls !== undefined) o.ignoreTls = input.ignoreTls;
+      db.prepare('UPDATE specialist_connectors SET name = ?, url = ?, secrets_ciphertext = ?, options_json = ?, enabled = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(
+        input.name ?? cur.name,
+        input.url ?? cur.url,
+        sealer.seal(JSON.stringify(s)),
+        JSON.stringify(o),
+        input.enabled === undefined ? cur.enabled : input.enabled ? 1 : 0,
+        nowIso(),
+        id,
+        userId,
+      );
+      clients.delete(id);
+      return connectors.get(userId, id);
+    },
+
+    remove(userId: number, id: number) {
+      const cur = connectorRow(userId, id);
+      db.prepare('DELETE FROM specialist_connectors WHERE id = ? AND user_id = ?').run(id, userId);
+      clients.delete(id);
+      return connectorView(cur);
+    },
+
+    /** The UISP of a connector (enabled, with its token). */
+    client(userId: number, id: number): { client: Uisp; name: string; uispKey: string | null } {
+      const r = connectorRow(userId, id);
+      if (!r.enabled) throw new HttpError(409, 'connector_disabled');
+      const s = connectorSecrets(r);
+      if (!s.token) throw new HttpError(409, 'connector_incomplete');
+      let c = clients.get(id);
+      if (!c || c.at !== r.updated_at) {
+        c = { at: r.updated_at, client: build(r.url, s.token, !!json<{ ignoreTls?: boolean }>(r.options_json, {}).ignoreTls) };
+        clients.set(id, c);
+      }
+      return { client: c.client, name: r.name, uispKey: s.uispKey ?? null };
+    },
+
+    /**
+     * Tests the values of the form (token empty: the saved one of [id]) without saving them; a test
+     * of a saved connector is remembered with it.
+     */
+    async test(userId: number, input: { id?: number | undefined; url?: string | undefined; token?: string | undefined; ignoreTls?: boolean | undefined }) {
+      const saved = input.id ? connectorRow(userId, input.id) : null;
+      const url = input.url ?? saved?.url;
+      const token = input.token || (saved ? connectorSecrets(saved).token : undefined);
+      const ignoreTls = input.ignoreTls ?? (saved ? !!json<{ ignoreTls?: boolean }>(saved.options_json, {}).ignoreTls : false);
+      if (!url || !token) throw new HttpError(400, 'connector_incomplete');
+      let out: Record<string, unknown>;
+      try {
+        out = { ...(await build(url, token, ignoreTls).test()) };
+      } catch (e) {
+        const err = e as HttpError;
+        const detail = String(err.extra?.detail ?? (e as Error).message ?? '');
+        const tls = /certificate|self[- ]signed|unable to verify|CERT_|SSL/i.test(detail);
+        out = { ok: false, error: tls ? 'uisp_tls_error' : (err.code ?? 'uisp_error'), status: err.extra?.status ?? null, detail: detail.slice(0, 200) };
+      }
+      if (saved && input.url === undefined && !input.token && input.ignoreTls === undefined) {
+        const detail = out.ok ? `UISP ${String(out.version ?? '')} · ${String(out.devices ?? 0)} dispositivi`.trim() : String(out.error ?? 'errore');
+        db.prepare('UPDATE specialist_connectors SET last_test_at = ?, last_test_ok = ?, last_test_detail = ? WHERE id = ?').run(nowIso(), out.ok ? 1 : 0, detail.slice(0, 200), saved.id);
+      }
+      return out;
+    },
+
+    async sites(userId: number, id: number) {
+      const { client } = connectors.client(userId, id);
+      return (await client.sites()).filter((s) => s.type !== 'endpoint').map((s) => ({ id: s.id, name: s.name }));
+    },
+  };
+
+  // ---- installations ---------------------------------------------------------------------------
+  const JOB_SELECT = 'SELECT j.*, c.name connector_name FROM specialist_jobs j LEFT JOIN specialist_connectors c ON c.id = j.connector_id';
+  const jobRow = (userId: number, id: string) => {
+    const r = db.prepare(`${JOB_SELECT} WHERE j.id = ? AND j.user_id = ?`).get(id, userId) as JobRow | undefined;
+    if (!r) throw new HttpError(404, 'job_not_found');
+    return r;
+  };
+  const jobView = (r: JobRow) => ({
+    id: r.id,
+    createdAt: r.created_at,
+    completedAt: r.completed_at,
+    status: r.status,
+    attempts: r.attempts,
+    model: r.model,
+    template: r.template_name,
+    templateId: r.template_id,
+    mac: r.mac,
+    serial: r.serial,
+    firmware: r.firmware,
+    deviceName: r.device_name,
+    ssid: r.ssid,
+    pppoeUser: r.pppoe_user,
+    customer: r.customer,
+    notes: r.notes,
+    company: r.connector_name ?? r.company,
+    connector: r.connector_id ? { id: r.connector_id, name: r.connector_name ?? r.company } : null,
+    location: r.latitude !== null && r.longitude !== null ? { lat: r.latitude, lon: r.longitude, source: r.location_source } : null,
+    stages: json<string[]>(r.stages, []),
+    detected: json<Record<string, string>>(r.detected, {}),
+    error: r.error,
+    acceptance: r.acceptance_json ? { ...json<Record<string, unknown>>(r.acceptance_json, {}), at: r.acceptance_at } : null,
+    uisp: { deviceId: r.uisp_device_id, siteId: r.uisp_site_id, site: r.uisp_site, authorizedAt: r.uisp_authorized_at, error: r.uisp_error },
+  });
+
+  const isPrivateHost = (h: string) => isPrivateIPv4(h) || isPrivateIPv6(h);
+
+  /** The values of the placeholders of a job: typed ones, then those the server fills in. */
+  function jobValues(input: JobInput, tpl: TemplateRow, uispKey: string | null) {
+    const typed = Object.fromEntries(Object.entries(input.values).map(([k, v]) => [k, v.trim() === '' ? '' : v]));
+    for (const [k, v] of Object.entries(typed)) {
+      if (v.length > 4096 || /[\r\n\0]/.test(v)) throw new HttpError(400, `invalid_value_${k}`);
+    }
+    if (typed.WPA2_PSK && !isWpa2Key(typed.WPA2_PSK)) throw new HttpError(400, 'invalid_value_WPA2_PSK');
+    if (typed.SSID && !isSsid(typed.SSID)) throw new HttpError(400, 'invalid_value_SSID');
+    const secrets = templateSecrets(tpl);
+    const name = (typed.DEVICE_NAME ?? '').trim();
+    return {
+      ...typed,
+      // from the CPE and from the flow: never typed here
+      CPE_USERNAME: input.cpe.username,
+      CPE_PASSWORD: input.cpe.password,
+      CPE_PASSWORD_HASH: md5Crypt(input.cpe.password),
+      EXPECTED_MAC: input.mac,
+      EXPECTED_SERIAL: input.serial || input.mac.replace(/:/g, ''),
+      SNMP_LOCATION: typed.SNMP_LOCATION || name,
+      SNMP_COMMUNITY: typed.SNMP_COMMUNITY || secrets.snmpCommunity || '',
+      UISP_ENROLLMENT: typed.UISP_ENROLLMENT || uispKey || '',
+    } as Record<string, string>;
+  }
+
+  const jobs = {
+    /** What the specialist is asked for a template (and what the server fills in). */
+    form(userId: number, templateId: number, connectorId: number | null) {
+      const tpl = templateRow(userId, templateId);
+      const report = inspectFreeTemplate(sealer.open(tpl.template_ciphertext));
+      const uispKey = connectorId ? !!connectorSecrets(connectorRow(userId, connectorId)).uispKey : false;
+      return { placeholders: report.placeholders, asked: askedFor(report.placeholders, { snmpCommunity: !!templateSecrets(tpl).snmpCommunity, uispKey }) };
+    },
+
+    /**
+     * Prepares an installation: the template's file with the values typed for this CPE. The
+     * answer has the same shape as CDA Net's package (the app writes it the same way); the row
+     * keeps no secret.
+     */
+    create(user: { id: number; username: string }, input: JobInput, client: string) {
+      const tpl = templateRow(user.id, input.templateId);
+      if (tpl.model !== input.model) throw new HttpError(409, 'template_model_mismatch', { template: tpl.model, cpe: input.model });
+      const conn = input.connectorId ? connectorRow(user.id, input.connectorId) : null;
+      const uispKey = conn ? (connectorSecrets(conn).uispKey ?? null) : null;
+      const host = input.host?.trim() || cfg.network.factoryIp;
+      if (!isPrivateHost(host)) throw new HttpError(400, 'target_not_private');
+      const text0 = sealer.open(tpl.template_ciphertext);
+      const values = jobValues(input, tpl, uispKey);
+      const extra: Array<[string, string]> = input.location
+        ? [
+            ['system.latitude', input.location.latitude.toFixed(6)],
+            ['system.longitude', input.location.longitude.toFixed(6)],
+          ]
+        : [];
+      let text: string;
+      try {
+        text = renderFreeCfg(text0, values, extra);
+      } catch (e) {
+        const code = (e as Error).message;
+        if (code.startsWith('missing_value_')) throw new HttpError(400, code, { placeholder: code.slice('missing_value_'.length) });
+        throw new HttpError(409, code.startsWith('invalid_value_') || code.startsWith('profile_') || code.startsWith('template_') ? code : 'profile_render_failed');
+      }
+      const id = randomUUID();
+      const created = new Date();
+      // a professional on a roof: at least an hour (firmware updates included)
+      const expiresAt = new Date(created.getTime() + Math.max(cfg.jobTtlMinutes, 60) * 60_000).toISOString();
+      const sha = sha256Hex(text);
+      const facts = templateFacts(text);
+      const deviceName = values.DEVICE_NAME ?? '';
+      const ssid = values.SSID ?? '';
+      const pppoeUser = values.PPPOE_USER ?? '';
+      db.prepare(
+        `INSERT INTO specialist_jobs(id, user_id, username, created_at, expires_at, client, connector_id, company, template_id, template_name, model, mac, serial, firmware,
+           device_name, ssid, pppoe_user, customer, notes, latitude, longitude, location_source, config_sha256)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      ).run(
+        id,
+        user.id,
+        user.username,
+        created.toISOString(),
+        expiresAt,
+        client.slice(0, 60),
+        conn?.id ?? null,
+        conn?.name ?? (input.company ?? '').slice(0, 80),
+        tpl.id,
+        tpl.name,
+        input.model,
+        input.mac,
+        values.EXPECTED_SERIAL ?? '',
+        (input.firmware ?? '').slice(0, 80),
+        deviceName.slice(0, 120),
+        ssid.slice(0, 64),
+        pppoeUser.slice(0, 128),
+        (input.customer ?? '').slice(0, 120),
+        (input.notes ?? '').slice(0, 1000),
+        input.location?.latitude ?? null,
+        input.location?.longitude ?? null,
+        input.location?.source ?? '',
+        sha,
+      );
+      return {
+        jobId: id,
+        expiresAt,
+        // the port of the CPE as it is now (factory: 22, else what the discovery read), not the template's
+        target: { host, sshPort: input.sshPort ?? 22 },
+        credentials: { username: input.cpe.username, password: input.cpe.password },
+        // an expert: after failed updates he may write on the firmware the CPE has
+        checks: { firmware: TARGET_FIRMWARE, boardMatch: tpl.board_match, mac: input.mac, firmwareBypass: true },
+        config: { path: '/tmp/system.cfg', text, sha256: sha },
+        summary: { model: input.model, template: tpl.name, ssid, pppoeUser, deviceName, mac: input.mac, serial: values.EXPECTED_SERIAL ?? '' },
+        afterApply: { lanIp: facts.lanIp ?? host, httpPort: facts.httpPort, httpsPort: facts.httpsPort },
+        alternatives: [],
+      };
+    },
+
+    /** The outcome of the write: a success is final, a failed write may be tried again. */
+    result(userId: number, id: string, input: JobResultInput) {
+      const job = jobRow(userId, id);
+      if (job.status === 'success') {
+        if (input.result === 'success') return { ok: true, duplicate: true };
+        throw new HttpError(409, 'job_already_completed');
+      }
+      const retry = job.status === 'failed';
+      if (retry && input.completedAt && job.completed_at === input.completedAt) return { ok: true, duplicate: true };
+      db.prepare(`UPDATE specialist_jobs SET status = ?, completed_at = ?, stages = ?, detected = ?, error = ?, firmware = COALESCE(NULLIF(?, ''), firmware), attempts = attempts + 1 WHERE id = ?`).run(
+        input.result,
+        input.completedAt ?? nowIso(),
+        JSON.stringify(input.stages.map((s) => clean(s).slice(0, 200)).slice(0, 40)),
+        JSON.stringify(input.detected),
+        clean(input.error),
+        (input.detected.firmware ?? '').slice(0, 80),
+        id,
+      );
+      return { ok: true, duplicate: false, ...(retry ? { retry: true } : {}) };
+    },
+
+    /** The optional acceptance test of the specialist (no NOC: his own judgment). */
+    acceptance(userId: number, id: string, data: Record<string, unknown>) {
+      const job = jobRow(userId, id);
+      if (job.status !== 'success') throw new HttpError(409, 'job_not_completed');
+      const at = nowIso();
+      db.prepare('UPDATE specialist_jobs SET acceptance_json = ?, acceptance_at = ? WHERE id = ?').run(JSON.stringify(data), at, id);
+      return jobView(jobRow(userId, id));
+    },
+
+    clearAcceptance(userId: number, id: string) {
+      jobRow(userId, id);
+      db.prepare('UPDATE specialist_jobs SET acceptance_json = NULL, acceptance_at = NULL WHERE id = ?').run(id);
+      return jobView(jobRow(userId, id));
+    },
+
+    get(userId: number, id: string) {
+      return jobView(jobRow(userId, id));
+    },
+
+    list(
+      userId: number,
+      f: { q?: string | undefined; status?: string | undefined; connectorId?: number | undefined; from?: string | undefined; to?: string | undefined; limit: number },
+    ) {
+      const where = ['j.user_id = ?'];
+      const params: Array<string | number> = [userId];
+      if (f.status === 'to_authorize') where.push("j.status = 'success' AND j.connector_id IS NOT NULL AND j.uisp_authorized_at IS NULL");
+      else if (f.status === 'no_acceptance') where.push("j.status = 'success' AND j.acceptance_json IS NULL");
+      else if (f.status) {
+        where.push('j.status = ?');
+        params.push(f.status);
+      }
+      if (f.connectorId) {
+        where.push('j.connector_id = ?');
+        params.push(f.connectorId);
+      }
+      if (f.from) {
+        where.push('j.created_at >= ?');
+        params.push(f.from);
+      }
+      if (f.to) {
+        where.push('j.created_at < ?');
+        params.push(f.to);
+      }
+      if (f.q) {
+        const like = `%${f.q.replace(/[!%_]/g, (m) => `!${m}`)}%`;
+        const compact = `%${f.q.replace(/[\s:.-]/g, '').replace(/[!%_]/g, (m) => `!${m}`)}%`;
+        where.push(
+          `(j.mac LIKE ? ESCAPE '!' OR REPLACE(j.mac, ':', '') LIKE ? ESCAPE '!' OR j.serial LIKE ? ESCAPE '!' OR j.device_name LIKE ? ESCAPE '!' OR j.customer LIKE ? ESCAPE '!'
+            OR j.ssid LIKE ? ESCAPE '!' OR j.pppoe_user LIKE ? ESCAPE '!' OR j.company LIKE ? ESCAPE '!' OR j.template_name LIKE ? ESCAPE '!' OR c.name LIKE ? ESCAPE '!')`,
+        );
+        params.push(like, compact, like, like, like, like, like, like, like, like);
+      }
+      const total = (db.prepare(`SELECT count(*) n FROM specialist_jobs j LEFT JOIN specialist_connectors c ON c.id = j.connector_id WHERE ${where.join(' AND ')}`).get(...params) as { n: number }).n;
+      const rows = db.prepare(`${JOB_SELECT} WHERE ${where.join(' AND ')} ORDER BY j.created_at DESC LIMIT ?`).all(...params, f.limit) as unknown as JobRow[];
+      return { total, items: rows.map(jobView) };
+    },
+
+    remove(userId: number, id: string) {
+      const job = jobRow(userId, id);
+      db.prepare('DELETE FROM specialist_jobs WHERE id = ? AND user_id = ?').run(id, userId);
+      return jobView(job);
+    },
+
+    summary(userId: number) {
+      const n = (sql: string, ...p: Array<string | number>) => (db.prepare(sql).get(userId, ...p) as { n: number }).n;
+      const since = new Date(Date.now() - 30 * 86400_000).toISOString();
+      return {
+        templates: n('SELECT count(*) n FROM specialist_templates WHERE user_id = ?'),
+        connectors: n('SELECT count(*) n FROM specialist_connectors WHERE user_id = ?'),
+        jobs30d: n('SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND created_at > ?', since),
+        success30d: n("SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND status = 'success' AND created_at > ?", since),
+        toAuthorize: n("SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND status = 'success' AND connector_id IS NOT NULL AND uisp_authorized_at IS NULL"),
+        failed30d: n("SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND status = 'failed' AND created_at > ?", since),
+      };
+    },
+
+    /** The UISP device of an installation in its company's UISP: by MAC (the job's, the one read, their siblings). */
+    async uispDevice(userId: number, id: string): Promise<{ job: JobRow; uisp: Uisp; connector: string; device: UispDevice | null }> {
+      const job = jobRow(userId, id);
+      if (!job.connector_id) throw new HttpError(409, 'job_without_connector');
+      const { client, name } = connectors.client(userId, job.connector_id);
+      if (job.uisp_device_id) {
+        const d = await client.device(job.uisp_device_id);
+        if (d) return { job, uisp: client, connector: name, device: d };
+      }
+      const detected = json<{ mac?: string }>(job.detected, {}).mac;
+      const device = await client.findByMac(job.mac, detected, ...macSiblings(job.mac));
+      if (device && device.id !== job.uisp_device_id) db.prepare('UPDATE specialist_jobs SET uisp_device_id = ? WHERE id = ?').run(device.id, job.id);
+      return { job, uisp: client, connector: name, device };
+    },
+
+    async uispState(userId: number, id: string) {
+      const { job, uisp, connector, device } = await jobs.uispDevice(userId, id);
+      const near = job.latitude !== null && job.longitude !== null ? { lat: job.latitude, lon: job.longitude } : null;
+      const proposed = device && !device.authorized ? await uisp.siteForStation(device, job.ssid, near).catch(() => null) : null;
+      return {
+        connector,
+        device: device ? { id: device.id, name: device.name, mac: device.mac, model: device.model, authorized: device.authorized, site: device.siteName, status: device.status, signal: device.signal } : null,
+        proposedSite: proposed ? { id: proposed.id, name: proposed.name } : null,
+        authorizedAt: job.uisp_authorized_at,
+        site: job.uisp_site || null,
+      };
+    },
+
+    /** Authorizes the installed CPE in the company's UISP, in the site chosen (or the one of its AP). */
+    async authorize(userId: number, id: string, siteId: string | undefined) {
+      const { job, uisp, device } = await jobs.uispDevice(userId, id);
+      if (job.status !== 'success') throw new HttpError(409, 'job_not_completed');
+      if (!device) throw new HttpError(409, 'uisp_device_not_found');
+      if (device.authorized) {
+        db.prepare("UPDATE specialist_jobs SET uisp_device_id = ?, uisp_site = COALESCE(NULLIF(?, ''), uisp_site), uisp_authorized_at = COALESCE(uisp_authorized_at, ?), uisp_error = '' WHERE id = ?").run(
+          device.id,
+          device.siteName ?? '',
+          nowIso(),
+          id,
+        );
+        throw new HttpError(409, 'uisp_already_authorized', { site: device.siteName });
+      }
+      const near = job.latitude !== null && job.longitude !== null ? { lat: job.latitude, lon: job.longitude } : null;
+      const proposed = siteId ? null : await uisp.siteForStation(device, job.ssid, near);
+      const site = siteId ?? proposed?.id;
+      if (!site) throw new HttpError(409, 'uisp_site_unknown');
+      const siteName = siteId ? ((await uisp.sites()).find((s) => s.id === siteId)?.name ?? siteId) : (proposed?.name ?? site);
+      try {
+        await uisp.authorize(device.id, site);
+      } catch (e) {
+        db.prepare('UPDATE specialist_jobs SET uisp_error = ? WHERE id = ?').run(String((e as HttpError).code ?? (e as Error).message).slice(0, 200), id);
+        throw e;
+      }
+      db.prepare("UPDATE specialist_jobs SET uisp_device_id = ?, uisp_site_id = ?, uisp_site = ?, uisp_authorized_at = ?, uisp_error = '' WHERE id = ?").run(device.id, site, siteName, nowIso(), id);
+      return { ok: true, deviceId: device.id, site: siteName, job: jobView(jobRow(userId, id)) };
+    },
+  };
+
+  return { templates, connectors, jobs };
+}
+export type Specialist = ReturnType<typeof createSpecialist>;

@@ -17,6 +17,7 @@
     </li>
     <li><a href="#g-account">Account e POP/AP assegnati</a></li>
     <li><a href="#g-nuovo-installatore">Un nuovo installatore, dall'account al primo intervento</a></li>
+    <li><a href="#g-specialist">Lo Specialist</a></li>
     <li><a href="#g-storico">Storico, accettazione in UISP e rapporti PDF</a>
       <ol><li><a href="#g-speedtest">Speedtest e Wi-Fi del cliente</a></li></ol>
     </li>
@@ -144,7 +145,7 @@
 <figure><img data-guide="admin-calendar.jpg" alt="Calendario degli interventi"><figcaption>Calendario, vista settimana: gli interventi di tutti gli installatori.</figcaption></figure>
 
 <h2 id="g-account">9. Account e POP/AP assegnati</h2>
-<p><b>Nuovo account</b>: username, password iniziale (da comunicare a voce o di persona) e ruolo (<i>Installatore</i> o <i>Admin</i>). Nella tabella ci sono stato, verifica in due passaggi, ultimo accesso e numero di provisioning; da ogni riga si può disabilitare l'account o reimpostarne la password.</p>
+<p><b>Nuovo account</b>: username, password iniziale (da comunicare a voce o di persona) e ruolo (<i>Installatore</i>, <i>Admin</i> o <i>Specialist</i>, vedi <a href="#g-specialist">Lo Specialist</a>). Nella tabella ci sono stato, verifica in due passaggi, ultimo accesso e numero di provisioning; da ogni riga si può disabilitare l'account o reimpostarne la password.</p>
 <p><b>Magazzino dell'account</b>: per installatori e partner l'amministratore sceglie il loro <b>magazzino ISP Billing</b> e decide se possono installare anche CPE che non ci sono (<i>Può installare CPE non presenti nel suo magazzino</i>). Si cambia anche sugli account esistenti, senza dover rifare l'accesso. Senza l'opzione, nelle nuove installazioni l'app non mostra nemmeno i campi MAC e seriale: la CPE si sceglie solo dal suo magazzino, e il server rifiuta comunque una CPE che non c'è.</p>
 <p><b>POP/AP assegnati agli installatori</b>: gli amministratori vedono tutto; ogni installatore, in Copertura, nei Guasti Enel, in Stato rete e nelle notifiche, vede solo i POP e gli AP assegnati qui (le sue zone personali dei guasti restano sue). Con <i>Modifica</i> si scelgono POP interi o singoli AP. L'opzione in fondo decide se mostrare agli installatori il numero di clienti dei loro POP/AP.</p>
 <figure><img data-guide="admin-users.jpg" alt="Account"><figcaption>Account: tecnico.demo con il suo magazzino e il POP Demo Monte.</figcaption></figure>
@@ -157,6 +158,26 @@
   <li>Gli si indica la <a href="/wiki/" target="_blank" rel="noopener">Guida installatore</a> (dall'app: riquadro <i>Guida</i>; dalla console: voce <i>Guida installatore</i>).</li>
   <li>Dopo il primo intervento si controlla lo <b>Storico provisioning</b>: esito, collaudo, speedtest, accettazione in UISP.</li>
 </ol>
+
+<h2 id="g-specialist">Lo Specialist</h2>
+<p>Lo <b>Specialist</b> è un ruolo a parte, per chi lavora in autonomia per altre aziende: installa CPE che non sono di CDA Net e crea reti wireless con i propri template. Vede tutto come l'amministratore e usa tutti gli strumenti di amministratore e installatore. Restano agli amministratori gli account, i connettori di CDA Net, le impostazioni e gli aggiornamenti del server, la privacy, il connettore di Claude, gli accessi bloccati e le decisioni sul lavoro di CDA Net: collaudi e KO degli installatori, interventi, magazzino, template e reti Wi-Fi di CDA Net.</p>
+<p>Si crea da <i>Account</i> con ruolo <i>Specialist</i>, oppure con <i>Rendi specialist</i> su un account esistente. La verifica in due passaggi, quando è obbligatoria per gli amministratori, vale anche per lui.</p>
+<h3>Nella console: la sezione Specialist</h3>
+<ul>
+  <li><b>Storico Specialist</b>: solo le sue installazioni, separate dallo Storico di CDA Net e fuori da statistiche, NOC, magazzino e Salute CPE. Per ognuna ci sono azienda, cliente, CPE, template, collaudo e autorizzazione nell'UISP dell'azienda, con filtri, ricerca ed esportazione CSV.</li>
+  <li><b>I miei template</b>: i suoi template airOS, separati da quelli di CDA Net. Il modulo è lo stesso di Profili airOS (Wireless, Rete, Servizi, Sistema), ma il testo è tutto suo: nessun valore imposto dal server, VLAN ammesse, segnaposto suoi (<code>${VLAN_ID}</code>…) che si scrivono nell'app per ogni CPE. Si parte dal modulo, da un backup .cfg o da una copia di un template CDA Net, che resta com'è (la sua community SNMP e la chiave UISP non vengono copiate).</li>
+  <li><b>I miei connettori</b>: l'UISP di ogni azienda per cui lavora (indirizzo, token API e, facoltativa, la chiave dei dispositivi), cifrati sul server e mai mostrati. Altri tipi di connettore arriveranno.</li>
+</ul>
+<h3>Nell'app: il flusso Specialist</h3>
+<p>Nella barra in basso l'area <i>Specialist</i> prende il posto di <i>Installa</i>; l'installazione CDA Net resta raggiungibile da Oggi. Il flusso è separato da quello degli installatori, che non cambia:</p>
+<ol>
+  <li><b>CPE collegata</b>: con il telefono sulla Wi-Fi della CPE, la discovery la trova qualunque sia il suo IP. L'app entra via SSH (credenziali di fabbrica, o quelle attuali scritte lì) e legge MAC, seriale, modello, firmware e board: niente etichette né magazzino.</li>
+  <li><b>Firmware</b>: se non è quello richiesto si aggiorna da lì, oppure si tiene per scelta.</li>
+  <li><b>Configurazione</b>: azienda (il connettore UISP), template del modello, i valori per questa CPE (SSID, chiave WPA2 dell'AP, PPPoE, i suoi segnaposto), le credenziali admin della CPE, cliente e posizione. La WPA2 e le password si scrivono al momento per ogni CPE e non vengono mai salvate: il server prepara il file e ne tiene solo l'impronta SHA-256.</li>
+  <li><b>Scrittura</b> nella CPE, senza bisogno di Internet; l'esito arriva al server anche più tardi.</li>
+  <li><b>Verifica</b> con le credenziali nuove, <b>collaudo facoltativo</b> (il suo giudizio, senza NOC) e <b>autorizzazione nell'UISP dell'azienda</b>, nel site del suo AP (proposto) o in quello scelto.</li>
+</ol>
+<p>I template si creano e si modificano anche dall'app (<i>Specialist → Template</i>), pure dalla configurazione della CPE collegata.</p>
 
 <h2 id="g-storico">11. Storico, accettazione in UISP e rapporti PDF</h2>
 <p>Lo storico di tutti gli installatori (solo metadati, nessuna password): ricerca per MAC, seriale, utente PPPoE, SSID o cliente, filtri per esito (<i>completati, falliti, preparati/in corso, scaduti</i>) e date, esportazione in CSV.</p>

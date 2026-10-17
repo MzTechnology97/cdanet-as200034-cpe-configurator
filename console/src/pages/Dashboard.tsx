@@ -4,6 +4,7 @@ import { isOn } from '../lib/modules';
 import { api } from '../lib/api';
 import { keys } from '../lib/query';
 import { Badge, Card, Notice, PageHeader, Skeleton, Stat } from '../ui';
+import { canManage } from '../lib/roles';
 
 /** Panoramica (admins): what needs the office today, what is left to configure, the services. */
 
@@ -59,11 +60,13 @@ const date = (iso?: string | null) => (iso ? new Date(iso).toLocaleString('it-IT
 export function Dashboard() {
   const status = useQuery({ queryKey: ['admin', 'status'], queryFn: () => api<Status>('/api/admin/status'), refetchInterval: 60_000 });
   const profiles = useQuery({ queryKey: ['admin', 'profiles'], queryFn: () => api<Array<{ model: string; templates: unknown[] }>>('/api/admin/profiles') });
-  const privacy = useQuery({ queryKey: ['admin', 'privacy'], queryFn: () => api<{ complete: boolean }>('/api/admin/privacy') });
+  // what is left to configure and the connectors: the admins' (a specialist sees the rest)
+  const manage = canManage();
+  const privacy = useQuery({ queryKey: ['admin', 'privacy'], queryFn: () => api<{ complete: boolean }>('/api/admin/privacy'), enabled: manage });
   const advisor = useQuery({ queryKey: [...keys.advisor, 'summary'], queryFn: () => api<Advisor>('/api/admin/advisor/summary') });
   const network = useQuery({ queryKey: keys.network, queryFn: () => api<{ summary: { down: number; powerOutage: number } }>('/api/network/status'), enabled: isOn('network_status'), refetchInterval: 60_000 });
   const uisp = useQuery({ queryKey: ['admin', 'uisp', 'status'], queryFn: () => api<Uisp>('/api/admin/uisp/status').catch((e: Error): Uisp => ({ configured: true, ok: false, error: e.message })) });
-  const geocoder = useQuery({ queryKey: ['admin', 'geocoder', 'test'], queryFn: () => api<Geocoder>('/api/admin/connectors/geocoder/test', { method: 'POST', body: {} }), staleTime: 5 * 60_000 });
+  const geocoder = useQuery({ queryKey: ['admin', 'geocoder', 'test'], queryFn: () => api<Geocoder>('/api/admin/connectors/geocoder/test', { method: 'POST', body: {} }), staleTime: 5 * 60_000, enabled: manage });
 
   const s = status.data;
   if (status.error) return <Notice tone="bad">{(status.error as Error).message}</Notice>;
@@ -114,7 +117,7 @@ export function Dashboard() {
         )}
       </section>
 
-      {todo.length ? (
+      {!manage ? null : todo.length ? (
         <Notice tone="warn" title="Da completare">
           <ul className="ui-list">
             {todo.map((w) => (
@@ -139,9 +142,10 @@ export function Dashboard() {
             ]}
           />
         </Card>
-        <Card title="UISP" actions={<a href="#/connectors">Connettori</a>}>
+        <Card title="UISP" actions={manage ? <a href="#/connectors">Connettori</a> : undefined}>
           <UispFacts u={uisp.data} />
         </Card>
+        {manage && (
         <Card title="Ricerca indirizzi (OpenStreetMap)">
           {geocoder.data ? (
             <Facts
@@ -157,6 +161,7 @@ export function Dashboard() {
             <Skeleton lines={3} />
           )}
         </Card>
+        )}
         <Card title="App Android">
           <Facts
             rows={[

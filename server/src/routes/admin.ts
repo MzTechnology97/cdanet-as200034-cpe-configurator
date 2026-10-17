@@ -5,7 +5,7 @@ import { HttpError, createLoginLimiter } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { hashPassword, sha256Hex, verifyPassword } from '../crypto.ts';
 import { nowIso, recordEvent } from '../db.ts';
-import { applyForm, FIELDS, policyWarnings, readForm, skeletonFor, templateFacts } from '../domain/airos-form.ts';
+import { applyForm, formFieldsView, policyWarnings, readForm, skeletonFor, templateFacts } from '../domain/airos-form.ts';
 import { autoTemplate } from '../domain/autotemplate.ts';
 import { parseWirelessCsv, wirelessCsv } from '../domain/wireless-csv.ts';
 import { BOARD_MATCH_SUGGESTIONS, SSID_RX, SUPPORTED_MODELS, TARGET_FIRMWARE } from '../domain/policy.ts';
@@ -22,6 +22,8 @@ const password = z.string().min(12).max(200);
 export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
   const { db, sealer } = ctx;
   const admin = { preHandler: ctx.auth.requireAdmin };
+  // what the specialist sees and uses too (the CDA Net templates in read only, the form helpers)
+  const staff = { preHandler: ctx.auth.requireStaff };
   const actor = (req: { user?: { id: number } }) => req.user?.id ?? null;
 
   // ---- Funzionalità (modules) -------------------------------------------------------
@@ -102,7 +104,7 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
       .object({
         username,
         password,
-        role: z.enum(['installer', 'admin']).default('installer'),
+        role: z.enum(['installer', 'admin', 'specialist']).default('installer'),
         /** Warehouse of the installer or partner (ISP Billing site); null = none. */
         warehouseSiteId: z.number().int().positive().nullable().optional(),
         /** May install CPEs that are not in that warehouse. */
@@ -116,6 +118,8 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
         .prepare('INSERT INTO users(username, password_hash, role, created_at, warehouse_site_id, warehouse_site, stock_bypass) VALUES(?,?,?,?,?,?,?)')
         .run(b.username, hashPassword(b.password), b.role, nowIso(), b.warehouseSiteId ?? null, site, b.stockBypass ? 1 : 0);
       recordEvent(db, actor(req), 'user.create', b.username, b.role);
+      // a new account that sees everything: the NOC hears of it
+      if (b.role === 'specialist') ctx.notify.security(`Nuovo account specialist <b>${escapeHtml(b.username)}</b> creato da ${escapeHtml(req.user!.username)}: vede tutto come un amministratore`);
       return reply.code(201).send({ ok: true, id: Number(r.lastInsertRowid) });
     } catch {
       throw new HttpError(409, 'username_exists');
@@ -128,7 +132,7 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
       .object({
         active: z.boolean().optional(),
         password: password.optional(),
-        role: z.enum(['installer', 'admin']).optional(),
+        role: z.enum(['installer', 'admin', 'specialist']).optional(),
         resetTotp: z.literal(true).optional(),
         warehouseSiteId: z.number().int().positive().nullable().optional(),
         stockBypass: z.boolean().optional(),
@@ -140,8 +144,9 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
       | { id: number; username: string; role: string }
       | undefined;
     if (!target) throw new HttpError(404, 'user_not_found');
-    if (id === req.user?.id && (b.active === false || b.role === 'installer')) throw new HttpError(409, 'cannot_demote_current_admin');
-    if ((b.active === false || b.role === 'installer') && target.role === 'admin') {
+    const demoted = b.active === false || (b.role !== undefined && b.role !== 'admin');
+    if (id === req.user?.id && demoted) throw new HttpError(409, 'cannot_demote_current_admin');
+    if (demoted && target.role === 'admin') {
       const admins = (db.prepare("SELECT count(*) n FROM users WHERE role = 'admin' AND active = 1").get() as { n: number }).n;
       if (admins <= 1) throw new HttpError(409, 'last_admin');
     }
@@ -149,12 +154,14 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
     if (b.password !== undefined) {
       db.prepare('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?').run(hashPassword(b.password), id);
       if (target.role === 'admin') ctx.notify.security(`Password dell'amministratore <b>${escapeHtml(target.username)}</b> reimpostata da ${escapeHtml(req.user!.username)}`);
+      else if (target.role === 'specialist') ctx.notify.security(`Password dello specialist <b>${escapeHtml(target.username)}</b> reimpostata da ${escapeHtml(req.user!.username)}`);
     }
     if (b.resetTotp) {
       db.prepare("UPDATE users SET totp_secret = '', totp_pending = '', totp_enabled = 0, totp_last_step = 0, recovery_codes = '[]', token_version = token_version + 1 WHERE id = ?").run(id);
       ctx.notify.security(`Verifica in due passaggi di <b>${escapeHtml(target.username)}</b> azzerata da ${escapeHtml(req.user!.username)}`);
     }
     if (b.role === 'admin' && target.role !== 'admin') ctx.notify.security(`<b>${escapeHtml(target.username)}</b> promosso amministratore da ${escapeHtml(req.user!.username)}`);
+    if (b.role === 'specialist' && target.role !== 'specialist') ctx.notify.security(`<b>${escapeHtml(target.username)}</b> reso specialist da ${escapeHtml(req.user!.username)}: vede tutto come un amministratore`);
     if (b.active !== undefined) db.prepare('UPDATE users SET active = ?, token_version = token_version + 1 WHERE id = ?').run(b.active ? 1 : 0, id);
     if (b.role !== undefined) db.prepare('UPDATE users SET role = ?, token_version = token_version + 1 WHERE id = ?').run(b.role, id);
     // warehouse and bypass: no new login needed, the app reads them with «Le mie CPE»
@@ -395,30 +402,25 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
     return { template, params, values, missing, warnings: policyWarnings(values), facts: templateFacts(template), report: inspectTemplate(template) };
   };
 
-  app.get('/api/admin/profiles', admin, async () => {
+  app.get('/api/admin/profiles', staff, async () => {
     const all = ctx.templates.list();
     return SUPPORTED_MODELS.map((model) => ({ model, firmware: TARGET_FIRMWARE, templates: all.filter((t) => t.model === model) }));
   });
 
-  app.get('/api/admin/placeholders', admin, async () => Object.entries(PLACEHOLDERS).map(([name, description]) => ({ name, description })));
+  app.get('/api/admin/placeholders', staff, async () => Object.entries(PLACEHOLDERS).map(([name, description]) => ({ name, description })));
 
   /** The fields of the template form (like the CPE's web interface), with each model's defaults. */
-  app.get('/api/admin/template-form', admin, async () => ({
-    fields: FIELDS.map(({ read: _r, write: _w, fallback, ...f }) => ({
-      ...f,
-      fallback: typeof fallback === 'function' ? Object.fromEntries(SUPPORTED_MODELS.map((m) => [m, fallback(m)])) : fallback,
-    })),
-  }));
+  app.get('/api/admin/template-form', staff, async () => ({ fields: formFieldsView() }));
 
   /** The form of a template text; without a text, the one of a new template made from the form alone. */
-  app.post('/api/admin/profiles/:model/form/read', admin, async (req) => {
+  app.post('/api/admin/profiles/:model/form/read', staff, async (req) => {
     const { model } = modelParam.parse(req.params);
     const b = z.object({ template: templateText.optional(), params: paramsSchema.optional() }).strict().parse(req.body ?? {});
     return formOf(model, b.template ?? skeletonFor(model), { ...DEFAULT_PARAMS, ...b.params });
   });
 
   /** The form's changes written into the text (only what changed): nothing is stored here. */
-  app.post('/api/admin/profiles/:model/form/apply', admin, async (req) => {
+  app.post('/api/admin/profiles/:model/form/apply', staff, async (req) => {
     const { model } = modelParam.parse(req.params);
     const b = z
       .object({ template: templateText, params: paramsSchema.optional(), changes: z.record(z.string().max(40), z.union([z.string().max(300), z.number(), z.boolean()])) })
@@ -434,14 +436,14 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   /** Raw CPE backup -> template with placeholders + preview. Nothing is stored here. */
-  app.post('/api/admin/profiles/:model/autotemplate', admin, async (req) => {
+  app.post('/api/admin/profiles/:model/autotemplate', staff, async (req) => {
     const { model } = modelParam.parse(req.params);
     const b = z.object({ backup: templateText }).strict().parse(req.body);
     const result = autoTemplate(b.backup);
     return { ...result, report: inspectTemplate(result.template), suggestedBoardMatch: BOARD_MATCH_SUGGESTIONS[model] };
   });
 
-  app.post('/api/admin/profiles/:model/inspect', admin, async (req) => {
+  app.post('/api/admin/profiles/:model/inspect', staff, async (req) => {
     modelParam.parse(req.params);
     const b = z.object({ template: templateText, boardMatch: boardMatch.optional() }).strict().parse(req.body);
     if (b.boardMatch) validateBoardMatch(b.boardMatch);
@@ -459,7 +461,7 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
     return reply.code(201).send(t);
   });
 
-  app.get('/api/admin/templates/:id', admin, async (req) => ctx.templates.get(idParam.parse(req.params).id));
+  app.get('/api/admin/templates/:id', staff, async (req) => ctx.templates.get(idParam.parse(req.params).id));
 
   app.patch('/api/admin/templates/:id', admin, async (req) => {
     const { id } = idParam.parse(req.params);
@@ -481,7 +483,7 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   // ---- Status / settings --------------------------------------------------------
-  app.get('/api/admin/status', admin, async () => {
+  app.get('/api/admin/status', staff, async () => {
     const c = ctx.cfg;
     const count = (sql: string, ...params: string[]) => (db.prepare(sql).get(...params) as { n: number }).n;
     const since30d = new Date(Date.now() - 30 * 86400_000).toISOString();
@@ -526,7 +528,7 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
     };
   });
 
-  app.get('/api/admin/events', admin, async (req) => {
+  app.get('/api/admin/events', staff, async (req) => {
     const limit = z.coerce.number().int().min(1).max(500).default(200).parse((req.query as { limit?: string }).limit);
     return db
       .prepare(

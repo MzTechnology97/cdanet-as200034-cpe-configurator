@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { HttpError } from '../auth.ts';
+import { HttpError, isStaff } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
 import { parseMac } from '../domain/policy.ts';
@@ -16,10 +16,12 @@ export const RMA_CONDITIONS = ['unknown', 'working', 'broken'] as const;
 export function warehouseRoutes(app: FastifyInstance, ctx: AppContext) {
   const { db } = ctx;
   const admin = { preHandler: [ctx.auth.requireAdmin] };
+  // the specialist sees the warehouse (his CPEs come from other companies: he never uses it)
+  const staff = { preHandler: [ctx.auth.requireStaff] };
   const user = { preHandler: [ctx.auth.requireUser] };
   const w = () => ctx.warehouse;
 
-  app.get('/api/admin/warehouse/sites', admin, async () => ({ ...w().state(), sites: w().sites() }));
+  app.get('/api/admin/warehouse/sites', staff, async () => ({ ...w().state(), sites: w().sites() }));
 
   app.post('/api/admin/warehouse/refresh', admin, async (req) => {
     const r = await w().sync();
@@ -37,7 +39,7 @@ export function warehouseRoutes(app: FastifyInstance, ctx: AppContext) {
       .map((a) => ({ userId: a.id, username: a.username, site: a.site, cpe: w().cpesOf(a.siteId).length, min: a.min ?? ctx.cfg.warehouseMinStock }))
       .filter((a) => a.min > 0 && a.cpe < a.min);
 
-  app.get('/api/admin/warehouse/overview', admin, async () => ({ ...w().state(), byModel: w().byModel(), lowStock: lowStock(), lowStockBelow: ctx.cfg.warehouseMinStock, toUnload: w().toUnload() }));
+  app.get('/api/admin/warehouse/overview', staff, async () => ({ ...w().state(), byModel: w().byModel(), lowStock: lowStock(), lowStockBelow: ctx.cfg.warehouseMinStock, toUnload: w().toUnload() }));
 
   /** An account's own minimum (null: the one of Impostazioni server). */
   app.put('/api/admin/users/:id/min-stock', admin, async (req) => {
@@ -83,7 +85,7 @@ export function warehouseRoutes(app: FastifyInstance, ctx: AppContext) {
       r.condition, r.state, r.note, r.updated_at updatedAt, u.username removedBy, x.username updatedBy
     FROM cpe_rma r LEFT JOIN users u ON u.id = r.removed_by LEFT JOIN users x ON x.id = r.updated_by`;
 
-  app.get('/api/admin/rma', admin, async (req) => {
+  app.get('/api/admin/rma', staff, async (req) => {
     const { state } = z.object({ state: z.enum(['open', 'all', ...RMA_STATES]).default('open') }).parse(req.query);
     const where = state === 'all' ? '' : state === 'open' ? "WHERE r.state IN ('to_return','repair')" : 'WHERE r.state = ?';
     const items = db.prepare(`${RMA_SELECT} ${where} ORDER BY r.created_at DESC LIMIT 1000`).all(...(state === 'all' || state === 'open' ? [] : [state]));
@@ -120,14 +122,14 @@ export function warehouseRoutes(app: FastifyInstance, ctx: AppContext) {
       | { id: number; mac: string; owner: number }
       | undefined;
     if (!r) throw new HttpError(404, 'rma_not_found');
-    if (req.user!.role !== 'admin' && r.owner !== req.user!.id) throw new HttpError(403, 'forbidden');
+    if (!isStaff(req.user!.role) && r.owner !== req.user!.id) throw new HttpError(403, 'forbidden');
     db.prepare('UPDATE cpe_rma SET condition = ?, note = ?, updated_at = ?, updated_by = ? WHERE id = ?').run(b.condition, b.note, new Date().toISOString(), req.user!.id, r.id);
     recordEvent(db, req.user!.id, 'rma.condition', r.mac, `${b.condition}${b.note ? ` · ${b.note}` : ''}`);
     return { ok: true, id: r.id };
   });
 
   /** Audit of the CPE movements (warehouses of ISP Billing, installations, acceptance tests). */
-  app.get('/api/admin/warehouse/movements', admin, async (req) => {
+  app.get('/api/admin/warehouse/movements', staff, async (req) => {
     const q = z.object({ mac: z.string().max(40).optional(), site: z.string().max(200).optional(), limit: z.coerce.number().int().min(1).max(2000).default(300) }).parse(req.query);
     const mac = q.mac ? parseMac(q.mac) : undefined;
     if (q.mac && !mac) throw new HttpError(400, 'invalid_mac');
@@ -166,7 +168,7 @@ export function stockCheck(ctx: AppContext, userId: number, mac: string): StockC
   const u = ctx.db.prepare('SELECT role, warehouse_site_id siteId, stock_bypass bypass FROM users WHERE id = ?').get(userId) as
     | { role: string; siteId: number | null; bypass: number }
     | undefined;
-  const bypass = !u || u.role === 'admin' || !!u.bypass;
+  const bypass = !u || isStaff(u.role) || !!u.bypass;
   const done = (result: StockCheck['result']) => ({ result, bypass, allowed: result === 'ok' || result === 'not_linked' || result === 'not_loaded' || bypass });
   if (!u || u.siteId === null) return done('not_linked');
   if (!ctx.warehouse.loaded()) return done('not_loaded');

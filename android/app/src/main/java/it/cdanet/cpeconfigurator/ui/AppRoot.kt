@@ -102,6 +102,8 @@ import it.cdanet.cpeconfigurator.ui.screens.RemoteScreen
 import it.cdanet.cpeconfigurator.ui.screens.RouterOsScreen
 import it.cdanet.cpeconfigurator.ui.screens.SettingsScreen
 import it.cdanet.cpeconfigurator.ui.screens.SnmpScreen
+import it.cdanet.cpeconfigurator.ui.screens.SpecialistHub
+import it.cdanet.cpeconfigurator.ui.screens.SpecialistTemplateEditor
 import it.cdanet.cpeconfigurator.ui.screens.UpdateBanner
 import it.cdanet.cpeconfigurator.ui.screens.WifiScreen
 import it.cdanet.cpeconfigurator.update.UpdateInfo
@@ -153,12 +155,15 @@ enum class Screen(val title: String, val scroll: Boolean = true, val wide: Boole
     Search("Cerca"),
     // admins: one CPE managed as in the UISP app (opened from Salute CPE)
     CpeAdmin("Gestione CPE", scroll = false),
+    // the Specialist (owner, 17/10/2026): his own flow, history and templates; the editor of one template
+    Specialist("Specialist", scroll = false),
+    SpecTemplate("Template Specialist"),
     // debug builds: every component on one page (Impostazioni → Componenti dell'interfaccia)
     Components("Componenti"),
 }
 
-/** The four areas of the bottom bar. */
-private val TOP = listOf(Screen.Home, Screen.Installations, Screen.Coverage, Screen.NetHub, Screen.Tools)
+/** The areas of the bottom bar (the Specialist's in place of Installa for his account). */
+private val TOP = listOf(Screen.Home, Screen.Installations, Screen.Coverage, Screen.NetHub, Screen.Tools, Screen.Specialist)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -189,7 +194,7 @@ fun AppRoot(c: AppContainer) {
 
     /** Opens a screen, on a given tab for the areas with tabs. */
     fun open(d: Dest) {
-        val titles = hubTabTitles(d.screen, modules, c.session.isAdmin)
+        val titles = hubTabTitles(d.screen, modules, c.session.isStaff)
         d.tab?.let { t -> titles.indexOf(t).takeIf { it >= 0 }?.let { hubTabs[d.screen.name] = it } }
         if (d.screen in TOP) top(d.screen) else go(d.screen)
     }
@@ -283,6 +288,7 @@ fun AppRoot(c: AppContainer) {
             c.resultQueue.syncInBackground()
             c.acceptanceQueue.syncInBackground()
             c.rmaQueue.syncInBackground()
+            c.specialist.results.syncInBackground()
             // the firmware the CPEs need stays on the phone, ready for the roof without Internet
             c.scope.launch { c.firmware.prefetch(c.api) }
             scope.launch { c.routerOs.refreshCatalog() }
@@ -296,6 +302,7 @@ fun AppRoot(c: AppContainer) {
                     if (c.resultQueue.pending.value.isNotEmpty()) runCatching { c.resultQueue.sync() }
                     if (c.acceptanceQueue.pending.value.isNotEmpty()) runCatching { c.acceptanceQueue.sync() }
                     if (c.rmaQueue.pending.value.isNotEmpty()) runCatching { c.rmaQueue.sync() }
+                    if (c.specialist.results.pending.value.isNotEmpty()) runCatching { c.specialist.results.sync() }
                     session?.user?.id?.let { c.captureReports.send(it) }
                     runCatching { c.speedtests.sendPending() }
                     // back on the network after a roof without signal: the warehouse is read again
@@ -311,6 +318,7 @@ fun AppRoot(c: AppContainer) {
                         if (c.resultQueue.pending.value.isNotEmpty()) runCatching { c.resultQueue.sync() }
                         if (c.acceptanceQueue.pending.value.isNotEmpty()) runCatching { c.acceptanceQueue.sync() }
                         if (c.rmaQueue.pending.value.isNotEmpty()) runCatching { c.rmaQueue.sync() }
+                        if (c.specialist.results.pending.value.isNotEmpty()) runCatching { c.specialist.results.sync() }
                         runCatching { c.speedtests.sendPending() }
                         session?.user?.id?.let { runCatching { c.captureReports.send(it) } }
                     }
@@ -337,7 +345,7 @@ fun AppRoot(c: AppContainer) {
         return
     }
     // Salute CPE asks for the admin CPE screen (admins only, the list offers it only to them)
-    LaunchedEffect(Unit) { c.openAdminCpe.collect { if (c.session.isAdmin) go(Screen.CpeAdmin) } }
+    LaunchedEffect(Unit) { c.openAdminCpe.collect { if (c.session.isStaff) go(Screen.CpeAdmin) } }
     LaunchedEffect(session?.user?.id) {
         if (session != null) {
             allowAutoLogin()
@@ -370,7 +378,7 @@ fun AppRoot(c: AppContainer) {
         }
         // notifications at once, also with the app closed: Firebase when the server has it, else the app's own connection
         c.scope.launch { it.cdanet.cpeconfigurator.push.Push.start(ctx) }
-        if (s.user.role == "admin") readinessDone = true
+        if (s.user.role == "admin" || s.user.role == "specialist") readinessDone = true
     }
     privacy?.let { p ->
         if (session != null) {
@@ -395,7 +403,9 @@ fun AppRoot(c: AppContainer) {
     val wide = config.screenWidthDp >= 600 && config.screenWidthDp > config.screenHeightDp
     val areas = listOf(
         Triple(Screen.Home, "Oggi", R.drawable.ic_home to R.drawable.ic_home_filled),
-        Triple(Screen.Installations, "Installa", R.drawable.ic_settings_input_antenna to R.drawable.ic_settings_input_antenna_filled),
+        // the Specialist's own work in place of CDA Net's installations (still on Oggi and in Cerca)
+        if (session?.user?.role == "specialist") Triple(Screen.Specialist, "Specialist", R.drawable.ic_rocket_launch to R.drawable.ic_rocket_launch)
+        else Triple(Screen.Installations, "Installa", R.drawable.ic_settings_input_antenna to R.drawable.ic_settings_input_antenna_filled),
         // before going to a customer: is the address covered? (its own area, not the on-site AP vicini)
         Triple(Screen.Coverage, "Copertura", R.drawable.ic_map to R.drawable.ic_map),
         Triple(Screen.NetHub, "Rete", R.drawable.ic_hub to R.drawable.ic_hub_filled),
@@ -420,7 +430,7 @@ fun AppRoot(c: AppContainer) {
                                 }
                                 Spacer(Modifier.width(12.dp))
                             }
-                            val title = if (screen == Screen.CpeHealth && session?.user?.role == "admin") "Salute CPE" else screen.title
+                            val title = if (screen == Screen.CpeHealth && c.session.isStaff) "Salute CPE" else screen.title
                             androidx.compose.runtime.SideEffect { c.currentScreen.value = title }
                             Text(
                                 title,
@@ -565,6 +575,8 @@ fun AppRoot(c: AppContainer) {
                     Screen.Camera -> WifiRequired(c, "alla Wi-Fi della rete delle telecamere", "ONVIF, SADP e RTSP funzionano sulla rete locale.") { CameraScreen(c) }
                     Screen.Remote -> RemoteScreen(c)
                     Screen.CpeAdmin -> c.adminCpeId.collectAsState().value?.let { CpeAdminScreen(c, it) }
+                    Screen.Specialist -> SpecialistHub(c, hubTabs[screen.name], { hubTabs[screen.name] = it }, onEditTemplate = { go(Screen.SpecTemplate) })
+                    Screen.SpecTemplate -> SpecialistTemplateEditor(c, onClose = { back() })
                     Screen.RouterOs -> WifiRequired(c, "alla Wi-Fi della rete del MikroTik", "La consultazione avviene in SSH verso il router in rete locale.") { RouterOsScreen(c) }
                     Screen.History -> HistoryScreen(
                         c,

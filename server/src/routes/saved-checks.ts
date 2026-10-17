@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { HttpError } from '../auth.ts';
+import { HttpError, isStaff } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { distanceM, isValidLatLon } from '../domain/geo.ts';
@@ -82,8 +82,9 @@ const COVERAGE_PARAMS = z
 export function savedCheckRoutes(app: FastifyInstance, ctx: AppContext) {
   const { db } = ctx;
   const user = { preHandler: [ctx.auth.requireUser, ctx.modules.require('coverage')] };
-  const admin = { preHandler: [ctx.auth.requireAdmin, ctx.modules.require('coverage')] };
-  const isAdmin = (req: FastifyRequest) => req.user!.role === 'admin';
+  const admin = { preHandler: [ctx.auth.requireStaff, ctx.modules.require('coverage')] };
+  // admins and specialists: every saved check, and the customers of ISP Billing
+  const isAdmin = (req: FastifyRequest) => isStaff(req.user!.role);
   /** Feasibility is a check for sales: admins only, as its page. */
   const allowKind = (req: FastifyRequest, kind: CheckKind) => {
     if (kind === 'feasibility' && !isAdmin(req)) throw new HttpError(403, 'forbidden');

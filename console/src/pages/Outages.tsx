@@ -10,6 +10,7 @@ import { keys } from '../lib/query';
 import { type LMap, MapView } from '../map/MapView';
 import type { PageContext } from '../shell/routes';
 import { AsyncButton, Badge, Button, Card, EmptyState, Field, Notice, PageHeader, Skeleton, Stat } from '../ui';
+import { canManage, isStaff } from '../lib/roles';
 
 /**
  * Guasti Enel: outages and planned works of the power network in the areas of interest (admins:
@@ -96,7 +97,8 @@ interface MapApi {
 }
 
 export function Outages({ user }: PageContext) {
-  const admin = user.role === 'admin';
+  // admins and specialists see everything; the zones and what is monitored stay with the admins
+  const admin = isStaff(user);
   const qc = useQueryClient();
   const list = useQuery({ queryKey: [...keys.outages, 'list'], queryFn: () => api<List>('/api/outages?recent=1'), refetchInterval: 5 * 60_000 });
   const mapApi = useRef<MapApi | null>(null);
@@ -238,8 +240,8 @@ export function Outages({ user }: PageContext) {
       )}
       <MyTelegram title="Notifiche" appHint />
       {!admin && <MyZones onMap={onMap} />}
-      {admin && <InfraCard onSaved={reloadAll} />}
-      {admin && <AdminZones onMap={onMap} onChecked={reloadAll} />}
+      {admin && canManage() && <InfraCard onSaved={reloadAll} />}
+      {admin && canManage() && <AdminZones onMap={onMap} onChecked={reloadAll} />}
     </div>
   );
 }

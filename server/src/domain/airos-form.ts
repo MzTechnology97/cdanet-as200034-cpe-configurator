@@ -1,5 +1,5 @@
 import type { CpeModel } from './policy.ts';
-import { MANAGEMENT_PORTS } from './policy.ts';
+import { MANAGEMENT_PORTS, SUPPORTED_MODELS } from './policy.ts';
 import { normalizeTemplate, setKey } from './systemcfg.ts';
 
 /**
@@ -38,6 +38,11 @@ export interface FieldDef {
   experimental?: boolean;
   /** Kept in the template's parameters (forced by the server at every provisioning), not in the text. */
   param?: true;
+  /**
+   * Only in the specialist's templates (owner, 17/10/2026): CDA Net forces this value at every
+   * provisioning, a template of the specialist has it in its own text.
+   */
+  free?: true;
   read?: (c: Cfg) => FormValue | undefined;
   write?: (v: FormValue, c: Cfg) => Writes;
   fallback: FormValue | ((model: CpeModel) => FormValue);
@@ -516,6 +521,8 @@ export const FIELDS: FieldDef[] = [
     hint: 'La CPE si riavvia se questo indirizzo non risponde (watchdog sempre attivo).',
     type: 'host',
     param: true,
+    // a template of the specialist (no values forced by the server) has it in its own text
+    ...simple('pwdog.host', 'text'),
     fallback: '8.8.8.8',
   },
   { id: 'watchdogPeriod', section: 'services', label: 'Ping watchdog: intervallo (s)', hint: 'Ogni quanto controlla.', type: 'int', min: 10, max: 3600, ...simple('pwdog.period', 'int'), fallback: 300 },
@@ -528,8 +535,12 @@ export const FIELDS: FieldDef[] = [
     hint: 'Il server lo scrive in ogni CPE (SNMP sempre attivo; la location è il nome del cliente).',
     type: 'text',
     param: true,
+    ...simple('snmp.contact', 'text'),
     fallback: '172.31.0.7',
   },
+  // forced on by CDA Net at every provisioning: a choice of the template only for the specialist
+  { id: 'watchdog', section: 'services', label: 'Ping watchdog', hint: 'La CPE si riavvia se l’indirizzo del watchdog non risponde.', type: 'bool', free: true, ...simple('pwdog.status', 'bool'), fallback: true },
+  { id: 'snmp', section: 'services', label: 'SNMP', hint: 'Agente SNMP v2c della CPE (community del template).', type: 'bool', free: true, ...simple('snmp.status', 'bool'), fallback: true },
   { id: 'uisp', section: 'services', label: 'UISP', hint: 'La CPE si collega a UISP con la chiave del template.', type: 'bool', ...simple('unms.status', 'bool'), fallback: true },
   { id: 'discovery', section: 'services', label: 'Device discovery', hint: 'La CPE risponde alla ricerca Ubiquiti (anche l’app la usa).', type: 'bool', ...simple('discovery.status', 'bool'), fallback: true },
   { id: 'cdp', section: 'services', label: 'CDP', hint: 'Annunci Cisco Discovery Protocol.', type: 'bool', ...simple('discovery.cdp.status', 'bool'), fallback: true },
@@ -550,6 +561,42 @@ export const FIELDS: FieldDef[] = [
 
 const BY_ID = new Map(FIELDS.map((f) => [f.id, f]));
 
+/**
+ * How a form is read and written. CDA Net (default): two values live in the template's parameters
+ * (the server forces them at every provisioning) and the network rules of CDA Net are checked.
+ * [free]: a template of the specialist, where the text is the whole truth: those two values are its
+ * own keys, the fields CDA Net forces are choices of the template, and no CDA Net rule applies.
+ */
+export interface FormMode {
+  free?: boolean;
+}
+
+/** The fields of the form in a mode (the specialist's ones only in his templates). */
+export function fieldsFor(mode: FormMode = {}): FieldDef[] {
+  return mode.free ? FIELDS : FIELDS.filter((f) => !f.free);
+}
+const inParams = (f: FieldDef, mode: FormMode) => !!f.param && !mode.free;
+
+/** Hints that speak of CDA Net's own rules, in the words of a template of the specialist. */
+const FREE_HINTS: Record<string, string> = {
+  watchdogHost: 'La CPE si riavvia se questo indirizzo non risponde (con il watchdog attivo).',
+  snmpContact: 'Il contatto SNMP scritto nella CPE.',
+  uisp: 'La CPE si collega all’UISP dell’azienda con la chiave del connettore (o quella scritta).',
+  updateCheck: 'La CPE cerca nuovi firmware da sola.',
+};
+
+/** The fields as the console and the app get them (no code), with each model's default. */
+export function formFieldsView(mode: FormMode = {}) {
+  return fieldsFor(mode).map(({ read: _r, write: _w, fallback, param, free: _f, policy, hint, ...f }) => ({
+    ...f,
+    hint: (mode.free && FREE_HINTS[f.id]) || hint,
+    // a value forced by the server and the network rules: only in CDA Net's templates
+    ...(param && !mode.free ? { param } : {}),
+    ...(policy && !mode.free ? { policy } : {}),
+    fallback: typeof fallback === 'function' ? Object.fromEntries(SUPPORTED_MODELS.map((m) => [m, fallback(m)])) : fallback,
+  }));
+}
+
 export interface TemplateParams {
   watchdogHost: string;
   snmpContact: string;
@@ -567,21 +614,22 @@ export function parseKeys(text: string): Cfg {
 const fallback = (f: FieldDef, model: CpeModel) => (typeof f.fallback === 'function' ? f.fallback(model) : f.fallback);
 
 /** The form of a template: its values, and which fields were not in the text (shown with their default). */
-export function readForm(text: string, params: TemplateParams, model: CpeModel) {
+export function readForm(text: string, params: TemplateParams, model: CpeModel, mode: FormMode = {}) {
   const c = parseKeys(text);
   const values: FormValues = {};
   const missing: string[] = [];
-  for (const f of FIELDS) {
-    const v = f.param ? params[f.id as keyof TemplateParams] : f.read?.(c);
+  for (const f of fieldsFor(mode)) {
+    const v = inParams(f, mode) ? params[f.id as keyof TemplateParams] : f.read?.(c);
     if (v === undefined) missing.push(f.id);
     values[f.id] = v ?? fallback(f, model);
   }
   return { values, missing };
 }
 
-/** Values that differ from the network rules of CDA Net. */
-export function policyWarnings(values: FormValues) {
+/** Values that differ from the network rules of CDA Net (none for a template of the specialist). */
+export function policyWarnings(values: FormValues, mode: FormMode = {}) {
   const out: Array<{ field: string; message: string }> = [];
+  if (mode.free) return out;
   for (const f of FIELDS) {
     if (!f.policy || !visible(f, values)) continue;
     if (f.id.startsWith('scan') && !values.scanLimit) continue;
@@ -618,18 +666,18 @@ function checked(f: FieldDef, v: unknown): FormValue {
  * Writes the fields the admin changed (compared with what was read from this same text) and
  * leaves everything else as it is. The modes go first: they decide which keys the others use.
  */
-export function applyForm(text: string, params: TemplateParams, model: CpeModel, changes: Record<string, unknown>) {
-  const before = readForm(text, params, model).values;
+export function applyForm(text: string, params: TemplateParams, model: CpeModel, changes: Record<string, unknown>, mode: FormMode = {}) {
+  const before = readForm(text, params, model, mode).values;
   const order = ['wirelessMode', 'netMode', ...Object.keys(changes).filter((k) => k !== 'wirelessMode' && k !== 'netMode')];
   let out = normalizeTemplate(text);
   const nextParams = { ...params };
   for (const id of order) {
     if (!(id in changes)) continue;
     const f = BY_ID.get(id);
-    if (!f) throw new Error(`form_unknown_${id}`);
+    if (!f || (f.free && !mode.free)) throw new Error(`form_unknown_${id}`);
     const v = checked(f, changes[id]);
     if (v === before[id]) continue;
-    if (f.param) {
+    if (inParams(f, mode)) {
       nextParams[id as keyof TemplateParams] = String(v);
       continue;
     }

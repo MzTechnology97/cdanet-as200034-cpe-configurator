@@ -34,13 +34,15 @@ export function firmwareRoutes(app: FastifyInstance, ctx: AppContext): void {
   const { db } = ctx;
   const dir = ctx.cfg.firmwareDir;
   const admin = { preHandler: [ctx.auth.requireAdmin, ctx.modules.require('firmware_upgrade')] };
+  // the specialist sees the reference firmware (his flow updates the CPEs to it); uploading stays with the admins
+  const staff = { preHandler: [ctx.auth.requireStaff, ctx.modules.require('firmware_upgrade')] };
   const user = { preHandler: [ctx.auth.requireUser, ctx.modules.require('firmware_upgrade')] };
   const fileOf = (r: Pick<Row, 'sha256'>) => join(dir, `${r.sha256}.bin`);
   const view = (r: Row) => ({ ...r, target: r.version === TARGET_FIRMWARE, present: existsSync(fileOf(r)) });
 
   app.addContentTypeParser(FIRMWARE_CONTENT_TYPE, { parseAs: 'buffer', bodyLimit: MAX_IMAGE_BYTES }, (_req, body, done) => done(null, body));
 
-  app.get('/api/admin/firmware', admin, async () => ({
+  app.get('/api/admin/firmware', staff, async () => ({
     target: TARGET_FIRMWARE,
     items: (db.prepare(`${SELECT} ORDER BY version DESC, platform`).all() as unknown as Row[]).map(view),
   }));

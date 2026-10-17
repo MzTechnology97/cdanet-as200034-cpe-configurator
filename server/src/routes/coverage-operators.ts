@@ -13,7 +13,7 @@ import { forInstaller } from '../services/coverage-operators.ts';
  * address is never written whole in the activity log.
  */
 export function coverageOpsRoutes(app: FastifyInstance, ctx: AppContext) {
-  const admin = { preHandler: ctx.auth.requireAdmin };
+  const admin = { preHandler: ctx.auth.requireStaff };
   const field = { preHandler: [ctx.auth.requireUser, ctx.modules.require('coverage')] };
 
   const where = z.object({

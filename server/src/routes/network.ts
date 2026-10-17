@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { HttpError } from '../auth.ts';
+import { HttpError, isStaff } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { isSuspended } from '../services/crm-sync.ts';
 import { installerPower } from '../services/victron-sync.ts';
@@ -28,7 +28,7 @@ export function networkRoutes(app: FastifyInstance, ctx: AppContext) {
   app.get('/api/network/status', user, async (req) => {
     if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
     const u = req.user!;
-    const keys = u.role === 'admin' ? null : new Set(ctx.outages.assignments(u.id).map((i) => i.key));
+    const keys = isStaff(u.role) ? null : new Set(ctx.outages.assignments(u.id).map((i) => i.key));
     const [inf, counts] = await Promise.all([ctx.uisp.infrastructure(), ctx.uisp.cpeCounts((d) => isStaleCpe(d, ctx.cfg.staleCpeMonths))]);
     // admins: real positions and the sector already served, for the map of the whole network
     const sectors = keys
@@ -141,5 +141,5 @@ export function networkRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   /** Admins: UISP online, and when the data the pages show was read. */
-  app.get('/api/uisp/health', { preHandler: ctx.auth.requireAdmin }, async () => (ctx.uisp ? { configured: true, ...(ctx.uisp.health?.() ?? {}) } : { configured: false }));
+  app.get('/api/uisp/health', { preHandler: ctx.auth.requireStaff }, async () => (ctx.uisp ? { configured: true, ...(ctx.uisp.health?.() ?? {}) } : { configured: false }));
 }

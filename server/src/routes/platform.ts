@@ -15,8 +15,10 @@ const MAX_BACKUP_BYTES = 512 * 1024 * 1024;
  */
 export function platformRoutes(app: FastifyInstance, ctx: AppContext) {
   const admin = { preHandler: ctx.auth.requireAdmin };
+  // the specialist sees how the platform is doing; the backups stay with the admins
+  const staff = { preHandler: ctx.auth.requireStaff };
 
-  app.get('/api/admin/platform/health', admin, async () => ctx.platformHealth.view());
+  app.get('/api/admin/platform/health', staff, async () => ctx.platformHealth.view());
 
   app.post('/api/admin/platform/backup', admin, async (req, reply) => {
     const b = z

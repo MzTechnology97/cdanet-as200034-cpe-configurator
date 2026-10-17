@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { api } from '../lib/api';
 import { toast } from '../lib/toast';
 import { Badge, Card, EmptyState, Notice, Segmented, Skeleton, Table } from '../ui';
+import { canManage } from '../lib/roles';
 
 /**
  * Magazzino → «CPE smontate»: every CPE taken off in a replacement, from «da rientrare» to its end
@@ -82,7 +83,10 @@ export function RmaCard() {
               { label: 'Come sta', render: (r) => <Badge tone={CONDITION[r.condition]![1]}>{CONDITION[r.condition]![0]}</Badge> },
               {
                 label: 'Stato',
-                render: (r) => (
+                render: (r) =>
+                  !canManage() ? (
+                    <Badge>{STATE[r.state]?.[0] ?? r.state}</Badge>
+                  ) : (
                   <select className="wo-date" value={r.state} onChange={(e) => void set(r, { state: e.target.value as State })} aria-label="Stato">
                     {Object.entries(STATE).map(([k, [l]]) => (
                       <option key={k} value={k}>
@@ -90,11 +94,14 @@ export function RmaCard() {
                       </option>
                     ))}
                   </select>
-                ),
+                  ),
               },
               {
                 label: 'Nota',
-                render: (r) => (
+                render: (r) =>
+                  !canManage() ? (
+                    <span className="ui-small">{r.note || '—'}</span>
+                  ) : (
                   <input
                     className="wo-date rma-note"
                     defaultValue={r.note}

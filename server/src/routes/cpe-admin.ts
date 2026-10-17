@@ -17,7 +17,8 @@ const RANGES = ['day', 'week', 'month'] as const;
  * is in the activity log. Customer CPEs only: APs and PtP links are not managed from here.
  */
 export function cpeAdminRoutes(app: FastifyInstance, ctx: AppContext) {
-  const admin = { preHandler: [ctx.auth.requireAdmin, ctx.modules.require('cpe_health')] };
+  // a tool: admins and specialists
+  const admin = { preHandler: [ctx.auth.requireStaff, ctx.modules.require('cpe_health')] };
   const { db } = ctx;
 
   const uisp = () => {

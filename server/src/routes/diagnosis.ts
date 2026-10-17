@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { HttpError } from '../auth.ts';
+import { HttpError, isStaff } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { createDiagnosis } from '../services/diagnosis.ts';
 
@@ -16,13 +16,13 @@ export function diagnosisRoutes(app: FastifyInstance, ctx: AppContext) {
     pppoeUser: z.string().trim().max(128).optional(),
   });
 
-  app.get('/api/admin/diagnosis', { preHandler: ctx.auth.requireAdmin }, async (req) => d.run(q.parse(req.query)));
+  app.get('/api/admin/diagnosis', { preHandler: ctx.auth.requireStaff }, async (req) => d.run(q.parse(req.query)));
 
   app.get('/api/field/diagnosis', { preHandler: [ctx.auth.requireUser, ctx.modules.require('work_orders')] }, async (req) => {
     const { workOrderId } = z.object({ workOrderId: z.coerce.number().int().positive() }).parse(req.query);
     const o = ctx.db.prepare('SELECT assigned_to FROM work_orders WHERE id = ?').get(workOrderId) as { assigned_to: number | null } | undefined;
     if (!o) throw new HttpError(404, 'work_order_not_found');
-    if (req.user!.role !== 'admin' && o.assigned_to !== req.user!.id) throw new HttpError(403, 'forbidden');
+    if (!isStaff(req.user!.role) && o.assigned_to !== req.user!.id) throw new HttpError(403, 'forbidden');
     const r = await d.run({ workOrderId });
     return {
       at: r.at,

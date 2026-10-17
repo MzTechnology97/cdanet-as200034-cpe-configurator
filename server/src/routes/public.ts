@@ -2,7 +2,8 @@ import { createHash, randomBytes, randomUUID, timingSafeEqual } from 'node:crypt
 import { createReadStream } from 'node:fs';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { HttpError, createLoginLimiter } from '../auth.ts';
+import { HttpError, createLoginLimiter, isStaff, type Role } from '../auth.ts';
+import { roleLabel } from '../domain/roles.ts';
 import type { AppContext } from '../context.ts';
 import { DUMMY_PASSWORD_HASH, hashPassword, verifyPassword } from '../crypto.ts';
 import { nowIso, recordEvent } from '../db.ts';
@@ -41,7 +42,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     const body = loginSchema.parse(req.body);
     ctx.loginGuard.check(req, body.username);
     const u = findUser.get(body.username) as
-      | { id: number; username: string; password_hash: string; role: 'admin' | 'installer'; active: number; token_version: number; totp_enabled: number }
+      | { id: number; username: string; password_hash: string; role: Role; active: number; token_version: number; totp_enabled: number }
       | undefined;
     const valid = verifyPassword(body.password, u?.password_hash ?? DUMMY_PASSWORD_HASH);
     if (!u || !valid || !u.active) {
@@ -54,11 +55,12 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     return session(u, req.ip);
   };
 
-  async function session(u: { id: number; username: string; role: 'admin' | 'installer'; token_version: number; totp_enabled?: number }, ip: string, notify = true) {
+  async function session(u: { id: number; username: string; role: Role; token_version: number; totp_enabled?: number }, ip: string, notify = true) {
     ctx.db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').run(nowIso(), u.id);
     const { token, expiresAt } = await ctx.auth.issueToken(u);
-    if (u.role === 'admin' && notify) ctx.notify.adminLogin(u.id, u.username, ip);
-    const mfaSetupRequired = u.role === 'admin' && ctx.auth.totpRequiredForAdmins() && !u.totp_enabled;
+    // admins and specialists see everything: a login from a new address is told to the NOC
+    if (isStaff(u.role) && notify) ctx.notify.adminLogin(u.id, u.username, ip, roleLabel(u.role));
+    const mfaSetupRequired = isStaff(u.role) && ctx.auth.totpRequiredForAdmins() && !u.totp_enabled;
     return { token, expiresAt, user: { id: u.id, username: u.username, role: u.role }, ...(mfaSetupRequired ? { mfaSetupRequired: true } : {}) };
   }
 
@@ -81,7 +83,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     id: number;
     username: string;
     password_hash: string;
-    role: 'admin' | 'installer';
+    role: Role;
     active: number;
     token_version: number;
     totp_secret: string;
@@ -101,7 +103,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
 
   // ---- Il mio account -------------------------------------------------------------------
   const selfRow = ctx.db.prepare('SELECT id, username, password_hash, role, active, token_version, last_login_at, created_at FROM users WHERE id = ?');
-  type SelfRow = { id: number; username: string; password_hash: string; role: 'admin' | 'installer'; active: number; token_version: number; last_login_at: string | null; created_at: string };
+  type SelfRow = { id: number; username: string; password_hash: string; role: Role; active: number; token_version: number; last_login_at: string | null; created_at: string };
 
   app.get('/api/auth/account', { preHandler: ctx.auth.requireUser }, async (req) => {
     const u = selfRow.get(req.user!.id) as SelfRow;
@@ -113,7 +115,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
       lastLoginAt: u.last_login_at,
       createdAt: u.created_at,
       totpEnabled: !!t.totp_enabled,
-      totpRequired: u.role === 'admin' && ctx.auth.totpRequiredForAdmins(),
+      totpRequired: isStaff(u.role) && ctx.auth.totpRequiredForAdmins(),
       recoveryCodesLeft: t.totp_enabled ? (JSON.parse(t.recovery_codes) as string[]).length : 0,
     };
   });
@@ -170,7 +172,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
       .prepare("UPDATE users SET totp_secret = ?, totp_pending = '', totp_enabled = 1, totp_last_step = ?, recovery_codes = ? WHERE id = ?")
       .run(u.totp_pending, step, JSON.stringify(rc.hashes), u.id);
     recordEvent(ctx.db, u.id, 'account.totp_enable', u.username, 'verifica in due passaggi attivata');
-    if (u.role === 'admin') ctx.notify.security(`Verifica in due passaggi attivata per <b>${escapeHtml(u.username)}</b>`);
+    if (isStaff(u.role)) ctx.notify.security(`Verifica in due passaggi attivata per <b>${escapeHtml(u.username)}</b>`);
     return { ok: true, recoveryCodes: rc.codes };
   });
 
@@ -178,12 +180,12 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     const b = z.object({ password: z.string().min(1).max(200), code: z.string().trim().min(6).max(12) }).strict().parse(req.body);
     const u = totpRow(req.user!.id);
     if (!u.totp_enabled) return { ok: true };
-    if (u.role === 'admin' && ctx.auth.totpRequiredForAdmins()) throw new HttpError(409, 'totp_required_by_policy');
+    if (isStaff(u.role) && ctx.auth.totpRequiredForAdmins()) throw new HttpError(409, 'totp_required_by_policy');
     needPassword(u, b.password, req.ip);
     if (!checkSecondFactor(u, b.code)) throw new HttpError(400, 'invalid_code');
     ctx.db.prepare("UPDATE users SET totp_secret = '', totp_pending = '', totp_enabled = 0, totp_last_step = 0, recovery_codes = '[]' WHERE id = ?").run(u.id);
     recordEvent(ctx.db, u.id, 'account.totp_disable', u.username, 'verifica in due passaggi disattivata');
-    if (u.role === 'admin') ctx.notify.security(`Verifica in due passaggi <b>disattivata</b> da <b>${escapeHtml(u.username)}</b>`);
+    if (isStaff(u.role)) ctx.notify.security(`Verifica in due passaggi <b>disattivata</b> da <b>${escapeHtml(u.username)}</b>`);
     return { ok: true };
   });
 
@@ -212,7 +214,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     limiter.clear(req.ip, u.username);
     ctx.db.prepare('UPDATE users SET password_hash = ?, token_version = token_version + 1 WHERE id = ?').run(hashPassword(b.newPassword), u.id);
     recordEvent(ctx.db, u.id, 'account.password', u.username, 'cambio password personale');
-    if (u.role === 'admin') ctx.notify.security(`Password dell'amministratore <b>${escapeHtml(u.username)}</b> cambiata dall'interessato`);
+    if (isStaff(u.role)) ctx.notify.security(`Password ${u.role === 'admin' ? "dell'amministratore" : 'dello specialist'} <b>${escapeHtml(u.username)}</b> cambiata dall'interessato`);
     const { token, expiresAt } = await ctx.auth.issueToken({ ...u, token_version: u.token_version + 1 });
     return { ok: true, token, expiresAt };
   });
@@ -295,7 +297,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
           expires_at: string | null;
           persistent: number;
           username: string;
-          role: 'admin' | 'installer';
+          role: Role;
           active: number;
           tv: number;
           totp_enabled: number;
