@@ -7,7 +7,9 @@ import type { ApLoad } from '../domain/ap-load.ts';
  * one of their acceptance test (seen in two checks in a row), APs close to saturation in the
  * evening, and the POPs running on battery with the autonomy left (from how fast the charge drops).
  * Each alert at most once a week per CPE / AP; the POPs at the start, when little is left and when
- * the power is back.
+ * the power is back. What was said about the POPs is kept in the database, so a restart of the
+ * server (every update) does not say it again, and the power counts as back once the charge has
+ * lasted 15 minutes.
  */
 
 const HOUR = 3_600_000;
@@ -53,20 +55,110 @@ export function autonomyHours(history: Array<{ t: number; soc: number }>): numbe
   return Math.round((last.soc / perHour) * 10) / 10;
 }
 
+/** After a critical alert the power counts as back once the charge has lasted this long. */
+export const POWER_STABLE_MS = 15 * 60_000;
+/** After the power is back, no new critical alert for this long (a charge swinging at the threshold). */
+export const POWER_CALM_MS = 2 * HOUR;
+
+/** What the alerts keep about one POP, in the database so that it survives a restart. */
+export interface PopAlertState {
+  /** A critical alert is out, until the charge is back. */
+  critical?: true;
+  /** When the power came back after a critical alert (ms). */
+  recoveredAt?: number;
+  /** Charging since (ms), while a critical alert is out. */
+  chargingSince?: number;
+  /** Charge readings of the last hour (time ms, state of charge %). */
+  socs: Array<{ t: number; soc: number }>;
+}
+
+export type PowerSay = 'critical' | 'back';
+
+/**
+ * One check of a POP's battery: the state to keep and what to tell the NOC, if anything. Critical
+ * only: on battery with the autonomy under [lowHours] or the charge under [criticalSoc] (not again
+ * within [POWER_CALM_MS] of a recovery); «di nuovo in carica» after such an alert, once the charge
+ * has lasted [POWER_STABLE_MS]: a few minutes of charge at sunrise are not the power back.
+ */
+export function powerStep(
+  prev: PopAlertState | undefined,
+  p: { soc: number | null; batteryState: string | null; offGrid: boolean },
+  now: number,
+  t: { lowHours: number; criticalSoc: number },
+): { next: PopAlertState; say: PowerSay | null; hours: number | null } {
+  const socs = (prev?.socs ?? []).filter((x) => x.t > now - HOUR);
+  if (p.soc != null) socs.push({ t: now, soc: p.soc });
+  let critical = prev?.critical === true;
+  let recoveredAt = prev?.recoveredAt;
+  let chargingSince: number | undefined;
+  let say: PowerSay | null = null;
+  let hours: number | null = null;
+  if (p.batteryState === 'discharging' && !p.offGrid) {
+    hours = autonomyHours(socs);
+    const lowTime = hours != null && hours <= t.lowHours;
+    const lowCharge = p.soc != null && p.soc <= t.criticalSoc;
+    const calm = (recoveredAt ?? 0) > now - POWER_CALM_MS;
+    if ((lowTime || lowCharge) && !critical && !calm) {
+      say = 'critical';
+      critical = true;
+    }
+  } else if (critical && p.batteryState === 'charging') {
+    chargingSince = prev?.chargingSince ?? now;
+    if (now - chargingSince >= POWER_STABLE_MS) {
+      say = 'back';
+      critical = false;
+      recoveredAt = now;
+      chargingSince = undefined;
+    }
+  }
+  if (recoveredAt !== undefined && recoveredAt <= now - POWER_CALM_MS) recoveredAt = undefined;
+  return {
+    next: { ...(critical ? { critical: true as const } : {}), ...(recoveredAt !== undefined ? { recoveredAt } : {}), ...(chargingSince !== undefined ? { chargingSince } : {}), socs },
+    say,
+    hours,
+  };
+}
+
+/** A stored state as it was written: anything else (an older format, a broken value) starts over. */
+const validState = (v: unknown): v is PopAlertState => {
+  const s = v as PopAlertState | null;
+  return (
+    !!s &&
+    typeof s === 'object' &&
+    (s.critical === undefined || s.critical === true) &&
+    (s.recoveredAt === undefined || Number.isFinite(s.recoveredAt)) &&
+    (s.chargingSince === undefined || Number.isFinite(s.chargingSince)) &&
+    Array.isArray(s.socs) &&
+    s.socs.every((x) => Number.isFinite(x?.t) && Number.isFinite(x?.soc))
+  );
+};
+
 // ---- the service -------------------------------------------------------------------------------
 
 const KEY = 'alerts.notified';
+const POWER_KEY = 'alerts.power';
 
 export function createProactiveAlerts(ctx: AppContext, log?: (m: string) => void) {
   const { db } = ctx;
   /** Signal drops seen in the last check (a drop must be seen twice before the alert). */
   let lastDrops = new Set<string>();
-  /** Charge readings of each POP (last hour) and what was already said about it. */
-  const socs = new Map<string, Array<{ t: number; soc: number }>>();
-  /** POPs with a critical alert out (until back on charge), and when they came back (no flapping). */
-  const popCritical = new Set<string>();
-  const popRecovered = new Map<string, number>();
   let timers: NodeJS.Timeout[] = [];
+
+  /** The POPs' battery alerts as last saved: critical alert out, recovery, charge readings. */
+  const powerStates = (): Record<string, PopAlertState> => {
+    const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(POWER_KEY) as { value: string } | undefined;
+    let all: Record<string, unknown> = {};
+    try {
+      all = r ? (JSON.parse(r.value) as Record<string, unknown>) : {};
+    } catch {
+      /* a broken value: start over */
+    }
+    return Object.fromEntries(Object.entries(all ?? {}).filter((e): e is [string, PopAlertState] => validState(e[1])));
+  };
+  const savePowerStates = (v: Record<string, PopAlertState>) =>
+    db
+      .prepare('INSERT INTO settings(key, value, updated_at) VALUES(?, ?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at')
+      .run(POWER_KEY, JSON.stringify(v), nowIso());
 
   const notified = (): Record<string, string> => {
     const r = db.prepare('SELECT value FROM settings WHERE key = ?').get(KEY) as { value: string } | undefined;
@@ -128,35 +220,33 @@ export function createProactiveAlerts(ctx: AppContext, log?: (m: string) => void
   /**
    * Every 5 minutes, critical alerts only: a POP on battery says nothing (with solar panels it
    * happens every night) until its autonomy falls under the hours set or its charge under the
-   * critical %; the power back is said only after such an alert. Not again within 2 hours of a
-   * recovery, so a charge swinging around the threshold does not flood the group.
+   * critical %; the power back is said only after such an alert, once the charge has lasted 15
+   * minutes. Not again within 2 hours of a recovery, so a charge swinging around the threshold
+   * does not flood the group. The state is saved, so an update of the server repeats nothing.
    */
   async function power() {
     const pops = ctx.victronSync.byPop();
     if (!pops.size) return;
     const names = new Map(ctx.uisp ? (await ctx.uisp.sites().catch(() => [])).map((s) => [s.id, s.name]) : []);
     const now = Date.now();
+    const prev = powerStates();
+    // only the POPs that still have a battery system linked are kept
+    const next: Record<string, PopAlertState> = {};
+    const messages: Array<[string, string[]]> = [];
+    const limits = { lowHours: ctx.cfg.proactive.popLowHours, criticalSoc: ctx.cfg.proactive.popCriticalSoc };
     for (const [popId, p] of pops) {
+      const { next: state, say, hours } = powerStep(prev[popId], p, now, limits);
+      next[popId] = state;
+      if (!say) continue;
       const name = `POP ${names.get(popId) ?? popId}`;
-      const h = (socs.get(popId) ?? []).filter((x) => x.t > now - HOUR);
-      if (p.soc != null) h.push({ t: now, soc: p.soc });
-      socs.set(popId, h);
-      if (p.batteryState === 'discharging' && !p.offGrid) {
-        const hours = autonomyHours(h);
-        const lowTime = hours != null && hours <= ctx.cfg.proactive.popLowHours;
-        const lowCharge = p.soc != null && p.soc <= ctx.cfg.proactive.popCriticalSoc;
-        const calm = (popRecovered.get(popId) ?? 0) > now - 2 * HOUR;
-        if ((lowTime || lowCharge) && !popCritical.has(popId) && !calm) {
-          const soc = p.soc != null ? `${Math.round(p.soc)}%` : 'carica sconosciuta';
-          ctx.notify.proactive(`⚠️ ${name}: batteria critica`, [hours != null ? `Carica ${soc}, circa ${hours} h di autonomia.` : `Carica ${soc}.`, 'Il POP non è alimentato: verifica la corrente o il fotovoltaico.'], true);
-          popCritical.add(popId);
-        }
-      } else if (popCritical.has(popId) && p.batteryState === 'charging') {
-        ctx.notify.proactive(`✅ ${name}: di nuovo in carica`, ['Dopo l’avviso di batteria critica: la corrente è tornata (o il fotovoltaico basta).'], true);
-        popCritical.delete(popId);
-        popRecovered.set(popId, now);
-      }
+      if (say === 'critical') {
+        const soc = p.soc != null ? `${Math.round(p.soc)}%` : 'carica sconosciuta';
+        messages.push([`⚠️ ${name}: batteria critica`, [hours != null ? `Carica ${soc}, circa ${hours} h di autonomia.` : `Carica ${soc}.`, 'Il POP non è alimentato: verifica la corrente o il fotovoltaico.']]);
+      } else messages.push([`✅ ${name}: di nuovo in carica`, ['Dopo l’avviso di batteria critica: la corrente è tornata (o il fotovoltaico basta).']]);
     }
+    // saved before telling: a failure while sending never makes the same alert go out twice
+    savePowerStates(next);
+    for (const [title, lines] of messages) ctx.notify.proactive(title, lines, true);
   }
 
   const safe = (f: () => Promise<void>, what: string) => () => void f().catch((e) => log?.(`alerts ${what}: ${(e as Error).message}`));
