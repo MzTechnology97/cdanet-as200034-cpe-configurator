@@ -1,7 +1,7 @@
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { AppContext } from '../context.ts';
 import type { LiveTopic } from '../services/live.ts';
-import { isStaff } from '../auth.ts';
+import { seesAll } from '../auth.ts';
 
 /** A stream lasts at most this long: the console opens a new one, checked again like any request. */
 const MAX_STREAM_MS = 15 * 60_000;
@@ -41,7 +41,7 @@ export function liveRoutes(app: FastifyInstance, ctx: AppContext) {
       if (!res.writableEnded) res.write(s);
     };
     write(`retry: 5000\nevent: ready\ndata: {}\n\n`);
-    const unsubscribe = ctx.live.subscribe({ userId: u.id, admin: isStaff(u.role), send: (topic: LiveTopic) => write(`event: ${topic}\ndata: {}\n\n`) });
+    const unsubscribe = ctx.live.subscribe({ userId: u.id, admin: seesAll(u), send: (topic: LiveTopic) => write(`event: ${topic}\ndata: {}\n\n`) });
     const beat = setInterval(() => write(`: ${Date.now()}\n\n`), HEARTBEAT_MS);
     const end = setTimeout(() => res.end(), MAX_STREAM_MS);
     const close = () => {

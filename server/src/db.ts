@@ -868,6 +868,30 @@ const MIGRATIONS: Array<string | CodeMigration> = [
   `
   ALTER TABLE specialist_jobs ADD COLUMN cpe_at_write INTEGER NOT NULL DEFAULT 0;
   `,
+  // issue #275 (titolare, 17/10/2026): a specialist may be outside CDA Net. He sees his own work and
+  // that of his work groups (shared templates, installations, calendar); «visibilità piena» on CDA
+  // Net's data only when an admin gives it (off for everyone, the specialists of today included)
+  `
+  ALTER TABLE users ADD COLUMN full_view INTEGER NOT NULL DEFAULT 0;
+  CREATE TABLE work_groups(
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX work_groups_name ON work_groups(name COLLATE NOCASE);
+  CREATE TABLE work_group_members(
+    group_id INTEGER NOT NULL REFERENCES work_groups(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY(group_id, user_id)
+  );
+  CREATE INDEX work_group_members_user ON work_group_members(user_id);
+  -- a copy of a CDA Net template: shared in the group only with whoever may use the original
+  ALTER TABLE specialist_templates ADD COLUMN cda_source_id INTEGER;
+  `,
 ];
 
 export function openDatabase(path: string): Db {

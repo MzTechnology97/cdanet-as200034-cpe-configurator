@@ -5,7 +5,7 @@ import { eveningShare, expectedModulation } from '../domain/ap-load.ts';
 import { apModels } from '../services/model-inputs.ts';
 import { z } from 'zod';
 import { CPE_MODELS, cpeModelById, recommendCpe } from '../domain/cpe-models.ts';
-import { HttpError, isStaff } from '../auth.ts';
+import { HttpError, seesAll } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { toCsv } from '../domain/csv.ts';
@@ -49,7 +49,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
   const admin = { preHandler: ctx.auth.requireAdmin };
   // what the specialist sees and the tools he uses like an admin (subscribers and the activation of
   // CDA Net's CPEs in UISP stay with the admins: his own CPEs are authorized from his section)
-  const staff = { preHandler: ctx.auth.requireStaff };
+  const staff = { preHandler: ctx.auth.requireSeesAll };
   const mod = (k: ModuleKey, base: typeof user | typeof admin = user) => ({ preHandler: [base.preHandler, ctx.modules.require(k)] });
   const { db } = ctx;
 
@@ -62,7 +62,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     const id = z.string().uuid().parse((req.params as { id: string }).id);
     const job = db.prepare('SELECT * FROM provisioning_jobs WHERE id = ?').get(id) as JobRow | undefined;
     if (!job) throw new HttpError(404, 'job_not_found');
-    if (job.user_id !== req.user!.id && !isStaff(req.user!.role)) throw new HttpError(403, 'forbidden');
+    if (job.user_id !== req.user!.id && !seesAll(req.user!)) throw new HttpError(403, 'forbidden');
     return job;
   };
 
@@ -117,13 +117,13 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     if (q.cpe !== 'auto' && !chosenCpe) throw new HttpError(400, 'unknown_cpe_model');
     // admins: no limits (up to 50 APs, the distance they ask up to 200 km); installers, from the
     // web or the app alike: the number set in Impostazioni server, within the configured radius
-    const isAdmin = isStaff(req.user!.role);
+    const isAdmin = seesAll(req.user!);
     const limit = isAdmin ? q.limit : ctx.cfg.installerCoverageAps;
     // never beyond the farthest realistic link (20 km), whatever is asked or configured
     const maxKm = Math.min(MAX_LINK_M / 1000, isAdmin ? (q.km ?? ctx.uispSettings.coverageMaxKm) : ctx.uispSettings.coverageMaxKm);
     if (!isValidLatLon(q.lat, q.lon)) throw new HttpError(400, 'invalid_position');
     // Installers check coverage only on the POPs/APs assigned to them by the admin.
-    const keys = isStaff(req.user!.role) ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
+    const keys = seesAll(req.user!) ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
     const allow = keys ? (a: { id: string; siteId: string | null }) => keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`)) : undefined;
     // every AP within range is rated, the limit comes last: a good AP a bit farther away is not
     // hidden by closer ones with a worse signal
@@ -335,10 +335,10 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
            WHERE j.status = 'success'
              AND NOT EXISTS (SELECT 1 FROM provisioning_jobs r WHERE r.replaces_job_id = j.id AND r.status = 'success')
              AND NOT EXISTS (SELECT 1 FROM provisioning_jobs n WHERE n.mac = j.mac AND n.status = 'success' AND n.created_at > j.created_at)
-             ${!isStaff(viewer.role) ? 'AND j.user_id = ?' : installer ? 'AND u.username = ?' : ''}
+             ${!seesAll(viewer) ? 'AND j.user_id = ?' : installer ? 'AND u.username = ?' : ''}
            ORDER BY j.created_at DESC LIMIT 5000`,
         )
-        .all(...(!isStaff(viewer.role) ? [viewer.id] : installer ? [installer] : [])) as unknown as InstalledJob[]
+        .all(...(!seesAll(viewer) ? [viewer.id] : installer ? [installer] : [])) as unknown as InstalledJob[]
     );
 
   /** CPEs assigned to installers (MAC → user): customers installed before the app or by someone else. */
@@ -373,7 +373,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       .object({ installer: z.string().trim().max(80).optional(), scope: z.enum(['all', 'app']).default('all'), stale: z.coerce.boolean().default(false) })
       .parse(req.query);
     const viewer = req.user!;
-    const admin = isStaff(viewer.role);
+    const admin = seesAll(viewer);
     const jobs = installedJobs(viewer, q.installer);
     const assigned = assignmentsByMac(admin ? undefined : viewer.id);
     const byMac = new Map<string, UispDevice>();
@@ -465,7 +465,7 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
     if (b.userId !== null) {
       const u = db.prepare('SELECT username, role FROM users WHERE id = ?').get(b.userId) as { username: string; role: string } | undefined;
       if (!u) throw new HttpError(404, 'user_not_found');
-      if (isStaff(u.role)) throw new HttpError(400, 'admin_sees_all');
+      if (seesAll(u)) throw new HttpError(400, 'admin_sees_all');
       username = u.username;
     }
     const names = new Map<string, string>();

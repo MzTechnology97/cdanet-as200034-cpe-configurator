@@ -107,6 +107,8 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
   /** A CDA Net template as the start of one of his own: the copy is his, the original stays as it is. */
   app.post('/api/specialist/templates/copy', spec, async (req, reply) => {
     const b = z.object({ fromId: z.number().int().positive(), name: templateName }).strict().parse(req.body);
+    // only a CDA Net template he may use (all of them with «visibilità piena», issue #275)
+    if (!ctx.templates.visibleTo(req.user!).some((t) => t.id === b.fromId)) throw new HttpError(404, 'template_not_found');
     const src = ctx.templates.get(b.fromId);
     const t = s().templates.create(me(req).id, {
       model: src.model,
@@ -114,6 +116,7 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
       template: freeCopyOfCdaTemplate(src.template, src.params),
       boardMatch: src.boardMatch,
       notes: `Copia del template CDA Net «${src.name}»`,
+      cdaSourceId: src.id,
     });
     log(req, 'specialist.template_copy', `${t.model} · ${t.name}`, `da CDA Net «${src.name}»`);
     return reply.code(201).send(t);
@@ -346,6 +349,7 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
       const a = j.acceptance as { verdict?: string; radio?: { signal?: number }; speedtest?: { downMbps?: number; upMbps?: number } } | null;
       return [
         j.createdAt,
+        j.author,
         esito[j.status] ?? j.status,
         j.company,
         j.customer,
@@ -376,7 +380,7 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
     return (
       '﻿' +
       toCsv([
-        ['Data', 'Esito', 'Azienda', 'Cliente', 'Nome CPE', 'Modello', 'Template', 'MAC', 'Seriale', 'Firmware', 'SSID', 'Utente PPPoE', 'Collaudo', 'Segnale', 'Download Mbit/s', 'Upload Mbit/s', 'Site UISP', 'Autorizzata in UISP', 'Latitudine', 'Longitudine', 'Note', 'Errore'],
+        ['Data', 'Specialist', 'Esito', 'Azienda', 'Cliente', 'Nome CPE', 'Modello', 'Template', 'MAC', 'Seriale', 'Firmware', 'SSID', 'Utente PPPoE', 'Collaudo', 'Segnale', 'Download Mbit/s', 'Upload Mbit/s', 'Site UISP', 'Autorizzata in UISP', 'Latitudine', 'Longitudine', 'Note', 'Errore'],
         ...rows,
       ])
     );

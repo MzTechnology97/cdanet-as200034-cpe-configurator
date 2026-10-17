@@ -7,7 +7,7 @@ import { keys } from '../lib/query';
 import type { PageContext } from '../shell/routes';
 import { matches } from '../shell/search';
 import { AsyncButton, Badge, Button, Card, EmptyState, Field, Icon, Notice, PageHeader, Skeleton, Stat } from '../ui';
-import { canManage, isStaff } from '../lib/roles';
+import { canManage, seesAll } from '../lib/roles';
 
 /**
  * Salute CPE (admins: every customer CPE in UISP, with assignment to installers) / Le mie CPE
@@ -97,7 +97,7 @@ const date = (iso?: string) => (iso ? new Date(iso).toLocaleDateString('it-IT') 
 
 export function Health({ user, params }: PageContext) {
   // admins and specialists see every customer CPE; assigning them to installers stays with the admins
-  const admin = isStaff(user);
+  const admin = seesAll(user);
   const qc = useQueryClient();
   const [showStale, setShowStale] = useState(false);
   const health = useQuery({

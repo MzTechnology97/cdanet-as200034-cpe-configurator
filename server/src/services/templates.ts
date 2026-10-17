@@ -1,5 +1,5 @@
 import { HttpError } from '../auth.ts';
-import { isStaff } from '../domain/roles.ts';
+import { seesAll } from '../domain/roles.ts';
 import { sha256Hex, type Sealer } from '../crypto.ts';
 import { nowIso, type Db } from '../db.ts';
 import { templateFacts, type TemplateParams } from '../domain/airos-form.ts';
@@ -37,6 +37,8 @@ export interface LegacyValues {
 export interface Viewer {
   id: number;
   role: string;
+  /** A specialist with «visibilità piena» (issue #275): every template, like an admin. */
+  fullView?: boolean;
 }
 
 export interface TemplateMeta {
@@ -224,7 +226,7 @@ export function createTemplates(db: Db, sealer: Sealer) {
     return { audience, userIds, defaultForAssigned };
   };
   const canUse = (r: Row, viewer: Viewer) =>
-    isStaff(viewer.role) || r.audience === 'all' || !!db.prepare('SELECT 1 FROM template_users WHERE template_id = ? AND user_id = ?').get(r.id, viewer.id);
+    seesAll(viewer) || r.audience === 'all' || !!db.prepare('SELECT 1 FROM template_users WHERE template_id = ? AND user_id = ?').get(r.id, viewer.id);
   const personalDefault = (model: string, viewer: Viewer) =>
     db
       .prepare(

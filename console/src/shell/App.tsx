@@ -7,7 +7,7 @@ import { keys, queryClient } from '../lib/query';
 import { isOn, loadModules, modulesLoaded, resetModules } from '../lib/modules';
 import { toast } from '../lib/toast';
 import { setAdmin } from '../lib/terms';
-import { isStaff, roleLabel, setRole } from '../lib/roles';
+import { isStaff, roleLabel, seesAll, setRole } from '../lib/roles';
 import { Icon } from '../ui/Icon';
 import { CommandPalette } from './CommandPalette';
 import { Login } from './Login';
@@ -224,7 +224,7 @@ export function App() {
         </nav>
         {menuOpen && <div className="cx-shade" onClick={() => setMenuOpen(false)} />}
         <main className="view cx-main" aria-live="polite">
-          {isStaff(user) && <UispBanner />}
+          {seesAll(user) && <UispBanner />}
           {modulesReady ? <Page key={`${route.id}?${hash.query}#${modulesRev}`} route={route} user={user} query={hash.query} /> : <p className="muted">Caricamento…</p>}
         </main>
       </div>

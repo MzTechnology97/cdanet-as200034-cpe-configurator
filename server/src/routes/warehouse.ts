@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { HttpError, isStaff } from '../auth.ts';
+import { HttpError, isStaff, seesAll } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
 import { parseMac } from '../domain/policy.ts';
@@ -17,7 +17,7 @@ export function warehouseRoutes(app: FastifyInstance, ctx: AppContext) {
   const { db } = ctx;
   const admin = { preHandler: [ctx.auth.requireAdmin] };
   // the specialist sees the warehouse (his CPEs come from other companies: he never uses it)
-  const staff = { preHandler: [ctx.auth.requireStaff] };
+  const staff = { preHandler: [ctx.auth.requireSeesAll] };
   const user = { preHandler: [ctx.auth.requireUser] };
   const w = () => ctx.warehouse;
 
@@ -122,7 +122,7 @@ export function warehouseRoutes(app: FastifyInstance, ctx: AppContext) {
       | { id: number; mac: string; owner: number }
       | undefined;
     if (!r) throw new HttpError(404, 'rma_not_found');
-    if (!isStaff(req.user!.role) && r.owner !== req.user!.id) throw new HttpError(403, 'forbidden');
+    if (!seesAll(req.user!) && r.owner !== req.user!.id) throw new HttpError(403, 'forbidden');
     db.prepare('UPDATE cpe_rma SET condition = ?, note = ?, updated_at = ?, updated_by = ? WHERE id = ?').run(b.condition, b.note, new Date().toISOString(), req.user!.id, r.id);
     recordEvent(db, req.user!.id, 'rma.condition', r.mac, `${b.condition}${b.note ? ` · ${b.note}` : ''}`);
     return { ok: true, id: r.id };

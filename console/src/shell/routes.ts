@@ -13,6 +13,8 @@ export interface User {
   id: number;
   username: string;
   role: 'admin' | 'installer' | 'specialist' | string;
+  /** A specialist with «visibilità piena» (issue #275). */
+  fullView?: boolean;
 }
 
 export interface PageContext {
@@ -26,8 +28,10 @@ export interface Route {
   installerLabel?: string;
   icon: string;
   admin?: boolean;
-  /** Admins and specialists. */
+  /** Admins and specialists: technical tools without data of others. */
   staff?: boolean;
+  /** CDA Net's data of everyone: admins and specialists with «visibilità piena» (issue #275). */
+  all?: boolean;
   /** Only the specialists: their own section. */
   specialist?: boolean;
   installer?: boolean;
@@ -53,25 +57,26 @@ export const ROUTES: Array<Route | Group> = [
   { id: 'specialist-templates', label: 'I miei template', icon: 'memory', specialist: true, react: () => import('../pages/specialist/SpecialistTemplates').then((m) => m.SpecialistTemplates) },
   { id: 'specialist-connectors', label: 'I miei connettori', icon: 'link', specialist: true, react: () => import('../pages/specialist/SpecialistConnectors').then((m) => m.SpecialistConnectors) },
   { group: 'Operatività' },
-  { id: 'dashboard', label: 'Panoramica', icon: 'home', staff: true, bottom: true, react: () => import('../pages/Dashboard').then((m) => m.Dashboard) },
+  { id: 'dashboard', label: 'Panoramica', icon: 'home', all: true, bottom: true, react: () => import('../pages/Dashboard').then((m) => m.Dashboard) },
   { id: 'notifications', label: 'Notifiche', icon: 'notifications', react: () => import('../pages/Notifications').then((m) => m.Notifications) },
   { id: 'work-orders', icon: 'pending_actions', label: 'Interventi', installerLabel: 'I miei interventi', module: 'work_orders', bottom: true, react: () => import('../pages/WorkOrders').then((m) => m.WorkOrders) },
   { id: 'jobs', label: 'Storico provisioning', icon: 'history', react: () => import('../pages/Jobs').then((m) => m.Jobs) },
   { id: 'health', icon: 'monitor_heart', label: 'Salute CPE', installerLabel: 'Le mie CPE', module: 'cpe_health', bottom: true, react: () => import('../pages/Health').then((m) => m.Health) },
   // one CPE managed as in the UISP app (opened from Salute CPE, not in the menu)
-  { id: 'cpe', icon: 'monitor_heart', label: 'Gestione CPE', module: 'cpe_health', staff: true, hidden: true, parent: 'health', react: () => import('../pages/CpeAdmin').then((m) => m.CpeAdmin) },
+  { id: 'cpe', icon: 'monitor_heart', label: 'Gestione CPE', module: 'cpe_health', all: true, hidden: true, parent: 'health', react: () => import('../pages/CpeAdmin').then((m) => m.CpeAdmin) },
   { id: 'warehouse', icon: 'inventory', label: 'Magazzino', installerLabel: 'Il mio magazzino', react: () => import('../pages/Warehouse').then((m) => m.Warehouse) },
-  { id: 'customers', icon: 'my_location', label: 'Clienti', staff: true, react: () => import('../pages/Customers').then((m) => m.Customers) },
-  { id: 'stats', icon: 'query_stats', label: 'Statistiche', staff: true, module: 'stats', react: () => import('../pages/Stats').then((m) => m.Stats) },
+  { id: 'customers', icon: 'my_location', label: 'Clienti', all: true, react: () => import('../pages/Customers').then((m) => m.Customers) },
+  { id: 'stats', icon: 'query_stats', label: 'Statistiche', all: true, module: 'stats', react: () => import('../pages/Stats').then((m) => m.Stats) },
   { id: 'outages', icon: 'power_off', label: 'Guasti Enel', module: 'power_outages', react: () => import('../pages/Outages').then((m) => m.Outages) },
   { id: 'network', icon: 'hub', label: 'Stato rete', module: 'network_status', react: () => import('../pages/Network').then((m) => m.Network) },
-  { id: 'ia-ap', icon: 'troubleshoot', label: 'IA-AP', staff: true, react: () => import('../pages/Advisor').then((m) => m.Advisor) },
+  { id: 'ia-ap', icon: 'troubleshoot', label: 'IA-AP', all: true, react: () => import('../pages/Advisor').then((m) => m.Advisor) },
   { id: 'mytemplates', icon: 'memory', label: 'Template disponibili', installer: true, react: () => import('../pages/MyTemplates').then((m) => m.MyTemplates) },
   { id: 'coverage', icon: 'explore', label: 'Copertura', module: 'coverage', bottom: true, react: () => import('../pages/Coverage').then((m) => m.Coverage) },
-  { id: 'feasibility', icon: 'my_location', label: 'Fattibilità', staff: true, module: 'coverage', react: () => import('../pages/Feasibility').then((m) => m.Feasibility) },
+  { id: 'feasibility', icon: 'my_location', label: 'Fattibilità', all: true, module: 'coverage', react: () => import('../pages/Feasibility').then((m) => m.Feasibility) },
   { id: 'routeros', icon: 'router', label: 'MikroTik · RouterOS', module: 'routeros', react: () => import('../pages/RouterOs').then((m) => m.RouterOs) },
   { group: 'Amministrazione' },
   { id: 'users', icon: 'person', label: 'Account', admin: true, react: () => import('../pages/Users').then((m) => m.Users) },
+  { id: 'work-groups', icon: 'person', label: 'Gruppi di lavoro', all: true, react: () => import('../pages/WorkGroups').then((m) => m.WorkGroups) },
   { id: 'wireless', icon: 'wifi_find', label: 'Reti Wi-Fi (WPA2)', admin: true, react: () => import('../pages/Wireless').then((m) => m.Wireless) },
   { id: 'profiles', icon: 'settings_input_antenna', label: 'Profili airOS', admin: true, react: () => import('../pages/Profiles').then((m) => m.Profiles) },
   { id: 'firmware', icon: 'system_update', label: 'Firmware airOS', admin: true, module: 'firmware_upgrade', react: () => import('../pages/Firmware').then((m) => m.Firmware) },
@@ -82,7 +87,7 @@ export const ROUTES: Array<Route | Group> = [
   { id: 'bans', icon: 'lock', label: 'Accessi bloccati', admin: true, react: () => import('../pages/Bans').then((m) => m.Bans) },
   { id: 'privacy', icon: 'lock', label: 'Informativa privacy', admin: true, react: () => import('../pages/Privacy').then((m) => m.Privacy) },
   { id: 'platform', icon: 'check_circle', label: 'Salute piattaforma', admin: true, react: () => import('../pages/Platform').then((m) => m.Platform) },
-  { id: 'events', icon: 'manage_search', label: 'Registro attività', staff: true, react: () => import('../pages/Events').then((m) => m.Events) },
+  { id: 'events', icon: 'manage_search', label: 'Registro attività', all: true, react: () => import('../pages/Events').then((m) => m.Events) },
   { id: 'admin-guide', icon: 'menu_book', label: 'Guida amministratore', staff: true, react: () => import('../pages/Guide').then((m) => m.Guide) },
   // the components of the console in both themes (admins): to check the look at a glance
   { id: 'ui', icon: 'handyman', label: 'Componenti', admin: true, hidden: true, react: () => import('../pages/UiShowcase').then((m) => m.UiShowcase) },
@@ -100,6 +105,7 @@ export function allowed(r: Route, user: User | null, isOn: (key: string) => bool
   // admins manage CDA Net's templates in Profili airOS, the specialist has his own
   if (r.installer) return user?.role === 'installer';
   if (r.specialist) return user?.role === 'specialist';
+  if (r.all) return seesAllUser(user);
   if (r.staff) return user?.role === 'admin' || user?.role === 'specialist';
   return !r.admin || user?.role === 'admin';
 }
@@ -123,5 +129,7 @@ export function menuFor(user: User, isOn: (key: string) => boolean): Array<Route
   return out;
 }
 
-const seesAll = (user: User | null) => user?.role === 'admin' || user?.role === 'specialist';
-export const labelOf = (r: Route, user: User | null) => (!seesAll(user) && r.installerLabel ? r.installerLabel : r.label);
+function seesAllUser(user: User | null) {
+  return user?.role === 'admin' || (user?.role === 'specialist' && !!user.fullView);
+}
+export const labelOf = (r: Route, user: User | null) => (!seesAllUser(user) && r.installerLabel ? r.installerLabel : r.label);

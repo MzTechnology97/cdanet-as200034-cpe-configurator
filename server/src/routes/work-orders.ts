@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { HttpError, isStaff } from '../auth.ts';
+import { HttpError, seesAll } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { toCsv } from '../domain/csv.ts';
@@ -70,7 +70,7 @@ const view = (r: Row, today = todayRome()) => {
 export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
   const admin = { preHandler: [ctx.auth.requireAdmin, ctx.modules.require('work_orders')] };
   // the specialist sees the office's orders and their history; planning them stays with the admins
-  const staff = { preHandler: [ctx.auth.requireStaff, ctx.modules.require('work_orders')] };
+  const staff = { preHandler: [ctx.auth.requireSeesAll, ctx.modules.require('work_orders')] };
   const user = { preHandler: [ctx.auth.requireUser, ctx.modules.require('work_orders')] };
   const { db } = ctx;
 
@@ -203,7 +203,7 @@ export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   /** The same selection for Excel (';', UTF-8 BOM): never the PPPoE password. */
-  app.get('/api/admin/work-orders.csv', { preHandler: [ctx.auth.requireStaff, ctx.modules.require('work_orders'), ctx.modules.require('csv_export')] }, async (req, reply) => {
+  app.get('/api/admin/work-orders.csv', { preHandler: [ctx.auth.requireSeesAll, ctx.modules.require('work_orders'), ctx.modules.require('csv_export')] }, async (req, reply) => {
     const r = select({ ...(req.query as object), limit: '5000', offset: '0' });
     const header = ['Numero', 'Giorno', 'Fascia', 'Tipo', 'Stato', 'Installatore', 'Cliente', 'Indirizzo', 'Contatto', 'Utente PPPoE', 'Modello', 'Note', 'Nota dello stato', 'Creato', 'Ultima modifica', 'Completato', 'Installazione'];
     const lines = r.rows.map((o) => [o.id, o.day, o.slot, WORK_ORDER_KIND_LABEL[o.kind], STATUS_LABEL[o.status] ?? o.status, o.assignee ?? '', o.customer, o.address, o.contact, o.pppoeUser, o.model, o.notes, o.statusNote, o.createdAt, o.updatedAt, o.doneAt ?? '', o.jobId ?? '']);
@@ -379,18 +379,24 @@ export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
    */
   /**
    * The calendar: the orders of a range of days (up to 62) exactly as planned, done ones included,
-   * cancelled ones left out. An installer sees their own; the NOC every installer's, or one with
-   * ?user=, plus the installers to plan on.
+   * cancelled ones left out. An installer sees their own, a specialist his own and his work groups';
+   * the NOC (and a specialist with «visibilità piena») every installer's, or one with ?user=, plus
+   * the installers to plan on.
    */
   app.get('/api/work-orders/calendar', user, async (req) => {
     const q = z.object({ from: DAY, to: DAY, user: z.coerce.number().int().positive().optional() }).parse(req.query);
     const days = (Date.parse(`${q.to}T00:00:00Z`) - Date.parse(`${q.from}T00:00:00Z`)) / 86_400_000;
     if (!(days >= 0 && days <= 62)) throw new HttpError(400, 'invalid_range');
-    const isAdmin = isStaff(req.user!.role);
-    const who = isAdmin ? (q.user ?? null) : req.user!.id;
+    const isAdmin = seesAll(req.user!);
+    // a specialist: his own orders and those of the members of his work groups (issue #275), never
+    // the rest of the team; an installer: his own
+    const team = !isAdmin && req.user!.role === 'specialist' ? ctx.workGroups.visibleIds(req.user!.id) : [req.user!.id];
+    const who: number[] | null = isAdmin ? (q.user ? [q.user] : null) : q.user && team.includes(q.user) ? [q.user] : team;
     const rows = db
-      .prepare(`${SELECT} WHERE w.day BETWEEN ? AND ? AND w.status <> 'cancelled'${who !== null ? ' AND w.assigned_to = ?' : ''} ORDER BY w.day, w.slot, w.id`)
-      .all(q.from, q.to, ...(who !== null ? [who] : [])) as unknown as Row[];
+      .prepare(
+        `${SELECT} WHERE w.day BETWEEN ? AND ? AND w.status <> 'cancelled'${who !== null ? ` AND w.assigned_to IN (${who.map(() => '?').join(',')})` : ''} ORDER BY w.day, w.slot, w.id`,
+      )
+      .all(q.from, q.to, ...(who ?? [])) as unknown as Row[];
     const today = todayRome();
     const installers = isAdmin
       ? (db.prepare("SELECT id, username FROM users WHERE active = 1 AND role = 'installer' ORDER BY username").all() as Array<{ id: number; username: string }>)
@@ -403,7 +409,7 @@ export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
     const b = z.object({ lat: z.number(), lon: z.number(), accuracyM: z.number().min(0).max(100_000).optional() }).strict().parse(req.body);
     if (!isValidLatLon(b.lat, b.lon)) throw new HttpError(400, 'invalid_position');
     const cur = get(id);
-    if (!cur || (cur.assignedTo !== req.user!.id && !isStaff(req.user!.role))) throw new HttpError(404, 'work_order_not_found');
+    if (!cur || (cur.assignedTo !== req.user!.id && !seesAll(req.user!))) throw new HttpError(404, 'work_order_not_found');
     const ref = await locate(id);
     if (!ref) return { ok: true, checked: false, distanceM: null, maxM: POSITION_MAX_M, reference: null };
     const d = Math.round(distanceM(ref, { lat: b.lat, lon: b.lon }));

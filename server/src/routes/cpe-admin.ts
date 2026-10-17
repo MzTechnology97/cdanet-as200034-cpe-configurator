@@ -18,7 +18,7 @@ const RANGES = ['day', 'week', 'month'] as const;
  */
 export function cpeAdminRoutes(app: FastifyInstance, ctx: AppContext) {
   // a tool: admins and specialists
-  const admin = { preHandler: [ctx.auth.requireStaff, ctx.modules.require('cpe_health')] };
+  const admin = { preHandler: [ctx.auth.requireSeesAll, ctx.modules.require('cpe_health')] };
   const { db } = ctx;
 
   const uisp = () => {

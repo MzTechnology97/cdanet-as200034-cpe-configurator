@@ -2,7 +2,7 @@ import { distanceM, type LatLon } from '../domain/geo.ts';
 import { nowIso, type Db } from '../db.ts';
 import { escapeHtml as e } from './telegram.ts';
 import type { Uisp } from './uisp.ts';
-import { isStaff } from '../domain/roles.ts';
+import { seesAll } from '../domain/roles.ts';
 
 /**
  * Power outages of the Italian distribution network (e-distribuzione public outage map,
@@ -324,18 +324,19 @@ export function createOutages(
   }
 
   /**
-   * What a user sees: admins everything (undefined); installers their own zones plus the
-   * POPs/APs/zones assigned by the admin (impacts only for the assigned ones).
+   * What a user sees: admins (and specialists with «visibilità piena») everything (undefined);
+   * installers and the other specialists their own zones plus the POPs/APs/zones assigned by the
+   * admin (impacts only for the assigned ones).
    */
-  const keysFor = (userId: number, role: string): Set<string> | undefined =>
-    isStaff(role) ? undefined : new Set([...assignments(userId).map((i) => i.key), ...manualZones(userId).map((z) => z.id)]);
+  const keysFor = (userId: number, who: { role: string; fullView?: boolean | number | null }): Set<string> | undefined =>
+    seesAll(who) ? undefined : new Set([...assignments(userId).map((i) => i.key), ...manualZones(userId).map((z) => z.id)]);
 
   /**
    * What a user is notified about for one kind of outage: the assigned POPs/APs (planned works only
    * if the user wants them) and the personal zones whose rules accept that kind. Admins: everything.
    */
-  const notifyKeysFor = (userId: number, role: string, kind: PowerOutage['kind'], plannedForAssigned: boolean): Set<string> | undefined => {
-    if (isStaff(role)) return undefined;
+  const notifyKeysFor = (userId: number, who: { role: string; fullView?: boolean | number | null }, kind: PowerOutage['kind'], plannedForAssigned: boolean): Set<string> | undefined => {
+    if (seesAll(who)) return undefined;
     const keys = new Set<string>();
     if (kind !== 'lavoro' || plannedForAssigned) for (const i of assignments(userId)) keys.add(i.key);
     for (const z of manualZones(userId)) if (zoneNotifies(z, kind)) keys.add(z.id);
@@ -347,16 +348,17 @@ export function createOutages(
   /** Personal Telegram messages: each linked user gets what they may see, nothing else. */
   function personal(kind: 'new' | 'restored', rec: Stored) {
     if (!opts.sendPersonal) return;
-    const users = db.prepare("SELECT id, role, telegram_chat_id chat, telegram_planned planned FROM users WHERE active = 1 AND telegram_chat_id <> ''").all() as Array<{
+    const users = db.prepare("SELECT id, role, full_view fullView, telegram_chat_id chat, telegram_planned planned FROM users WHERE active = 1 AND telegram_chat_id <> ''").all() as Array<{
       id: number;
       role: string;
+      fullView: number;
       chat: string;
       planned: number;
     }>;
     for (const u of users) {
       if (opts.userOn && !opts.userOn(u.id)) continue;
-      if (isStaff(u.role) && rec.kind === 'lavoro' && !u.planned) continue;
-      const keys = notifyKeysFor(u.id, u.role, rec.kind, !!u.planned);
+      if (seesAll(u) && rec.kind === 'lavoro' && !u.planned) continue;
+      const keys = notifyKeysFor(u.id, u, rec.kind, !!u.planned);
       const v = keys ? scopeOutage(rec, keys) : rec;
       if (!v) continue;
       const hide = keys && !config().installerClients;

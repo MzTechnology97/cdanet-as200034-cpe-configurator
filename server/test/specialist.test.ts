@@ -39,14 +39,43 @@ async function setup() {
 }
 
 describe('Specialist', () => {
-  it('sees everything like an admin, the management stays with the admins', async () => {
+  it('his own work and the technical tools; CDA Net data only with «visibilità piena» (issue #275)', async () => {
     const { app, call, A, S, I, spec, db } = await setup();
     assert.equal(spec.user.role, 'specialist');
-    // what he sees and the tools he uses
-    for (const url of ['/api/admin/status', '/api/admin/events', '/api/admin/profiles', '/api/admin/template-form', '/api/admin/stats', '/api/admin/work-orders', '/api/admin/uisp/status', '/api/admin/uisp/sites', '/api/admin/platform/health']) {
+    assert.equal((spec.user as { fullView?: boolean }).fullView, undefined, 'never implicit');
+    // the technical tools that show no data of others
+    for (const url of ['/api/admin/template-form', '/api/admin/placeholders', '/api/admin/terrain']) {
       const r = await call('GET', url, S);
       assert.equal(r.statusCode, 200, `${url}: ${r.body}`);
     }
+    // CDA Net's data of everyone: not for a specialist who may be outside the company
+    const others = ['/api/admin/status', '/api/admin/events', '/api/admin/profiles', '/api/admin/stats', '/api/admin/work-orders', '/api/admin/uisp/status', '/api/admin/uisp/sites', '/api/admin/platform/health', '/api/admin/crm/radius/status', '/api/admin/coverage/accuracy'];
+    for (const url of others) {
+      const r = await call('GET', url, S);
+      assert.equal(r.statusCode, 403, `${url}: ${r.statusCode} ${r.body}`);
+    }
+    // the calendar: his own orders only, no list of installers
+    const inst = (db.prepare('SELECT id FROM users WHERE username = ?').get(INST.username) as { id: number }).id;
+    db.prepare("INSERT INTO work_orders(created_at, updated_at, day, slot, kind, status, assigned_to, customer) VALUES(?,?,?,?,?,?,?,?)").run('2026-10-17T08:00:00Z', '2026-10-17T08:00:00Z', '2026-10-20', '', 'new', 'open', inst, 'Cliente di CDA Net');
+    const cal = (await call('GET', '/api/work-orders/calendar?from=2026-10-19&to=2026-10-25', S)).json();
+    assert.deepEqual([cal.items.length, cal.installers], [0, undefined], 'nothing of the team');
+    assert.equal((await call('GET', `/api/work-orders/calendar?from=2026-10-19&to=2026-10-25&user=${inst}`, S)).json().items.length, 0, 'not even asking for someone');
+    // «visibilità piena», given by an admin: the views of the NOC (his sessions start again)
+    assert.equal((await call('PATCH', `/api/admin/users/${inst}`, A, { fullView: true })).json().error, 'full_view_specialist_only');
+    assert.equal((await call('PATCH', `/api/admin/users/${spec.user.id}`, S, { fullView: true })).statusCode, 403, 'not by himself');
+    assert.equal((await call('PATCH', `/api/admin/users/${spec.user.id}`, A, { fullView: true })).statusCode, 200);
+    assert.equal((await call('GET', '/api/admin/status', S)).statusCode, 401, 'the old session is closed');
+    const full = (await app.inject({ method: 'POST', url: '/api/auth/login', payload: SPEC })).json();
+    assert.equal(full.user.fullView, true);
+    const F = { authorization: `Bearer ${full.token}` };
+    for (const url of others) {
+      const r = await call('GET', url, F);
+      assert.equal(r.statusCode, 200, `with full view ${url}: ${r.body}`);
+    }
+    assert.equal((await call('GET', '/api/work-orders/calendar?from=2026-10-19&to=2026-10-25', F)).json().items.length, 1);
+    assert.equal((await call('POST', '/api/admin/platform/backup', F, { password: 'Password-Backup-123' })).statusCode, 403, 'the backup stays with the admins');
+    const users = (await call('GET', '/api/admin/users', A)).json() as Array<{ username: string; fullView: boolean }>;
+    assert.equal(users.find((u) => u.username === SPEC.username)?.fullView, true);
     // the platform and CDA Net's decisions: admins only
     for (const [method, url, body] of [
       ['GET', '/api/admin/users', undefined],
@@ -62,11 +91,11 @@ describe('Specialist', () => {
       ['POST', '/api/admin/work-orders', { day: '2026-10-20', customer: 'Prova' }],
       ['POST', '/api/admin/profiles/LiteBeam%205AC/templates', { name: 'X', template: SAMPLE_TEMPLATE, boardMatch: 'board\\.name=LiteBeam' }],
     ] as const) {
-      const r = await call(method, url, S, body);
+      const r = await call(method, url, F, body);
       assert.equal(r.statusCode, 403, `${method} ${url}: ${r.statusCode} ${r.body}`);
     }
     // his section: his own, nobody else's
-    assert.equal((await call('GET', '/api/specialist/templates', S)).statusCode, 200);
+    assert.equal((await call('GET', '/api/specialist/templates', F)).statusCode, 200);
     assert.equal((await call('GET', '/api/specialist/templates', A)).statusCode, 403);
     assert.equal((await call('GET', '/api/specialist/templates', I)).statusCode, 403);
     // an admin cannot make himself a specialist (he would lose the admin pages)

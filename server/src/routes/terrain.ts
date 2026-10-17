@@ -30,12 +30,14 @@ export function terrainRoutes(app: FastifyInstance, ctx: AppContext) {
   const admin = { preHandler: [ctx.auth.requireAdmin] };
   // what the specialist sees (the imports of terrain and data stay with the admins)
   const staff = { preHandler: [ctx.auth.requireStaff] };
+  // the accuracy of the coverage model is measured on CDA Net's customers (issue #275)
+  const all = { preHandler: [ctx.auth.requireSeesAll] };
   const accuracy = createCoverageAccuracy(ctx);
 
   /** Reliability of the coverage estimate on the real customers: last run, history, running. */
-  app.get('/api/admin/coverage/accuracy', staff, async () => accuracy.view());
+  app.get('/api/admin/coverage/accuracy', all, async () => accuracy.view());
 
-  app.post('/api/admin/coverage/accuracy', staff, async (req) => {
+  app.post('/api/admin/coverage/accuracy', all, async (req) => {
     if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
     const started = accuracy.start();
     if (started) recordEvent(ctx.db, req.user!.id, 'coverage.accuracy', 'Affidabilità della copertura', 'misura avviata');
