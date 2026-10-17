@@ -213,7 +213,8 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
       connectorId: z.number().int().positive().nullable().optional(),
       company: z.string().trim().max(80).optional(),
       model: z.enum(SUPPORTED_MODELS),
-      mac: cpeMacSchema,
+      // absent: prepared before connecting to the CPE, MAC and serial come with the outcome
+      mac: cpeMacSchema.optional(),
       serial: cpeSerialSchema.optional(),
       firmware: z.string().trim().max(80).optional(),
       host: z.string().trim().max(64).optional(),
@@ -249,7 +250,7 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!versionAtLeast(client.version, ctx.cfg.minAndroidVersion)) throw new HttpError(426, 'client_upgrade_required', { minVersion: ctx.cfg.minAndroidVersion });
     const b = jobBody.parse(req.body);
     const pkg = s().jobs.create(me(req), b, `${client.platform}/${client.version}`);
-    log(req, 'specialist.job', `${b.model} · ${b.mac}`, [pkg.summary.template, b.customer, pkg.summary.deviceName].filter(Boolean).join(' · '));
+    log(req, 'specialist.job', `${b.model} · ${b.mac ?? 'CPE letta alla scrittura'}`, [pkg.summary.template, b.customer, pkg.summary.deviceName].filter(Boolean).join(' · '));
     reply.header('Cache-Control', 'no-store');
     return reply.code(201).send(pkg);
   });
@@ -261,6 +262,8 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
       error: z.string().max(1000).optional().default(''),
       detected: z.object({ firmware: z.string().max(80).optional(), board: z.string().max(120).optional(), mac: z.string().max(40).optional() }).strict().optional().default({}),
       completedAt: z.string().datetime().optional(),
+      // the CPE read at the write, for a configuration prepared before connecting to it
+      cpe: z.object({ mac: cpeMacSchema, serial: cpeSerialSchema.optional() }).strict().optional(),
     })
     .strict();
 
@@ -269,7 +272,7 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
     const r = s().jobs.result(me(req).id, id, resultBody.parse(req.body));
     if (!r.duplicate) {
       const j = s().jobs.get(me(req).id, id);
-      log(req, j.status === 'success' ? 'specialist.job_written' : 'specialist.job_failed', `${j.model} · ${j.mac}`, j.status === 'success' ? (j.customer || j.deviceName) : j.error.slice(0, 200));
+      log(req, j.status === 'success' ? 'specialist.job_written' : 'specialist.job_failed', `${j.model} · ${j.mac || 'CPE non letta'}`, j.status === 'success' ? (j.customer || j.deviceName) : j.error.slice(0, 200));
     }
     return r;
   });

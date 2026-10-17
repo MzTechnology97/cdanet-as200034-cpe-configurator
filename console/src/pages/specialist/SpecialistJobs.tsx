@@ -22,6 +22,8 @@ const SHOW: Array<{ value: Show; label: string }> = [
   { value: 'no_acceptance', label: 'Senza collaudo' },
 ];
 const fail = (e: unknown) => toast((e as Error).message, 'bad');
+/** No MAC yet: prepared before connecting to the CPE, the app reads it at the write. */
+const macPending = (j: SpecJob) => (j.cpeAtWrite ? 'letto alla scrittura' : '—');
 
 export function SpecialistJobs({ params }: PageContext) {
   const qc = useQueryClient();
@@ -125,7 +127,7 @@ export function SpecialistJobs({ params }: PageContext) {
                   </span>
                 ),
               },
-              { label: 'CPE', render: (j) => <span className="ui-small">{j.model} · <span className="ui-mono">{j.mac}</span></span> },
+              { label: 'CPE', render: (j) => <span className="ui-small">{j.model} · {j.mac ? <span className="ui-mono">{j.mac}</span> : <span className="ui-muted">{macPending(j)}</span>}</span> },
               { label: 'Esito', render: (j) => <Badge tone={STATUS[j.status][1]}>{STATUS[j.status][0]}</Badge> },
               { label: 'Collaudo', render: (j) => (j.acceptance?.verdict ? <Badge tone={VERDICT[j.acceptance.verdict][1]}>{VERDICT[j.acceptance.verdict][0]}</Badge> : <span className="ui-muted ui-small">—</span>) },
               { label: 'UISP', render: (j) => <UispBadge j={j} /> },
@@ -166,14 +168,14 @@ function JobDrawer({ j, onClose, onChanged, onDeleted }: { j: SpecJob; onClose: 
     </div>
   );
   const remove = async () => {
-    if (!confirm(`Eliminare dallo storico l’installazione di «${j.customer || j.deviceName || j.mac}»? La CPE resta configurata com’è; resta solo la voce nel registro attività.`)) return;
+    if (!confirm(`Eliminare dallo storico l’installazione di «${j.customer || j.deviceName || j.mac || j.model}»? La CPE resta configurata com’è; resta solo la voce nel registro attività.`)) return;
     await api(`/api/specialist/jobs/${j.id}`, { method: 'DELETE' });
     toast('Installazione eliminata dallo storico');
     await onDeleted();
   };
   return (
     <Drawer
-      title={j.customer || j.deviceName || `CPE ${j.mac}`}
+      title={j.customer || j.deviceName || `CPE ${j.mac || j.model}`}
       onClose={onClose}
       footer={
         <>
@@ -196,8 +198,8 @@ function JobDrawer({ j, onClose, onChanged, onDeleted }: { j: SpecJob; onClose: 
         {fact('Cliente', j.customer)}
         {fact('Nome CPE', j.deviceName)}
         {fact('Modello', j.model)}
-        {fact('MAC', <span className="ui-mono">{j.mac}</span>)}
-        {fact('Seriale', <span className="ui-mono">{j.serial}</span>)}
+        {fact('MAC', j.mac ? <span className="ui-mono">{j.mac}</span> : macPending(j))}
+        {fact('Seriale', j.serial ? <span className="ui-mono">{j.serial}</span> : '')}
         {fact('Firmware', j.detected.firmware || j.firmware)}
         {fact('Template', j.template)}
         {fact('SSID', j.ssid)}

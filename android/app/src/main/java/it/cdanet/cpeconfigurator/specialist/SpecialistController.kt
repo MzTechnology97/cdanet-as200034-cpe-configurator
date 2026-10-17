@@ -3,6 +3,7 @@ package it.cdanet.cpeconfigurator.specialist
 import it.cdanet.cpeconfigurator.data.ApiClient
 import it.cdanet.cpeconfigurator.data.ApiException
 import it.cdanet.cpeconfigurator.data.AppJson
+import it.cdanet.cpeconfigurator.data.CpeIdDto
 import it.cdanet.cpeconfigurator.data.CpeLocation
 import it.cdanet.cpeconfigurator.data.CredentialsDto
 import it.cdanet.cpeconfigurator.data.DetectedDto
@@ -22,6 +23,7 @@ import it.cdanet.cpeconfigurator.data.SpecReplacementDto
 import it.cdanet.cpeconfigurator.data.SpecResultDto
 import it.cdanet.cpeconfigurator.data.SpecTemplateDto
 import it.cdanet.cpeconfigurator.data.SpecValuesDto
+import it.cdanet.cpeconfigurator.data.TargetDto
 import it.cdanet.cpeconfigurator.data.specConnectors
 import it.cdanet.cpeconfigurator.data.specCreateJob
 import it.cdanet.cpeconfigurator.data.specPutAcceptance
@@ -160,6 +162,11 @@ data class SpecState(
     val verify: AirosStatus? = null,
     /** The installation as the server has it after the acceptance test. */
     val job: SpecJobDto? = null,
+    /**
+     * He is on the CPE's Wi-Fi already and reads it before the configuration (else: first the
+     * configuration, then the CPE). Back to false with the next CPE.
+     */
+    val readFirst: Boolean = false,
 ) {
     /** A CPE is being configured (Home offers to go back to it). */
     val inProgress: Boolean get() = pkg != null || (cpe != null && done == null) || done?.ok == true
@@ -201,15 +208,29 @@ object SpecialistRules {
         return keep || version == null || version == target
     }
 
-    /** What stops the preparation, in plain words (empty: ready). */
-    fun problems(f: SpecForm, cpe: SpecCpe?, template: SpecTemplateDto?, asked: List<SpecAskedDto>?, firmwareReady: Boolean): List<String> = buildList {
+    /** Placeholders the server fills from the CPE read: a template with them needs the CPE before the preparation. */
+    val FROM_CPE = setOf("EXPECTED_MAC", "EXPECTED_SERIAL")
+
+    /**
+     * What stops the preparation, in plain words (empty: ready). [cpe] null: prepared before
+     * connecting to the CPE (owner, 17/10/2026), the model is the template's and the firmware is
+     * seen at the write; [placeholders]: the template's (one filled from the CPE needs it read first).
+     */
+    fun problems(
+        f: SpecForm,
+        cpe: SpecCpe?,
+        template: SpecTemplateDto?,
+        asked: List<SpecAskedDto>?,
+        firmwareReady: Boolean,
+        placeholders: List<String> = emptyList(),
+    ): List<String> = buildList {
         val model = cpe?.model
         val templateModel = template?.model
-        if (cpe == null) add("Leggi prima la CPE collegata")
-        else if (model == null) add("Modello della CPE non supportato (${cpe.product})")
-        if (!firmwareReady) add("Firmware: aggiornalo o scegli di tenerlo")
+        if (cpe != null && model == null) add("Modello della CPE non supportato (${cpe.product})")
+        if (cpe != null && !firmwareReady) add("Firmware: aggiornalo o scegli di tenerlo")
         if (templateModel == null) add("Scegli il template")
         else if (model != null && templateModel != model) add("Il template è per $templateModel, la CPE è una $model")
+        if (cpe == null && placeholders.any { it in FROM_CPE }) add("Il template usa il MAC o il seriale della CPE: collegati alla CPE e leggila prima")
         if (templateModel != null && asked == null) add("Valori del template non ancora letti: serve Internet")
         asked.orEmpty().forEach { a ->
             val v = f.values[a.name].orEmpty()
@@ -229,6 +250,29 @@ object SpecialistRules {
         else if (f.cpePassword == CpeProvisioner.FACTORY.password) add("La password admin non può restare quella di fabbrica")
         else if (f.cpePassword.any { it == '\n' || it == '\r' }) add("Password admin della CPE: una sola riga")
     }
+
+    /** What stops writing a configuration prepared before connecting to the CPE (empty: ready). */
+    fun writeProblems(pkg: ProvisionPackage, cpe: SpecCpe?, firmwareReady: Boolean): List<String> {
+        if (!pkg.needsCpe) return emptyList()
+        val problem = when {
+            cpe == null -> "Collegati alla Wi-Fi di management della CPE: l'app la trova e la legge"
+            cpe.model != pkg.summary.model -> "La CPE collegata è una ${cpe.model ?: cpe.product}: la configurazione è per ${pkg.summary.model}"
+            !firmwareReady -> "Firmware: aggiornalo o scegli di tenerlo"
+            else -> null
+        }
+        return listOfNotNull(problem)
+    }
+
+    /**
+     * A configuration prepared before connecting to the CPE, for the CPE read: its address, MAC
+     * and serial (they go to the server with the outcome). The text stays the one prepared.
+     */
+    fun bind(pkg: ProvisionPackage, cpe: SpecCpe): ProvisionPackage = pkg.copy(
+        target = TargetDto(cpe.ip, cpe.sshPort),
+        checks = pkg.checks.copy(mac = cpe.mac),
+        summary = pkg.summary.copy(mac = cpe.mac, serial = cpe.serial),
+        scannedOnSite = true,
+    )
 
     /** For the next CPE: the values that are not of this CPE's customer and not secret stay (VLAN, SSID…). */
     fun keepForNext(values: Map<String, String>, asked: List<SpecAskedDto>): Map<String, String> {
@@ -402,9 +446,22 @@ class SpecialistController(
         }
     }
 
-    /** «Cerca di nuovo»: forgets the CPE read (a new one on the Wi-Fi, or after a reset). */
+    /** «Cerca di nuovo»: forgets the CPE read (a new one on the Wi-Fi, or after a reset); the search goes on. */
     fun forgetCpe() {
-        _state.update { it.copy(device = null, cpe = null, candidates = emptyList(), searched = false, authFailed = false, keepFirmware = false, firmwareStages = emptyList(), firmwareNote = null, error = null, errorAt = null) }
+        _state.update {
+            it.copy(
+                device = null, cpe = null, candidates = emptyList(), searched = false, authFailed = false, keepFirmware = false,
+                firmwareStages = emptyList(), firmwareNote = null, error = null, errorAt = null,
+                // looking for a CPE again: the screen stays on the CPE
+                readFirst = it.readFirst || it.cpe != null || it.device != null,
+            )
+        }
+    }
+
+    /** The CPE before the configuration ([on]), or back to the configuration first, without the CPE. */
+    fun readFirst(on: Boolean) {
+        if (!on) forgetCpe()
+        _state.update { it.copy(readFirst = on) }
     }
 
     /** Reads the CPE over SSH (the current credentials typed, the factory ones, the new ones): MACs, firmware, board. */
@@ -445,7 +502,8 @@ class SpecialistController(
         _state.update { it.copy(cpe = cpe, authFailed = false) }
     }
 
-    private fun loginsFor(f: SpecForm): List<CredentialsDto> = listOfNotNull(f.current, CpeProvisioner.FACTORY, f.newLogin).distinct()
+    /** The current ones typed, the factory ones, the new ones (also of the configuration kept on the phone). */
+    private fun loginsFor(f: SpecForm): List<CredentialsDto> = listOfNotNull(f.current, CpeProvisioner.FACTORY, f.newLogin, _state.value.pkg?.credentials).distinct()
 
     private fun labelOf(cr: CredentialsDto, f: SpecForm): String = when (cr) {
         CpeProvisioner.FACTORY -> "credenziali di fabbrica"
@@ -518,13 +576,17 @@ class SpecialistController(
 
     // ---- 3 · the configuration ----------------------------------------------------------------------
 
-    /** Prepares the configuration on the server (Internet: mobile data is enough on the CPE's Wi-Fi). */
+    /**
+     * Prepares the configuration on the server (Internet: mobile data is enough on the CPE's Wi-Fi).
+     * Without a CPE read (owner, 17/10/2026: first the configuration, then the CPE) the model is
+     * the template's, and MAC, serial and address are the ones read at the write.
+     */
     suspend fun prepare() {
         val s = _state.value
         val f = _form.value
-        val cpe = s.cpe ?: return
-        val model = cpe.model ?: return
+        val cpe = s.cpe
         val tpl = s.templates?.firstOrNull { it.id == f.templateId } ?: return
+        val model: String = if (cpe == null) tpl.model else (cpe.model ?: return)
         val asked = s.asked?.asked ?: return
         val location = f.location
         val req = SpecJobRequest(
@@ -532,11 +594,11 @@ class SpecialistController(
             connectorId = f.connectorId,
             company = if (f.connectorId == null) f.company.trim().take(80).ifBlank { null } else null,
             model = model,
-            mac = cpe.mac,
-            serial = cpe.serial.take(128).ifBlank { null },
-            firmware = cpe.firmware?.take(80),
-            host = cpe.ip,
-            sshPort = cpe.sshPort,
+            mac = cpe?.mac,
+            serial = cpe?.serial?.take(128)?.ifBlank { null },
+            firmware = cpe?.firmware?.take(80),
+            host = cpe?.ip,
+            sshPort = cpe?.sshPort,
             cpe = SpecCpeLoginDto(f.cpeUser.trim(), f.cpePassword),
             values = asked.associate { a -> a.name to f.values[a.name].orEmpty() },
             customer = f.customer.trim().take(120).ifBlank { null },
@@ -558,11 +620,21 @@ class SpecialistController(
 
     // ---- 4 · the write ------------------------------------------------------------------------------
 
-    /** Writes the configuration into the CPE over SSH, then queues the outcome for the server. */
+    /**
+     * Writes the configuration into the CPE over SSH, then queues the outcome for the server. One
+     * prepared before connecting to the CPE goes on the CPE read now, whose MAC and serial go with
+     * the outcome.
+     */
     suspend fun write() {
         val s = _state.value
-        val pkg = s.pkg ?: return
+        val prepared = s.pkg ?: return
         val cpe = s.cpe
+        SpecialistRules.writeProblems(prepared, cpe, firmwareReady = true).firstOrNull()?.let { p ->
+            _state.update { it.copy(error = p, errorAt = "write") }
+            return
+        }
+        val pkg = if (prepared.needsCpe && cpe != null) SpecialistRules.bind(prepared, cpe) else prepared
+        val site = if (pkg.scannedOnSite) CpeIdDto(pkg.summary.mac, pkg.summary.serial) else null
         val f = _form.value
         val prior = listOfNotNull(s.firmwareNote)
         _state.update { it.copy(busy = "write", error = null, errorAt = null, writeError = null, stages = prior) }
@@ -578,11 +650,11 @@ class SpecialistController(
                         _state.update { it.copy(stages = stages.toList()) }
                     }.provision(pkg, allow, extra, REFUSED)
                 }
-                SpecResultDto("success", stages.toList(), detected = detected, completedAt = Instant.now().toString())
+                SpecResultDto("success", stages.toList(), detected = detected, completedAt = Instant.now().toString(), cpe = site)
             } catch (e: ProvisioningFailure) {
-                SpecResultDto("failed", stages.toList(), error = e.message.orEmpty(), detected = e.detected ?: DetectedDto(), completedAt = Instant.now().toString())
+                SpecResultDto("failed", stages.toList(), error = e.message.orEmpty(), detected = e.detected ?: DetectedDto(), completedAt = Instant.now().toString(), cpe = site)
             } catch (e: Exception) {
-                SpecResultDto("failed", stages.toList(), error = e.message ?: e.toString(), completedAt = Instant.now().toString())
+                SpecResultDto("failed", stages.toList(), error = e.message ?: e.toString(), completedAt = Instant.now().toString(), cpe = site)
             }
         }
         results.enqueue(SpecPendingResult(pkg.jobId, result, "${pkg.summary.deviceName.ifBlank { pkg.summary.model }} · ${pkg.summary.mac}"))
@@ -591,8 +663,8 @@ class SpecialistController(
         _state.update {
             it.copy(
                 busy = null,
-                // a failed write may be tried again with the same configuration
-                pkg = if (ok) null else pkg,
+                // a failed write may be tried again with the same configuration (on the CPE read then)
+                pkg = if (ok) null else prepared,
                 done = SpecDone(pkg.jobId, pkg.summary, ok, pkg.credentials, pkg.afterApply.lanIp, f.connectorId),
                 writeError = if (ok) null else result.error,
             )

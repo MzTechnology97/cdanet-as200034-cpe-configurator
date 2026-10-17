@@ -60,6 +60,8 @@ export interface SpecJob {
   templateId: number | null;
   mac: string;
   serial: string;
+  /** Prepared before connecting to the CPE: MAC and serial are read at the write (empty until then). */
+  cpeAtWrite?: boolean;
   firmware: string;
   deviceName: string;
   ssid: string;

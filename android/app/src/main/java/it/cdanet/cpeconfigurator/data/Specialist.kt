@@ -99,7 +99,8 @@ data class SpecJobRequest(
     val connectorId: Int? = null,
     val company: String? = null,
     val model: String,
-    val mac: String,
+    /** Null (with serial, firmware, host): prepared before connecting to the CPE, read at the write. */
+    val mac: String? = null,
     val serial: String? = null,
     val firmware: String? = null,
     val host: String? = null,
@@ -121,6 +122,8 @@ data class SpecResultDto(
     val error: String = "",
     val detected: DetectedDto = DetectedDto(),
     val completedAt: String? = null,
+    /** The CPE written (MAC and serial read over SSH), for a configuration prepared before connecting to it. */
+    val cpe: CpeIdDto? = null,
 )
 
 @Serializable
@@ -178,6 +181,8 @@ data class SpecJobDto(
     val templateId: Int? = null,
     val mac: String = "",
     val serial: String = "",
+    /** Prepared before connecting to the CPE: MAC and serial are the ones read at the write (empty until then). */
+    val cpeAtWrite: Boolean = false,
     val firmware: String = "",
     val deviceName: String = "",
     val ssid: String = "",
@@ -195,7 +200,10 @@ data class SpecJobDto(
 ) {
     /** Written, with a company's UISP, and not yet authorized there. */
     val toAuthorize: Boolean get() = status == "success" && connector != null && uisp.authorizedAt == null
-    val title: String get() = customer.ifBlank { deviceName }.ifBlank { mac }
+    val title: String get() = customer.ifBlank { deviceName }.ifBlank { mac }.ifBlank { model }
+
+    /** The CPE in a line: its MAC, or why there is none yet. */
+    val macLabel: String get() = mac.ifBlank { if (cpeAtWrite) "MAC letto alla scrittura" else "" }
 }
 
 @Serializable

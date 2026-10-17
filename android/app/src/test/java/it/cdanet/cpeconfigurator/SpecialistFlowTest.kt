@@ -1,8 +1,14 @@
 package it.cdanet.cpeconfigurator
 
+import it.cdanet.cpeconfigurator.data.AfterApplyDto
 import it.cdanet.cpeconfigurator.data.AppJson
+import it.cdanet.cpeconfigurator.data.ChecksDto
+import it.cdanet.cpeconfigurator.data.ConfigDto
+import it.cdanet.cpeconfigurator.data.CpeIdDto
 import it.cdanet.cpeconfigurator.data.CredentialsDto
 import it.cdanet.cpeconfigurator.data.DetectedDto
+import it.cdanet.cpeconfigurator.data.JobSummaryDto
+import it.cdanet.cpeconfigurator.data.ProvisionPackage
 import it.cdanet.cpeconfigurator.data.SpecAcceptanceDto
 import it.cdanet.cpeconfigurator.data.SpecAskedDto
 import it.cdanet.cpeconfigurator.data.SpecCpeLoginDto
@@ -11,6 +17,7 @@ import it.cdanet.cpeconfigurator.data.SpecJobRequest
 import it.cdanet.cpeconfigurator.data.SpecRadioDto
 import it.cdanet.cpeconfigurator.data.SpecResultDto
 import it.cdanet.cpeconfigurator.data.SpecTemplateDto
+import it.cdanet.cpeconfigurator.data.TargetDto
 import it.cdanet.cpeconfigurator.firmware.AirosImage
 import it.cdanet.cpeconfigurator.specialist.SpecCpe
 import it.cdanet.cpeconfigurator.specialist.SpecForm
@@ -54,7 +61,43 @@ class SpecialistFlowTest {
         assertTrue(shortKey.toString(), shortKey.any { it.startsWith("Chiave Wi-Fi") })
         val other = SpecialistRules.problems(ready, cpe, template.copy(model = "NanoBeam 5AC"), asked, true)
         assertTrue(other.toString(), other.any { it.contains("NanoBeam 5AC") })
-        assertTrue(SpecialistRules.problems(ready, null, template, asked, true).contains("Leggi prima la CPE collegata"))
+        // first the configuration, then the CPE (owner, 17/10/2026): no CPE read yet is fine, its firmware is seen at the write
+        assertEquals(emptyList<String>(), SpecialistRules.problems(ready, null, template, asked, firmwareReady = false))
+        val fromCpe = SpecialistRules.problems(ready, null, template, asked, true, placeholders = listOf("SSID", "EXPECTED_SERIAL"))
+        assertTrue(fromCpe.toString(), fromCpe.any { it.contains("MAC o il seriale") })
+        assertEquals(emptyList<String>(), SpecialistRules.problems(ready, cpe, template, asked, true, placeholders = listOf("EXPECTED_SERIAL")))
+    }
+
+    @Test
+    fun `a configuration prepared before the CPE goes on the CPE read`() {
+        val pkg = ProvisionPackage(
+            jobId = "j1",
+            expiresAt = "2026-10-17T20:00:00Z",
+            target = TargetDto("192.168.1.20"),
+            credentials = CredentialsDto("admin-x", "Una-Password-1"),
+            checks = ChecksDto(firmware = "8.7.4", boardMatch = "board\\.name=LiteBeam", mac = "", firmwareBypass = true),
+            config = ConfigDto(text = "wireless.1.ssid=AP3", sha256 = "abc"),
+            summary = JobSummaryDto(model = "LiteBeam 5AC", ssid = "AP3", pppoeUser = "rossi", deviceName = "ROSSI", mac = "", serial = ""),
+            afterApply = AfterApplyDto("192.168.1.1", 80, 443),
+        )
+        assertTrue(pkg.needsCpe)
+        assertTrue(SpecialistRules.writeProblems(pkg, null, firmwareReady = true).single().startsWith("Collegati"))
+        assertTrue(SpecialistRules.writeProblems(pkg, cpe.copy(model = "NanoBeam 5AC"), true).single().contains("NanoBeam 5AC"))
+        assertTrue(SpecialistRules.writeProblems(pkg, cpe, firmwareReady = false).single().startsWith("Firmware"))
+        assertEquals(emptyList<String>(), SpecialistRules.writeProblems(pkg, cpe, true))
+        val bound = SpecialistRules.bind(pkg, cpe.copy(ip = "192.168.1.36", sshPort = 2222))
+        assertEquals(TargetDto("192.168.1.36", 2222), bound.target)
+        assertEquals("24:A4:3C:11:22:33", bound.checks.mac)
+        assertEquals("24:A4:3C:11:22:33", bound.summary.mac)
+        assertEquals("24A43C112233", bound.summary.serial)
+        assertTrue(bound.scannedOnSite)
+        assertFalse(bound.needsCpe)
+        assertEquals(pkg.config, bound.config)
+        // prepared with the CPE read: nothing to wait for
+        assertEquals(emptyList<String>(), SpecialistRules.writeProblems(bound, null, firmwareReady = false))
+        // the outcome tells the server which CPE was written
+        val r = AppJson.encodeToJsonElement(SpecResultDto.serializer(), SpecResultDto("success", cpe = CpeIdDto("24:A4:3C:11:22:33", "24A43C112233"))).jsonObject
+        assertEquals(setOf("mac", "serial"), r["cpe"]!!.jsonObject.keys)
     }
 
     @Test
@@ -76,6 +119,9 @@ class SpecialistFlowTest {
         val req = SpecJobRequest(templateId = 4, model = "LiteBeam 5AC", mac = "24:A4:3C:11:22:33", cpe = SpecCpeLoginDto("admin-x", "p"), values = mapOf("SSID" to "AP"))
         val keys = AppJson.encodeToJsonElement(SpecJobRequest.serializer(), req).jsonObject.keys
         assertEquals(setOf("templateId", "model", "mac", "cpe", "values"), keys)
+        // before connecting to the CPE: no MAC, no address
+        val first = AppJson.encodeToJsonElement(SpecJobRequest.serializer(), req.copy(mac = null)).jsonObject.keys
+        assertEquals(setOf("templateId", "model", "cpe", "values"), first)
         val result = AppJson.encodeToJsonElement(SpecResultDto.serializer(), SpecResultDto("success", listOf("ok"), detected = DetectedDto(firmware = "8.7.4"))).jsonObject.keys
         assertEquals(setOf("result", "stages", "error", "detected"), result)
         val acc = AppJson.encodeToJsonElement(SpecAcceptanceDto.serializer(), SpecAcceptanceDto(verdict = "ok", radio = SpecRadioDto(signal = -58))).jsonObject
@@ -98,5 +144,9 @@ class SpecialistFlowTest {
         assertEquals("ROSSI", j.title)
         assertEquals("warn", j.acceptance?.verdict)
         assertEquals(-66, j.acceptance?.radio?.signal)
+        val prepared = AppJson.decodeFromString(SpecJobDto.serializer(), """{"id":"7a2d","status":"prepared","model":"LiteBeam 5AC","mac":"","cpeAtWrite":true}""")
+        assertEquals("LiteBeam 5AC", prepared.title)
+        assertEquals("MAC letto alla scrittura", prepared.macLabel)
+        assertEquals("24:A4:3C:11:22:33", j.macLabel)
     }
 }

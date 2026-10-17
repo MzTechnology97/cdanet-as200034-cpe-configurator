@@ -98,6 +98,11 @@ fun SpecialistHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit, onEdi
 
 // ---- the flow ---------------------------------------------------------------------------------------
 
+/**
+ * First the configuration, then the CPE (owner, 17/10/2026): the configuration is prepared without
+ * the management Wi-Fi (the model is the template's), then the CPE is found, read and written. Who
+ * is already on the CPE's Wi-Fi may read it first: the configuration then is for that CPE.
+ */
 @Composable
 fun SpecialistFlow(c: AppContainer, onTemplates: () -> Unit) {
     val s = c.specialist.state.collectAsState().value
@@ -106,18 +111,39 @@ fun SpecialistFlow(c: AppContainer, onTemplates: () -> Unit) {
     LaunchedEffect(refresh) { c.specialist.loadLists() }
     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 16.dp)) {
         val done = s.done
+        val pkg = s.pkg
+        // a CPE already read or being looked for: the configuration is for it
+        val withCpe = s.readFirst || s.cpe != null || s.device != null || s.candidates.isNotEmpty() || s.authFailed
         when {
             done != null && done.ok -> AfterWrite(c, s)
-            s.pkg != null -> WriteCard(c, s, f)
+            pkg != null && pkg.needsCpe -> {
+                // prepared before connecting to the CPE: now the CPE, its firmware, the write
+                CpeCard(c, s, f, "2 · CPE collegata")
+                if (s.cpe != null) FirmwareCard(c, s, "3 · Firmware")
+                WriteCard(c, s, f, "4 · Scrittura nella CPE")
+            }
+            pkg != null -> WriteCard(c, s, f, "4 · Scrittura nella CPE")
+            withCpe -> {
+                CpeCard(c, s, f, "1 · CPE collegata")
+                if (s.cpe == null) {
+                    TextButton(onClick = { c.specialist.readFirst(false) }, enabled = s.busy == null) { Text("Prepara prima la configurazione, senza CPE") }
+                } else {
+                    FirmwareCard(c, s, "2 · Firmware")
+                    ConfigCard(c, s, f, onTemplates, "3 · Configurazione")
+                }
+            }
             else -> {
                 Notice(
-                    "CPE di altre aziende, con i tuoi template e i tuoi connettori. MAC, seriale e modello li legge l'app dalla CPE (niente etichette né magazzino); il collaudo è facoltativo, senza NOC.",
+                    "CPE di altre aziende, con i tuoi template e i tuoi connettori. Prima prepari la configurazione (serve Internet, non la Wi-Fi della CPE), poi ti colleghi alla CPE: l'app ne legge MAC, seriale, modello e firmware e la scrive. Il collaudo è facoltativo, senza NOC.",
                     NoticeKind.Info,
                 )
-                CpeCard(c, s, f)
-                if (s.cpe != null) {
-                    FirmwareCard(c, s)
-                    ConfigCard(c, s, f, onTemplates)
+                ConfigCard(c, s, f, onTemplates, "1 · Configurazione")
+                SectionCard("2 · CPE", icon = R.drawable.ic_radar) {
+                    Text(
+                        "Dopo «Prepara la configurazione» ti colleghi alla Wi-Fi di management della CPE: l'app la trova, la legge e la scrive. Lì Internet non serve.",
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                    TextButton(onClick = { c.specialist.readFirst(true) }) { Text("Sono già sulla Wi-Fi della CPE: leggila ora") }
                 }
             }
         }
@@ -132,9 +158,9 @@ private fun StepError(s: SpecState, vararg steps: String) {
     if (at in steps) Notice(e, NoticeKind.Bad)
 }
 
-/** 1 · the CPE on the phone's Wi-Fi: found by the discovery, read over SSH. */
+/** The CPE on the phone's Wi-Fi: found by the discovery, read over SSH ([title]: its step in the flow). */
 @Composable
-private fun CpeCard(c: AppContainer, s: SpecState, f: SpecForm) {
+private fun CpeCard(c: AppContainer, s: SpecState, f: SpecForm, title: String) {
     var showCurrent by remember { mutableStateOf(false) }
     WifiRequired(c, "alla Wi-Fi di management della CPE", "La discovery trova la CPE in rete locale, qualunque sia il suo IP.") {
         // at opening (and after «Cerca di nuovo»), then every 8 seconds while no CPE answers (its Wi-Fi may come later)
@@ -147,7 +173,7 @@ private fun CpeCard(c: AppContainer, s: SpecState, f: SpecForm) {
                 delay(8_000)
             }
         }
-        SectionCard("1 · CPE collegata", icon = R.drawable.ic_radar) {
+        SectionCard(title, icon = R.drawable.ic_radar) {
             val cpe = s.cpe
             when {
                 cpe != null -> {
@@ -208,9 +234,9 @@ private fun CpeCard(c: AppContainer, s: SpecState, f: SpecForm) {
     }
 }
 
-/** 2 · the firmware: updated here when it is not the required one, or kept by choice. */
+/** The firmware: updated here when it is not the required one, or kept by choice. */
 @Composable
-private fun FirmwareCard(c: AppContainer, s: SpecState) {
+private fun FirmwareCard(c: AppContainer, s: SpecState, title: String) {
     val cpe = s.cpe ?: return
     val build = cpe.build
     val list = c.firmware.savedList()
@@ -219,7 +245,7 @@ private fun FirmwareCard(c: AppContainer, s: SpecState) {
     var confirm by remember { mutableStateOf(false) }
     // the CPE must not lose the phone halfway: display on while flashing
     if (s.busy == "firmware") KeepScreenOn()
-    SectionCard("2 · Firmware", icon = R.drawable.ic_system_update) {
+    SectionCard(title, icon = R.drawable.ic_system_update) {
         when {
             build == null -> Notice("Versione del firmware non leggibile (${cpe.firmware ?: "—"}): la scrittura la controlla di nuovo.", NoticeKind.Warn)
             build.version == target -> Notice("Firmware ${build.version}: è quello richiesto.", NoticeKind.Good)
@@ -265,25 +291,32 @@ private fun FirmwareCard(c: AppContainer, s: SpecState) {
     }
 }
 
-/** 3 · the configuration: company, template, what is typed for this CPE, its credentials, where it is. */
+/**
+ * The configuration: company, template, what is typed for this CPE, its credentials, where it is.
+ * With the CPE read, the templates of its model; before connecting to it, all of them (the model
+ * is the template's).
+ */
 @Composable
-private fun ConfigCard(c: AppContainer, s: SpecState, f: SpecForm, onTemplates: () -> Unit) {
-    val cpe = s.cpe ?: return
-    val model = cpe.model
-    val mine = s.templates.orEmpty().filter { it.model == model }
+private fun ConfigCard(c: AppContainer, s: SpecState, f: SpecForm, onTemplates: () -> Unit, title: String) {
+    val cpe = s.cpe
+    val model = cpe?.model
+    val all = s.templates.orEmpty()
+    val mine = if (cpe != null) all.filter { it.model == model } else all
     var showErrors by remember { mutableStateOf(false) }
     var shown by remember { mutableStateOf(setOf<String>()) }
-    // a template of this model chosen by itself (the only one, or the first)
+    // a template chosen by itself (the only one, or the first)
     LaunchedEffect(model, s.templates) {
         val cur = c.specialist.form.value.templateId
         if (mine.isNotEmpty() && mine.none { it.id == cur }) c.specialist.updateForm { it.copy(templateId = mine.first().id) }
     }
     LaunchedEffect(f.templateId, f.connectorId) { c.specialist.loadAsked() }
     val tpl = mine.firstOrNull { it.id == f.templateId }
-    val asked = s.asked?.asked?.takeIf { s.askedFor?.first == f.templateId && s.askedFor?.second == f.connectorId }
+    val current = s.askedFor?.first == f.templateId && s.askedFor?.second == f.connectorId
+    val asked = s.asked?.asked?.takeIf { current }
+    val placeholders = s.asked?.placeholders?.takeIf { current }.orEmpty()
     val target = c.firmware.savedList()?.target?.takeIf { it.isNotBlank() } ?: "8.7.4"
-    val problems = SpecialistRules.problems(f, cpe, tpl, asked, SpecialistRules.firmwareReady(cpe, target, s.keepFirmware))
-    SectionCard("3 · Configurazione", icon = R.drawable.ic_memory) {
+    val problems = SpecialistRules.problems(f, cpe, tpl, asked, SpecialistRules.firmwareReady(cpe, target, s.keepFirmware), placeholders)
+    SectionCard(title, icon = R.drawable.ic_memory) {
         val conns = s.connectors.orEmpty().filter { it.enabled }
         val none = SpecConnectorDto(id = 0, name = "Nessuno: scrivo il nome dell'azienda")
         Dropdown(
@@ -304,19 +337,33 @@ private fun ConfigCard(c: AppContainer, s: SpecState, f: SpecForm, onTemplates: 
         }
         when {
             s.templates == null -> Text("Lettura dei tuoi template…", style = MaterialTheme.typography.bodySmall)
-            model == null -> Unit
+            cpe != null && model == null -> Unit
             mine.isEmpty() -> {
-                Notice("Nessun tuo template per $model: crealo (anche dalla CPE collegata).", NoticeKind.Warn)
+                Notice(
+                    if (cpe != null) "Nessun tuo template per $model: crealo (anche dalla CPE collegata)." else "Nessun tuo template: crealo dalla scheda Template (dal modulo, dalla CPE o da un template CDA Net).",
+                    NoticeKind.Warn,
+                )
                 SecondaryButton(onClick = onTemplates, modifier = Modifier.fillMaxWidth()) { Text("Vai ai template") }
             }
             else -> {
-                Dropdown("Template", mine, tpl ?: mine.first(), { t -> t.name }, { t -> c.specialist.updateForm { it.copy(templateId = t.id) } }, Modifier.fillMaxWidth())
+                // before connecting to the CPE the model is the template's: it is in the name
+                Dropdown(
+                    "Template",
+                    mine,
+                    tpl ?: mine.first(),
+                    { t -> if (cpe == null) "${t.model} · ${t.name}" else t.name },
+                    { t -> c.specialist.updateForm { it.copy(templateId = t.id) } },
+                    Modifier.fillMaxWidth(),
+                )
                 tpl?.let { t ->
                     Text(
                         "${t.facts.mode} · LAN ${t.facts.lanIp ?: "—"}" + if (t.notes.isNotBlank()) "\n${t.notes}" else "",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
+                }
+                if (cpe == null && placeholders.any { it in SpecialistRules.FROM_CPE }) {
+                    Notice("Questo template usa il MAC o il seriale della CPE: collegati prima alla CPE e leggila.", NoticeKind.Warn)
                 }
             }
         }
@@ -371,7 +418,11 @@ private fun ConfigCard(c: AppContainer, s: SpecState, f: SpecForm, onTemplates: 
             if (problems.isEmpty()) c.scope.launch { c.specialist.prepare() }
         }
         Text(
-            "Serve Internet (bastano i dati mobili anche sulla Wi-Fi della CPE): il server prepara il file con i valori scritti qui e non li conserva.",
+            if (cpe == null) {
+                "Serve Internet, non la Wi-Fi della CPE: il server prepara il file con i valori scritti qui e non li conserva. Poi ti colleghi alla CPE e la scrivi senza Internet."
+            } else {
+                "Serve Internet (bastano i dati mobili anche sulla Wi-Fi della CPE): il server prepara il file con i valori scritti qui e non li conserva."
+            },
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -379,10 +430,21 @@ private fun ConfigCard(c: AppContainer, s: SpecState, f: SpecForm, onTemplates: 
     }
 }
 
-/** 4 · the write: the configuration prepared goes into the CPE (no Internet needed any more). */
+/** The time left of a prepared configuration (a day by default): minutes, or hours and minutes. */
+private fun leftText(left: Duration): String {
+    val min = left.toMinutes()
+    return if (min < 60) "$min min" else "${min / 60} h ${min % 60} min"
+}
+
+/**
+ * The write: the configuration prepared goes into the CPE (no Internet needed any more). One
+ * prepared before connecting to the CPE goes on the CPE read in the card above.
+ */
 @Composable
-private fun WriteCard(c: AppContainer, s: SpecState, f: SpecForm) {
+private fun WriteCard(c: AppContainer, s: SpecState, f: SpecForm, title: String) {
     val pkg = s.pkg ?: return
+    val target = c.firmware.savedList()?.target?.takeIf { it.isNotBlank() } ?: "8.7.4"
+    val blocking = SpecialistRules.writeProblems(pkg, s.cpe, SpecialistRules.firmwareReady(s.cpe, target, s.keepFirmware))
     var now by remember { mutableStateOf(Instant.now()) }
     LaunchedEffect(Unit) {
         while (true) {
@@ -394,20 +456,27 @@ private fun WriteCard(c: AppContainer, s: SpecState, f: SpecForm) {
     val writing = s.busy == "write"
     if (writing) KeepScreenOn()
     val failed = s.done?.takeIf { !it.ok } != null
-    SectionCard("4 · Scrittura nella CPE", icon = R.drawable.ic_settings_input_antenna) {
-        KeyValue("CPE", "${pkg.summary.model} · ${pkg.summary.mac}")
+    SectionCard(title, icon = R.drawable.ic_settings_input_antenna) {
+        val read = s.cpe
+        KeyValue("CPE", "${pkg.summary.model} · " + if (pkg.needsCpe) (read?.mac ?: "da leggere") else pkg.summary.mac)
         if (pkg.summary.template.isNotBlank()) KeyValue("Template", pkg.summary.template)
         if (pkg.summary.ssid.isNotBlank()) KeyValue("SSID", pkg.summary.ssid)
         if (pkg.summary.deviceName.isNotBlank()) KeyValue("Nome", pkg.summary.deviceName)
-        KeyValue("Valida ancora", if (left.isNegative) "SCADUTA" else "${left.toMinutes()} min")
+        KeyValue("Valida ancora", if (left.isNegative) "SCADUTA" else leftText(left))
         Text(
-            "Internet non serve più: l'app entra nella CPE, verifica board e MAC, scrive la configurazione, la salva e la riavvia.",
+            if (pkg.needsCpe) {
+                "Internet non serve più: l'app entra nella CPE letta, verifica modello, board e MAC, scrive la configurazione, la salva e la riavvia."
+            } else {
+                "Internet non serve più: l'app entra nella CPE, verifica board e MAC, scrive la configurazione, la salva e la riavvia."
+            },
             style = MaterialTheme.typography.bodySmall,
         )
         if (left.isNegative) Notice("Configurazione scaduta: annullala e preparala di nuovo.", NoticeKind.Bad)
-        BusyButton(if (failed) "Riprova la scrittura" else "Scrivi nella CPE", writing, Modifier.fillMaxWidth(), enabled = s.busy == null && !left.isNegative) {
+        else if (blocking.isNotEmpty()) Notice(blocking.joinToString("\n"), NoticeKind.Warn)
+        BusyButton(if (failed) "Riprova la scrittura" else "Scrivi nella CPE", writing, Modifier.fillMaxWidth(), enabled = s.busy == null && !left.isNegative && blocking.isEmpty()) {
             c.scope.launch { c.specialist.write() }
         }
+        StepError(s, "write")
         s.stages.forEach { Text("✓ $it", style = MaterialTheme.typography.bodyMedium) }
         if (failed) Notice("Scrittura non riuscita: ${s.writeError ?: "errore"}", NoticeKind.Bad)
         if (failed && s.writeError.orEmpty().startsWith("Autenticazione")) {
@@ -711,7 +780,7 @@ private fun SpecJobRow(c: AppContainer, j: SpecJobDto, expanded: Boolean, onTogg
             Column(Modifier.weight(1f)) {
                 Text(j.title, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Text(
-                    listOf(j.company, j.model, j.mac).filter { it.isNotBlank() }.joinToString(" · "),
+                    listOf(j.company, j.model, j.macLabel).filter { it.isNotBlank() }.joinToString(" · "),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     maxLines = 1,
@@ -767,7 +836,7 @@ private fun SpecJobRow(c: AppContainer, j: SpecJobDto, expanded: Boolean, onTogg
         AlertDialog(
             onDismissRequest = { confirmDelete = false },
             title = { Text("Eliminare dallo storico?") },
-            text = { Text("${j.title} · ${j.mac}: l'installazione esce dal tuo storico (la CPE resta com'è).") },
+            text = { Text(listOf(j.title, j.mac).filter { it.isNotBlank() }.distinct().joinToString(" · ") + ": l'installazione esce dal tuo storico (la CPE resta com'è).") },
             confirmButton = {
                 TextButton(onClick = {
                     confirmDelete = false

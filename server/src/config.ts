@@ -68,6 +68,8 @@ const envSchema = z.object({
   CPE_DISCOVERY_PORT: int(10001, 1, 65535),
 
   PROVISION_JOB_TTL_MINUTES: int(30, 5, 2880),
+  // the Specialist prepares the configuration before going to the CPE and writes it later
+  SPECIALIST_JOB_TTL_HOURS: int(24, 1, 72),
   // thresholds of the acceptance test, the field diagnosis and Salute CPE (Impostazioni server)
   SIGNAL_GOOD_DBM: int(-65, -90, -40),
   SIGNAL_MIN_DBM: int(-75, -95, -45),
@@ -195,6 +197,8 @@ export interface Config {
     discoveryPort: number;
   };
   jobTtlMinutes: number;
+  /** How long a configuration of the Specialist stays valid on the phone (titolare, 17/10/2026: 24 hours). */
+  specialistJobTtlHours: number;
   /** Thresholds of the acceptance test, field diagnosis, Salute CPE and coverage ranking. */
   thresholds: { signalGood: number; signalMin: number; cinrMin: number; chainDelta: number; capacityMinMbps: number; ethMinMbps: number; signalDropDb: number };
   installerCoverageAps: number;
@@ -309,6 +313,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
       discoveryPort: e.CPE_DISCOVERY_PORT,
     },
     jobTtlMinutes: e.PROVISION_JOB_TTL_MINUTES,
+    specialistJobTtlHours: e.SPECIALIST_JOB_TTL_HOURS,
     thresholds: {
       signalGood: e.SIGNAL_GOOD_DBM,
       signalMin: e.SIGNAL_MIN_DBM,

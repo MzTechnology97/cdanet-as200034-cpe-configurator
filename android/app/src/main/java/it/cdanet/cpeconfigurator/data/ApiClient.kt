@@ -99,6 +99,8 @@ private val ERRORS = mapOf(
     "template_not_found" to "Template non trovato: forse è stato eliminato",
     "template_name_exists" to "Esiste già un template con questo nome per il modello",
     "template_model_mismatch" to "Il template è di un altro modello di CPE",
+    "template_needs_cpe" to "Questo template usa il MAC o il seriale della CPE: collegati prima alla CPE e leggila",
+    "cpe_mac_required" to "L'esito non dice quale CPE è stata scritta (MAC e seriale)",
     "template_size" to "Template troppo corto o troppo lungo",
     "profile_not_system_cfg" to "Non sembra una configurazione airOS (mancano radio./wireless./netconf./users.)",
     "profile_contains_nul" to "Il testo del template contiene caratteri non validi",
