@@ -5,7 +5,7 @@ import { openDatabase } from '../src/db.ts';
 import { fakeUisp } from './fake-uisp.ts';
 import { ADMIN, SAMPLE_TEMPLATE, testConfig } from './helpers.ts';
 
-const TOKEN = '123456789:AAHfake-token-for-tests-0123456789abcd';
+const TOKEN = '000000:token_finto_dei_test_non_un_segreto';
 
 /** Telegram Bot API double + the UISP fake behind the same fetch. */
 function fakes() {
@@ -54,7 +54,7 @@ describe('Telegram notifications', () => {
       await call('PUT', '/api/admin/connectors/telegram', { enabled: true, token: TOKEN, chatId: '-1001234567890', events: ['provisioning_failed', 'uisp_pending', 'security'], summaryHour: 19 })
     ).json();
     assert.equal(saved.configured, true);
-    assert.equal(saved.tokenHint, '123456789:…');
+    assert.equal(saved.tokenHint, '000000:…');
     const view = (await call('GET', '/api/admin/connectors')).json().telegram;
     assert.ok(!JSON.stringify(view).includes('AAHfake'));
     assert.equal(view.publicUrl, 'https://cpe.cda-net.it');

@@ -4,7 +4,7 @@ import { buildApp } from '../src/app.ts';
 import { openDatabase } from '../src/db.ts';
 import { ADMIN, SAMPLE_TEMPLATE, testConfig } from './helpers.ts';
 
-const TOKEN = '123456789:AAbbCCddEEffGGhhIIjjKKllMMnnOOppQQr';
+const TOKEN = '000000:token_finto_dei_test_non_un_segreto';
 const ANDROID = { 'x-cda-client': 'android/1.33.0' };
 const acceptance = (signal: number, verdict: 'ok' | 'warn' | 'bad', checks: Array<{ title: string; verdict: string; detail: string }> = []) => ({
   verdict,
