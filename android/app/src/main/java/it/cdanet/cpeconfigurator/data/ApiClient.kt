@@ -439,6 +439,11 @@ class ApiClient(
         session.clear()
     }
 
+    /** "Esci": the server closes this session too (after a login with the code it lasts 30 days). */
+    suspend fun logout() {
+        request("POST", "/api/auth/logout")
+    }
+
     suspend fun meta(): MetaDto = AppJson.decodeFromString(MetaDto.serializer(), request("GET", "/api/meta"))
 
     suspend fun plan(req: ProvisionRequest): PlanDto =

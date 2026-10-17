@@ -147,6 +147,8 @@ suspend fun logoutPhone(c: AppContainer) {
     // what was done offline still reaches the log when possible, then nothing stays
     if (c.session.token != null) c.offlineLog.send(c.api)
     c.offlineLog.clear()
+    // the session ends on the server too (best effort: without Internet it ends here)
+    if (c.session.token != null) runCatching { c.api.logout() }
     c.session.clear()
 }
 

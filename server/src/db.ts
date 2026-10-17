@@ -854,6 +854,15 @@ const MIGRATIONS: Array<string | CodeMigration> = [
   CREATE INDEX specialist_jobs_user ON specialist_jobs(user_id, created_at);
   CREATE INDEX specialist_jobs_mac ON specialist_jobs(mac);
   `,
+  // «Esci» closes that session on the server too (titolare, 17/10/2026: with the two-step code a
+  // session lasts 30 days): its id stays here until the session would have expired
+  `
+  CREATE TABLE revoked_sessions(
+    jti TEXT PRIMARY KEY,
+    expires_at TEXT NOT NULL
+  );
+  CREATE INDEX revoked_sessions_expiry ON revoked_sessions(expires_at);
+  `,
 ];
 
 export function openDatabase(path: string): Db {
