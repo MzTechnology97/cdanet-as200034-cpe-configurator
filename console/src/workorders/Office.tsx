@@ -6,6 +6,7 @@ import { isOn } from '../lib/modules';
 import { toast } from '../lib/toast';
 import { AsyncButton, Badge, Button, Drawer, EmptyState, Icon, Notice, Segmented, Skeleton, Stat } from '../ui';
 import { dayLabel, KIND_TONE, KINDS, type Order, romeDay, STATUS } from './shared';
+import { canManage } from '../lib/roles';
 
 /**
  * Interventi, the office's list: any period (a day up to a year), installer, kind, status and a
@@ -275,12 +276,12 @@ function OrderDetails({ o, onClose, onEdit, onDelete }: { o: Order; onClose: () 
       onClose={onClose}
       footer={
         <>
-          {o.status !== 'cancelled' && o.status !== 'done' && (
+          {canManage() && o.status !== 'cancelled' && o.status !== 'done' && (
             <Button variant="primary" onClick={onEdit}>
               Modifica
             </Button>
           )}
-          {o.status !== 'cancelled' && (
+          {canManage() && o.status !== 'cancelled' && (
             <AsyncButton variant="danger" onClick={onDelete} onError={(e) => toast((e as Error).message, 'bad')}>
               {o.jobId || o.status === 'done' ? 'Annulla' : 'Elimina'}
             </AsyncButton>

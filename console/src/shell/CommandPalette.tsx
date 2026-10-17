@@ -3,6 +3,7 @@ import { isOn } from '../lib/modules';
 import { Icon } from '../ui/Icon';
 import { labelOf, type Route, type User } from './routes';
 import { matches, useGlobalSearch, type Hit } from './search';
+import { isStaff } from '../lib/roles';
 
 const GROUP: Record<Hit['kind'], string> = { cpe: 'CPE', customer: 'Clienti', ap: 'AP', job: 'Installazioni' };
 
@@ -55,7 +56,7 @@ export function CommandPalette({ pages, user, onClose }: { pages: Route[]; user:
           <input
             ref={input}
             value={q}
-            placeholder={user.role === 'admin' ? 'Pagina, cliente, CPE, MAC, AP, installazione…' : 'Pagina, CPE, MAC, AP, installazione…'}
+            placeholder={isStaff(user) ? 'Pagina, cliente, CPE, MAC, AP, installazione…' : 'Pagina, CPE, MAC, AP, installazione…'}
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Escape') onClose();

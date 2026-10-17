@@ -3,6 +3,7 @@ import { useState } from 'react';
 import { toast } from '../lib/toast';
 import { isOn } from '../lib/modules';
 import { api, download } from '../lib/api';
+import { canManage } from '../lib/roles';
 import { AsyncButton, Button, Notice, Segmented, Skeleton, Stat, Table } from '../ui';
 import { NewSubscriber, type SubscriberDraft } from './NewSubscriber';
 import { SignalChart, type SignalStats } from './SignalChart';
@@ -46,7 +47,8 @@ export function UispPanel({ job, admin }: { job: Job; admin: boolean }) {
   const [backupsRev, setBackupsRev] = useState(0);
   const [newSub, setNewSub] = useState(false);
   const s = q.data;
-  const waiting = admin && !!s?.device && !s.device.authorized;
+  // accepting a CPE of CDA Net (and its subscriber) is the admins' decision: the specialist sees the state
+  const waiting = admin && canManage() && !!s?.device && !s.device.authorized;
   // with the UISP CRM key the CPE can be accepted as a new subscriber (the form starts from this draft)
   const draft = useQuery({ queryKey: ['jobs', job.id, 'uisp-subscriber'], queryFn: () => api<SubscriberDraft>(`/api/admin/provisioning/jobs/${job.id}/uisp/subscriber`), enabled: waiting, retry: false, staleTime: 60_000 });
   const crm = waiting && !!draft.data?.crm;
@@ -103,7 +105,7 @@ export function UispPanel({ job, admin }: { job: Job; admin: boolean }) {
         <Stat label="firmware" value={<span className="ac-date">{d.firmware || '—'}</span>} />
       </section>
       {!pending && s.authorizedAt && <p className="ui-muted ui-small jb-p">Accettata il {date(s.authorizedAt)}</p>}
-      {admin && pending && sites && !s.proposedSite && (
+      {admin && canManage() && pending && sites && !s.proposedSite && (
         <label className="ui-field">
           <span className="ui-field-label">Site dell’AP non determinabile: scegli il site</span>
           <select value={site} onChange={(e) => setSite(e.target.value)}>
@@ -126,7 +128,7 @@ export function UispPanel({ job, admin }: { job: Job; admin: boolean }) {
           </Button>
         )}
         {/* with the CRM the CPE is accepted by «Nuovo subscriber» (customer and service with it), never alone */}
-        {admin && pending && !crm && !newSub && (
+        {admin && canManage() && pending && !crm && !newSub && (
           <AsyncButton variant="primary" onClick={accept} onError={fail}>
             {sites && !s.proposedSite ? 'Accetta nel site scelto' : 'Accetta in UISP'}
           </AsyncButton>

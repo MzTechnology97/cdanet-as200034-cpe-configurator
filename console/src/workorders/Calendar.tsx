@@ -3,6 +3,7 @@ import { type DragEvent, type MouseEvent, useMemo, useState } from 'react';
 import { api } from '../lib/api';
 import { toast } from '../lib/toast';
 import { Button, Icon, Notice, Segmented, Skeleton } from '../ui';
+import { canManage } from '../lib/roles';
 
 /**
  * The calendar of the interventions, as Google Calendar: week, month and day. Installers see
@@ -217,7 +218,7 @@ export function Calendar({ admin, onNew, onOpen }: { admin: boolean; onNew?: (at
           onDayTitle={view === 'week' ? (d) => (setAt(d), setView('day')) : undefined}
         />
       )}
-      {admin && <p className="ui-muted ui-small cal-help">Clic su un orario libero per programmare un intervento; trascina un intervento da fare per spostarlo di giorno, di orario o (vista Giorno) di installatore.</p>}
+      {admin && canManage() && <p className="ui-muted ui-small cal-help">Clic su un orario libero per programmare un intervento; trascina un intervento da fare per spostarlo di giorno, di orario o (vista Giorno) di installatore.</p>}
     </div>
   );
 }
@@ -244,7 +245,8 @@ let dragging: { o: CalOrder; grab: number } | null = null;
 
 function Block({ o, ctx, style, compact }: { o: CalOrder; ctx: GridCtx; style?: React.CSSProperties; compact?: boolean }) {
   const t = times(o.slot);
-  const canMove = ctx.admin && movable(o);
+  // moving an order is planning: the admins only
+  const canMove = ctx.admin && canManage() && movable(o);
   return (
     <button
       type="button"

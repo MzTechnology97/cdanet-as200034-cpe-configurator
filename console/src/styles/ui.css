@@ -702,3 +702,12 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 @media (max-width: 760px) {
   .sv-actions { justify-content: flex-start; margin-left: 0; }
 }
+
+/* Specialist (owner, 17/10/2026): his history, templates and connectors */
+.sp-filters { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-3); }
+.sp-filters .hl-search { flex: 1 1 260px; }
+.sp-filters select, .sp-filters input[type='date'] { width: auto; }
+.sp-p { margin: var(--sp-2) 0; white-space: pre-wrap; }
+.sp-facts { margin: var(--sp-3) 0; }
+.sp-acc { display: grid; gap: var(--sp-3); margin-bottom: var(--sp-2); }
+.sp-bad { color: var(--bad); }

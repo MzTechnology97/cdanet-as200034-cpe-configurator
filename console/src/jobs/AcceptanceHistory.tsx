@@ -2,6 +2,7 @@ import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { api } from '../lib/api';
 import { toast } from '../lib/toast';
+import { canManage } from '../lib/roles';
 import { AsyncButton, Badge } from '../ui';
 import { type Acceptance, AcceptanceBadge, measures, photoUrl } from './AcceptancePanel';
 
@@ -119,7 +120,7 @@ export function RepointGrants({ jobId }: { jobId: string }) {
             <strong>{g.username}</strong>
             <span className="ui-small ui-muted">presa sul posto il {date(g.grantedAt)}</span>
             {g.active ? <Badge tone="warn">accesso attivo fino al {date(new Date(Date.parse(g.grantedAt) + q.data.hours * 3_600_000).toISOString())}</Badge> : <Badge>scaduto</Badge>}
-            {g.active && (
+            {g.active && canManage() && (
               <AsyncButton
                 variant="ghost"
                 onClick={async () => {

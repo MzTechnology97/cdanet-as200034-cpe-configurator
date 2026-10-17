@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from '../lib/api';
 import { keys } from '../lib/query';
 import type { User } from './routes';
+import { isStaff } from '../lib/roles';
 
 /**
  * The search of the console (Ctrl+K): CPEs, customers, APs and installations through the same API
@@ -73,7 +74,8 @@ interface Customer {
 export function useGlobalSearch(q: string, user: User, isOn: (m: string) => boolean): { hits: Hit[]; loading: boolean } {
   const term = useDebounced(q.trim(), 200);
   const on = term.length >= 2;
-  const admin = user.role === 'admin';
+  // admins and specialists: the customers and the CPEs as in the UISP app
+  const admin = isStaff(user);
 
   const health = useQuery({ queryKey: keys.cpeHealth, queryFn: () => api<{ cpes: HealthCpe[] }>('/api/cpe-health'), enabled: on && isOn('cpe_health'), staleTime: 60_000 });
   const network = useQuery({ queryKey: keys.network, queryFn: () => api<{ pops: Array<{ aps: NetworkAp[] }>; apsWithoutPop?: NetworkAp[] }>('/api/network/status'), enabled: on && isOn('network_status'), staleTime: 60_000 });

@@ -7,11 +7,12 @@ import { keys, queryClient } from '../lib/query';
 import { isOn, loadModules, modulesLoaded, resetModules } from '../lib/modules';
 import { toast } from '../lib/toast';
 import { setAdmin } from '../lib/terms';
+import { isStaff, roleLabel, setRole } from '../lib/roles';
 import { Icon } from '../ui/Icon';
 import { CommandPalette } from './CommandPalette';
 import { Login } from './Login';
 import { Page } from './Page';
-import { allowed, isGroup, labelOf, ROUTES, type Route, type User } from './routes';
+import { allowed, isGroup, labelOf, menuFor, ROUTES, type Route, type User } from './routes';
 import { useTheme } from './theme';
 
 interface Session {
@@ -28,7 +29,8 @@ const readHash = () => {
 /** The page of the address, or the first one the user may open. */
 function pick(path: string, user: User): Route {
   const routes = ROUTES.filter((r): r is Route => !isGroup(r));
-  const id = path || (user.role === 'admin' ? 'dashboard' : 'jobs');
+  // the first page: the overview (admins), the specialist's own history, the installations
+  const id = path || (user.role === 'admin' ? 'dashboard' : user.role === 'specialist' ? 'specialist' : 'jobs');
   return routes.find((r) => r.id === id && r.react && allowed(r, user, isOn)) ?? routes.find((r) => r.id === 'jobs')!;
 }
 
@@ -76,7 +78,8 @@ export function App() {
   // after login: the role words (terms.ts: no data sources for installers), the modules on
   useEffect(() => {
     if (!user) return;
-    setAdmin(user.role === 'admin');
+    setAdmin(isStaff(user));
+    setRole(user.role);
     if (!modulesLoaded()) void loadModules().then(() => setModulesReady(true));
   }, [s?.token]);
 
@@ -105,7 +108,7 @@ export function App() {
     session.set({ token: d.token, user: d.user, expiresAt: d.expiresAt });
     toast(`Benvenuto ${d.user.username}`);
     if (d.mfaSetupRequired) {
-      toast('Per gli amministratori la verifica in due passaggi è obbligatoria: attivala ora', 'bad');
+      toast('Per gli amministratori e gli specialist la verifica in due passaggi è obbligatoria: attivala ora', 'bad');
       location.hash = '#/account';
     }
     setS(session.get());
@@ -121,10 +124,7 @@ export function App() {
     setS(null);
   };
 
-  const visible = useMemo(
-    () => (user ? ROUTES.filter((r) => (isGroup(r) ? !r.admin || user.role === 'admin' : allowed(r, user, isOn) && !r.hidden)) : []),
-    [user, modulesReady, modulesRev],
-  );
+  const visible = useMemo(() => (user ? menuFor(user, isOn) : []), [user, modulesReady, modulesRev]);
 
   if (!s || !user) {
     return (
@@ -174,7 +174,7 @@ export function App() {
           <span className="cx-avatar">{user.username.slice(0, 1).toUpperCase()}</span>
           <span className="cx-user-name">
             {user.username}
-            <small>{user.role === 'admin' ? 'Admin' : 'Installatore'}</small>
+            <small>{roleLabel(user.role)}</small>
           </span>
         </a>
         <button className="cx-icon-btn" onClick={logout} title="Esci" aria-label="Esci">
@@ -215,7 +215,7 @@ export function App() {
         </nav>
         {menuOpen && <div className="cx-shade" onClick={() => setMenuOpen(false)} />}
         <main className="view cx-main" aria-live="polite">
-          {user.role === 'admin' && <UispBanner />}
+          {isStaff(user) && <UispBanner />}
           {modulesReady ? <Page key={`${route.id}?${hash.query}#${modulesRev}`} route={route} user={user} query={hash.query} /> : <p className="muted">Caricamento…</p>}
         </main>
       </div>

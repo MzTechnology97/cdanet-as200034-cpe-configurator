@@ -35,7 +35,7 @@ export function terrainRoutes(app: FastifyInstance, ctx: AppContext) {
   /** Reliability of the coverage estimate on the real customers: last run, history, running. */
   app.get('/api/admin/coverage/accuracy', staff, async () => accuracy.view());
 
-  app.post('/api/admin/coverage/accuracy', admin, async (req) => {
+  app.post('/api/admin/coverage/accuracy', staff, async (req) => {
     if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
     const started = accuracy.start();
     if (started) recordEvent(ctx.db, req.user!.id, 'coverage.accuracy', 'Affidabilità della copertura', 'misura avviata');

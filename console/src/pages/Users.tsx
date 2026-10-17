@@ -7,6 +7,7 @@ import { countLabel } from '../infra/Picker';
 import { api } from '../lib/api';
 import type { PageContext, User } from '../shell/routes';
 import { AsyncButton, Badge, Button, Card, Drawer, Field, Icon, Notice, PageHeader, Segmented, Skeleton, Table, Tabs } from '../ui';
+import { roleLabel } from '../lib/roles';
 
 /**
  * Account (admins): installers and administrators. Disabling an account and resetting its password
@@ -17,7 +18,7 @@ import { AsyncButton, Badge, Button, Card, Drawer, Field, Icon, Notice, PageHead
 interface Account {
   id: number;
   username: string;
-  role: 'admin' | 'installer';
+  role: 'admin' | 'installer' | 'specialist';
   active: boolean;
   totpEnabled: boolean;
   lastLoginAt: string | null;
@@ -56,7 +57,7 @@ export function Users({ user: me }: PageContext) {
   const [open, setOpen] = useState<number | null>(null);
   const [creating, setCreating] = useState(false);
   const [text, setText] = useState('');
-  const [show, setShow] = useState<'all' | 'installer' | 'admin' | 'off'>('all');
+  const [show, setShow] = useState<'all' | 'installer' | 'specialist' | 'admin' | 'off'>('all');
   const [view, setView] = useState<'accounts' | 'pops'>('accounts');
   const [openTab, setOpenTab] = useState<'access' | 'infra'>('access');
   const assignments = useAssignments();
@@ -85,7 +86,7 @@ export function Users({ user: me }: PageContext) {
       <PageHeader
         icon="person"
         title="Account"
-        subtitle="Installatori e amministratori. Disabilitazione e reset revocano subito le sessioni."
+        subtitle="Installatori, specialist e amministratori. Disabilitazione e reset revocano subito le sessioni."
         actions={
           <Button variant="primary" icon="add_circle" onClick={() => setCreating(true)}>
             Nuovo account
@@ -96,12 +97,12 @@ export function Users({ user: me }: PageContext) {
         {security.data ? (
           <label className="ui-check">
             <input type="checkbox" checked={security.data.totpRequiredForAdmins} onChange={(e) => void setPolicy(e.target.checked)} />
-            Verifica in due passaggi obbligatoria per gli amministratori
+            Verifica in due passaggi obbligatoria per gli amministratori e gli specialist
           </label>
         ) : (
           <Skeleton lines={1} />
         )}
-        <p className="ui-muted ui-small us-p">Gli admin senza 2FA potranno solo attivarla da «Il mio account». Per abilitarla devi averla già attiva tu. Gli installatori possono attivarla quando vogliono.</p>
+        <p className="ui-muted ui-small us-p">Gli admin e gli specialist senza 2FA potranno solo attivarla da «Il mio account». Per abilitarla devi averla già attiva tu. Gli installatori possono attivarla quando vogliono.</p>
         <InstallerClientsRule />
       </Card>
 
@@ -142,6 +143,7 @@ export function Users({ user: me }: PageContext) {
                 options={[
                   { value: 'all', label: `Tutti ${users.data.length}` },
                   { value: 'installer', label: `Installatori ${n((u) => u.active && u.role === 'installer')}` },
+                  { value: 'specialist', label: `Specialist ${n((u) => u.active && u.role === 'specialist')}` },
                   { value: 'admin', label: `Admin ${n((u) => u.active && u.role === 'admin')}` },
                   { value: 'off', label: `Disabilitati ${n((u) => !u.active)}` },
                 ]}
@@ -157,13 +159,13 @@ export function Users({ user: me }: PageContext) {
               empty="Nessun account trovato."
               columns={[
                 { label: 'Username', render: (u) => <strong>{u.username}</strong> },
-                { label: 'Ruolo', render: (u) => <Badge tone={u.role === 'admin' ? 'warn' : 'neutral'}>{u.role === 'admin' ? 'Admin' : 'Installatore'}</Badge> },
+                { label: 'Ruolo', render: (u) => <RoleBadge role={u.role} /> },
                 { label: 'Stato', render: (u) => <Badge tone={u.active ? 'good' : 'bad'}>{u.active ? 'Attivo' : 'Disabilitato'}</Badge> },
-                { label: '2FA', render: (u) => (u.totpEnabled ? <Badge tone="good">attiva</Badge> : u.role === 'admin' ? <Badge tone="warn">no</Badge> : '—') },
+                { label: '2FA', render: (u) => (u.totpEnabled ? <Badge tone="good">attiva</Badge> : u.role !== 'installer' ? <Badge tone="warn">no</Badge> : '—') },
                 {
                   label: 'POP/AP',
                   render: (u) =>
-                    u.role === 'admin' ? (
+                    u.role !== 'installer' ? (
                       <span className="ui-muted ui-small">tutti</span>
                     ) : !assignments.data ? (
                       <span className="ui-muted ui-small">…</span>
@@ -242,9 +244,11 @@ function NewAccount({ onClose, onDone }: { onClose: () => void; onDone: () => Pr
         <Field label="Ruolo">
           <select value={role} onChange={(e) => setRole(e.target.value)}>
             <option value="installer">Installatore</option>
+            <option value="specialist">Specialist</option>
             <option value="admin">Admin</option>
           </select>
         </Field>
+        <RoleHint role={role} />
         {role === 'installer' && <WarehouseFields value={stock} onChange={setStock} />}
       </form>
     </Drawer>
@@ -277,7 +281,7 @@ function AccountDrawer({ u, me, templates, initialTab = 'access', onClose, onCha
   return (
     <Drawer title={`Account ${u.username}`} onClose={onClose}>
       <div className="ui-row">
-        <Badge tone={u.role === 'admin' ? 'warn' : 'neutral'}>{u.role === 'admin' ? 'Admin' : 'Installatore'}</Badge>
+        <RoleBadge role={u.role} />
         <Badge tone={u.active ? 'good' : 'bad'}>{u.active ? 'Attivo' : 'Disabilitato'}</Badge>
         <span className="ui-muted ui-small">
           Creato {date(u.createdAt)} · ultimo accesso {date(u.lastLoginAt)}
@@ -303,11 +307,23 @@ function AccountDrawer({ u, me, templates, initialTab = 'access', onClose, onCha
                 >
                   {u.active ? 'Disabilita' : 'Abilita'}
                 </AsyncButton>
-                <AsyncButton onClick={() => patch({ role: u.role === 'admin' ? 'installer' : 'admin' }, 'Ruolo aggiornato')} onError={fail}>
-                  {u.role === 'admin' ? 'Rendi installatore' : 'Rendi admin'}
-                </AsyncButton>
+                {(['installer', 'specialist', 'admin'] as const)
+                  .filter((r) => r !== u.role)
+                  .map((r) => (
+                    <AsyncButton
+                      key={r}
+                      onClick={async () => {
+                        if (r !== 'installer' && !confirm(`Rendere ${u.username} ${r === 'admin' ? 'amministratore' : 'specialist'}? ${r === 'admin' ? 'Gestirà tutta la piattaforma.' : 'Vedrà tutto come un amministratore, con la sua sezione Specialist.'} Le sessioni attive verranno chiuse.`)) return;
+                        await patch({ role: r }, 'Ruolo aggiornato');
+                      }}
+                      onError={fail}
+                    >
+                      {r === 'admin' ? 'Rendi admin' : r === 'specialist' ? 'Rendi specialist' : 'Rendi installatore'}
+                    </AsyncButton>
+                  ))}
               </div>
             )}
+            <RoleHint role={u.role} />
           </section>
           <section className="us-sec">
             <h3>Password</h3>
@@ -496,4 +512,21 @@ function AccountWarehouse({ u, onSave }: { u: Account; onSave: (body: { warehous
       )}
     </div>
   );
+}
+
+function RoleBadge({ role }: { role: string }) {
+  return <Badge tone={role === 'admin' ? 'warn' : role === 'specialist' ? 'info' : 'neutral'}>{roleLabel(role)}</Badge>;
+}
+
+/** What a role may do, in a line. */
+function RoleHint({ role }: { role: string }) {
+  if (role === 'specialist') {
+    return (
+      <p className="ui-muted ui-small us-p">
+        Specialist: lavora in autonomia per altre aziende. Vede tutto come un amministratore e usa tutti gli strumenti, con la sua sezione (template suoi, connettori UISP delle aziende, storico a parte) e il flusso Specialist nell’app: niente magazzino, collaudo facoltativo, nessuna approvazione del NOC. Account, connettori, impostazioni, privacy, Claude, accessi bloccati e decisioni sul lavoro CDA Net restano agli admin.
+      </p>
+    );
+  }
+  if (role === 'admin') return <p className="ui-muted ui-small us-p">Admin: gestisce tutta la piattaforma.</p>;
+  return <p className="ui-muted ui-small us-p">Installatore: le proprie installazioni, i POP/AP assegnati, il proprio magazzino.</p>;
 }

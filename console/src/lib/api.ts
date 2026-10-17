@@ -110,6 +110,28 @@ const MESSAGES: Record<string, string> = {
   customer_not_found: 'Cliente non trovato tra quelli di ISP Billing: aggiorna i clienti e riprova',
   invalid_position: 'Posizione non valida',
   saved_check_unreadable: 'La verifica salvata non si può leggere: rifalla e salvala di nuovo',
+  // Specialist
+  template_not_found: 'Template non trovato: forse è stato eliminato',
+  template_name_exists: 'Esiste già un template con questo nome per il modello',
+  template_model_mismatch: 'Il template è di un altro modello di CPE',
+  template_size: 'Dimensione non valida (minimo 64 caratteri)',
+  invalid_placeholders: 'Segnaposto non validi: usa ${NOME} con lettere maiuscole, cifre e _',
+  too_many_placeholders: 'Troppi segnaposto (al massimo 40)',
+  template_secret_invalid_snmpCommunity: 'Community SNMP non valida',
+  connector_not_found: 'Connettore non trovato: forse è stato eliminato',
+  connector_name_exists: 'Esiste già un connettore con questo nome',
+  connector_disabled: 'Connettore disattivato: riattivalo per usarlo',
+  uisp_key_invalid: 'La chiave UISP deve iniziare con wss:// (UISP → Impostazioni → Dispositivi)',
+  uisp_auth_failed: 'Token UISP rifiutato',
+  uisp_unreachable: 'UISP non raggiungibile dal server',
+  uisp_error: 'UISP ha risposto con un errore',
+  uisp_device_not_found: 'La CPE non è ancora in UISP (ricerca per MAC): dopo il riavvio può servire qualche minuto',
+  uisp_already_authorized: 'La CPE è già autorizzata in UISP',
+  uisp_site_unknown: 'Site dell’AP non determinabile: scegli il site',
+  job_not_found: 'Installazione non trovata',
+  job_without_connector: 'Installazione senza connettore UISP',
+  job_already_completed: 'Installazione già completata',
+  target_not_private: 'L’indirizzo della CPE deve essere privato',
 };
 
 export interface StoredSession {

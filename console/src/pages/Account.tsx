@@ -37,10 +37,10 @@ export function Account() {
       </div>
     );
   }
-  const role = a.role === 'admin' ? 'Amministratore' : 'Installatore';
+  const role = a.role === 'admin' ? 'Amministratore' : a.role === 'specialist' ? 'Specialist' : 'Installatore';
   return (
     <div className="ui-page">
-      {a.totpRequired && !a.totpEnabled && <Notice tone="bad">Per gli amministratori la verifica in due passaggi è obbligatoria: attivala qui sotto per usare la console.</Notice>}
+      {a.totpRequired && !a.totpEnabled && <Notice tone="bad">Per gli amministratori e gli specialist la verifica in due passaggi è obbligatoria: attivala qui sotto per usare la console.</Notice>}
       <PageHeader icon="lock" title="Il mio account" subtitle={`${a.username} · ${role}`} />
       <section className="ui-stats" aria-label="Account">
         <Stat label="utente" value={<span className="ac-date">{a.username}</span>} />
@@ -250,7 +250,7 @@ function TotpCard({ a }: { a: Me }) {
               </AsyncButton>
             )}
           </div>
-          {a.totpRequired && <p className="ui-muted ui-small ac-p">Obbligatoria per gli amministratori: non si può disattivare.</p>}
+          {a.totpRequired && <p className="ui-muted ui-small ac-p">Obbligatoria per gli amministratori e gli specialist: non si può disattivare.</p>}
         </>
       )}
     </Card>
