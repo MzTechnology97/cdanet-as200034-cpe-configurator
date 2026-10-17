@@ -707,6 +707,31 @@ const MIGRATIONS: string[] = [
   ALTER TABLE profile_templates ADD COLUMN secrets_ciphertext TEXT NOT NULL DEFAULT '';
   ALTER TABLE profile_templates ADD COLUMN params_version INTEGER NOT NULL DEFAULT 0;
   `,
+  // saved coverage and feasibility checks: a name (written, or the customer's of ISP Billing), the
+  // point, how it was checked and the answer as it was when saved (summary for the lists)
+  `
+  CREATE TABLE saved_checks(
+    id INTEGER PRIMARY KEY,
+    kind TEXT NOT NULL CHECK(kind IN('coverage','feasibility')),
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    username TEXT NOT NULL DEFAULT '',
+    name TEXT NOT NULL,
+    customer_id TEXT,
+    customer_name TEXT NOT NULL DEFAULT '',
+    customer_code TEXT NOT NULL DEFAULT '',
+    lat REAL NOT NULL,
+    lon REAL NOT NULL,
+    label TEXT NOT NULL DEFAULT '',
+    params TEXT NOT NULL DEFAULT '{}',
+    summary TEXT NOT NULL DEFAULT '{}',
+    result TEXT NOT NULL DEFAULT '{}',
+    created_at TEXT NOT NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE INDEX saved_checks_kind ON saved_checks(kind, updated_at);
+  CREATE INDEX saved_checks_user ON saved_checks(user_id, kind);
+  CREATE INDEX saved_checks_customer ON saved_checks(customer_id);
+  `,
 ];
 
 export function openDatabase(path: string): Db {

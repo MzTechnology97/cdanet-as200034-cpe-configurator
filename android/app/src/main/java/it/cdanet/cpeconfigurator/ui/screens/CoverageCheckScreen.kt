@@ -35,6 +35,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -57,6 +58,7 @@ import it.cdanet.cpeconfigurator.data.AppJson
 import it.cdanet.cpeconfigurator.data.CoverageAp
 import it.cdanet.cpeconfigurator.data.CoverageDto
 import it.cdanet.cpeconfigurator.data.GeocodeResult
+import it.cdanet.cpeconfigurator.data.SavedCheckDto
 import it.cdanet.cpeconfigurator.data.SimulationInfoDto
 import it.cdanet.cpeconfigurator.field.CompassTarget
 import it.cdanet.cpeconfigurator.ui.BusyButton
@@ -117,7 +119,8 @@ private data class BaseAp(val id: String, val name: String, val lat: Double, val
  * coordinates, AP name for admins), the phone GPS or a tap on the map; the APs ranked for the point
  * with the expected signal, line of sight with the customer's CPE height and, for admins, every AP
  * on the map and the radio simulation of each one (as the console). Installers get the server's
- * limits: their assigned APs, approximate areas.
+ * limits: their assigned APs, approximate areas. «Salva verifica» keeps the check with a name (the
+ * customer, the job), the other operators with it, to take it up again from «Verifiche salvate».
  */
 @OptIn(ExperimentalLayoutApi::class, androidx.compose.foundation.ExperimentalFoundationApi::class)
 @Composable
@@ -147,6 +150,11 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
     var page by remember { mutableStateOf<WebView?>(null) }
     // the AP whose link is open (the card shows the updated AP after every check)
     var los by remember { mutableStateOf<String?>(null) }
+    // the saved checks: the list reads itself again after a save; the one opened from it
+    var savedVersion by remember { mutableIntStateOf(0) }
+    var saving by remember { mutableStateOf(false) }
+    var opened by remember { mutableStateOf<SavedCheckDto?>(null) }
+    val savedPos = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
 
     // admins: every AP on the map (and for the search by name), the default CPE height
     LaunchedEffect(admin) {
@@ -204,7 +212,21 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
         }
     }
 
+    /** A saved check again: the same point, CPE and height (the other operators come with the point). */
+    fun openSaved(s: SavedCheckDto) {
+        opened = s
+        val label = s.point.label.ifBlank { s.name }
+        // the new point at once: a check started by the change of CPE or height goes there too
+        point = CheckedPoint(s.point.lat, s.point.lon, label)
+        result = null
+        resultJson = null
+        s.params.height?.let { h -> height = (if (h % 1.0 == 0.0) h.toInt().toString() else h.toString()).replace('.', ',') }
+        cpe = s.params.cpe ?: "auto"
+        check(s.point.lat, s.point.lon, label)
+    }
+
     fun search() {
+        opened = null
         val q = query.trim()
         parseCoords(q)?.let { (la, lo) -> return check(la, lo, String.format(java.util.Locale.US, "Coordinate %.5f, %.5f", la, lo)) }
         // admins: an AP by name
@@ -225,7 +247,10 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
         }
     }
 
-    val onTap by rememberUpdatedState { la: Double, lo: Double -> check(la, lo, null) }
+    val onTap by rememberUpdatedState { la: Double, lo: Double ->
+        opened = null
+        check(la, lo, null)
+    }
     val onSim by rememberUpdatedState { id: String -> simulate(id) }
     var map3d by remember { mutableStateOf(false) }
     val bridge = remember { CoverageBridge({ la, lo -> onTap(la, lo) }, { id -> onSim(id) }, { open -> map3d = open }) }
@@ -270,6 +295,7 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 BusyButton("Cerca", busy == "search", Modifier.weight(1f), enabled = busy == null && query.isNotBlank()) { search() }
                 BusyButton("Qui (GPS)", busy == "gps", Modifier.weight(1f), enabled = busy == null, primary = false) {
+                    opened = null
                     scope.launch {
                         busy = "gps"
                         try {
@@ -292,6 +318,7 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                 }) { Text("AP ${a.name} · simula copertura", style = MaterialTheme.typography.bodySmall) }
             }
             suggestions.forEach { r -> TextButton(onClick = { check(r.lat, r.lon, r.label) }) { Text(r.label, style = MaterialTheme.typography.bodySmall) } }
+            TextButton(onClick = { scope.launch { savedPos.bringIntoView() } }) { Text("Riprendi una verifica salvata") }
             Field(
                 "Altezza della CPE dal suolo (m)",
                 height,
@@ -379,8 +406,12 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
 
         val p = point
         val d = result
+        // a check opened from «Verifiche salvate»: which one, and what it said then
+        opened?.let { s -> if (p != null && p.lat == s.point.lat && p.lon == s.point.lon) OpenedCheckNote(s) { opened = null } }
         if (p != null && d != null) {
             SectionCard("AP per ${p.label}") {
+                // keep the check (and the other operators of the point) with a name, to take it up again later
+                SecondaryButton(onClick = { saving = true }, modifier = Modifier.fillMaxWidth()) { Text("Salva verifica") }
                 d.aps.firstOrNull()?.let { best ->
                     // the verdict in the state colours of the console
                     val (title, tone) = when (best.rating) {
@@ -468,6 +499,29 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
         // the other operators at the same point (FTTH, FTTC, radio), by AGCOM sticker, with every check
         // (installers without the operators' names)
         if (p != null) OperatorsCoverageCard(c, p.lat, p.lon, admin)
+        Column(Modifier.bringIntoViewRequester(savedPos)) {
+            SavedChecksCard(c, admin, savedVersion) { s ->
+                openSaved(s)
+                // the map and the APs are above: the screen goes back to them
+                scope.launch {
+                    kotlinx.coroutines.delay(250)
+                    mapPos.bringIntoView()
+                }
+            }
+        }
+    }
+    if (saving) {
+        val pt = point
+        if (pt != null) {
+            SaveCheckDialog(
+                c,
+                admin,
+                // what the screen shows: admins 10 APs within the server's radius, installers the server's limits
+                toSave = CheckToSave(pt.lat, pt.lon, pt.label, heightM, cpe, if (admin) 10 else null, null),
+                existing = null,
+                onDismiss = { saving = false },
+            ) { savedVersion++ }
+        }
     }
     val linkAp = los?.let { id -> result?.aps?.firstOrNull { it.id == id } }
     linkAp?.let { ap ->

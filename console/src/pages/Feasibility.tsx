@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { StickerChip } from '../coverage/Operators';
+import { OpenedCheck, SaveCheckButton, SavedChecksCard, type SavedCheck } from '../coverage/SavedChecks';
 import { api, download } from '../lib/api';
 import { toast } from '../lib/toast';
 import { AsyncButton, Badge, Button, Card, Icon, Notice, PageHeader, Skeleton } from '../ui';
@@ -7,7 +8,8 @@ import { AsyncButton, Badge, Button, Card, Icon, Notice, PageHeader, Skeleton } 
 /**
  * Fattibilità (admins, for sales): one address, one answer. Our coverage (the same check as
  * Copertura: available, to verify with a survey, not covered), the speed a new customer gets in the
- * evening, the other operators with their AGCOM sticker, and the PDF for internal use.
+ * evening, the other operators with their AGCOM sticker, and the PDF for internal use. A check is
+ * saved with the customer's name (ISP Billing) or a name written, and opened again from the list.
  */
 
 type Verdict = 'yes' | 'maybe' | 'no';
@@ -37,6 +39,9 @@ export function Feasibility() {
   const [a, setA] = useState<Answer | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  // the saved checks: the list reads itself again after a save; the one opened from it
+  const [version, setVersion] = useState(0);
+  const [opened, setOpened] = useState<SavedCheck | null>(null);
   const query = (p: { lat: number; lon: number; label: string }) => new URLSearchParams({ lat: String(p.lat), lon: String(p.lon), label: p.label }).toString();
 
   const check = async (p: { lat: number; lon: number; label: string }) => {
@@ -54,6 +59,7 @@ export function Feasibility() {
     }
   };
   const search = async () => {
+    setOpened(null);
     const t = text.trim();
     const coords = /^\s*(-?\d+(?:[.,]\d+)?)\s*[,; ]\s*(-?\d+(?:[.,]\d+)?)\s*$/.exec(t);
     if (coords) return void check({ lat: Number(coords[1]!.replace(',', '.')), lon: Number(coords[2]!.replace(',', '.')), label: 'Coordinate inserite' });
@@ -89,14 +95,18 @@ export function Feasibility() {
       </Card>
       {error && <Notice tone="bad">{error}</Notice>}
       {loading && <Skeleton lines={5} />}
+      {opened && point && opened.point.lat === point.lat && opened.point.lon === point.lon && <OpenedCheck c={opened} onClose={() => setOpened(null)} />}
       {a && point && (
         <>
           <Card
             title={a.address || point.label}
             actions={
-              <AsyncButton onClick={() => download(`/api/admin/feasibility.pdf?${query(point)}`, 'fattibilita.pdf')} onError={(e) => toast((e as Error).message, 'bad')}>
-                Scarica PDF
-              </AsyncButton>
+              <>
+                <SaveCheckButton kind="feasibility" point={{ lat: point.lat, lon: point.lon, label: a.address || point.label }} admin onSaved={() => setVersion((v) => v + 1)} />
+                <AsyncButton onClick={() => download(`/api/admin/feasibility.pdf?${query(point)}`, 'fattibilita.pdf')} onError={(e) => toast((e as Error).message, 'bad')}>
+                  Scarica PDF
+                </AsyncButton>
+              </>
             }
           >
             <div className={`fz-verdict ui-tone-${TONE[a.ours.verdict]}`}>
@@ -159,6 +169,17 @@ export function Feasibility() {
           <p className="ui-muted ui-small">Stime del modello di copertura e dati degli operatori: prima di promettere il servizio, la verifica sul posto resta necessaria quando l’esito è «da verificare».</p>
         </>
       )}
+      <SavedChecksCard
+        kind="feasibility"
+        admin
+        version={version}
+        onOpen={(c) => {
+          setOpened(c);
+          setText(c.point.label);
+          window.scrollTo({ top: 0, behavior: 'smooth' });
+          void check({ lat: c.point.lat, lon: c.point.lon, label: c.point.label });
+        }}
+      />
     </div>
   );
 }

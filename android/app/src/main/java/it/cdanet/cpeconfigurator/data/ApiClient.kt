@@ -68,6 +68,8 @@ private val ERRORS = mapOf(
     "template_needs_mac" to "Questo template ha bisogno del MAC già in preparazione: prepara la configurazione sul posto",
     "user_not_found" to "Installatore non trovato o disattivato",
     "invalid_position" to "Posizione non valida",
+    "saved_check_not_found" to "Verifica salvata non trovata: forse è stata eliminata",
+    "customer_not_found" to "Cliente non trovato tra quelli di ISP Billing",
     "acceptance_already_passed" to "Il collaudo risulta già superato",
     "acceptance_not_found" to "Collaudo non ancora registrato: il rapporto c'è dopo l'invio del collaudo",
     "work_order_password_missing" to "L'intervento non ha la password PPPoE: chiedila all'ufficio",

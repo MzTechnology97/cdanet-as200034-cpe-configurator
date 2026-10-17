@@ -50,6 +50,7 @@ import { speedtestRoutes } from './routes/speedtest.ts';
 import { coverageOpsRoutes } from './routes/coverage-operators.ts';
 import { diagnosisRoutes } from './routes/diagnosis.ts';
 import { feasibilityRoutes } from './routes/feasibility.ts';
+import { savedCheckRoutes } from './routes/saved-checks.ts';
 import { mcpRoutes } from './routes/mcp.ts';
 import { banRoutes } from './routes/bans.ts';
 import { createLoginGuard } from './services/login-guard.ts';
@@ -352,6 +353,7 @@ export async function buildApp(
   nasRoutes(app, ctx);
   diagnosisRoutes(app, ctx);
   feasibilityRoutes(app, ctx);
+  savedCheckRoutes(app, ctx);
   mcpRoutes(app, ctx);
   banRoutes(app, ctx);
 
