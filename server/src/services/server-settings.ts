@@ -195,9 +195,14 @@ export const SERVER_SETTINGS: Def[] = [
     get: (c) => c.proactive.apBusyPct, set: (c, v) => (c.proactive.apBusyPct = (v as number | undefined) ?? 80),
   },
   {
-    key: 'proactive.popLowHours', env: 'PROACTIVE_POP_LOW_HOURS', group: 'Avvisi proattivi', label: 'POP a batteria: avviso sotto (ore di autonomia)', kind: 'int', min: 1, max: 24,
-    help: 'Quando un POP va a batteria il NOC riceve l’autonomia stimata (da quanto scende la carica); un secondo avviso quando ne restano meno di queste ore, e uno quando torna in carica. Il calo di segnale delle CPE usa la soglia «Calo di segnale rispetto al collaudo».',
+    key: 'proactive.popLowHours', env: 'PROACTIVE_POP_LOW_HOURS', group: 'Avvisi proattivi', label: 'POP a batteria: avviso critico sotto (ore di autonomia)', kind: 'int', min: 1, max: 24,
+    help: 'Solo avvisi critici: un POP che va a batteria (anche ogni notte, con il fotovoltaico) non manda nulla finché l’autonomia stimata resta sopra queste ore e la carica sopra la soglia qui sotto. Sotto una delle due arriva un avviso al NOC e al gruppo; quando torna in carica, solo dopo quell’avviso, la conferma. Il calo di segnale delle CPE usa la soglia «Calo di segnale rispetto al collaudo».',
     get: (c) => c.proactive.popLowHours, set: (c, v) => (c.proactive.popLowHours = (v as number | undefined) ?? 2),
+  },
+  {
+    key: 'proactive.popCriticalSoc', env: 'PROACTIVE_POP_CRITICAL_SOC', group: 'Avvisi proattivi', label: 'POP a batteria: avviso critico sotto (% di carica)', kind: 'int', min: 5, max: 80,
+    help: 'Carica della batteria sotto la quale un POP che non è alimentato dà l’avviso critico, anche quando l’autonomia non si può ancora stimare.',
+    get: (c) => c.proactive.popCriticalSoc, set: (c, v) => (c.proactive.popCriticalSoc = (v as number | undefined) ?? 20),
   },
   {
     key: 'warehouseMinStock', env: 'WAREHOUSE_MIN_STOCK', group: 'Magazzino', label: 'CPE minime nel magazzino di un installatore', kind: 'int', min: 0, max: 50,
