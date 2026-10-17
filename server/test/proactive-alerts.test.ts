@@ -94,7 +94,13 @@ describe('Avvisi proattivi', () => {
       pop = { ...pop, soc: 20, batteryState: 'charging' };
       now += 5 * 60_000;
       await t.ctx.proactive.power();
-      assert.equal(said.at(-1)!.title, '✅ POP Demo Monte: di nuovo in carica');
+      assert.equal(said.length, 2, 'charging for a moment is not the power back');
+      for (const soc of [21, 22, 23]) {
+        now += 5 * 60_000;
+        pop = { ...pop, soc };
+        await t.ctx.proactive.power();
+      }
+      assert.equal(said.at(-1)!.title, '✅ POP Demo Monte: di nuovo in carica', 'after a quarter of an hour of charge');
       // swinging around the threshold right after: no new alert within 2 hours
       pop = { ...pop, soc: 18, batteryState: 'discharging' };
       now += 10 * 60_000;
