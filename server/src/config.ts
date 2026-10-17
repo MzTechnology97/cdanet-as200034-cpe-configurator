@@ -84,6 +84,7 @@ const envSchema = z.object({
   // proactive alerts to the NOC: AP busy in the evening (%), POP battery almost empty (hours)
   PROACTIVE_AP_BUSY_PCT: int(80, 50, 100),
   PROACTIVE_POP_LOW_HOURS: int(2, 1, 24),
+  PROACTIVE_POP_CRITICAL_SOC: int(20, 5, 80),
   // fewer CPEs than this in an installer's warehouse: the NOC is told to restock (accounts may override)
   WAREHOUSE_MIN_STOCK: int(2, 0, 50),
   // coverage of the other operators (fibre, FTTC, FWA) for a point: cache and the AGCOM sticker
@@ -196,7 +197,7 @@ export interface Config {
   /** Speedtest (OoklaServer host:port) and the Wi-Fi of the phone towards the customer's router. */
   speedtest: { server: string; seconds: number; streams: number; minPct: number; wifiWarnDbm: number; wifiBlockDbm: number };
   /** Proactive alerts: the evening load of an AP that is «close to saturation», the hours of battery that are «almost finished». */
-  proactive: { apBusyPct: number; popLowHours: number };
+  proactive: { apBusyPct: number; popLowHours: number; popCriticalSoc: number };
   /** Minimum of CPEs in an installer's warehouse (Magazzino), unless the account has its own. */
   warehouseMinStock: number;
   /** Other operators' coverage: days a lookup is reused, the FWA speed for «FR» and the FWA technologies with the VHCN sticker. */
@@ -314,7 +315,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     },
     installerCoverageAps: e.INSTALLER_COVERAGE_APS,
     speedtest: { server: e.SPEEDTEST_SERVER, seconds: e.SPEEDTEST_SECONDS, streams: e.SPEEDTEST_STREAMS, minPct: e.SPEEDTEST_MIN_PCT, wifiWarnDbm: e.WIFI_WARN_DBM, wifiBlockDbm: e.WIFI_BLOCK_DBM },
-    proactive: { apBusyPct: e.PROACTIVE_AP_BUSY_PCT, popLowHours: e.PROACTIVE_POP_LOW_HOURS },
+    proactive: { apBusyPct: e.PROACTIVE_AP_BUSY_PCT, popLowHours: e.PROACTIVE_POP_LOW_HOURS, popCriticalSoc: e.PROACTIVE_POP_CRITICAL_SOC },
     warehouseMinStock: e.WAREHOUSE_MIN_STOCK,
     coverageOps: { cacheDays: e.COVERAGE_OPS_CACHE_DAYS, fwaMinMbps: e.COVERAGE_OPS_FWA_MIN_MBPS, vhcnTechs: e.COVERAGE_OPS_VHCN_TECHS },
     staleCpeMonths: e.STALE_CPE_MONTHS,

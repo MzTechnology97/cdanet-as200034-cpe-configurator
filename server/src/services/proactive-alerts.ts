@@ -63,7 +63,9 @@ export function createProactiveAlerts(ctx: AppContext, log?: (m: string) => void
   let lastDrops = new Set<string>();
   /** Charge readings of each POP (last hour) and what was already said about it. */
   const socs = new Map<string, Array<{ t: number; soc: number }>>();
-  const popSaid = new Map<string, 'battery' | 'low'>();
+  /** POPs with a critical alert out (until back on charge), and when they came back (no flapping). */
+  const popCritical = new Set<string>();
+  const popRecovered = new Map<string, number>();
   let timers: NodeJS.Timeout[] = [];
 
   const notified = (): Record<string, string> => {
@@ -123,7 +125,12 @@ export function createProactiveAlerts(ctx: AppContext, log?: (m: string) => void
     }
   }
 
-  /** Every 5 minutes: the POPs on battery, their autonomy, the power back. */
+  /**
+   * Every 5 minutes, critical alerts only: a POP on battery says nothing (with solar panels it
+   * happens every night) until its autonomy falls under the hours set or its charge under the
+   * critical %; the power back is said only after such an alert. Not again within 2 hours of a
+   * recovery, so a charge swinging around the threshold does not flood the group.
+   */
   async function power() {
     const pops = ctx.victronSync.byPop();
     if (!pops.size) return;
@@ -134,20 +141,20 @@ export function createProactiveAlerts(ctx: AppContext, log?: (m: string) => void
       const h = (socs.get(popId) ?? []).filter((x) => x.t > now - HOUR);
       if (p.soc != null) h.push({ t: now, soc: p.soc });
       socs.set(popId, h);
-      const said = popSaid.get(popId);
       if (p.batteryState === 'discharging' && !p.offGrid) {
         const hours = autonomyHours(h);
-        const soc = p.soc != null ? `${Math.round(p.soc)}%` : 'carica sconosciuta';
-        if (!said && hours != null) {
-          ctx.notify.proactive(`🔋 ${name} a batteria`, [`Carica ${soc}, autonomia stimata circa ${hours} h.`], true);
-          popSaid.set(popId, 'battery');
-        } else if (said === 'battery' && hours != null && hours <= ctx.cfg.proactive.popLowHours) {
-          ctx.notify.proactive(`⚠️ ${name}: autonomia quasi finita`, [`Carica ${soc}, circa ${hours} h rimaste.`], true);
-          popSaid.set(popId, 'low');
+        const lowTime = hours != null && hours <= ctx.cfg.proactive.popLowHours;
+        const lowCharge = p.soc != null && p.soc <= ctx.cfg.proactive.popCriticalSoc;
+        const calm = (popRecovered.get(popId) ?? 0) > now - 2 * HOUR;
+        if ((lowTime || lowCharge) && !popCritical.has(popId) && !calm) {
+          const soc = p.soc != null ? `${Math.round(p.soc)}%` : 'carica sconosciuta';
+          ctx.notify.proactive(`⚠️ ${name}: batteria critica`, [hours != null ? `Carica ${soc}, circa ${hours} h di autonomia.` : `Carica ${soc}.`, 'Il POP non è alimentato: verifica la corrente o il fotovoltaico.'], true);
+          popCritical.add(popId);
         }
-      } else if (said && p.batteryState === 'charging') {
-        ctx.notify.proactive(`✅ ${name}: batteria in carica`, ['La corrente è tornata (o il fotovoltaico basta).'], true);
-        popSaid.delete(popId);
+      } else if (popCritical.has(popId) && p.batteryState === 'charging') {
+        ctx.notify.proactive(`✅ ${name}: di nuovo in carica`, ['Dopo l’avviso di batteria critica: la corrente è tornata (o il fotovoltaico basta).'], true);
+        popCritical.delete(popId);
+        popRecovered.set(popId, now);
       }
     }
   }
