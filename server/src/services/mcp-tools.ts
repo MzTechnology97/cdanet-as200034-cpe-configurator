@@ -13,7 +13,7 @@ export interface McpTool {
   /** The console route with its query, from the validated arguments. */
   path(args: Record<string, unknown>): string;
   /** A write (GET otherwise): only for a connection given «lettura e scrittura» at the consent. */
-  method?: 'POST' | 'PUT' | 'DELETE';
+  method?: 'POST' | 'PUT' | 'PATCH' | 'DELETE';
   body?(args: Record<string, unknown>): Record<string, unknown> | undefined;
   /** On the network (CPEs, UISP): the NOC hears of every call. */
   network?: boolean;
@@ -272,6 +272,22 @@ export const MCP_TOOLS: McpTool[] = [
     path: (a) => `/api/admin/feasibility${qs({ lat: coord(a.lat, 'lat'), lon: coord(a.lon, 'lon'), label: str(a.label, 200) })}`,
   },
   {
+    name: 'verifiche_salvate',
+    title: 'Verifiche di copertura e fattibilità salvate',
+    description:
+      "Le verifiche salvate con il loro nome (un cliente di ISP Billing o un nome scritto): punto, esito di quando sono state salvate, chi e quando. kind: coverage (predefinito) o feasibility; q cerca per nome, indirizzo o codice cliente; id per una sola, con la risposta completa di allora.",
+    inputSchema: obj({ kind: { type: 'string', enum: ['coverage', 'feasibility'] }, q: { type: 'string' }, id: { type: 'integer' } }),
+    path: (a) => (a.id !== undefined ? `/api/saved-checks/${id(a.id, 'id')}` : `/api/saved-checks${qs({ kind: a.kind === 'feasibility' ? 'feasibility' : 'coverage', q: str(a.q), limit: 100 })}`),
+  },
+  {
+    name: 'clienti_per_verifica',
+    title: 'Clienti di ISP Billing per nominare una verifica',
+    description: "I clienti di ISP Billing con cui nominare una verifica salvata: quelli con un indirizzo entro 300 m dal punto (lat/lon) e quelli che corrispondono a q (nome, codice, indirizzo, utente PPPoE).",
+    inputSchema: obj({ ...LATLON, q: { type: 'string' } }),
+    path: (a) =>
+      `/api/admin/saved-checks/customers${qs({ q: str(a.q), lat: a.lat !== undefined && a.lon !== undefined ? coord(a.lat, 'lat') : undefined, lon: a.lat !== undefined && a.lon !== undefined ? coord(a.lon, 'lon') : undefined })}`,
+  },
+  {
     name: 'cerca_indirizzo',
     title: 'Cerca un indirizzo',
     description: 'Da un indirizzo scritto (via, civico, comune) alle coordinate.',
@@ -493,6 +509,42 @@ export const MCP_TOOLS: McpTool[] = [
     description: "Cerca un cliente del CRM per un intervento: nome, indirizzo e posizione, telefono, utente PPPoE.",
     inputSchema: obj({ q: { type: 'string' } }, ['q']),
     path: (a) => `/api/admin/work-orders/crm${qs({ q: String(need(a.q, 'q')).slice(0, 80) })}`,
+  },
+  // ---- write: saved checks ----------------------------------------------------------------------
+  {
+    name: 'salva_verifica',
+    title: 'Salva una verifica di copertura o fattibilità',
+    description:
+      "Salva con un nome la verifica di un punto: il server la rifà e tiene la risposta. kind coverage o feasibility; name: il nome da dare; customerId: un cliente di ISP Billing (da clienti_per_verifica o cerca_cliente_intervento), il suo nome vale se name manca; label: l'indirizzo del punto; height e km solo per la copertura.",
+    inputSchema: obj(
+      {
+        kind: { type: 'string', enum: ['coverage', 'feasibility'] },
+        ...LATLON,
+        name: { type: 'string' },
+        customerId: { type: 'string' },
+        label: { type: 'string', description: 'Indirizzo del punto' },
+        height: { type: 'number', description: "Altezza della CPE dal suolo in metri (copertura)" },
+        km: { type: 'number', description: 'Raggio in km (copertura)' },
+      },
+      ['kind', 'lat', 'lon'],
+    ),
+    method: 'POST',
+    limits: ['third', 'heavy'],
+    path: () => '/api/saved-checks',
+    body: (a) => {
+      const kind = need(a.kind, 'kind') === 'feasibility' ? 'feasibility' : 'coverage';
+      const params = kind === 'coverage' ? { ...(typeof a.height === 'number' ? { height: a.height } : {}), ...(typeof a.km === 'number' ? { km: a.km } : {}) } : {};
+      return { kind, lat: coord(a.lat, 'lat'), lon: coord(a.lon, 'lon'), name: str(a.name, 120), customerId: str(a.customerId, 20), label: str(a.label, 200) ?? '', params };
+    },
+  },
+  {
+    name: 'rinomina_verifica',
+    title: 'Rinomina una verifica salvata',
+    description: 'Cambia il nome di una verifica salvata (id da verifiche_salvate) o il cliente di ISP Billing collegato: customerId per collegarne uno (il suo nome vale se name manca), null per scollegarlo.',
+    inputSchema: obj({ id: { type: 'integer' }, name: { type: 'string' }, customerId: { type: ['string', 'null'] } }, ['id']),
+    method: 'PATCH',
+    path: (a) => `/api/saved-checks/${id(a.id, 'id')}`,
+    body: (a) => ({ ...(a.name !== undefined ? { name: String(a.name).slice(0, 200) } : {}), ...(a.customerId === null ? { customerId: null } : str(a.customerId, 20) ? { customerId: str(a.customerId, 20) } : {}) }),
   },
   // ---- write: work orders -----------------------------------------------------------------------
   {
