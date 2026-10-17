@@ -4,7 +4,7 @@ import { join } from 'node:path';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import { z } from 'zod';
 import { REPOINT_GRANT_HOURS } from '../domain/policy.ts';
-import { HttpError, isStaff } from '../auth.ts';
+import { HttpError, seesAll } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { distanceM } from '../domain/geo.ts';
@@ -158,7 +158,7 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
       !!db
         .prepare('SELECT 1 FROM repoint_grants WHERE job_id = ? AND user_id = ? AND granted_at >= ?')
         .get(job.id, req.user!.id, new Date(Date.now() - REPOINT_GRANT_HOURS * 3_600_000).toISOString());
-    if (job.user_id !== req.user!.id && !isStaff(req.user!.role) && !assigned() && !granted()) throw new HttpError(403, 'forbidden');
+    if (job.user_id !== req.user!.id && !seesAll(req.user) && !assigned() && !granted()) throw new HttpError(403, 'forbidden');
     return job;
   };
 
@@ -166,11 +166,11 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
    * The work order of a re-pointing: the technician's own order it came from is closed; without
    * one, a «Ripuntamento» order is made for the record, already done (calendar, Interventi).
    */
-  const repointOrder = (jobId: string, u: { id: number; role: string }, fromOrder: number | null): number => {
+  const repointOrder = (jobId: string, u: { id: number; role: string; fullView?: boolean | undefined }, fromOrder: number | null): number => {
     const now = nowIso();
     if (fromOrder) {
       const o = db.prepare('SELECT id, assigned_to FROM work_orders WHERE id = ?').get(fromOrder) as { id: number; assigned_to: number | null } | undefined;
-      if (o && (o.assigned_to === u.id || isStaff(u.role))) {
+      if (o && (o.assigned_to === u.id || seesAll(u))) {
         db.prepare("UPDATE work_orders SET status = 'done', done_at = COALESCE(done_at, ?), job_id = COALESCE(job_id, ?), updated_at = ? WHERE id = ?").run(now, jobId, now, o.id);
         return o.id;
       }
@@ -354,7 +354,7 @@ export function acceptanceRoutes(app: FastifyInstance, ctx: AppContext) {
    */
   const acceptanceReport = async (req: FastifyRequest, reply: FastifyReply) => {
     const job = loadJob(req);
-    const forInstaller = !isStaff(req.user!.role);
+    const forInstaller = !seesAll(req.user);
     const j = db
       .prepare(
         `SELECT j.id, j.device_name, j.pppoe_user, j.model, j.mac, j.serial, j.ssid, j.template_name, j.completed_at, j.latitude, j.longitude, j.uisp_site,

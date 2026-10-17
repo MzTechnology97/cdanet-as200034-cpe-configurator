@@ -28,7 +28,7 @@ const loginSchema = z.object({
 
 export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
   const limiter = createLoginLimiter();
-  const findUser = ctx.db.prepare('SELECT id, username, password_hash, role, active, token_version, totp_enabled FROM users WHERE username = ?');
+  const findUser = ctx.db.prepare('SELECT id, username, password_hash, role, active, token_version, totp_enabled, full_view FROM users WHERE username = ?');
 
   app.get('/api/health', async () => ({
     ok: true,
@@ -42,7 +42,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     const body = loginSchema.parse(req.body);
     ctx.loginGuard.check(req, body.username);
     const u = findUser.get(body.username) as
-      | { id: number; username: string; password_hash: string; role: Role; active: number; token_version: number; totp_enabled: number }
+      | { id: number; username: string; password_hash: string; role: Role; active: number; token_version: number; totp_enabled: number; full_view: number }
       | undefined;
     const valid = verifyPassword(body.password, u?.password_hash ?? DUMMY_PASSWORD_HASH);
     if (!u || !valid || !u.active) {
@@ -61,7 +61,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
    * 17/10/2026): it lasts the days of Impostazioni server (30), and the console keeps it in the
    * browser beyond its closing (remember).
    */
-  async function session(u: { id: number; username: string; role: Role; token_version: number; totp_enabled?: number }, ip: string, notify = true, mfa = false) {
+  async function session(u: { id: number; username: string; role: Role; token_version: number; totp_enabled?: number; full_view?: number }, ip: string, notify = true, mfa = false) {
     ctx.db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').run(nowIso(), u.id);
     const { token, expiresAt } = await ctx.auth.issueToken(u, { mfa });
     // admins and specialists see everything: a login from a new address is told to the NOC
@@ -70,7 +70,8 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     return {
       token,
       expiresAt,
-      user: { id: u.id, username: u.username, role: u.role },
+      // fullView: a specialist with the full view of an admin (#275), what the app and the console show
+      user: { id: u.id, username: u.username, role: u.role, ...(u.role === 'specialist' && u.full_view ? { fullView: true } : {}) },
       ...(mfaSetupRequired ? { mfaSetupRequired: true } : {}),
       ...(mfa ? { remember: true } : {}),
     };
@@ -106,6 +107,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     totp_enabled: number;
     totp_last_step: number;
     recovery_codes: string;
+    full_view: number;
   };
 
   const checkSecondFactor = (u: TotpRow, code: string) => sharedSecondFactor(ctx.db, ctx.sealer, u, code);
@@ -263,7 +265,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
   const DAY_MS = 24 * 3600 * 1000;
   const deviceExpiry = (createdAt: string, now = Date.now()) =>
     new Date(Math.min(now + DEVICE_IDLE_DAYS * DAY_MS, Date.parse(createdAt) + DEVICE_MAX_DAYS * DAY_MS)).toISOString();
-  const deviceRow = ctx.db.prepare('SELECT d.*, u.username, u.role, u.active, u.token_version tv, u.totp_enabled FROM auth_devices d JOIN users u ON u.id = d.user_id WHERE d.id = ?');
+  const deviceRow = ctx.db.prepare('SELECT d.*, u.username, u.role, u.active, u.token_version tv, u.totp_enabled, u.full_view FROM auth_devices d JOIN users u ON u.id = d.user_id WHERE d.id = ?');
   const sha = (s: string) => createHash('sha256').update(s).digest('hex');
   const trusted = (req: FastifyRequest) => {
     const c = parseClientHeader(req.headers['x-cda-client'] as string | undefined);
@@ -326,6 +328,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
           active: number;
           tv: number;
           totp_enabled: number;
+          full_view: number;
         }
       | undefined;
     const ok = !!d && timingSafeEqual(Buffer.from(sha(b.secret)), Buffer.from(d.secret_hash)) && !!d.active && d.token_version === d.tv;
@@ -342,7 +345,7 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
     const deviceExpiresAt = d.expires_at ? deviceExpiry(d.created_at) : null;
     ctx.db.prepare('UPDATE auth_devices SET last_used_at = ?, expires_at = COALESCE(?, expires_at) WHERE id = ?').run(nowIso(), deviceExpiresAt, b.id);
     recordEvent(ctx.db, d.user_id, 'account.quick_login', d.username, d.name);
-    return { ...(await session({ id: d.user_id, username: d.username, role: d.role, token_version: d.tv, totp_enabled: d.totp_enabled }, req.ip, !d.persistent)), deviceExpiresAt };
+    return { ...(await session({ id: d.user_id, username: d.username, role: d.role, token_version: d.tv, totp_enabled: d.totp_enabled, full_view: d.full_view }, req.ip, !d.persistent)), deviceExpiresAt };
   });
 
   app.get('/api/meta', { preHandler: ctx.auth.requireUser }, async (req) => ({

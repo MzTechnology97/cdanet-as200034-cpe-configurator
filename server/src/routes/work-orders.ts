@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { HttpError, isStaff } from '../auth.ts';
+import { HttpError, seesAll } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { toCsv } from '../domain/csv.ts';
@@ -386,11 +386,14 @@ export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
     const q = z.object({ from: DAY, to: DAY, user: z.coerce.number().int().positive().optional() }).parse(req.query);
     const days = (Date.parse(`${q.to}T00:00:00Z`) - Date.parse(`${q.from}T00:00:00Z`)) / 86_400_000;
     if (!(days >= 0 && days <= 62)) throw new HttpError(400, 'invalid_range');
-    const isAdmin = isStaff(req.user!.role);
-    const who = isAdmin ? (q.user ?? null) : req.user!.id;
+    const isAdmin = seesAll(req.user);
+    // a specialist without the full view (#275): his own orders and those of the members of his
+    // work groups, never the others' (nor the list of the installers)
+    const team = !isAdmin && req.user!.role === 'specialist' ? ctx.workGroups.visibleSpecialistIds(req.user!.id) : null;
+    const ids: number[] | null = isAdmin ? (q.user !== undefined ? [q.user] : null) : team ? (q.user !== undefined && team.includes(q.user) ? [q.user] : team) : [req.user!.id];
     const rows = db
-      .prepare(`${SELECT} WHERE w.day BETWEEN ? AND ? AND w.status <> 'cancelled'${who !== null ? ' AND w.assigned_to = ?' : ''} ORDER BY w.day, w.slot, w.id`)
-      .all(q.from, q.to, ...(who !== null ? [who] : [])) as unknown as Row[];
+      .prepare(`${SELECT} WHERE w.day BETWEEN ? AND ? AND w.status <> 'cancelled'${ids ? ` AND w.assigned_to IN (${ids.map(() => '?').join(',')})` : ''} ORDER BY w.day, w.slot, w.id`)
+      .all(q.from, q.to, ...(ids ?? [])) as unknown as Row[];
     const today = todayRome();
     const installers = isAdmin
       ? (db.prepare("SELECT id, username FROM users WHERE active = 1 AND role = 'installer' ORDER BY username").all() as Array<{ id: number; username: string }>)
@@ -403,7 +406,7 @@ export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
     const b = z.object({ lat: z.number(), lon: z.number(), accuracyM: z.number().min(0).max(100_000).optional() }).strict().parse(req.body);
     if (!isValidLatLon(b.lat, b.lon)) throw new HttpError(400, 'invalid_position');
     const cur = get(id);
-    if (!cur || (cur.assignedTo !== req.user!.id && !isStaff(req.user!.role))) throw new HttpError(404, 'work_order_not_found');
+    if (!cur || (cur.assignedTo !== req.user!.id && !seesAll(req.user))) throw new HttpError(404, 'work_order_not_found');
     const ref = await locate(id);
     if (!ref) return { ok: true, checked: false, distanceM: null, maxM: POSITION_MAX_M, reference: null };
     const d = Math.round(distanceM(ref, { lat: b.lat, lon: b.lon }));

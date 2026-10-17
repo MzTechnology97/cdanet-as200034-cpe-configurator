@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { HttpError, isStaff } from '../auth.ts';
+import { HttpError, seesAll } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { isSuspended } from '../services/crm-sync.ts';
 import { installerPower } from '../services/victron-sync.ts';
@@ -28,7 +28,7 @@ export function networkRoutes(app: FastifyInstance, ctx: AppContext) {
   app.get('/api/network/status', user, async (req) => {
     if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
     const u = req.user!;
-    const keys = isStaff(u.role) ? null : new Set(ctx.outages.assignments(u.id).map((i) => i.key));
+    const keys = seesAll(u) ? null : new Set(ctx.outages.assignments(u.id).map((i) => i.key));
     const [inf, counts] = await Promise.all([ctx.uisp.infrastructure(), ctx.uisp.cpeCounts((d) => isStaleCpe(d, ctx.cfg.staleCpeMonths))]);
     // admins: real positions and the sector already served, for the map of the whole network
     const sectors = keys
@@ -52,7 +52,7 @@ export function networkRoutes(app: FastifyInstance, ctx: AppContext) {
     // Enel outages near a POP/AP (when the user also has Guasti Enel).
     const power = new Set<string>();
     if (ctx.modules.stateFor(u.id).power_outages) {
-      for (const o of ctx.outages.active(ctx.outages.keysFor(u.id, u.role))) for (const i of o.impact) power.add(`${i.type}:${i.id}`);
+      for (const o of ctx.outages.active(ctx.outages.keysFor(u.id, u))) for (const i of o.impact) power.add(`${i.type}:${i.id}`);
     }
 
     // the POPs' batteries (Victron): admins everything, installers only state, charge and discharging

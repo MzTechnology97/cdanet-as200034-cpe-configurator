@@ -1,6 +1,6 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify';
 import { z } from 'zod';
-import { HttpError } from '../auth.ts';
+import { HttpError, seesAll } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
 import { applyForm, formFieldsView, readForm, skeletonFor, templateFacts } from '../domain/airos-form.ts';
@@ -23,6 +23,11 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
   const s = () => ctx.specialist;
   const me = (req: FastifyRequest) => req.user!;
   const log = (req: FastifyRequest, action: string, target: string, detail = '') => recordEvent(ctx.db, me(req).id, action, target, detail);
+  /** The work groups of the author, in the activity log of what the groups share (#275). */
+  const groups = (req: FastifyRequest) => {
+    const names = ctx.workGroups.groupNames(me(req).id);
+    return names.length ? `gruppo ${names.join(', ')}` : '';
+  };
 
   const modelParam = z.object({ model: z.enum(SUPPORTED_MODELS) });
   const idParam = z.object({ id: z.coerce.number().int().positive() });
@@ -43,8 +48,10 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
 
   // ---- the form of the templates ----------------------------------------------------------------
   /** The fields (like the CPE's web interface), the placeholders and how each is filled, the models. */
-  app.get('/api/specialist/template-form', spec, async () => ({
+  app.get('/api/specialist/template-form', spec, async (req) => ({
     fields: formFieldsView({ free: true }),
+    // a copy of a CDA Net template: only with the full view of an admin (#275)
+    canCopyCda: seesAll(req.user),
     placeholders: Object.entries(SPECIALIST_PLACEHOLDERS).map(([name, p]) => ({ name, ...p })),
     models: SUPPORTED_MODELS,
     boardMatch: BOARD_MATCH_SUGGESTIONS,
@@ -100,12 +107,14 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
       .strict()
       .parse(req.body);
     const t = s().templates.create(me(req).id, b);
-    log(req, 'specialist.template_create', `${t.model} · ${t.name}`, t.sha256);
+    log(req, 'specialist.template_create', `${t.model} · ${t.name}`, [t.sha256, groups(req)].filter(Boolean).join(' · '));
     return reply.code(201).send(t);
   });
 
   /** A CDA Net template as the start of one of his own: the copy is his, the original stays as it is. */
   app.post('/api/specialist/templates/copy', spec, async (req, reply) => {
+    // CDA Net's templates are CDA Net's work: only with the full view of an admin (#275)
+    if (!seesAll(req.user)) throw new HttpError(403, 'forbidden');
     const b = z.object({ fromId: z.number().int().positive(), name: templateName }).strict().parse(req.body);
     const src = ctx.templates.get(b.fromId);
     const t = s().templates.create(me(req).id, {
@@ -128,7 +137,7 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
       .parse(req.body);
     const t = s().templates.update(me(req).id, id, b);
     // the keys changed, never the values (the community least of all)
-    log(req, b.template ? 'specialist.template_edit' : 'specialist.template_update', `${t.model} · ${t.name}`, Object.keys(b).join(','));
+    log(req, b.template ? 'specialist.template_edit' : 'specialist.template_update', `${t.model} · ${t.name}`, [Object.keys(b).join(','), t.mine ? '' : `template di ${t.author}`, groups(req)].filter(Boolean).join(' · '));
     return t;
   });
 
@@ -250,7 +259,7 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!versionAtLeast(client.version, ctx.cfg.minAndroidVersion)) throw new HttpError(426, 'client_upgrade_required', { minVersion: ctx.cfg.minAndroidVersion });
     const b = jobBody.parse(req.body);
     const pkg = s().jobs.create(me(req), b, `${client.platform}/${client.version}`);
-    log(req, 'specialist.job', `${b.model} · ${b.mac ?? 'CPE letta alla scrittura'}`, [pkg.summary.template, b.customer, pkg.summary.deviceName].filter(Boolean).join(' · '));
+    log(req, 'specialist.job', `${b.model} · ${b.mac ?? 'CPE letta alla scrittura'}`, [pkg.summary.template, b.customer, pkg.summary.deviceName, groups(req)].filter(Boolean).join(' · '));
     reply.header('Cache-Control', 'no-store');
     return reply.code(201).send(pkg);
   });

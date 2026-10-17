@@ -2,9 +2,9 @@ import { randomUUID } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { SignJWT, jwtVerify } from 'jose';
 import { nowIso, type Db } from './db.ts';
-import { isStaff, type Role } from './domain/roles.ts';
+import { isStaff, seesAll, type Role } from './domain/roles.ts';
 
-export { isStaff };
+export { isStaff, seesAll };
 export type { Role };
 
 export interface AuthUser {
@@ -15,6 +15,8 @@ export interface AuthUser {
   totp?: boolean;
   /** This session was opened with the password and the two-step code (it lasts days, not hours). */
   mfaSession?: boolean;
+  /** A specialist with the full view given by an admin (#275): he sees the work of the others too. */
+  fullView?: boolean;
 }
 
 /** Options of a session: [mfa] opened with the password and the two-step code. */
@@ -138,7 +140,7 @@ export function createAuth(db: Db, secret: Uint8Array, ttlHours: number, mfaDays
     }
   }
 
-  const userStmt = db.prepare('SELECT id, username, role, active, token_version, totp_enabled FROM users WHERE id = ?');
+  const userStmt = db.prepare('SELECT id, username, role, active, token_version, totp_enabled, full_view FROM users WHERE id = ?');
 
   /** Verifies the bearer token and re-checks the account on every request (disable/reset revoke immediately). */
   async function authenticate(req: FastifyRequest): Promise<AuthUser> {
@@ -149,12 +151,14 @@ export function createAuth(db: Db, secret: Uint8Array, ttlHours: number, mfaDays
       const { payload } = await jwtVerify(m[1] as string, secret, { issuer: ISSUER, algorithms: ['HS256'] });
       if (payload.mfa === true || payload.scope !== undefined) throw new Error('not_a_session_token');
       const row = userStmt.get(Number(payload.sub)) as
-        | { id: number; username: string; role: Role; active: number; token_version: number; totp_enabled: number }
+        | { id: number; username: string; role: Role; active: number; token_version: number; totp_enabled: number; full_view: number }
         | undefined;
       if (!row || !row.active || row.token_version !== payload.tv) throw new Error('revoked');
       if (typeof payload.jti === 'string' && revokedStmt.get(payload.jti)) throw new Error('logged_out');
       const mfa = Array.isArray(payload.amr) && payload.amr.includes('otp');
-      return { id: row.id, username: row.username, role: row.role, totp: !!row.totp_enabled, ...(mfa ? { mfaSession: true } : {}) };
+      // read at every request: the permission given or taken by an admin applies at once
+      const fullView = row.role === 'specialist' && !!row.full_view;
+      return { id: row.id, username: row.username, role: row.role, totp: !!row.totp_enabled, ...(mfa ? { mfaSession: true } : {}), ...(fullView ? { fullView: true } : {}) };
     } catch {
       throw new HttpError(401, 'unauthorized');
     }
@@ -169,11 +173,15 @@ export function createAuth(db: Db, secret: Uint8Array, ttlHours: number, mfaDays
     // Policy on: admin pages are closed until the admin enables two-step verification (Il mio account stays open).
     if (!req.user.totp && totpRequiredForAdmins()) throw new HttpError(403, 'mfa_setup_required');
   };
-  /** Admins and specialists: what they see and the tools they use (the specialist sees everything). */
+  /**
+   * The pages with the work and the data of the others (customers, installers, CDA Net's network):
+   * the admins, and a specialist only with the full view an admin gave him (#275). Without it a
+   * specialist is refused here, on the server, whatever the app or the console show.
+   */
   const requireStaff = async (req: FastifyRequest, _reply: FastifyReply) => {
     req.user = await authenticate(req);
-    if (!isStaff(req.user.role)) throw new HttpError(403, 'forbidden');
-    // the same policy as the admins: a specialist sees the customers and the network too
+    if (!seesAll(req.user)) throw new HttpError(403, 'forbidden');
+    // the same policy as the admins: with the full view a specialist sees the customers and the network too
     if (!req.user.totp && totpRequiredForAdmins()) throw new HttpError(403, 'mfa_setup_required');
   };
   /** The Specialist's own section (his templates, connectors and installations). */

@@ -77,7 +77,7 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
   app.get('/api/admin/users', admin, async () =>
     db
       .prepare(
-        `SELECT u.id, u.username, u.role, u.active, u.created_at createdAt, u.last_login_at lastLoginAt, u.totp_enabled totpEnabled,
+        `SELECT u.id, u.username, u.role, u.active, u.created_at createdAt, u.last_login_at lastLoginAt, u.totp_enabled totpEnabled, u.full_view fullView,
                 u.warehouse_site_id warehouseSiteId, u.warehouse_site warehouseSite, u.stock_bypass stockBypass, u.warehouse_min_stock warehouseMinStock,
                 (SELECT count(*) FROM provisioning_jobs j WHERE j.user_id = u.id) jobs
          FROM users u ORDER BY u.role, u.username`,
@@ -88,6 +88,9 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
         active: !!(r as { active: number }).active,
         totpEnabled: !!(r as { totpEnabled: number }).totpEnabled,
         stockBypass: !!(r as { stockBypass: number }).stockBypass,
+        // a specialist sees the work of the others only with this (#275), given by an admin
+        fullView: (r as { role: string }).role === 'specialist' && !!(r as { fullView: number }).fullView,
+        workGroups: (r as { role: string }).role === 'specialist' ? ctx.workGroups.groupNames((r as { id: number }).id) : [],
       })),
   );
 
@@ -119,7 +122,7 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
         .run(b.username, hashPassword(b.password), b.role, nowIso(), b.warehouseSiteId ?? null, site, b.stockBypass ? 1 : 0);
       recordEvent(db, actor(req), 'user.create', b.username, b.role);
       // a new account that sees everything: the NOC hears of it
-      if (b.role === 'specialist') ctx.notify.security(`Nuovo account specialist <b>${escapeHtml(b.username)}</b> creato da ${escapeHtml(req.user!.username)}: vede tutto come un amministratore`);
+      if (b.role === 'specialist') ctx.notify.security(`Nuovo account specialist <b>${escapeHtml(b.username)}</b> creato da ${escapeHtml(req.user!.username)}: vede i suoi dati e quelli dei suoi gruppi di lavoro`);
       return reply.code(201).send({ ok: true, id: Number(r.lastInsertRowid) });
     } catch {
       throw new HttpError(409, 'username_exists');
@@ -136,6 +139,8 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
         resetTotp: z.literal(true).optional(),
         warehouseSiteId: z.number().int().positive().nullable().optional(),
         stockBypass: z.boolean().optional(),
+        /** A specialist sees the work and the data of the others (#275): off by default. */
+        fullView: z.boolean().optional(),
       })
       .strict()
       .refine((x) => Object.keys(x).length > 0, 'empty')
@@ -144,6 +149,8 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
       | { id: number; username: string; role: string }
       | undefined;
     if (!target) throw new HttpError(404, 'user_not_found');
+    // the full view is a permission of the specialists only (#275)
+    if (b.fullView !== undefined && (b.role ?? target.role) !== 'specialist') throw new HttpError(400, 'full_view_specialist_only');
     const demoted = b.active === false || (b.role !== undefined && b.role !== 'admin');
     if (id === req.user?.id && demoted) throw new HttpError(409, 'cannot_demote_current_admin');
     if (demoted && target.role === 'admin') {
@@ -161,9 +168,23 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
       ctx.notify.security(`Verifica in due passaggi di <b>${escapeHtml(target.username)}</b> azzerata da ${escapeHtml(req.user!.username)}`);
     }
     if (b.role === 'admin' && target.role !== 'admin') ctx.notify.security(`<b>${escapeHtml(target.username)}</b> promosso amministratore da ${escapeHtml(req.user!.username)}`);
-    if (b.role === 'specialist' && target.role !== 'specialist') ctx.notify.security(`<b>${escapeHtml(target.username)}</b> reso specialist da ${escapeHtml(req.user!.username)}: vede tutto come un amministratore`);
+    if (b.role === 'specialist' && target.role !== 'specialist') ctx.notify.security(`<b>${escapeHtml(target.username)}</b> reso specialist da ${escapeHtml(req.user!.username)}: vede i suoi dati e quelli dei suoi gruppi di lavoro`);
     if (b.active !== undefined) db.prepare('UPDATE users SET active = ?, token_version = token_version + 1 WHERE id = ?').run(b.active ? 1 : 0, id);
-    if (b.role !== undefined) db.prepare('UPDATE users SET role = ?, token_version = token_version + 1 WHERE id = ?').run(b.role, id);
+    // another role: the full view is given again, if ever, by an admin (#275)
+    if (b.role !== undefined) db.prepare('UPDATE users SET role = ?, full_view = CASE WHEN role = ? THEN full_view ELSE 0 END, token_version = token_version + 1 WHERE id = ?').run(b.role, b.role, id);
+    // the work groups are of the specialists: another role leaves them
+    if (b.role !== undefined && b.role !== 'specialist') db.prepare('DELETE FROM work_group_members WHERE user_id = ?').run(id);
+    if (b.fullView !== undefined) {
+      const was = !!(db.prepare('SELECT full_view f FROM users WHERE id = ?').get(id) as { f: number }).f;
+      db.prepare('UPDATE users SET full_view = ? WHERE id = ?').run(b.fullView ? 1 : 0, id);
+      if (was !== b.fullView) {
+        ctx.notify.security(
+          b.fullView
+            ? `Visibilità piena data allo specialist <b>${escapeHtml(target.username)}</b> da ${escapeHtml(req.user!.username)}: vede interventi, clienti e lavori di tutti`
+            : `Visibilità piena tolta allo specialist <b>${escapeHtml(target.username)}</b> da ${escapeHtml(req.user!.username)}: vede solo i suoi dati e quelli dei suoi gruppi`,
+        );
+      }
+    }
     // warehouse and bypass: no new login needed, the app reads them with «Le mie CPE»
     if (b.warehouseSiteId !== undefined) db.prepare('UPDATE users SET warehouse_site_id = ?, warehouse_site = ? WHERE id = ?').run(b.warehouseSiteId, warehouseName(b.warehouseSiteId), id);
     if (b.stockBypass !== undefined) db.prepare('UPDATE users SET stock_bypass = ? WHERE id = ?').run(b.stockBypass ? 1 : 0, id);

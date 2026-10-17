@@ -868,6 +868,27 @@ const MIGRATIONS: Array<string | CodeMigration> = [
   `
   ALTER TABLE specialist_jobs ADD COLUMN cpe_at_write INTEGER NOT NULL DEFAULT 0;
   `,
+  // the specialist may be a person outside CDA Net (#275, titolare 17/10/2026): he sees his own
+  // data, and the work of others only with the permission an admin gives him (full_view, off by
+  // default). Work groups: specialists sharing templates, installations and calendar; the admins
+  // decide who is in them, the data stay their author's.
+  `
+  ALTER TABLE users ADD COLUMN full_view INTEGER NOT NULL DEFAULT 0;
+  CREATE TABLE work_groups(
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    created_at TEXT NOT NULL,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL
+  );
+  CREATE UNIQUE INDEX work_groups_name ON work_groups(name COLLATE NOCASE);
+  CREATE TABLE work_group_members(
+    group_id INTEGER NOT NULL REFERENCES work_groups(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY(group_id, user_id)
+  );
+  CREATE INDEX work_group_members_user ON work_group_members(user_id);
+  `,
 ];
 
 export function openDatabase(path: string): Db {

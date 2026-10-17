@@ -53,6 +53,8 @@ import { feasibilityRoutes } from './routes/feasibility.ts';
 import { savedCheckRoutes } from './routes/saved-checks.ts';
 import { specialistRoutes } from './routes/specialist.ts';
 import { createSpecialist } from './services/specialist.ts';
+import { createWorkGroups } from './services/work-groups.ts';
+import { workGroupRoutes } from './routes/work-groups.ts';
 import { mcpRoutes } from './routes/mcp.ts';
 import { banRoutes } from './routes/bans.ts';
 import { createLoginGuard } from './services/login-guard.ts';
@@ -122,6 +124,7 @@ export async function buildApp(
   const sealer = createSealer(cfg.masterKey);
   // values set from the console override .env before anything reads them
   const serverSettings = createServerSettings(db, cfg, sealer);
+  const workGroups = createWorkGroups(db);
   serverSettings.applyAll();
   const templates = createTemplates(db, sealer);
   const provisioning = createProvisioning(db, cfg, sealer, templates);
@@ -182,7 +185,8 @@ export async function buildApp(
     anncsu: createAnncsu({ dir: join(dirname(cfg.terrainDir), 'anncsu'), ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
     notify: undefined as unknown as Notifier,
     loginGuard: createLoginGuard(db, { ignore: cfg.loginBanIgnore, notify: (html) => ctx.notify.security(html) }),
-    specialist: createSpecialist(db, cfg, sealer, { fetchImpl: opts.fetchImpl }),
+    specialist: createSpecialist(db, cfg, sealer, { fetchImpl: opts.fetchImpl, workGroups }),
+    workGroups,
     version,
   };
   ctx.crmSync = createCrmSync(db, ctx.crm);
@@ -358,6 +362,7 @@ export async function buildApp(
   feasibilityRoutes(app, ctx);
   savedCheckRoutes(app, ctx);
   specialistRoutes(app, ctx);
+  workGroupRoutes(app, ctx);
   mcpRoutes(app, ctx);
   banRoutes(app, ctx);
 

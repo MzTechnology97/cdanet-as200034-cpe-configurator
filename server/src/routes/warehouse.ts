@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { HttpError, isStaff } from '../auth.ts';
+import { HttpError, seesAll } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
 import { parseMac } from '../domain/policy.ts';
@@ -122,7 +122,7 @@ export function warehouseRoutes(app: FastifyInstance, ctx: AppContext) {
       | { id: number; mac: string; owner: number }
       | undefined;
     if (!r) throw new HttpError(404, 'rma_not_found');
-    if (!isStaff(req.user!.role) && r.owner !== req.user!.id) throw new HttpError(403, 'forbidden');
+    if (!seesAll(req.user) && r.owner !== req.user!.id) throw new HttpError(403, 'forbidden');
     db.prepare('UPDATE cpe_rma SET condition = ?, note = ?, updated_at = ?, updated_by = ? WHERE id = ?').run(b.condition, b.note, new Date().toISOString(), req.user!.id, r.id);
     recordEvent(db, req.user!.id, 'rma.condition', r.mac, `${b.condition}${b.note ? ` · ${b.note}` : ''}`);
     return { ok: true, id: r.id };
@@ -165,10 +165,11 @@ export type StockCheck = { result: 'ok' | 'not_linked' | 'not_loaded' | 'other_w
  * account's bypass. Admins are never stopped.
  */
 export function stockCheck(ctx: AppContext, userId: number, mac: string): StockCheck & { allowed: boolean } {
-  const u = ctx.db.prepare('SELECT role, warehouse_site_id siteId, stock_bypass bypass FROM users WHERE id = ?').get(userId) as
-    | { role: string; siteId: number | null; bypass: number }
+  const u = ctx.db.prepare('SELECT role, warehouse_site_id siteId, stock_bypass bypass, full_view fullView FROM users WHERE id = ?').get(userId) as
+    | { role: string; siteId: number | null; bypass: number; fullView: number }
     | undefined;
-  const bypass = !u || isStaff(u.role) || !!u.bypass;
+  // a specialist without the full view (#275) is held like an installer
+  const bypass = !u || seesAll({ role: u.role, fullView: !!u.fullView }) || !!u.bypass;
   const done = (result: StockCheck['result']) => ({ result, bypass, allowed: result === 'ok' || result === 'not_linked' || result === 'not_loaded' || bypass });
   if (!u || u.siteId === null) return done('not_linked');
   if (!ctx.warehouse.loaded()) return done('not_loaded');

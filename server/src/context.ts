@@ -35,6 +35,7 @@ import type { Live } from './services/live.ts';
 import type { Push } from './services/push.ts';
 import type { ServerSettings } from './services/server-settings.ts';
 import type { Specialist } from './services/specialist.ts';
+import type { WorkGroups } from './services/work-groups.ts';
 
 export interface AppContext {
   cfg: Config;
@@ -94,5 +95,7 @@ export interface AppContext {
   loginGuard: LoginGuard;
   /** The specialist's own section: his templates, the connectors of his companies, his installations. */
   specialist: Specialist;
+  /** Work groups of the specialists (#275): who shares templates, installations and calendar. */
+  workGroups: WorkGroups;
   version: string;
 }

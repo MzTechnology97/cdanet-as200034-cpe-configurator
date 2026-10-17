@@ -39,14 +39,24 @@ async function setup() {
 }
 
 describe('Specialist', () => {
-  it('sees everything like an admin, the management stays with the admins', async () => {
+  it('sees his own; everything like an admin only with the full view an admin gives him; the management stays with the admins', async () => {
     const { app, call, A, S, I, spec, db } = await setup();
     assert.equal(spec.user.role, 'specialist');
-    // what he sees and the tools he uses
-    for (const url of ['/api/admin/status', '/api/admin/events', '/api/admin/profiles', '/api/admin/template-form', '/api/admin/stats', '/api/admin/work-orders', '/api/admin/uisp/status', '/api/admin/uisp/sites', '/api/admin/platform/health']) {
+    assert.equal((spec.user as { fullView?: boolean }).fullView, undefined, 'off by default (#275)');
+    // the pages with the work and the data of the others: refused without the full view (#275)
+    const staffPages = ['/api/admin/status', '/api/admin/events', '/api/admin/profiles', '/api/admin/template-form', '/api/admin/stats', '/api/admin/work-orders', '/api/admin/uisp/status', '/api/admin/uisp/sites', '/api/admin/platform/health'];
+    for (const url of staffPages) {
       const r = await call('GET', url, S);
-      assert.equal(r.statusCode, 200, `${url}: ${r.body}`);
+      assert.equal(r.statusCode, 403, `${url} without the full view: ${r.statusCode} ${r.body}`);
     }
+    // given by an admin (never by himself): then he sees them like an admin
+    assert.equal((await call('PATCH', `/api/admin/users/${spec.user.id}`, S, { fullView: true })).statusCode, 403);
+    assert.equal((await call('PATCH', `/api/admin/users/${spec.user.id}`, A, { fullView: true })).statusCode, 200);
+    for (const url of staffPages) {
+      const r = await call('GET', url, S);
+      assert.equal(r.statusCode, 200, `${url} with the full view: ${r.body}`);
+    }
+    assert.equal((await call('GET', '/api/auth/me', S)).json().user.fullView, true);
     // the platform and CDA Net's decisions: admins only
     for (const [method, url, body] of [
       ['GET', '/api/admin/users', undefined],
@@ -102,9 +112,15 @@ describe('Specialist', () => {
     // the same template text refused by CDA Net's archive (VLAN): his archive is apart
     assert.equal((await call('POST', '/api/admin/profiles/LiteBeam%205AC/templates', A, { name: 'Con VLAN', template: text, boardMatch: 'board\\.name=LiteBeam' })).json().error, 'profile_contains_vlan');
 
-    // a CDA Net template as a start: the copy is his, without CDA Net's secrets
+    // a CDA Net template as a start: the copy is his, without CDA Net's secrets; CDA Net's
+    // templates are CDA Net's work, so only with the full view of an admin (#275)
     const cda = await call('POST', '/api/admin/profiles/LiteBeam%205AC/templates', A, { name: 'Standard', template: SAMPLE_TEMPLATE, boardMatch: 'board\\.name=LiteBeam', secrets: { snmpCommunity: 'community-cda-net' } });
     assert.equal(cda.statusCode, 201, cda.body);
+    assert.equal((await call('POST', '/api/specialist/templates/copy', S, { fromId: cda.json().id, name: 'Da CDA Net' })).statusCode, 403);
+    assert.equal(form.canCopyCda, false);
+    const specId = (db.prepare('SELECT id FROM users WHERE username = ?').get(SPEC.username) as { id: number }).id;
+    assert.equal((await call('PATCH', `/api/admin/users/${specId}`, A, { fullView: true })).statusCode, 200);
+    assert.equal((await call('GET', '/api/specialist/template-form', S)).json().canCopyCda, true);
     const copy = await call('POST', '/api/specialist/templates/copy', S, { fromId: cda.json().id, name: 'Da CDA Net' });
     assert.equal(copy.statusCode, 201, copy.body);
     assert.equal(copy.json().secretsSet.snmpCommunity, false);

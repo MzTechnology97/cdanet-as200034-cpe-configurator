@@ -122,6 +122,7 @@ export function notificationRoutes(app: FastifyInstance, ctx: AppContext) {
       .object({ screen: z.string().trim().max(80).default(''), at: z.string().datetime().optional(), kind: z.enum(['screenshot', 'recording']).default('screenshot') })
       .strict()
       .parse(req.body);
+    // the specialist's own app is not blocked (#275 is about the data of the others, not screenshots)
     if (isStaff(req.user!.role) || ctx.modules.stateFor(req.user!.id).screenshots) return { ok: true, notified: false };
     const recording = b.kind === 'recording';
     // sent later by the phone's queue (no network at the time): the notice says when it happened

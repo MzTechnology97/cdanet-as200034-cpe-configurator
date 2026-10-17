@@ -11,6 +11,7 @@ import { isPrivateIPv4, isPrivateIPv6 } from '../net/ip.ts';
 import { insecureFetch } from './connectors.ts';
 import { validateBoardMatch } from './templates.ts';
 import { createUisp, type Uisp, type UispDevice } from './uisp.ts';
+import type { WorkGroups } from './work-groups.ts';
 
 /**
  * The Specialist's section (owner, 17/10/2026): he works on his own for other companies, with CPEs
@@ -81,6 +82,8 @@ export interface JobResultInput {
 interface TemplateRow {
   id: number;
   user_id: number;
+  /** The author's username (the templates of a work group are shared). */
+  author?: string | null;
   model: CpeModel;
   name: string;
   board_match: string;
@@ -170,7 +173,14 @@ const clean = (text: string) =>
     .replace(/[\r\n\t]+/g, ' ')
     .slice(0, 500);
 
-export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fetchImpl?: typeof fetch | undefined } = {}) {
+export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fetchImpl?: typeof fetch | undefined; workGroups?: WorkGroups | undefined } = {}) {
+  /**
+   * The specialists whose templates and installations [userId] sees: himself and the members of
+   * his work groups (#275). Reading only: the data stay their author's, and so do the changes
+   * that are not shared (deleting, the outcome, the acceptance test, the company's UISP).
+   */
+  const visible = (userId: number): number[] => opts.workGroups?.visibleSpecialistIds(userId) ?? [userId];
+  const marks = (ids: number[]) => ids.map(() => '?').join(',');
   const tx = <T>(fn: () => T): T => {
     db.exec('BEGIN');
     try {
@@ -185,12 +195,17 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
 
   // ---- templates -------------------------------------------------------------------------------
   const templateSecrets = (r: TemplateRow): { snmpCommunity?: string } => (r.secrets_ciphertext ? json(sealer.open(r.secrets_ciphertext), {}) : {});
-  const templateMeta = (r: TemplateRow) => {
+  /** [viewer]: who asks; the secrets of a template are its author's only (another member types his). */
+  const templateMeta = (r: TemplateRow, viewer?: number) => {
     const text = sealer.open(r.template_ciphertext);
     const report = inspectFreeTemplate(text);
-    const secrets = templateSecrets(r);
+    const mine = viewer === undefined || r.user_id === viewer;
+    const secrets = mine ? templateSecrets(r) : {};
     return {
       id: r.id,
+      // the author of a template shared in a work group, and whether it is the viewer's own
+      author: r.author ?? '',
+      mine,
       model: r.model,
       name: r.name,
       boardMatch: r.board_match,
@@ -205,9 +220,16 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
       updatedAt: r.updated_at,
     };
   };
-  const TEMPLATE_SELECT = 'SELECT t.*, (SELECT count(*) FROM specialist_jobs j WHERE j.template_id = t.id) jobs FROM specialist_templates t';
+  const TEMPLATE_SELECT = 'SELECT t.*, au.username author, (SELECT count(*) FROM specialist_jobs j WHERE j.template_id = t.id) jobs FROM specialist_templates t LEFT JOIN users au ON au.id = t.user_id';
   const templateRow = (userId: number, id: number) => {
     const r = db.prepare(`${TEMPLATE_SELECT} WHERE t.id = ? AND t.user_id = ?`).get(id, userId) as TemplateRow | undefined;
+    if (!r) throw new HttpError(404, 'template_not_found');
+    return r;
+  };
+  /** A template of his or of a member of his work groups (to see, use and change it). */
+  const sharedTemplateRow = (userId: number, id: number) => {
+    const ids = visible(userId);
+    const r = db.prepare(`${TEMPLATE_SELECT} WHERE t.id = ? AND t.user_id IN (${marks(ids)})`).get(id, ...ids) as TemplateRow | undefined;
     if (!r) throw new HttpError(404, 'template_not_found');
     return r;
   };
@@ -226,12 +248,15 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
 
   const templates = {
     list(userId: number) {
-      return (db.prepare(`${TEMPLATE_SELECT} WHERE t.user_id = ? ORDER BY t.model, t.name COLLATE NOCASE`).all(userId) as unknown as TemplateRow[]).map(templateMeta);
+      const ids = visible(userId);
+      return (db.prepare(`${TEMPLATE_SELECT} WHERE t.user_id IN (${marks(ids)}) ORDER BY t.model, t.name COLLATE NOCASE`).all(...ids) as unknown as TemplateRow[]).map((r) =>
+        templateMeta(r, userId),
+      );
     },
 
     get(userId: number, id: number) {
-      const r = templateRow(userId, id);
-      return { ...templateMeta(r), template: sealer.open(r.template_ciphertext) };
+      const r = sharedTemplateRow(userId, id);
+      return { ...templateMeta(r, userId), template: sealer.open(r.template_ciphertext) };
     },
 
     create(userId: number, input: SpecialistTemplateInput & { model: CpeModel; name: string; template: string }) {
@@ -251,8 +276,10 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
     },
 
     update(userId: number, id: number, input: SpecialistTemplateInput) {
-      const cur = templateRow(userId, id);
-      if (input.name !== undefined && nameTaken(userId, cur.model, input.name, id)) throw new HttpError(409, 'template_name_exists');
+      // a member of the work group changes the template too; its secrets stay its author's
+      const cur = sharedTemplateRow(userId, id);
+      if (cur.user_id !== userId && input.snmpCommunity !== undefined && input.snmpCommunity !== '') throw new HttpError(403, 'template_secrets_author_only');
+      if (input.name !== undefined && nameTaken(cur.user_id, cur.model, input.name, id)) throw new HttpError(409, 'template_name_exists');
       if (input.boardMatch !== undefined) validateBoardMatch(input.boardMatch);
       const checked = input.template !== undefined ? checkedText(input.template) : null;
       let secretsCipher = cur.secrets_ciphertext;
@@ -269,7 +296,7 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
         secretsCipher,
         nowIso(),
         id,
-        userId,
+        cur.user_id,
       );
       return { ...templates.get(userId, id), report: checked?.report ?? null };
     },
@@ -423,6 +450,8 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
   };
   const jobView = (r: JobRow) => ({
     id: r.id,
+    // who made it (the installations of a work group are shared, read only)
+    author: r.username,
     createdAt: r.created_at,
     completedAt: r.completed_at,
     status: r.status,
@@ -453,14 +482,15 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
   const isPrivateHost = (h: string) => isPrivateIPv4(h) || isPrivateIPv6(h);
 
   /** The values of the placeholders of a job: typed ones, then those the server fills in. */
-  function jobValues(input: JobInput, tpl: TemplateRow, uispKey: string | null) {
+  function jobValues(input: JobInput, tpl: TemplateRow, uispKey: string | null, mine = true) {
     const typed = Object.fromEntries(Object.entries(input.values).map(([k, v]) => [k, v.trim() === '' ? '' : v]));
     for (const [k, v] of Object.entries(typed)) {
       if (v.length > 4096 || /[\r\n\0]/.test(v)) throw new HttpError(400, `invalid_value_${k}`);
     }
     if (typed.WPA2_PSK && !isWpa2Key(typed.WPA2_PSK)) throw new HttpError(400, 'invalid_value_WPA2_PSK');
     if (typed.SSID && !isSsid(typed.SSID)) throw new HttpError(400, 'invalid_value_SSID');
-    const secrets = templateSecrets(tpl);
+    // the template of another member of the work group: its secrets are not his (he types them)
+    const secrets = mine ? templateSecrets(tpl) : {};
     const name = (typed.DEVICE_NAME ?? '').trim();
     return {
       ...typed,
@@ -479,10 +509,11 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
   const jobs = {
     /** What the specialist is asked for a template (and what the server fills in). */
     form(userId: number, templateId: number, connectorId: number | null) {
-      const tpl = templateRow(userId, templateId);
+      const tpl = sharedTemplateRow(userId, templateId);
       const report = inspectFreeTemplate(sealer.open(tpl.template_ciphertext));
       const uispKey = connectorId ? !!connectorSecrets(connectorRow(userId, connectorId)).uispKey : false;
-      return { placeholders: report.placeholders, asked: askedFor(report.placeholders, { snmpCommunity: !!templateSecrets(tpl).snmpCommunity, uispKey }) };
+      const mine = tpl.user_id === userId;
+      return { placeholders: report.placeholders, asked: askedFor(report.placeholders, { snmpCommunity: mine && !!templateSecrets(tpl).snmpCommunity, uispKey }) };
     },
 
     /**
@@ -491,14 +522,15 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
      * keeps no secret.
      */
     create(user: { id: number; username: string }, input: JobInput, client: string) {
-      const tpl = templateRow(user.id, input.templateId);
+      // his own template or one of his work group (#275); the connector is always his own
+      const tpl = sharedTemplateRow(user.id, input.templateId);
       if (tpl.model !== input.model) throw new HttpError(409, 'template_model_mismatch', { template: tpl.model, cpe: input.model });
       const conn = input.connectorId ? connectorRow(user.id, input.connectorId) : null;
       const uispKey = conn ? (connectorSecrets(conn).uispKey ?? null) : null;
       const host = input.host?.trim() || cfg.network.factoryIp;
       if (!isPrivateHost(host)) throw new HttpError(400, 'target_not_private');
       const text0 = sealer.open(tpl.template_ciphertext);
-      const values = jobValues(input, tpl, uispKey);
+      const values = jobValues(input, tpl, uispKey, tpl.user_id === user.id);
       const extra: Array<[string, string]> = input.location
         ? [
             ['system.latitude', input.location.latitude.toFixed(6)],
@@ -616,16 +648,22 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
       return jobView(jobRow(userId, id));
     },
 
+    /** One installation, his or of a member of his work groups (reading only). */
     get(userId: number, id: string) {
-      return jobView(jobRow(userId, id));
+      const ids = visible(userId);
+      const r = db.prepare(`${JOB_SELECT} WHERE j.id = ? AND j.user_id IN (${marks(ids)})`).get(id, ...ids) as JobRow | undefined;
+      if (!r) throw new HttpError(404, 'job_not_found');
+      return jobView(r);
     },
 
     list(
       userId: number,
       f: { q?: string | undefined; status?: string | undefined; connectorId?: number | undefined; from?: string | undefined; to?: string | undefined; limit: number },
     ) {
-      const where = ['j.user_id = ?'];
-      const params: Array<string | number> = [userId];
+      // his installations and those of the members of his work groups (#275)
+      const ids = visible(userId);
+      const where = [`j.user_id IN (${marks(ids)})`];
+      const params: Array<string | number> = [...ids];
       if (f.status === 'to_authorize') where.push("j.status = 'success' AND j.connector_id IS NOT NULL AND j.uisp_authorized_at IS NULL");
       else if (f.status === 'no_acceptance') where.push("j.status = 'success' AND j.acceptance_json IS NULL");
       else if (f.status) {
