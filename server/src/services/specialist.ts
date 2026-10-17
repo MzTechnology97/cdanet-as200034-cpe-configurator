@@ -516,8 +516,9 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
       }
       const id = randomUUID();
       const created = new Date();
-      // a professional on a roof: at least an hour (firmware updates included)
-      const expiresAt = new Date(created.getTime() + Math.max(cfg.jobTtlMinutes, 60) * 60_000).toISOString();
+      // prepared before going to the CPE and written later (titolare, 17/10/2026): the hours of
+      // Impostazioni server, 24 by default; at least one (firmware updates included)
+      const expiresAt = new Date(created.getTime() + Math.max(cfg.specialistJobTtlHours, 1) * 3600_000).toISOString();
       const sha = sha256Hex(text);
       const facts = templateFacts(text);
       const deviceName = values.DEVICE_NAME ?? '';

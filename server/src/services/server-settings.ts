@@ -113,6 +113,11 @@ export const SERVER_SETTINGS: Def[] = [
     get: (c) => c.jobTtlMinutes, set: (c, v) => (c.jobTtlMinutes = v as number),
   },
   {
+    key: 'specialistJobTtlHours', env: 'SPECIALIST_JOB_TTL_HOURS', group: 'Provisioning e app', label: 'Validità di una configurazione Specialist (ore)', kind: 'int', min: 1, max: 72,
+    help: 'Lo Specialist prepara la configurazione prima di collegarsi alla CPE e la scrive dopo: per quanto tempo resta valida sul suo telefono, cifrata, con la chiave Wi-Fi e le password di quella CPE. Vale per le configurazioni preparate da quel momento.',
+    get: (c) => c.specialistJobTtlHours, set: (c, v) => (c.specialistJobTtlHours = (v as number | undefined) ?? 24),
+  },
+  {
     key: 'minAndroidVersion', env: 'MIN_ANDROID_VERSION', group: 'Provisioning e app', label: 'Versione minima dell’app Android', kind: 'version',
     help: 'Le app più vecchie devono aggiornarsi prima di fare provisioning o usare gli strumenti di campo.',
     get: (c) => c.minAndroidVersion, set: (c, v) => (c.minAndroidVersion = (v as string | undefined) ?? '1.0.0'),

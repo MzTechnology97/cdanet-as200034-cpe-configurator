@@ -430,6 +430,12 @@ private fun ConfigCard(c: AppContainer, s: SpecState, f: SpecForm, onTemplates: 
     }
 }
 
+/** The time left of a prepared configuration (a day by default): minutes, or hours and minutes. */
+private fun leftText(left: Duration): String {
+    val min = left.toMinutes()
+    return if (min < 60) "$min min" else "${min / 60} h ${min % 60} min"
+}
+
 /**
  * The write: the configuration prepared goes into the CPE (no Internet needed any more). One
  * prepared before connecting to the CPE goes on the CPE read in the card above.
@@ -456,7 +462,7 @@ private fun WriteCard(c: AppContainer, s: SpecState, f: SpecForm, title: String)
         if (pkg.summary.template.isNotBlank()) KeyValue("Template", pkg.summary.template)
         if (pkg.summary.ssid.isNotBlank()) KeyValue("SSID", pkg.summary.ssid)
         if (pkg.summary.deviceName.isNotBlank()) KeyValue("Nome", pkg.summary.deviceName)
-        KeyValue("Valida ancora", if (left.isNegative) "SCADUTA" else "${left.toMinutes()} min")
+        KeyValue("Valida ancora", if (left.isNegative) "SCADUTA" else leftText(left))
         Text(
             if (pkg.needsCpe) {
                 "Internet non serve più: l'app entra nella CPE letta, verifica modello, board e MAC, scrive la configurazione, la salva e la riavvia."

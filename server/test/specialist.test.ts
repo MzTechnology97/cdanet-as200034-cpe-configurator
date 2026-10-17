@@ -231,7 +231,7 @@ describe('Specialist', () => {
 
   // first the configuration, then the CPE (titolare, 17/10/2026): no management Wi-Fi to prepare it
   it('a configuration prepared before connecting to the CPE: MAC and serial come with the write', async () => {
-    const { app, db, call, S } = await setup();
+    const { app, db, call, A, S } = await setup();
     const draft = (await call('POST', '/api/specialist/form/LiteBeam%205AC/read', S, {})).json();
     const created = await call('POST', '/api/specialist/templates', S, { model: 'LiteBeam 5AC', name: 'Prima la configurazione', template: draft.template });
     assert.equal(created.statusCode, 201, created.body);
@@ -250,6 +250,9 @@ describe('Specialist', () => {
     assert.equal(pkg.checks.mac, '');
     assert.equal(pkg.summary.mac, '');
     assert.equal(pkg.target.sshPort, 22);
+    // valid for a day by default: prepared at the office, written on the roof
+    const hours = (iso: string) => (Date.parse(iso) - Date.now()) / 3_600_000;
+    assert.ok(hours(pkg.expiresAt) > 23.9 && hours(pkg.expiresAt) <= 24.01, pkg.expiresAt);
     const job = (id: string) => call('GET', `/api/specialist/jobs/${id}`, S).then((r) => r.json());
     const prepared = await job(pkg.jobId);
     assert.deepEqual([prepared.mac, prepared.cpeAtWrite, prepared.status], ['', true, 'prepared']);
@@ -271,6 +274,9 @@ describe('Specialist', () => {
     const row = JSON.stringify(db.prepare('SELECT * FROM specialist_jobs WHERE id = ?').get(pkg.jobId));
     for (const secret of [WIFI, CPE_PASSWORD, 'chiave-y']) assert.ok(!row.includes(secret), `${secret} not stored`);
 
+    // the hours of Impostazioni server, for the next configurations
+    assert.equal((await call('PUT', '/api/admin/server-settings', A, { values: { specialistJobTtlHours: 2 } })).statusCode, 200);
+
     // a template with the serial of the CPE in it: the CPE is read first
     const text = draft.template.replace('resolv.host.1.name=${DEVICE_NAME}', 'resolv.host.1.name=CPE-${EXPECTED_SERIAL}');
     assert.notEqual(text, draft.template);
@@ -281,6 +287,7 @@ describe('Specialist', () => {
     const read = await call('POST', '/api/specialist/jobs', { ...S, ...APP }, { ...again, mac: 'AA:BB:CC:00:00:04', serial: 'SER-C', host: '192.168.1.20' });
     assert.equal(read.statusCode, 201, read.body);
     assert.match(read.json().config.text, /^resolv\.host\.1\.name=CPE-SER-C$/m);
+    assert.ok(hours(read.json().expiresAt) > 1.9 && hours(read.json().expiresAt) <= 2.01, read.json().expiresAt);
     assert.equal((await job(read.json().jobId)).cpeAtWrite, false);
     // prepared with the CPE read: the outcome needs nothing more
     assert.equal((await call('POST', `/api/specialist/jobs/${read.json().jobId}/result`, S, { result: 'success' })).statusCode, 200);
