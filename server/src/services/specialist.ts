@@ -51,7 +51,11 @@ export interface JobInput {
   connectorId?: number | null | undefined;
   company?: string | undefined;
   model: CpeModel;
-  mac: string;
+  /**
+   * Absent (with serial, firmware and host): prepared before connecting to the CPE (titolare,
+   * 17/10/2026); the app reads them from the CPE at the write and they come with the outcome.
+   */
+  mac?: string | undefined;
   serial?: string | undefined;
   firmware?: string | undefined;
   host?: string | undefined;
@@ -70,6 +74,8 @@ export interface JobResultInput {
   error: string;
   detected: { firmware?: string | undefined; board?: string | undefined; mac?: string | undefined };
   completedAt?: string | undefined;
+  /** The CPE written, read by the app, for a configuration prepared before connecting to it. */
+  cpe?: { mac: string; serial?: string | undefined } | undefined;
 }
 
 interface TemplateRow {
@@ -141,6 +147,8 @@ interface JobRow {
   uisp_site: string;
   uisp_authorized_at: string | null;
   uisp_error: string;
+  /** Prepared before connecting to the CPE: MAC and serial come with the outcome. */
+  cpe_at_write: number;
   connector_name?: string | null;
 }
 
@@ -424,6 +432,8 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
     templateId: r.template_id,
     mac: r.mac,
     serial: r.serial,
+    /** Prepared before connecting to the CPE: MAC and serial are the ones read at the write. */
+    cpeAtWrite: !!r.cpe_at_write,
     firmware: r.firmware,
     deviceName: r.device_name,
     ssid: r.ssid,
@@ -458,8 +468,8 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
       CPE_USERNAME: input.cpe.username,
       CPE_PASSWORD: input.cpe.password,
       CPE_PASSWORD_HASH: md5Crypt(input.cpe.password),
-      EXPECTED_MAC: input.mac,
-      EXPECTED_SERIAL: input.serial || input.mac.replace(/:/g, ''),
+      // prepared before connecting to the CPE: not known yet (a template using them needs the CPE first)
+      ...(input.mac ? { EXPECTED_MAC: input.mac, EXPECTED_SERIAL: input.serial || input.mac.replace(/:/g, '') } : {}),
       SNMP_LOCATION: typed.SNMP_LOCATION || name,
       SNMP_COMMUNITY: typed.SNMP_COMMUNITY || secrets.snmpCommunity || '',
       UISP_ENROLLMENT: typed.UISP_ENROLLMENT || uispKey || '',
@@ -500,6 +510,7 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
         text = renderFreeCfg(text0, values, extra);
       } catch (e) {
         const code = (e as Error).message;
+        if ((code === 'missing_value_EXPECTED_MAC' || code === 'missing_value_EXPECTED_SERIAL') && !input.mac) throw new HttpError(409, 'template_needs_cpe');
         if (code.startsWith('missing_value_')) throw new HttpError(400, code, { placeholder: code.slice('missing_value_'.length) });
         throw new HttpError(409, code.startsWith('invalid_value_') || code.startsWith('profile_') || code.startsWith('template_') ? code : 'profile_render_failed');
       }
@@ -512,10 +523,11 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
       const deviceName = values.DEVICE_NAME ?? '';
       const ssid = values.SSID ?? '';
       const pppoeUser = values.PPPOE_USER ?? '';
+      const mac = input.mac ?? '';
       db.prepare(
         `INSERT INTO specialist_jobs(id, user_id, username, created_at, expires_at, client, connector_id, company, template_id, template_name, model, mac, serial, firmware,
-           device_name, ssid, pppoe_user, customer, notes, latitude, longitude, location_source, config_sha256)
-         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           device_name, ssid, pppoe_user, customer, notes, latitude, longitude, location_source, config_sha256, cpe_at_write)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       ).run(
         id,
         user.id,
@@ -528,7 +540,7 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
         tpl.id,
         tpl.name,
         input.model,
-        input.mac,
+        mac,
         values.EXPECTED_SERIAL ?? '',
         (input.firmware ?? '').slice(0, 80),
         deviceName.slice(0, 120),
@@ -540,6 +552,7 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
         input.location?.longitude ?? null,
         input.location?.source ?? '',
         sha,
+        mac ? 0 : 1,
       );
       return {
         jobId: id,
@@ -547,10 +560,11 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
         // the port of the CPE as it is now (factory: 22, else what the discovery read), not the template's
         target: { host, sshPort: input.sshPort ?? 22 },
         credentials: { username: input.cpe.username, password: input.cpe.password },
-        // an expert: after failed updates he may write on the firmware the CPE has
-        checks: { firmware: TARGET_FIRMWARE, boardMatch: tpl.board_match, mac: input.mac, firmwareBypass: true },
+        // an expert: after failed updates he may write on the firmware the CPE has;
+        // MAC empty: prepared before connecting to the CPE, the app checks the one it reads
+        checks: { firmware: TARGET_FIRMWARE, boardMatch: tpl.board_match, mac, firmwareBypass: true },
         config: { path: '/tmp/system.cfg', text, sha256: sha },
-        summary: { model: input.model, template: tpl.name, ssid, pppoeUser, deviceName, mac: input.mac, serial: values.EXPECTED_SERIAL ?? '' },
+        summary: { model: input.model, template: tpl.name, ssid, pppoeUser, deviceName, mac, serial: values.EXPECTED_SERIAL ?? '' },
         afterApply: { lanIp: facts.lanIp ?? host, httpPort: facts.httpPort, httpsPort: facts.httpsPort },
         alternatives: [],
       };
@@ -565,13 +579,22 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
       }
       const retry = job.status === 'failed';
       if (retry && input.completedAt && job.completed_at === input.completedAt) return { ok: true, duplicate: true };
-      db.prepare(`UPDATE specialist_jobs SET status = ?, completed_at = ?, stages = ?, detected = ?, error = ?, firmware = COALESCE(NULLIF(?, ''), firmware), attempts = attempts + 1 WHERE id = ?`).run(
+      // prepared before connecting to the CPE: the one the app read at the write is the job's (a
+      // failed write may be tried again on another one, until a success)
+      const site = job.cpe_at_write ? input.cpe : undefined;
+      if (job.cpe_at_write && input.result === 'success' && !site) throw new HttpError(400, 'cpe_mac_required');
+      db.prepare(
+        `UPDATE specialist_jobs SET status = ?, completed_at = ?, stages = ?, detected = ?, error = ?, firmware = COALESCE(NULLIF(?, ''), firmware),
+           mac = COALESCE(?, mac), serial = COALESCE(?, serial), attempts = attempts + 1 WHERE id = ?`,
+      ).run(
         input.result,
         input.completedAt ?? nowIso(),
         JSON.stringify(input.stages.map((s) => clean(s).slice(0, 200)).slice(0, 40)),
         JSON.stringify(input.detected),
         clean(input.error),
         (input.detected.firmware ?? '').slice(0, 80),
+        site?.mac ?? null,
+        site ? (site.serial || site.mac.replace(/:/g, '')).slice(0, 128) : null,
         id,
       );
       return { ok: true, duplicate: false, ...(retry ? { retry: true } : {}) };
@@ -657,6 +680,8 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
     async uispDevice(userId: number, id: string): Promise<{ job: JobRow; uisp: Uisp; connector: string; device: UispDevice | null }> {
       const job = jobRow(userId, id);
       if (!job.connector_id) throw new HttpError(409, 'job_without_connector');
+      // prepared before connecting to the CPE and not written yet: its MAC comes with the outcome
+      if (!job.mac) throw new HttpError(409, 'job_not_completed');
       const { client, name } = connectors.client(userId, job.connector_id);
       if (job.uisp_device_id) {
         const d = await client.device(job.uisp_device_id);

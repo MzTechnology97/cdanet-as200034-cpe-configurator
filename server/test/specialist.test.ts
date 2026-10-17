@@ -228,4 +228,62 @@ describe('Specialist', () => {
     for (const secret of [WIFI, PPPOE_PASSWORD, CPE_PASSWORD, 'tok-secret']) assert.ok(!events.includes(secret));
     await app.close();
   });
+
+  // first the configuration, then the CPE (titolare, 17/10/2026): no management Wi-Fi to prepare it
+  it('a configuration prepared before connecting to the CPE: MAC and serial come with the write', async () => {
+    const { app, db, call, S } = await setup();
+    const draft = (await call('POST', '/api/specialist/form/LiteBeam%205AC/read', S, {})).json();
+    const created = await call('POST', '/api/specialist/templates', S, { model: 'LiteBeam 5AC', name: 'Prima la configurazione', template: draft.template });
+    assert.equal(created.statusCode, 201, created.body);
+    const tpl = created.json();
+    const conn = await call('POST', '/api/specialist/connectors', S, { name: 'Azienda Y', url: 'https://uisp.azienda-x.test', token: 'tok-secret', uispKey: 'wss://uisp.azienda-x.test:443+chiave-y+allowSelfSignedCertificate' });
+    assert.equal(conn.statusCode, 201, conn.body);
+    const connectorId = conn.json().id as number;
+    const asked = (await call('GET', `/api/specialist/templates/${tpl.id}/values?connectorId=${connectorId}`, S)).json().asked as Array<{ name: string }>;
+    const values = Object.fromEntries(asked.map((a) => [a.name, a.name === 'WPA2_PSK' ? WIFI : a.name === 'SSID' ? 'AZIENDA-Y-AP1' : `${a.name.toLowerCase()}-1`]));
+    const body = { templateId: tpl.id, connectorId, model: 'LiteBeam 5AC', cpe: { username: 'admin-y', password: CPE_PASSWORD }, values, customer: 'Bianchi Anna' };
+
+    // no MAC, serial, firmware or address: the app reads them from the CPE at the write
+    const prep = await call('POST', '/api/specialist/jobs', { ...S, ...APP }, body);
+    assert.equal(prep.statusCode, 201, prep.body);
+    const pkg = prep.json();
+    assert.equal(pkg.checks.mac, '');
+    assert.equal(pkg.summary.mac, '');
+    assert.equal(pkg.target.sshPort, 22);
+    const job = (id: string) => call('GET', `/api/specialist/jobs/${id}`, S).then((r) => r.json());
+    const prepared = await job(pkg.jobId);
+    assert.deepEqual([prepared.mac, prepared.cpeAtWrite, prepared.status], ['', true, 'prepared']);
+    assert.equal((await call('GET', `/api/specialist/jobs/${pkg.jobId}/uisp`, S)).json().error, 'job_not_completed', 'no MAC yet to look for in UISP');
+
+    // the outcome says which CPE was written: a failed write on one, then a success on another
+    const url = `/api/specialist/jobs/${pkg.jobId}/result`;
+    assert.equal((await call('POST', url, S, { result: 'success', stages: [] })).json().error, 'cpe_mac_required');
+    assert.equal((await call('POST', url, S, { result: 'success', cpe: { mac: '81:78:00:00:00:01' } })).statusCode, 400, 'not a device MAC');
+    const failed = await call('POST', url, S, { result: 'failed', error: 'Board non corrispondente', cpe: { mac: 'aabbcc000001', serial: 'SER-A' }, completedAt: '2026-10-17T18:00:00.000Z' });
+    assert.equal(failed.statusCode, 200, failed.body);
+    assert.equal((await job(pkg.jobId)).mac, 'AA:BB:CC:00:00:01');
+    const ok = await call('POST', url, S, { result: 'success', stages: ['Configurazione salvata in flash (cfgmtd)'], cpe: { mac: 'AA:BB:CC:00:00:02', serial: 'SER-B' }, completedAt: '2026-10-17T18:05:00.000Z' });
+    assert.equal(ok.statusCode, 200, ok.body);
+    const written = await job(pkg.jobId);
+    assert.deepEqual([written.mac, written.serial, written.status, written.attempts], ['AA:BB:CC:00:00:02', 'SER-B', 'success', 2]);
+    assert.equal((await call('POST', url, S, { result: 'success', cpe: { mac: 'AA:BB:CC:00:00:03' } })).json().duplicate, true);
+    assert.equal((await job(pkg.jobId)).mac, 'AA:BB:CC:00:00:02', 'a success is final');
+    const row = JSON.stringify(db.prepare('SELECT * FROM specialist_jobs WHERE id = ?').get(pkg.jobId));
+    for (const secret of [WIFI, CPE_PASSWORD, 'chiave-y']) assert.ok(!row.includes(secret), `${secret} not stored`);
+
+    // a template with the serial of the CPE in it: the CPE is read first
+    const text = draft.template.replace('resolv.host.1.name=${DEVICE_NAME}', 'resolv.host.1.name=CPE-${EXPECTED_SERIAL}');
+    assert.notEqual(text, draft.template);
+    const withSerial = await call('POST', '/api/specialist/templates', S, { model: 'LiteBeam 5AC', name: 'Nome dal seriale', template: text });
+    assert.equal(withSerial.statusCode, 201, withSerial.body);
+    const again = { ...body, templateId: withSerial.json().id };
+    assert.equal((await call('POST', '/api/specialist/jobs', { ...S, ...APP }, again)).json().error, 'template_needs_cpe');
+    const read = await call('POST', '/api/specialist/jobs', { ...S, ...APP }, { ...again, mac: 'AA:BB:CC:00:00:04', serial: 'SER-C', host: '192.168.1.20' });
+    assert.equal(read.statusCode, 201, read.body);
+    assert.match(read.json().config.text, /^resolv\.host\.1\.name=CPE-SER-C$/m);
+    assert.equal((await job(read.json().jobId)).cpeAtWrite, false);
+    // prepared with the CPE read: the outcome needs nothing more
+    assert.equal((await call('POST', `/api/specialist/jobs/${read.json().jobId}/result`, S, { result: 'success' })).statusCode, 200);
+    await app.close();
+  });
 });

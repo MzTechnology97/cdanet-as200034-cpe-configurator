@@ -575,7 +575,11 @@ fun AppRoot(c: AppContainer) {
                     Screen.Remote -> RemoteScreen(c)
                     Screen.CpeAdmin -> c.adminCpeId.collectAsState().value?.let { CpeAdminScreen(c, it) }
                     Screen.Specialist -> SpecialistHub(c, hubTabs[screen.name], { hubTabs[screen.name] = it }, onEditTemplate = { go(Screen.SpecTemplate) })
-                    Screen.SpecTemplate -> SpecialistTemplateEditor(c, onClose = { back() })
+                    Screen.SpecTemplate -> SpecialistTemplateEditor(c, onClose = { back() }, onUse = {
+                        // «Nuova CPE» with this template: first the configuration, then the CPE
+                        hubTabs[Screen.Specialist.name] = 0
+                        back()
+                    })
                     Screen.RouterOs -> WifiRequired(c, "alla Wi-Fi della rete del MikroTik", "La consultazione avviene in SSH verso il router in rete locale.") { RouterOsScreen(c) }
                     Screen.History -> HistoryScreen(
                         c,

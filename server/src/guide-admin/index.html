@@ -170,15 +170,16 @@
   <li><b>I miei connettori</b>: l'UISP di ogni azienda per cui lavora (indirizzo, token API e, facoltativa, la chiave dei dispositivi), cifrati sul server e mai mostrati. Altri tipi di connettore arriveranno.</li>
 </ul>
 <h3>Nell'app: il flusso Specialist</h3>
-<p>Nella barra in basso l'area <i>Specialist</i> prende il posto di <i>Installa</i>; l'installazione CDA Net resta raggiungibile da Oggi. Il flusso è separato da quello degli installatori, che non cambia:</p>
+<p>Nella barra in basso l'area <i>Specialist</i> prende il posto di <i>Installa</i>; l'installazione CDA Net resta raggiungibile da Oggi. Il flusso è separato da quello degli installatori, che non cambia. Prima si prepara la configurazione, poi ci si collega alla CPE: per preparare serve Internet, non la Wi-Fi di management della CPE.</p>
 <ol>
-  <li><b>CPE collegata</b>: con il telefono sulla Wi-Fi della CPE, la discovery la trova qualunque sia il suo IP. L'app entra via SSH (credenziali di fabbrica, o quelle attuali scritte lì) e legge MAC, seriale, modello, firmware e board: niente etichette né magazzino.</li>
+  <li><b>Configurazione</b>: azienda (il connettore UISP), template (il modello della CPE è quello del template), i valori per questa CPE (SSID, chiave WPA2 dell'AP, PPPoE, i suoi segnaposto), le credenziali admin della CPE, cliente e posizione. La WPA2 e le password si scrivono al momento per ogni CPE e non vengono mai salvate: il server prepara il file e ne tiene solo l'impronta SHA-256. La configurazione preparata resta cifrata sul telefono fino alla scrittura e vale quanto la <i>validità di un provisioning</i> di Impostazioni server (almeno un'ora).</li>
+  <li><b>CPE collegata</b>: con il telefono sulla Wi-Fi della CPE, la discovery la trova qualunque sia il suo IP. L'app entra via SSH (credenziali di fabbrica, o quelle attuali scritte lì) e legge MAC, seriale, modello, firmware e board: niente etichette né magazzino. Se la CPE non è del modello del template la scrittura non parte.</li>
   <li><b>Firmware</b>: se non è quello richiesto si aggiorna da lì, oppure si tiene per scelta.</li>
-  <li><b>Configurazione</b>: azienda (il connettore UISP), template del modello, i valori per questa CPE (SSID, chiave WPA2 dell'AP, PPPoE, i suoi segnaposto), le credenziali admin della CPE, cliente e posizione. La WPA2 e le password si scrivono al momento per ogni CPE e non vengono mai salvate: il server prepara il file e ne tiene solo l'impronta SHA-256.</li>
-  <li><b>Scrittura</b> nella CPE, senza bisogno di Internet; l'esito arriva al server anche più tardi.</li>
+  <li><b>Scrittura</b> nella CPE, senza bisogno di Internet. MAC e seriale letti arrivano al server con l'esito, anche più tardi, e lo storico li mostra da quel momento.</li>
   <li><b>Verifica</b> con le credenziali nuove, <b>collaudo facoltativo</b> (il suo giudizio, senza NOC) e <b>autorizzazione nell'UISP dell'azienda</b>, nel site del suo AP (proposto) o in quello scelto.</li>
 </ol>
-<p>I template si creano e si modificano anche dall'app (<i>Specialist → Template</i>), pure dalla configurazione della CPE collegata.</p>
+<p>Chi è già sulla Wi-Fi della CPE può leggerla prima (<i>Sono già sulla Wi-Fi della CPE: leggila ora</i>): allora la configurazione è per quella CPE e propone i template del suo modello. Un template che usa il MAC o il seriale della CPE (<code>${EXPECTED_MAC}</code>, <code>${EXPECTED_SERIAL}</code>) richiede questa strada.</p>
+<p>I template si creano e si modificano anche dall'app (<i>Specialist → Template</i>), pure dalla configurazione della CPE collegata. Dopo il salvataggio, <i>Prepara una configurazione con questo template</i> porta a <i>Nuova CPE</i> con il template già scelto.</p>
 
 <h2 id="g-storico">11. Storico, accettazione in UISP e rapporti PDF</h2>
 <p>Lo storico di tutti gli installatori (solo metadati, nessuna password): ricerca per MAC, seriale, utente PPPoE, SSID o cliente, filtri per esito (<i>completati, falliti, preparati/in corso, scaduti</i>) e date, esportazione in CSV.</p>

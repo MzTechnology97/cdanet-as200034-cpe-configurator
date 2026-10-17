@@ -863,6 +863,11 @@ const MIGRATIONS: Array<string | CodeMigration> = [
   );
   CREATE INDEX revoked_sessions_expiry ON revoked_sessions(expires_at);
   `,
+  // the Specialist prepares the configuration before connecting to the CPE (titolare, 17/10/2026):
+  // MAC and serial come with the outcome of the write, read from the CPE by the app
+  `
+  ALTER TABLE specialist_jobs ADD COLUMN cpe_at_write INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function openDatabase(path: string): Db {

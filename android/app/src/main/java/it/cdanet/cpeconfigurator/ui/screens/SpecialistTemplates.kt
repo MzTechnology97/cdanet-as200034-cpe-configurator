@@ -65,6 +65,7 @@ import it.cdanet.cpeconfigurator.ui.ListHeader
 import it.cdanet.cpeconfigurator.ui.Notice
 import it.cdanet.cpeconfigurator.ui.NoticeKind
 import it.cdanet.cpeconfigurator.ui.PrimaryButton
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
 import it.cdanet.cpeconfigurator.ui.SectionCard
 import it.cdanet.cpeconfigurator.ui.Segmented
 import it.cdanet.cpeconfigurator.ui.SkeletonRows
@@ -310,19 +311,22 @@ private fun NewTemplateDialog(c: AppContainer, meta: SpecTemplateFormDto, onDism
     )
 }
 
-/** The editor of one template (a screen of its own): the form like the CPE's web interface, the values, the text. */
+/**
+ * The editor of one template (a screen of its own): the form like the CPE's web interface, the
+ * values, the text. [onUse]: to «Nuova CPE» with this template chosen, the configuration first.
+ */
 @Composable
-fun SpecialistTemplateEditor(c: AppContainer, onClose: () -> Unit) {
+fun SpecialistTemplateEditor(c: AppContainer, onClose: () -> Unit, onUse: () -> Unit = onClose) {
     val open = c.specialist.editing.collectAsState().value
     if (open == null) {
         EmptyState(R.drawable.ic_memory, "Nessun template aperto", "Torna all'elenco dei template.")
         return
     }
-    key(open) { TemplateEditorBody(c, open, onClose) }
+    key(open) { TemplateEditorBody(c, open, onClose, onUse) }
 }
 
 @Composable
-private fun TemplateEditorBody(c: AppContainer, open: SpecEditorOpen, onClose: () -> Unit) {
+private fun TemplateEditorBody(c: AppContainer, open: SpecEditorOpen, onClose: () -> Unit, onUse: () -> Unit) {
     val scope = rememberCoroutineScope()
     var meta by remember { mutableStateOf<SpecTemplateFormDto?>(null) }
     var form by remember { mutableStateOf<SpecFormStateDto?>(null) }
@@ -558,6 +562,14 @@ private fun TemplateEditorBody(c: AppContainer, open: SpecEditorOpen, onClose: (
         saved?.let { Notice(it, NoticeKind.Good) }
         BusyButton("Salva template", busy == "save", Modifier.fillMaxWidth(), enabled = busy == null && fs != null) {
             scope.launch { step("save") { save() } }
+        }
+        // saved: the configuration of a CPE with it, without the CPE's Wi-Fi (the CPE comes after)
+        val usable = savedId
+        if (usable != null && !dirty) {
+            SecondaryButton(onClick = {
+                c.specialist.updateForm { it.copy(templateId = usable) }
+                onUse()
+            }, modifier = Modifier.fillMaxWidth(), enabled = busy == null) { Text("Prepara una configurazione con questo template") }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
             if (savedId != null) TextButton(onClick = { confirmDelete = true }, enabled = busy == null) { Text("Elimina template") }
