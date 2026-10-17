@@ -1,6 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import type { FastifyReply, FastifyRequest } from 'fastify';
 import { SignJWT, jwtVerify } from 'jose';
-import type { Db } from './db.ts';
+import { nowIso, type Db } from './db.ts';
 import { isStaff, type Role } from './domain/roles.ts';
 
 export { isStaff };
@@ -12,6 +13,13 @@ export interface AuthUser {
   role: Role;
   /** Two-step verification enabled on the account. */
   totp?: boolean;
+  /** This session was opened with the password and the two-step code (it lasts days, not hours). */
+  mfaSession?: boolean;
+}
+
+/** Options of a session: [mfa] opened with the password and the two-step code. */
+export interface SessionOptions {
+  mfa?: boolean;
 }
 
 declare module 'fastify' {
@@ -32,7 +40,13 @@ export class HttpError extends Error {
   }
 }
 
-export function createAuth(db: Db, secret: Uint8Array, ttlHours: number) {
+/**
+ * [ttlHours]: an ordinary session; [mfaDays]: one opened with the password and the code of the
+ * two-step verification (titolare, 17/10/2026: 30 days), read at every login so a change in
+ * Impostazioni server applies to the next ones. Both are checked against the account at every
+ * request: Esci da tutti i dispositivi, a password change, a reset or a disabled account end them.
+ */
+export function createAuth(db: Db, secret: Uint8Array, ttlHours: number, mfaDays: () => number = () => 30) {
   const ISSUER = 'cdanet-cpe';
 
   /** Short-lived proof that the password was right; only exchangeable for a session with the TOTP code. */
@@ -89,16 +103,39 @@ export function createAuth(db: Db, secret: Uint8Array, ttlHours: number) {
   const policyStmt = db.prepare("SELECT value FROM settings WHERE key = 'security.totp_admins'");
   const totpRequiredForAdmins = () => (policyStmt.get() as { value: string } | undefined)?.value === 'required';
 
-  async function issueToken(u: { id: number; username: string; role: Role; token_version: number }) {
-    const expiresAt = new Date(Date.now() + ttlHours * 3600_000);
-    const token = await new SignJWT({ username: u.username, role: u.role, tv: u.token_version })
+  async function issueToken(u: { id: number; username: string; role: Role; token_version: number }, opts: SessionOptions = {}) {
+    const days = Math.min(Math.max(Math.round(mfaDays()), 1), 90);
+    const expiresAt = new Date(Date.now() + (opts.mfa ? days * 24 : ttlHours) * 3600_000);
+    // amr (RFC 8176): how the session was opened, ["pwd", "otp"] = password and two-step code;
+    // jti: the id «Esci» revokes (revokeSession)
+    const token = await new SignJWT({ username: u.username, role: u.role, tv: u.token_version, ...(opts.mfa ? { amr: ['pwd', 'otp'] } : {}) })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(String(u.id))
       .setIssuer(ISSUER)
+      .setJti(randomUUID())
       .setIssuedAt()
       .setExpirationTime(Math.floor(expiresAt.getTime() / 1000))
       .sign(secret);
     return { token, expiresAt: expiresAt.toISOString() };
+  }
+
+  const revokedStmt = db.prepare('SELECT 1 FROM revoked_sessions WHERE jti = ?');
+
+  /**
+   * «Esci»: the session of this request ends on the server too, the other sessions and phones of
+   * the account go on. Its id is kept until the session would have expired.
+   */
+  async function revokeSession(req: FastifyRequest): Promise<void> {
+    const m = /^Bearer\s+(\S+)$/i.exec(req.headers.authorization ?? '');
+    if (!m) return;
+    try {
+      const { payload } = await jwtVerify(m[1] as string, secret, { issuer: ISSUER, algorithms: ['HS256'] });
+      if (typeof payload.jti !== 'string' || typeof payload.exp !== 'number') return;
+      db.prepare('DELETE FROM revoked_sessions WHERE expires_at <= ?').run(nowIso());
+      db.prepare('INSERT OR IGNORE INTO revoked_sessions(jti, expires_at) VALUES(?, ?)').run(payload.jti, new Date(payload.exp * 1000).toISOString());
+    } catch {
+      // expired or not ours: nothing to close
+    }
   }
 
   const userStmt = db.prepare('SELECT id, username, role, active, token_version, totp_enabled FROM users WHERE id = ?');
@@ -115,7 +152,9 @@ export function createAuth(db: Db, secret: Uint8Array, ttlHours: number) {
         | { id: number; username: string; role: Role; active: number; token_version: number; totp_enabled: number }
         | undefined;
       if (!row || !row.active || row.token_version !== payload.tv) throw new Error('revoked');
-      return { id: row.id, username: row.username, role: row.role, totp: !!row.totp_enabled };
+      if (typeof payload.jti === 'string' && revokedStmt.get(payload.jti)) throw new Error('logged_out');
+      const mfa = Array.isArray(payload.amr) && payload.amr.includes('otp');
+      return { id: row.id, username: row.username, role: row.role, totp: !!row.totp_enabled, ...(mfa ? { mfaSession: true } : {}) };
     } catch {
       throw new HttpError(401, 'unauthorized');
     }
@@ -144,7 +183,20 @@ export function createAuth(db: Db, secret: Uint8Array, ttlHours: number) {
     if (!req.user.totp && totpRequiredForAdmins()) throw new HttpError(403, 'mfa_setup_required');
   };
 
-  return { issueToken, issueMfaToken, verifyMfaToken, issueFeedToken, verifyFeedToken, totpRequiredForAdmins, authenticate, requireUser, requireAdmin, requireStaff, requireSpecialist };
+  return {
+    issueToken,
+    issueMfaToken,
+    verifyMfaToken,
+    issueFeedToken,
+    verifyFeedToken,
+    totpRequiredForAdmins,
+    authenticate,
+    revokeSession,
+    requireUser,
+    requireAdmin,
+    requireStaff,
+    requireSpecialist,
+  };
 }
 export type Auth = ReturnType<typeof createAuth>;
 

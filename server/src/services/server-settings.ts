@@ -127,6 +127,11 @@ export const SERVER_SETTINGS: Def[] = [
     get: (c) => c.jwtTtlHours, set: (c, v) => (c.jwtTtlHours = v as number),
   },
   {
+    key: 'jwtMfaTtlDays', env: 'JWT_MFA_TTL_DAYS', group: 'Provisioning e app', label: 'Sessioni con verifica in due passaggi (giorni)', kind: 'int', min: 1, max: 90,
+    help: 'Chi accede con password e codice della verifica in due passaggi resta connesso per questi giorni (console e app), anche chiudendo il browser se ha lasciato «Resta connesso». Esci, Esci da tutti i dispositivi, un cambio password, un reset o la disattivazione dell’account le chiudono subito. Vale per i nuovi accessi.',
+    get: (c) => c.jwtMfaTtlDays, set: (c, v) => (c.jwtMfaTtlDays = (v as number | undefined) ?? 30),
+  },
+  {
     key: 'offlineSessionHours', env: 'OFFLINE_SESSION_HOURS', group: 'Provisioning e app', label: 'Sessione dell’app senza Internet (ore, 0 = mai)', kind: 'int', min: 0, max: 72,
     help: 'Dopo l’ultimo contatto con il server l’app resta utilizzabile per questo tempo anche se viene chiusa, il telefono si spegne o manca Internet: strumenti sulla CPE (verifica, puntamento, collaudo) con le credenziali salvate cifrate sul telefono. Torna online e si ricollega da sola. Attenzione: un account disattivato, una password cambiata o un telefono perso restano utilizzabili senza Internet fino a questa scadenza; al primo contatto con il server l’app cancella sessione e credenziali. Le azioni fatte senza Internet arrivano nel Registro alla risincronizzazione, con l’ora in cui sono avvenute.',
     get: (c) => c.offlineSessionHours, set: (c, v) => (c.offlineSessionHours = (v as number | undefined) ?? 24),

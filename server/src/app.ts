@@ -140,7 +140,7 @@ export async function buildApp(
     push: createPush(db, sealer, { fetchImpl: opts.fetchImpl, log: (m) => pushLog(m) }),
     db,
     sealer,
-    auth: createAuth(db, cfg.jwtSecret, cfg.jwtTtlHours),
+    auth: createAuth(db, cfg.jwtSecret, cfg.jwtTtlHours, () => cfg.jwtMfaTtlDays),
     provisioning,
     templates,
     uisp: opts.uisp !== undefined ? opts.uisp : uispCfg ? connectors.build(uispCfg) : null,

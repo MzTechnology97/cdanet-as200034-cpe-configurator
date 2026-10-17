@@ -1,6 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { api, session } from '../lib/api';
+import { api, endSession, session } from '../lib/api';
 import { useLiveEvents } from '../lib/live';
 import { UispBanner } from './UispBanner';
 import { keys, queryClient } from '../lib/query';
@@ -65,13 +65,22 @@ export function App() {
       setS(null);
     };
     const onModules = () => setModulesRev((n) => n + 1);
+    // the session kept in the browser changed in another tab: Esci there is Esci here, a login there too
+    const onStorage = (e: StorageEvent) => {
+      if (e.key !== session.key) return;
+      const next = session.get() as Session | null;
+      if (!next) queryClient.clear();
+      setS((prev) => (next?.token === prev?.token ? prev : next));
+    };
     window.addEventListener('hashchange', onHash);
     window.addEventListener('cda:logout', onLogout);
     window.addEventListener('cda:modules', onModules);
+    window.addEventListener('storage', onStorage);
     return () => {
       window.removeEventListener('hashchange', onHash);
       window.removeEventListener('cda:logout', onLogout);
       window.removeEventListener('cda:modules', onModules);
+      window.removeEventListener('storage', onStorage);
     };
   }, []);
 
@@ -104,8 +113,8 @@ export function App() {
     return () => document.removeEventListener('keydown', onKey);
   }, [user]);
 
-  const started = useCallback((d: { token: string; user: User; expiresAt: string; mfaSetupRequired?: boolean }) => {
-    session.set({ token: d.token, user: d.user, expiresAt: d.expiresAt });
+  const started = useCallback((d: { token: string; user: User; expiresAt: string; mfaSetupRequired?: boolean; remember?: boolean }) => {
+    session.set({ token: d.token, user: d.user, expiresAt: d.expiresAt, ...(d.remember ? { remember: true } : {}) });
     toast(`Benvenuto ${d.user.username}`);
     if (d.mfaSetupRequired) {
       toast('Per gli amministratori e gli specialist la verifica in due passaggi è obbligatoria: attivala ora', 'bad');
@@ -116,7 +125,7 @@ export function App() {
   }, []);
 
   const logout = () => {
-    session.clear();
+    endSession();
     queryClient.clear();
     resetModules();
     setModulesReady(false);
@@ -132,11 +141,11 @@ export function App() {
         <Login
           onLogin={async (username: string, password: string) => {
             const d = await api('/api/auth/login', { method: 'POST', body: { username, password } });
-            if (d.mfaRequired) return { mfaToken: d.mfaToken };
+            if (d.mfaRequired) return { mfaToken: d.mfaToken, rememberDays: d.rememberDays };
             started(d);
             return {};
           }}
-          onTotp={async (mfaToken: string, code: string) => started(await api('/api/auth/login/totp', { method: 'POST', body: { mfaToken, code } }))}
+          onTotp={async (mfaToken: string, code: string, remember: boolean) => started(await api('/api/auth/login/totp', { method: 'POST', body: { mfaToken, code, remember } }))}
         />
       </div>
     );
