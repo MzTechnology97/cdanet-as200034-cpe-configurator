@@ -82,9 +82,12 @@ data class SpecConnectorDto(
 @Serializable
 data class SpecConnectorsDto(val items: List<SpecConnectorDto> = emptyList())
 
-/** A value typed for each CPE: a placeholder of the template the server does not fill by itself. */
+/**
+ * A value typed for each CPE: a placeholder of the template the server does not fill by itself.
+ * [optional]: it may stay empty (the company's UISP key: without it the CPE has UISP off).
+ */
 @Serializable
-data class SpecAskedDto(val name: String, val label: String = "", val secret: Boolean = false, val own: Boolean = false)
+data class SpecAskedDto(val name: String, val label: String = "", val secret: Boolean = false, val own: Boolean = false, val optional: Boolean = false)
 
 @Serializable
 data class SpecValuesDto(val placeholders: List<String> = emptyList(), val asked: List<SpecAskedDto> = emptyList())
@@ -173,7 +176,15 @@ data class SpecAcceptanceDto(
 data class SpecConnectorRefDto(val id: Int, val name: String = "")
 
 @Serializable
-data class SpecUispDto(val deviceId: String? = null, val siteId: String? = null, val site: String = "", val authorizedAt: String? = null, val error: String = "")
+data class SpecUispDto(
+    val deviceId: String? = null,
+    val siteId: String? = null,
+    val site: String = "",
+    val authorizedAt: String? = null,
+    val error: String = "",
+    /** Written with UISP off (no key of the company): nothing to authorize. */
+    val off: Boolean = false,
+)
 
 @Serializable
 data class SpecJobDto(
@@ -207,8 +218,8 @@ data class SpecJobDto(
     val acceptance: SpecAcceptanceDto? = null,
     val uisp: SpecUispDto = SpecUispDto(),
 ) {
-    /** Written, with a company's UISP, and not yet authorized there. */
-    val toAuthorize: Boolean get() = status == "success" && connector != null && uisp.authorizedAt == null
+    /** Written, with a company's UISP, and not yet authorized there (never with UISP off). */
+    val toAuthorize: Boolean get() = status == "success" && connector != null && uisp.authorizedAt == null && !uisp.off
     val title: String get() = customer.ifBlank { deviceName }.ifBlank { mac }.ifBlank { model }
 
     /** The CPE in a line: its MAC, or why there is none yet. */

@@ -152,6 +152,31 @@ class SpecialistFlowTest {
         assertEquals("LiteBeam 5AC", prepared.title)
         assertEquals("MAC letto alla scrittura", prepared.macLabel)
         assertEquals("24:A4:3C:11:22:33", j.macLabel)
+        // written with UISP off: never «da autorizzare»
+        val off = AppJson.decodeFromString(SpecJobDto.serializer(), """{"id":"8b3e","status":"success","connector":{"id":2,"name":"Azienda X"},"uisp":{"off":true}}""")
+        assertTrue(off.uisp.off)
+        assertFalse(off.toAuthorize)
+    }
+
+    // owner, 18/10/2026: in bridge no PPPoE is asked (the server leaves it out), the company's UISP
+    // key may stay empty and then the CPE is written with UISP off
+    @Test
+    fun `the company's UISP key is optional, and an empty one means UISP off`() {
+        val withKey = asked + SpecAskedDto("UISP_ENROLLMENT", "Chiave UISP dell'azienda", secret = true, optional = true)
+        assertEquals(emptyList<String>(), SpecialistRules.problems(ready, cpe, template, withKey, true))
+        val bad = SpecialistRules.problems(ready.copy(values = ready.values + ("UISP_ENROLLMENT" to "chiave")), cpe, template, withKey, true)
+        assertTrue(bad.toString(), bad.any { it.startsWith("Chiave UISP") })
+        val good = ready.copy(values = ready.values + ("UISP_ENROLLMENT" to "wss://uisp.azienda-x.it:443+chiave+allowSelfSignedCertificate"))
+        assertEquals(emptyList<String>(), SpecialistRules.problems(good, cpe, template, withKey, true))
+        // the other values are still needed
+        val missing = SpecialistRules.problems(ready.copy(values = ready.values - "SSID"), cpe, template, withKey, true)
+        assertTrue(missing.toString(), missing.any { it == "Manca: SSID dell'AP" })
+        val dto = AppJson.decodeFromString(SpecAskedDto.serializer(), """{"name":"UISP_ENROLLMENT","label":"Chiave UISP dell'azienda","secret":true,"own":false,"optional":true}""")
+        assertTrue(dto.optional)
+        assertFalse(AppJson.decodeFromString(SpecAskedDto.serializer(), """{"name":"SSID"}""").optional)
+        assertTrue(SpecialistRules.uispOff("netmode=bridge\nunms.uri=\nunms.status=disabled\n"))
+        assertFalse(SpecialistRules.uispOff("unms.uri=wss://x\nunms.status=enabled\n"))
+        assertTrue(SpecialistRules.isUispKey("WSS://uisp.x:443+k") && !SpecialistRules.isUispKey("wss://a b"))
     }
 
     // issue #275: a specialist may be outside CDA Net. Without «visibilità piena» he sees his own work

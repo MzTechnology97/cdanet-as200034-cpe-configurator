@@ -377,17 +377,18 @@ private fun ConfigCard(c: AppContainer, s: SpecState, f: SpecForm, onTemplates: 
                         val v = f.values[a.name].orEmpty()
                         val visible = !a.secret || a.name in shown
                         Field(
-                            a.label.ifBlank { a.name } + if (a.own) " (tuo)" else "",
+                            a.label.ifBlank { a.name } + (if (a.own) " (tuo)" else "") + if (a.optional) " (facoltativa)" else "",
                             v,
                             { nv -> c.specialist.updateForm { it.copy(values = it.values + (a.name to nv)) } },
                             password = !visible,
                             supporting = when {
                                 a.name == "WPA2_PSK" -> "La chiave del tuo AP: solo per questa CPE, mai salvata"
+                                a.name == "UISP_ENROLLMENT" -> "Se la lasci vuota, la CPE resta senza UISP. Solo per questa CPE, mai salvata"
                                 a.secret -> "Solo per questa CPE, mai salvato"
                                 a.own -> "\${${a.name}} del tuo template"
                                 else -> null
                             },
-                            isError = showErrors && v.isBlank(),
+                            isError = showErrors && v.isBlank() && !a.optional,
                             trailing = if (a.secret) {
                                 { TextButton(onClick = { shown = if (a.name in shown) shown - a.name else shown + a.name }) { Text(if (visible) "Nascondi" else "Mostra") } }
                             } else {
@@ -511,7 +512,11 @@ private fun AfterWrite(c: AppContainer, s: SpecState) {
         StepError(s, "verify")
     }
     AcceptanceCard(c, s)
-    d.connectorId?.let { id -> SectionCard("7 · UISP dell'azienda", icon = R.drawable.ic_cell_tower) { SpecUispPanel(c, d.jobId, id) } }
+    d.connectorId?.let { id ->
+        SectionCard("7 · UISP dell'azienda", icon = R.drawable.ic_cell_tower) {
+            if (d.uispOff) Notice(SPEC_UISP_OFF, NoticeKind.Info) else SpecUispPanel(c, d.jobId, id)
+        }
+    }
     PrimaryButton(onClick = { c.specialist.nextCpe() }, modifier = Modifier.fillMaxWidth()) { Text("Configura un'altra CPE") }
 }
 
@@ -559,6 +564,9 @@ private fun AcceptanceCard(c: AppContainer, s: SpecState) {
 }
 
 // ---- the company's UISP -----------------------------------------------------------------------------
+
+/** A CPE written with UISP off: no chiave UISP in its file. */
+private const val SPEC_UISP_OFF = "UISP spento in questa CPE: la chiave UISP non è stata scritta, quindi la CPE non entra nell'UISP dell'azienda e non c'è niente da autorizzare."
 
 /** The Specialist's errors in plain words: here the company's UISP is named (it is his, not CDA Net's). */
 internal fun specialistError(e: Throwable): String = when ((e as? ApiException)?.code) {
@@ -827,8 +835,9 @@ private fun SpecJobRow(c: AppContainer, j: SpecJobDto, expanded: Boolean, onTogg
             j.uisp.authorizedAt?.let { at ->
                 KeyValue("UISP", "autorizzata " + localTime(at) + (j.uisp.site.takeIf { it.isNotBlank() }?.let { " · $it" } ?: ""))
             }
+            if (j.uisp.off && j.uisp.authorizedAt == null) KeyValue("UISP", "spento (chiave UISP non scritta)")
             val conn = j.connector
-            if (mine && j.status == "success" && conn != null && j.uisp.authorizedAt == null) {
+            if (mine && j.status == "success" && conn != null && j.uisp.authorizedAt == null && !j.uisp.off) {
                 SpecUispPanel(c, j.id, conn.id) { onChanged() }
             }
             if (j.stages.isNotEmpty()) Text(j.stages.joinToString("\n") { "✓ $it" }, style = MaterialTheme.typography.bodySmall)

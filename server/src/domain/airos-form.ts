@@ -44,7 +44,8 @@ export interface FieldDef {
    */
   free?: true;
   read?: (c: Cfg) => FormValue | undefined;
-  write?: (v: FormValue, c: Cfg) => Writes;
+  /** [mode]: CDA Net's templates or the specialist's ones (free). */
+  write?: (v: FormValue, c: Cfg, mode: FormMode) => Writes;
   fallback: FormValue | ((model: CpeModel) => FormValue);
 }
 
@@ -133,7 +134,7 @@ export const FIELDS: FieldDef[] = [
       { value: 'ap', label: 'Access Point' },
     ],
     read: (c) => (c.get('radio.1.mode') === 'master' ? 'ap' : c.get('radio.1.mode') === undefined ? undefined : 'station'),
-    write: (v, c) =>
+    write: (v, c, mode) =>
       v === 'ap'
         ? [
             ['radio.1.mode', 'master'],
@@ -143,8 +144,8 @@ export const FIELDS: FieldDef[] = [
             ['aaa.1.status', 'enabled'],
             ['aaa.1.devname', 'ath0'],
             ['aaa.1.br.devname', 'br0'],
-            // the SSID the template has (a fixed one of the specialist stays), else typed for each CPE
-            ['aaa.1.ssid', c.get('wireless.1.ssid') ?? '${SSID}'],
+            // CDA Net's SSID is chosen for each customer; a fixed one of the specialist's template stays
+            ['aaa.1.ssid', mode.free ? (c.get('wireless.1.ssid') ?? '${SSID}') : '${SSID}'],
             ['aaa.1.wpa.mode', '2'],
             ['aaa.1.wpa.key.1.mgmt', 'WPA-PSK'],
             ['aaa.1.wpa.1.pairwise', 'CCMP'],
@@ -708,7 +709,7 @@ export function applyForm(text: string, params: TemplateParams, model: CpeModel,
       nextParams[id as keyof TemplateParams] = String(v);
       continue;
     }
-    for (const [key, value] of f.write!(v, parseKeys(out))) out = setKey(out, key, value);
+    for (const [key, value] of f.write!(v, parseKeys(out), mode)) out = setKey(out, key, value);
   }
   return { text: out, params: nextParams };
 }

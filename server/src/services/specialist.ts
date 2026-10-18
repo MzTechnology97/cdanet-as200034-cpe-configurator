@@ -5,7 +5,7 @@ import { md5Crypt, sha256Hex, type Sealer } from '../crypto.ts';
 import { nowIso, type Db } from '../db.ts';
 import { templateFacts, templateSsid } from '../domain/airos-form.ts';
 import { BOARD_MATCH_SUGGESTIONS, TARGET_FIRMWARE, macSiblings, type CpeModel } from '../domain/policy.ts';
-import { askedFor, inspectFreeTemplate, isSsid, isWpa2Key, renderFreeCfg } from '../domain/specialist-cfg.ts';
+import { askedFor, inspectFreeTemplate, isSsid, isUispKey, isWpa2Key, OPTIONAL_PLACEHOLDERS, renderFreeCfg, unusedPlaceholders } from '../domain/specialist-cfg.ts';
 import { normalizeTemplate } from '../domain/systemcfg.ts';
 import { isPrivateIPv4, isPrivateIPv6 } from '../net/ip.ts';
 import { insecureFetch } from './connectors.ts';
@@ -153,6 +153,8 @@ interface JobRow {
   uisp_error: string;
   /** Prepared before connecting to the CPE: MAC and serial come with the outcome. */
   cpe_at_write: number;
+  /** Written with UISP off (no key of the company): nothing to authorize. */
+  uisp_off: number;
   connector_name?: string | null;
 }
 
@@ -524,7 +526,7 @@ export function createSpecialist(
     detected: json<Record<string, string>>(r.detected, {}),
     error: r.error,
     acceptance: r.acceptance_json ? { ...json<Record<string, unknown>>(r.acceptance_json, {}), at: r.acceptance_at } : null,
-    uisp: { deviceId: r.uisp_device_id, siteId: r.uisp_site_id, site: r.uisp_site, authorizedAt: r.uisp_authorized_at, error: r.uisp_error },
+    uisp: { deviceId: r.uisp_device_id, siteId: r.uisp_site_id, site: r.uisp_site, authorizedAt: r.uisp_authorized_at, error: r.uisp_error, off: !!r.uisp_off },
   });
 
   const isPrivateHost = (h: string) => isPrivateIPv4(h) || isPrivateIPv6(h);
@@ -540,6 +542,7 @@ export function createSpecialist(
     }
     if (typed.WPA2_PSK && !isWpa2Key(typed.WPA2_PSK)) throw new HttpError(400, 'invalid_value_WPA2_PSK');
     if (typed.SSID && !isSsid(typed.SSID)) throw new HttpError(400, 'invalid_value_SSID');
+    if (typed.UISP_ENROLLMENT && !isUispKey(typed.UISP_ENROLLMENT)) throw new HttpError(400, 'invalid_value_UISP_ENROLLMENT');
     const secrets = mine ? templateSecrets(tpl) : {};
     const name = (typed.DEVICE_NAME ?? '').trim();
     return {
@@ -562,12 +565,14 @@ export function createSpecialist(
     /** What the specialist is asked for a template (and what the server fills in). */
     form(userId: number, templateId: number, connectorId: number | null) {
       const tpl = templateRow(userId, templateId);
-      const report = inspectFreeTemplate(sealer.open(tpl.template_ciphertext));
+      const text = sealer.open(tpl.template_ciphertext);
+      const report = inspectFreeTemplate(text);
       const uispKey = connectorId ? !!connectorSecrets(connectorRow(userId, connectorId)).uispKey : false;
       // a template of another member: its secrets are his author's, typed here
       const mine = tpl.user_id === userId;
       const secrets = mine ? templateSecrets(tpl) : {};
-      return { placeholders: report.placeholders, asked: askedFor(report.placeholders, { snmpCommunity: !!secrets.snmpCommunity, wpa2Psk: !!secrets.wpa2Psk, uispKey }) };
+      // in bridge the CPE has no PPPoE: its user and password are not asked
+      return { placeholders: report.placeholders, asked: askedFor(report.placeholders, { snmpCommunity: !!secrets.snmpCommunity, wpa2Psk: !!secrets.wpa2Psk, uispKey }, unusedPlaceholders(text)) };
     },
 
     /**
@@ -584,15 +589,20 @@ export function createSpecialist(
       if (!isPrivateHost(host)) throw new HttpError(400, 'target_not_private');
       const text0 = sealer.open(tpl.template_ciphertext);
       const values = jobValues(input, tpl, uispKey, tpl.user_id === user.id);
+      // in bridge the CPE has no PPPoE (titolare, 18/10/2026): its lines stay empty, whatever was typed
+      const unused = unusedPlaceholders(text0);
+      for (const p of unused) values[p] = '';
       const extra: Array<[string, string]> = input.location
         ? [
             ['system.latitude', input.location.latitude.toFixed(6)],
             ['system.longitude', input.location.longitude.toFixed(6)],
           ]
         : [];
+      // the company's UISP key is optional (titolare, 18/10/2026): without it the CPE has UISP off
+      if (!values.UISP_ENROLLMENT && inspectFreeTemplate(text0).placeholders.includes('UISP_ENROLLMENT')) extra.push(['unms.status', 'disabled']);
       let text: string;
       try {
-        text = renderFreeCfg(text0, values, extra);
+        text = renderFreeCfg(text0, values, extra, new Set([...unused, ...OPTIONAL_PLACEHOLDERS]));
       } catch (e) {
         const code = (e as Error).message;
         if ((code === 'missing_value_EXPECTED_MAC' || code === 'missing_value_EXPECTED_SERIAL') && !input.mac) throw new HttpError(409, 'template_needs_cpe');
@@ -611,10 +621,12 @@ export function createSpecialist(
       const ssid = templateSsid(text) ?? values.SSID ?? '';
       const pppoeUser = values.PPPOE_USER ?? '';
       const mac = input.mac ?? '';
+      // UISP off in the file written (the key left empty, or the template's choice): nothing to authorize
+      const uispOff = /^unms\.status=disabled$/m.test(text);
       db.prepare(
         `INSERT INTO specialist_jobs(id, user_id, username, created_at, expires_at, client, connector_id, company, template_id, template_name, model, mac, serial, firmware,
-           device_name, ssid, pppoe_user, customer, notes, latitude, longitude, location_source, config_sha256, cpe_at_write)
-         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           device_name, ssid, pppoe_user, customer, notes, latitude, longitude, location_source, config_sha256, cpe_at_write, uisp_off)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       ).run(
         id,
         user.id,
@@ -640,6 +652,7 @@ export function createSpecialist(
         input.location?.source ?? '',
         sha,
         mac ? 0 : 1,
+        uispOff ? 1 : 0,
       );
       return {
         jobId: id,
@@ -714,7 +727,7 @@ export function createSpecialist(
       const ids = visible(userId);
       const where = [`j.user_id IN (${inList(ids)})`];
       const params: Array<string | number> = [...ids];
-      if (f.status === 'to_authorize') where.push("j.status = 'success' AND j.connector_id IS NOT NULL AND j.uisp_authorized_at IS NULL");
+      if (f.status === 'to_authorize') where.push("j.status = 'success' AND j.connector_id IS NOT NULL AND j.uisp_authorized_at IS NULL AND j.uisp_off = 0");
       else if (f.status === 'no_acceptance') where.push("j.status = 'success' AND j.acceptance_json IS NULL");
       else if (f.status) {
         where.push('j.status = ?');
@@ -760,7 +773,7 @@ export function createSpecialist(
         connectors: n('SELECT count(*) n FROM specialist_connectors WHERE user_id = ?'),
         jobs30d: n('SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND created_at > ?', since),
         success30d: n("SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND status = 'success' AND created_at > ?", since),
-        toAuthorize: n("SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND status = 'success' AND connector_id IS NOT NULL AND uisp_authorized_at IS NULL"),
+        toAuthorize: n("SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND status = 'success' AND connector_id IS NOT NULL AND uisp_authorized_at IS NULL AND uisp_off = 0"),
         failed30d: n("SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND status = 'failed' AND created_at > ?", since),
       };
     },

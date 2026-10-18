@@ -68,6 +68,8 @@ const ERRORS: Record<string, string> = {
   too_many_placeholders: 'Troppi segnaposto (al massimo 40)',
   users_password_requires_hash_placeholder: 'users.N.password deve usare ${CPE_PASSWORD_HASH}, non ${CPE_PASSWORD}',
   non_key_value_lines: 'Alcune righe non sono nel formato chiave=valore',
+  literal_secrets:
+    'Il testo contiene una chiave o una password in chiaro (Wi-Fi, PPPoE, community SNMP, chiave UISP, password admin): i colleghi del tuo gruppo di lavoro leggono il testo. Usa i segnaposto, es. ${WPA2_PSK}, e tieni la chiave nel template, cifrata.',
 };
 const errText = (c: string) => ERRORS[c] ?? c;
 
@@ -586,7 +588,16 @@ function TemplateEditor({ opts, data, onDirty, onClose, onSaved }: { opts: Edito
                         <strong>{k?.label ?? 'Tuo'}</strong>
                         {k?.secret && <Badge tone="warn">segreto</Badge>}
                       </div>
-                      <span className="ui-muted ui-small">{k ? FROM_TEXT[k.from] : 'scritto nell’app per ogni CPE'}</span>
+                      <span className="ui-muted ui-small">
+                        {/* a CPE in bridge cannot use PPPoE (titolare, 18/10/2026): not asked, its lines stay empty */}
+                        {(p === 'PPPOE_USER' || p === 'PPPOE_PASSWORD') && values.netMode === 'bridge'
+                          ? 'non chiesto: in bridge la CPE non usa il PPPoE'
+                          : (p === 'PPPOE_USER' || p === 'PPPOE_PASSWORD') && values.pppoe === false
+                            ? 'non chiesto: PPPoE spento nel template'
+                            : k
+                              ? FROM_TEXT[k.from]
+                              : 'scritto nell’app per ogni CPE'}
+                      </span>
                     </div>
                   </li>
                 );

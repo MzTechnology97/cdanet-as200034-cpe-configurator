@@ -120,6 +120,7 @@ const MESSAGES: Record<string, string> = {
   template_secret_invalid_snmpCommunity: 'Community SNMP non valida',
   template_secrets_author_only: 'Community SNMP e chiave Wi-Fi le imposta solo chi ha creato il template: nelle tue installazioni le scrivi nell’app',
   template_secret_invalid_wpa2Psk: 'Chiave Wi-Fi non valida: da 8 a 63 caratteri, oppure 64 cifre esadecimali',
+  template_author_only: 'Questo template lo modifica solo chi l’ha creato',
   form_invalid_ssid: 'SSID non valido: al massimo 32 caratteri',
   connector_not_found: 'Connettore non trovato: forse è stato eliminato',
   connector_name_exists: 'Esiste già un connettore con questo nome',

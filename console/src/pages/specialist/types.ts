@@ -88,7 +88,8 @@ export interface SpecJob {
   detected: { firmware?: string; board?: string; mac?: string };
   error: string;
   acceptance: SpecAcceptance | null;
-  uisp: { deviceId: string | null; siteId: string | null; site: string; authorizedAt: string | null; error: string };
+  /** [off]: written with UISP off (no key of the company), nothing to authorize. */
+  uisp: { deviceId: string | null; siteId: string | null; site: string; authorizedAt: string | null; error: string; off?: boolean };
 }
 
 export interface SpecSummary {
@@ -114,7 +115,7 @@ export const FROM_TEXT: Record<SpecPlaceholder['from'], string> = {
   serial: 'dalla CPE trovata (discovery)',
   cpe: 'dalle credenziali scritte nell’app',
   template: 'dal template (cifrata, la imposta chi l’ha creato), o scritta nell’app',
-  connector: 'dal connettore UISP dell’azienda, o scritta nell’app',
+  connector: 'dal connettore UISP dell’azienda, o scritta nell’app (facoltativa: vuota, la CPE resta senza UISP)',
   name: 'dal nome della CPE',
 };
 

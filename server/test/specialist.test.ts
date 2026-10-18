@@ -404,7 +404,7 @@ describe('Specialist', () => {
     const askedOf = async () => ((await call('GET', `/api/specialist/templates/${id}/values`, S)).json().asked as Array<{ name: string }>).map((a) => a.name);
     const asked = await askedOf();
     assert.ok(!asked.includes('SSID') && !asked.includes('WPA2_PSK'), asked.join(','));
-    const values = Object.fromEntries(asked.map((n) => [n, `${n.toLowerCase()}-1`]));
+    const values = Object.fromEntries(asked.map((n) => [n, n === 'UISP_ENROLLMENT' ? 'wss://uisp.azienda-x.test:443+chiave-x+allowSelfSignedCertificate' : `${n.toLowerCase()}-1`]));
     const job = (extra: Record<string, string> = {}) =>
       call('POST', '/api/specialist/jobs', { ...S, ...APP }, { templateId: id, model: 'LiteBeam 5AC', cpe: { username: 'admin-x', password: CPE_PASSWORD }, values: { ...values, ...extra } });
     const prep = await job();
@@ -424,6 +424,68 @@ describe('Specialist', () => {
     assert.deepEqual((await call('PATCH', `/api/specialist/templates/${id}`, S, { wpa2Psk: null })).json().secretsSet, { snmpCommunity: false, wpa2Psk: false });
     assert.ok((await askedOf()).includes('WPA2_PSK'));
     assert.equal((await job()).json().error, 'missing_value_WPA2_PSK');
+    await app.close();
+  });
+
+  // a CPE in bridge cannot use PPPoE, the company's UISP key is optional (titolare, 18/10/2026)
+  it('a CPE in bridge is asked no PPPoE; without the UISP key of the company it is written with UISP off', async () => {
+    const { app, db, call, S } = await setup();
+    const draft = (await call('POST', '/api/specialist/form/LiteBeam%205AC/read', S, {})).json();
+    const bridge = (await call('POST', '/api/specialist/form/LiteBeam%205AC/apply', S, { template: draft.template, changes: { netMode: 'bridge' } })).json();
+    assert.equal(parseKeys(bridge.template).get('netmode'), 'bridge');
+    assert.ok(bridge.report.placeholders.includes('PPPOE_USER'), 'the lines of PPPoE stay in the text, switched off');
+    const t = await call('POST', '/api/specialist/templates', S, { model: 'LiteBeam 5AC', name: 'Azienda Z · bridge', template: bridge.template });
+    assert.equal(t.statusCode, 201, t.body);
+    const id = t.json().id as number;
+    // a company whose connector has no key for the devices: the flow asks it, it may stay empty
+    const conn = await call('POST', '/api/specialist/connectors', S, { name: 'Azienda Z', url: 'https://uisp.azienda-x.test', token: 'tok-secret' });
+    assert.equal(conn.statusCode, 201, conn.body);
+    const connectorId = conn.json().id as number;
+    const asked = (await call('GET', `/api/specialist/templates/${id}/values?connectorId=${connectorId}`, S)).json().asked as Array<{ name: string; optional?: boolean }>;
+    const names = asked.map((a) => a.name);
+    assert.ok(!names.includes('PPPOE_USER') && !names.includes('PPPOE_PASSWORD'), `no PPPoE in bridge: ${names}`);
+    assert.equal(asked.find((a) => a.name === 'UISP_ENROLLMENT')?.optional, true);
+    assert.ok(asked.every((a) => a.name === 'UISP_ENROLLMENT' || !a.optional), 'the rest is needed');
+    const values = Object.fromEntries(asked.filter((a) => !a.optional).map((a) => [a.name, a.name === 'WPA2_PSK' ? WIFI : a.name === 'SSID' ? 'AZIENDA-Z-AP1' : `${a.name.toLowerCase()}-1`]));
+    const job = (extra: Record<string, string> = {}) =>
+      call('POST', '/api/specialist/jobs', { ...S, ...APP }, { templateId: id, connectorId, model: 'LiteBeam 5AC', cpe: { username: 'admin-z', password: CPE_PASSWORD }, values: { ...values, ...extra } });
+
+    // no key: the CPE is written with UISP off, and there is nothing to authorize
+    const off = await job();
+    assert.equal(off.statusCode, 201, off.body);
+    const k = parseKeys(off.json().config.text);
+    assert.deepEqual([k.get('ppp.status'), k.get('ppp.1.name'), k.get('ppp.1.password')], ['disabled', '', '']);
+    assert.deepEqual([k.get('unms.status'), k.get('unms.uri')], ['disabled', '']);
+    assert.ok(!off.json().config.text.includes('${'), 'no placeholder left');
+    assert.equal(off.json().summary.pppoeUser, '');
+    const result = (jobId: string) => call('POST', `/api/specialist/jobs/${jobId}/result`, S, { result: 'success', stages: [], cpe: { mac: 'AA:BB:CC:00:00:21', serial: 'SER-Z' } });
+    assert.equal((await result(off.json().jobId)).statusCode, 200);
+    const written = (await call('GET', `/api/specialist/jobs/${off.json().jobId}`, S)).json();
+    assert.deepEqual([written.status, written.uisp.off, written.pppoeUser], ['success', true, '']);
+    assert.equal((await call('GET', '/api/specialist/summary', S)).json().toAuthorize, 0, 'never «da autorizzare»');
+    assert.equal((await call('GET', '/api/specialist/jobs?status=to_authorize', S)).json().total, 0);
+
+    // PPPoE typed all the same (an app of before): never in the file of a CPE in bridge
+    const typed = await job({ PPPOE_USER: 'rossi@azienda-z.it', PPPOE_PASSWORD });
+    assert.equal(typed.statusCode, 201, typed.body);
+    assert.ok(!typed.body.includes(PPPOE_PASSWORD) && !typed.body.includes('rossi@azienda-z.it'));
+
+    // with the key: UISP on, as before (a key of UISP starts with wss://)
+    assert.equal((await job({ UISP_ENROLLMENT: 'chiave-senza-indirizzo' })).json().error, 'invalid_value_UISP_ENROLLMENT');
+    const KEY = 'wss://uisp.azienda-x.test:443+chiave-z+allowSelfSignedCertificate';
+    const on = await job({ UISP_ENROLLMENT: KEY });
+    assert.equal(on.statusCode, 201, on.body);
+    const kOn = parseKeys(on.json().config.text);
+    assert.deepEqual([kOn.get('unms.status'), kOn.get('unms.uri')], ['enabled', KEY]);
+    assert.equal((await result(on.json().jobId)).statusCode, 200);
+    assert.equal((await call('GET', `/api/specialist/jobs/${on.json().jobId}`, S)).json().uisp.off, false);
+    assert.equal((await call('GET', '/api/specialist/summary', S)).json().toAuthorize, 1);
+    assert.ok(!JSON.stringify(db.prepare('SELECT * FROM specialist_jobs').all()).includes('chiave-z'), 'the key typed is never stored');
+
+    // a router with PPPoE: user and password asked as before
+    const router = await call('POST', '/api/specialist/templates', S, { model: 'LiteBeam 5AC', name: 'Azienda Z · router', template: draft.template });
+    const askedRouter = (await call('GET', `/api/specialist/templates/${router.json().id}/values?connectorId=${connectorId}`, S)).json().asked as Array<{ name: string; optional?: boolean }>;
+    assert.ok(askedRouter.some((a) => a.name === 'PPPOE_USER' && !a.optional) && askedRouter.some((a) => a.name === 'PPPOE_PASSWORD' && !a.optional));
     await app.close();
   });
 });

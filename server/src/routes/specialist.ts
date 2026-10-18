@@ -376,7 +376,8 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
         a?.speedtest?.downMbps ?? '',
         a?.speedtest?.upMbps ?? '',
         j.uisp.site,
-        j.uisp.authorizedAt ?? '',
+        // written without the company's key: nothing to authorize
+        j.uisp.off ? 'UISP spento' : (j.uisp.authorizedAt ?? ''),
         j.location?.lat ?? '',
         j.location?.lon ?? '',
         j.notes,

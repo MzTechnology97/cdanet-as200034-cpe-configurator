@@ -91,6 +91,7 @@ private val TEMPLATE_ERRORS = mapOf(
     "too_many_placeholders" to "troppi segnaposto (al massimo 40)",
     "users_password_requires_hash_placeholder" to "users.N.password deve usare \${CPE_PASSWORD_HASH}, non \${CPE_PASSWORD}",
     "non_key_value_lines" to "alcune righe non sono nel formato chiave=valore",
+    "literal_secrets" to "il testo contiene una chiave o una password in chiaro (Wi-Fi, PPPoE, community SNMP, chiave UISP, password admin): i colleghi del tuo gruppo di lavoro leggono il testo. Usa i segnaposto, es. \${WPA2_PSK}, e tieni la chiave nel template, cifrata.",
 )
 
 private fun templateError(code: String) = TEMPLATE_ERRORS[code] ?: code
@@ -102,7 +103,7 @@ private val FILLED_FROM = mapOf(
     "serial" to "dalla CPE letta (seriale)",
     "cpe" to "dalle credenziali scritte nel flusso",
     "template" to "dal template (cifrata, la imposta chi l'ha creato), o scritta nel flusso",
-    "connector" to "dal connettore UISP dell'azienda, o scritta nel flusso",
+    "connector" to "dal connettore UISP dell'azienda, o scritta nel flusso (facoltativa: vuota, la CPE resta senza UISP)",
     "name" to "dal nome della CPE",
 )
 
@@ -705,13 +706,21 @@ private fun PlaceholdersCard(fs: SpecFormStateDto, meta: SpecTemplateFormDto) {
         if (fs.report.placeholders.isEmpty()) {
             Text("Nessun segnaposto: ogni CPE riceve lo stesso file.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
+        // a CPE in bridge cannot use PPPoE (owner, 18/10/2026): its user and password are not asked
+        val bridge = (fs.values["netMode"] as? JsonPrimitive)?.content == "bridge"
+        val pppoeOff = (fs.values["pppoe"] as? JsonPrimitive)?.content == "false"
         fs.report.placeholders.forEach { p ->
             val k = known[p]
+            val pppoe = p == "PPPOE_USER" || p == "PPPOE_PASSWORD"
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("\${$p}", style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
                     Text(
-                        (k?.label ?: "Tuo") + " · " + (FILLED_FROM[k?.from ?: "typed"] ?: "scritto nel flusso per ogni CPE"),
+                        (k?.label ?: "Tuo") + " · " + when {
+                            pppoe && bridge -> "non chiesto: in bridge la CPE non usa il PPPoE"
+                            pppoe && pppoeOff -> "non chiesto: PPPoE spento nel template"
+                            else -> FILLED_FROM[k?.from ?: "typed"] ?: "scritto nel flusso per ogni CPE"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
