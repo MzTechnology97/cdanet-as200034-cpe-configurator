@@ -387,4 +387,127 @@ describe('Specialist', () => {
     assert.equal((await call('POST', `/api/specialist/jobs/${read.json().jobId}/result`, S, { result: 'success' })).statusCode, 200);
     await app.close();
   });
+
+  // SSID and Wi-Fi key in his templates (titolare, 17/10/2026): the company's AP may be always the
+  // same; the key is sealed like the community, never returned, and only his installations use it
+  it('a template with the SSID of the company and its Wi-Fi key sealed, or both typed for each CPE', async () => {
+    const { app, db, call, S } = await setup();
+    const form = (await call('GET', '/api/specialist/template-form', S)).json();
+    assert.ok(form.fields.some((f: { id: string; section: string }) => f.id === 'ssid' && f.section === 'wireless'), 'in the Wireless section');
+    const draft = (await call('POST', '/api/specialist/form/LiteBeam%205AC/read', S, {})).json();
+    assert.equal(draft.values.ssid, '', 'typed for each CPE by default');
+    const apply = (template: string, changes: object) => call('POST', '/api/specialist/form/LiteBeam%205AC/apply', S, { template, changes });
+    assert.equal((await apply(draft.template, { ssid: 'x'.repeat(33) })).json().error, 'form_invalid_ssid');
+    const fixed = (await apply(draft.template, { ssid: 'AZIENDA-X-AP1' })).json();
+    const k = parseKeys(fixed.template);
+    assert.equal(k.get('wireless.1.ssid'), 'AZIENDA-X-AP1');
+    assert.equal(k.get('wpasupplicant.profile.1.network.1.ssid'), 'AZIENDA-X-AP1');
+    assert.equal(fixed.values.ssid, 'AZIENDA-X-AP1');
+    assert.ok(!fixed.report.placeholders.includes('SSID'));
+    // as an Access Point the SSID it transmits stays the one chosen
+    const ap = parseKeys((await apply(fixed.template, { wirelessMode: 'ap' })).json().template);
+    assert.equal(ap.get('aaa.1.ssid'), 'AZIENDA-X-AP1');
+    // emptied: typed for each CPE again
+    assert.equal(parseKeys((await apply(fixed.template, { ssid: '' })).json().template).get('wireless.1.ssid'), '${SSID}');
+
+    // the key: sealed apart, never in the text nor returned
+    const create = (name: string, wpa2Psk: string | undefined) => call('POST', '/api/specialist/templates', S, { model: 'LiteBeam 5AC', name, template: fixed.template, ...(wpa2Psk ? { wpa2Psk } : {}) });
+    assert.equal((await create('Corta', 'corta')).json().error, 'template_secret_invalid_wpa2Psk');
+    const t = await create('Azienda X · AP1', WIFI);
+    assert.equal(t.statusCode, 201, t.body);
+    const id = t.json().id as number;
+    assert.deepEqual(t.json().secretsSet, { snmpCommunity: false, wpa2Psk: true });
+    const got = await call('GET', `/api/specialist/templates/${id}`, S);
+    assert.ok(!got.body.includes(WIFI), 'never returned');
+    assert.match(got.json().template, /^wpasupplicant\.profile\.1\.network\.1\.psk=\$\{WPA2_PSK\}$/m, 'the text keeps the placeholder');
+
+    // the flow asks neither the SSID nor the key: both from the template
+    const askedOf = async () => ((await call('GET', `/api/specialist/templates/${id}/values`, S)).json().asked as Array<{ name: string }>).map((a) => a.name);
+    const asked = await askedOf();
+    assert.ok(!asked.includes('SSID') && !asked.includes('WPA2_PSK'), asked.join(','));
+    const values = Object.fromEntries(asked.map((n) => [n, n === 'UISP_ENROLLMENT' ? 'wss://uisp.azienda-x.test:443+chiave-x+allowSelfSignedCertificate' : `${n.toLowerCase()}-1`]));
+    const job = (extra: Record<string, string> = {}) =>
+      call('POST', '/api/specialist/jobs', { ...S, ...APP }, { templateId: id, model: 'LiteBeam 5AC', cpe: { username: 'admin-x', password: CPE_PASSWORD }, values: { ...values, ...extra } });
+    const prep = await job();
+    assert.equal(prep.statusCode, 201, prep.body);
+    const cfg = parseKeys(prep.json().config.text);
+    assert.equal(cfg.get('wpasupplicant.profile.1.network.1.psk'), WIFI, 'to the CPE, from the phone of its author');
+    assert.equal(cfg.get('wpasupplicant.profile.1.network.1.ssid'), 'AZIENDA-X-AP1');
+    assert.equal(prep.json().summary.ssid, 'AZIENDA-X-AP1');
+    assert.equal((await call('GET', `/api/specialist/jobs/${prep.json().jobId}`, S)).json().ssid, 'AZIENDA-X-AP1', 'the history says which AP');
+    // a key typed for this CPE wins over the template's
+    assert.equal(parseKeys((await job({ WPA2_PSK: 'Altra-Chiave-WiFi-9' })).json().config.text).get('wpasupplicant.profile.1.network.1.psk'), 'Altra-Chiave-WiFi-9');
+    // nothing of the key in the history nor in the log
+    for (const table of ['specialist_jobs', 'specialist_templates', 'events']) {
+      assert.ok(!JSON.stringify(db.prepare(`SELECT * FROM ${table}`).all()).includes(WIFI), table);
+    }
+    // removed: typed in the flow again
+    assert.deepEqual((await call('PATCH', `/api/specialist/templates/${id}`, S, { wpa2Psk: null })).json().secretsSet, { snmpCommunity: false, wpa2Psk: false });
+    assert.ok((await askedOf()).includes('WPA2_PSK'));
+    assert.equal((await job()).json().error, 'missing_value_WPA2_PSK');
+    await app.close();
+  });
+
+  // a CPE in bridge cannot use PPPoE, the company's UISP key is optional (titolare, 18/10/2026)
+  it('a CPE in bridge is asked no PPPoE; without the UISP key of the company it is written with UISP off', async () => {
+    const { app, db, call, S } = await setup();
+    const draft = (await call('POST', '/api/specialist/form/LiteBeam%205AC/read', S, {})).json();
+    const bridge = (await call('POST', '/api/specialist/form/LiteBeam%205AC/apply', S, { template: draft.template, changes: { netMode: 'bridge' } })).json();
+    assert.equal(parseKeys(bridge.template).get('netmode'), 'bridge');
+    assert.ok(bridge.report.placeholders.includes('PPPOE_USER'), 'the lines of PPPoE stay in the text, switched off');
+    assert.deepEqual(bridge.report.unused, ['PPPOE_PASSWORD', 'PPPOE_USER'], 'the editors say they are not asked');
+    const t = await call('POST', '/api/specialist/templates', S, { model: 'LiteBeam 5AC', name: 'Azienda Z · bridge', template: bridge.template });
+    assert.equal(t.statusCode, 201, t.body);
+    const id = t.json().id as number;
+    // a company whose connector has no key for the devices: the flow asks it, it may stay empty
+    const conn = await call('POST', '/api/specialist/connectors', S, { name: 'Azienda Z', url: 'https://uisp.azienda-x.test', token: 'tok-secret' });
+    assert.equal(conn.statusCode, 201, conn.body);
+    const connectorId = conn.json().id as number;
+    const asked = (await call('GET', `/api/specialist/templates/${id}/values?connectorId=${connectorId}`, S)).json().asked as Array<{ name: string; optional?: boolean }>;
+    const names = asked.map((a) => a.name);
+    assert.ok(!names.includes('PPPOE_USER') && !names.includes('PPPOE_PASSWORD'), `no PPPoE in bridge: ${names}`);
+    assert.equal(asked.find((a) => a.name === 'UISP_ENROLLMENT')?.optional, true);
+    assert.ok(asked.every((a) => a.name === 'UISP_ENROLLMENT' || !a.optional), 'the rest is needed');
+    const values = Object.fromEntries(asked.filter((a) => !a.optional).map((a) => [a.name, a.name === 'WPA2_PSK' ? WIFI : a.name === 'SSID' ? 'AZIENDA-Z-AP1' : `${a.name.toLowerCase()}-1`]));
+    const job = (extra: Record<string, string> = {}) =>
+      call('POST', '/api/specialist/jobs', { ...S, ...APP }, { templateId: id, connectorId, model: 'LiteBeam 5AC', cpe: { username: 'admin-z', password: CPE_PASSWORD }, values: { ...values, ...extra } });
+
+    // no key: the CPE is written with UISP off, and there is nothing to authorize
+    const off = await job();
+    assert.equal(off.statusCode, 201, off.body);
+    const k = parseKeys(off.json().config.text);
+    assert.deepEqual([k.get('ppp.status'), k.get('ppp.1.name'), k.get('ppp.1.password')], ['disabled', '', '']);
+    assert.deepEqual([k.get('unms.status'), k.get('unms.uri')], ['disabled', '']);
+    assert.ok(!off.json().config.text.includes('${'), 'no placeholder left');
+    assert.equal(off.json().summary.pppoeUser, '');
+    const result = (jobId: string) => call('POST', `/api/specialist/jobs/${jobId}/result`, S, { result: 'success', stages: [], cpe: { mac: 'AA:BB:CC:00:00:21', serial: 'SER-Z' } });
+    assert.equal((await result(off.json().jobId)).statusCode, 200);
+    const written = (await call('GET', `/api/specialist/jobs/${off.json().jobId}`, S)).json();
+    assert.deepEqual([written.status, written.uisp.off, written.pppoeUser], ['success', true, '']);
+    assert.equal((await call('GET', '/api/specialist/summary', S)).json().toAuthorize, 0, 'never «da autorizzare»');
+    assert.equal((await call('GET', '/api/specialist/jobs?status=to_authorize', S)).json().total, 0);
+
+    // PPPoE typed all the same (an app of before): never in the file of a CPE in bridge
+    const typed = await job({ PPPOE_USER: 'rossi@azienda-z.it', PPPOE_PASSWORD });
+    assert.equal(typed.statusCode, 201, typed.body);
+    assert.ok(!typed.body.includes(PPPOE_PASSWORD) && !typed.body.includes('rossi@azienda-z.it'));
+
+    // with the key: UISP on, as before (a key of UISP starts with wss://)
+    assert.equal((await job({ UISP_ENROLLMENT: 'chiave-senza-indirizzo' })).json().error, 'invalid_value_UISP_ENROLLMENT');
+    const KEY = 'wss://uisp.azienda-x.test:443+chiave-z+allowSelfSignedCertificate';
+    const on = await job({ UISP_ENROLLMENT: KEY });
+    assert.equal(on.statusCode, 201, on.body);
+    const kOn = parseKeys(on.json().config.text);
+    assert.deepEqual([kOn.get('unms.status'), kOn.get('unms.uri')], ['enabled', KEY]);
+    assert.equal((await result(on.json().jobId)).statusCode, 200);
+    assert.equal((await call('GET', `/api/specialist/jobs/${on.json().jobId}`, S)).json().uisp.off, false);
+    assert.equal((await call('GET', '/api/specialist/summary', S)).json().toAuthorize, 1);
+    assert.ok(!JSON.stringify(db.prepare('SELECT * FROM specialist_jobs').all()).includes('chiave-z'), 'the key typed is never stored');
+
+    // a router with PPPoE: user and password asked as before
+    const router = await call('POST', '/api/specialist/templates', S, { model: 'LiteBeam 5AC', name: 'Azienda Z · router', template: draft.template });
+    const askedRouter = (await call('GET', `/api/specialist/templates/${router.json().id}/values?connectorId=${connectorId}`, S)).json().asked as Array<{ name: string; optional?: boolean }>;
+    assert.ok(askedRouter.some((a) => a.name === 'PPPOE_USER' && !a.optional) && askedRouter.some((a) => a.name === 'PPPOE_PASSWORD' && !a.optional));
+    await app.close();
+  });
 });

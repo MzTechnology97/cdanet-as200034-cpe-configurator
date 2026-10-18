@@ -249,15 +249,17 @@ describe('Gruppi di lavoro degli Specialist (issue #275)', () => {
     const B = await login(B_);
     const APP = { 'x-cda-client': 'android/9.9.9' };
 
-    // A's template with his company's SNMP community, sealed
-    const t = await call('POST', '/api/specialist/templates', A, { model: 'LiteBeam 5AC', name: 'Azienda X · SNMP', template: `${SAMPLE_TEMPLATE}snmp.community=\${SNMP_COMMUNITY}\n`, snmpCommunity: 'community-di-a' });
+    // A's template with his company's SNMP community and the Wi-Fi key of its AP, sealed
+    const t = await call('POST', '/api/specialist/templates', A, { model: 'LiteBeam 5AC', name: 'Azienda X · SNMP', template: `${SAMPLE_TEMPLATE}snmp.community=\${SNMP_COMMUNITY}\n`, snmpCommunity: 'community-di-a', wpa2Psk: 'Chiave-WiFi-Di-A-1' });
     assert.equal(t.statusCode, 201, t.body);
     const tid = t.json().id as number;
     const view = (h: Record<string, string>) => call('GET', `/api/specialist/templates/${tid}`, h).then((r) => r.json() as { mine: boolean; secretsSet: { snmpCommunity: boolean } });
     assert.deepEqual([(await view(A)).mine, (await view(B)).mine], [true, false]);
+    assert.deepEqual((await view(B)).secretsSet, { snmpCommunity: true, wpa2Psk: true }, 'B knows they are there, never their values');
     const asked = async (h: Record<string, string>) => (await call('GET', `/api/specialist/templates/${tid}/values`, h)).json().asked as Array<{ name: string; secret: boolean }>;
-    assert.ok(!(await asked(A)).some((x) => x.name === 'SNMP_COMMUNITY'), 'the author: his own, sealed');
+    assert.ok(!(await asked(A)).some((x) => x.name === 'SNMP_COMMUNITY' || x.name === 'WPA2_PSK'), 'the author: his own, sealed');
     assert.equal((await asked(B)).find((x) => x.name === 'SNMP_COMMUNITY')?.secret, true, 'a member types it, hidden');
+    assert.equal((await asked(B)).find((x) => x.name === 'WPA2_PSK')?.secret, true, 'the Wi-Fi key too');
 
     // B installs with A's template: his own community, never A's
     const values = { SSID: 'AZIENDA-X-AP1', WPA2_PSK: 'Chiave-WiFi-Azienda-1', PPPOE_USER: 'rossi', PPPOE_PASSWORD: 'Pppoe-Segreta-1' };
@@ -268,14 +270,21 @@ describe('Gruppi di lavoro degli Specialist (issue #275)', () => {
     assert.equal(pkgB.statusCode, 201, pkgB.body);
     assert.match(pkgB.json().config.text, /^snmp\.community=community-di-b$/m);
     assert.ok(!pkgB.body.includes('community-di-a'), "the author's community never reaches another member");
+    assert.ok(!pkgB.body.includes('Chiave-WiFi-Di-A-1'), "nor the author's Wi-Fi key");
     // only the author changes it: its secrets, nor its text where the server writes them
     assert.equal((await call('PATCH', `/api/specialist/templates/${tid}`, B, { snmpCommunity: 'community-scelta-da-b' })).json().error, 'template_author_only');
     assert.equal((await call('PATCH', `/api/specialist/templates/${tid}`, B, { snmpCommunity: null })).json().error, 'template_author_only');
+    assert.equal((await call('PATCH', `/api/specialist/templates/${tid}`, B, { wpa2Psk: 'Chiave-Scelta-Da-B-1' })).json().error, 'template_author_only');
     assert.equal((await call('PATCH', `/api/specialist/templates/${tid}`, B, { template: `${SAMPLE_TEMPLATE}resolv.host.1.name=\${SNMP_COMMUNITY}\n` })).json().error, 'template_author_only');
     assert.equal((await call('PATCH', `/api/specialist/templates/${tid}`, A, { notes: 'rivisto da A' })).statusCode, 200);
     const pkgA = await job(A);
     assert.equal(pkgA.statusCode, 201, pkgA.body);
     assert.match(pkgA.json().config.text, /^snmp\.community=community-di-a$/m, "the author's installations keep his");
+    // his key too, when not typed for this CPE
+    const { WPA2_PSK: _typed, ...withoutKey } = values;
+    const pkgA2 = await call('POST', '/api/specialist/jobs', { ...A, ...APP }, { templateId: tid, model: 'LiteBeam 5AC', cpe: { username: 'admin-x', password: 'Cpe-Password-X-1' }, values: withoutKey, customer: 'Rossi' });
+    assert.equal(pkgA2.statusCode, 201, pkgA2.body);
+    assert.match(pkgA2.json().config.text, /^wpasupplicant\.profile\.1\.network\.1\.psk=Chiave-WiFi-Di-A-1$/m);
 
     // the log: whose template and which group, never a secret
     const ev = db.prepare("SELECT u.username who, e.action, e.detail FROM events e JOIN users u ON u.id = e.user_id WHERE e.action LIKE 'specialist.%' ORDER BY e.id").all() as Array<{ who: string; action: string; detail: string }>;
@@ -284,7 +293,7 @@ describe('Gruppi di lavoro degli Specialist (issue #275)', () => {
     assert.match(ev.find((e) => e.who === 'spec.a' && e.action === 'specialist.template_update')!.detail, /gruppo Squadra Est/);
     assert.match(byB.find((e) => e.action === 'specialist.job')!.detail, /template di spec\.a.*gruppo Squadra Est/);
     assert.match(ev.find((e) => e.who === 'spec.a' && e.action === 'specialist.template_create')!.detail, /gruppo Squadra Est/);
-    for (const secret of ['community-di-a', 'community-di-b', 'community-scelta-da-b', 'Chiave-WiFi-Azienda-1', 'Pppoe-Segreta-1', 'Cpe-Password-X-1']) {
+    for (const secret of ['community-di-a', 'community-di-b', 'community-scelta-da-b', 'Chiave-WiFi-Di-A-1', 'Chiave-Scelta-Da-B-1', 'Chiave-WiFi-Azienda-1', 'Pppoe-Segreta-1', 'Cpe-Password-X-1']) {
       assert.ok(!JSON.stringify(ev).includes(secret), secret);
     }
 
@@ -302,7 +311,7 @@ describe('Gruppi di lavoro degli Specialist (issue #275)', () => {
     for (const line of [/Squadra Est<\/b>: creato con spec\.a, spec\.b/, /Squadra Est<\/b>: usciti spec\.b/, /Squadra Est<\/b>: entrati spec\.b/, /spec\.b<\/b> non è più specialist: tolto dai gruppi di lavoro Squadra Est/, /Squadra Est<\/b>: eliminato \(1 membro\)/]) {
       assert.match(noc, line);
     }
-    assert.ok(!/community-di|Chiave-WiFi|Pppoe-Segreta/.test(noc), 'no secret to the NOC');
+    assert.ok(!/community-di|Chiave-WiFi|Chiave-Scelta|Pppoe-Segreta/.test(noc), 'no secret to the NOC');
     await app.close();
   });
 

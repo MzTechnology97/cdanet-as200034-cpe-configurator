@@ -159,6 +159,8 @@ export function SpecialistJobs({ params }: PageContext) {
 
 function UispBadge({ j }: { j: SpecJob }) {
   if (j.uisp.authorizedAt) return <Badge tone="good">autorizzata{j.uisp.site ? ` · ${j.uisp.site}` : ''}</Badge>;
+  // written without the company's key (titolare, 18/10/2026): the CPE has UISP off
+  if (j.uisp.off) return <Badge tone="neutral">UISP spento</Badge>;
   if (j.status === 'success' && j.connector) return <Badge tone="warn">da autorizzare</Badge>;
   return <span className="ui-muted ui-small">—</span>;
 }
@@ -227,7 +229,7 @@ function JobDrawer({ j, onClose, onChanged, onDeleted }: { j: SpecJob; onClose: 
         )}
       </section>
       {mine && j.status === 'success' && <AcceptanceSection j={j} onChanged={onChanged} />}
-      {mine && j.status === 'success' && j.connector && <UispSection j={j} onChanged={onChanged} />}
+      {mine && j.status === 'success' && j.connector && !j.uisp.off && <UispSection j={j} onChanged={onChanged} />}
       {!!j.stages.length && (
         <section className="jb-sec">
           <h3>Fasi della scrittura</h3>

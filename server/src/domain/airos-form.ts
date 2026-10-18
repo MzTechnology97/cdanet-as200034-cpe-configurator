@@ -44,7 +44,8 @@ export interface FieldDef {
    */
   free?: true;
   read?: (c: Cfg) => FormValue | undefined;
-  write?: (v: FormValue, c: Cfg) => Writes;
+  /** [mode]: CDA Net's templates or the specialist's ones (free). */
+  write?: (v: FormValue, c: Cfg, mode: FormMode) => Writes;
   fallback: FormValue | ((model: CpeModel) => FormValue);
 }
 
@@ -52,6 +53,8 @@ const on = (v: string | undefined) => (v === undefined ? undefined : v === 'enab
 const st = (v: FormValue) => (v ? 'enabled' : 'disabled');
 const num = (v: string | undefined) => (v === undefined || v.trim() === '' || !/^-?\d+$/.test(v.trim()) ? undefined : Number(v));
 const isPlaceholder = (v: string | undefined) => !!v && v.includes('${');
+/** The SSID of the template: the AP's one in Station, its own as an AP; a placeholder is typed for each CPE. */
+const ssidOf = (c: Cfg) => (c.get('radio.1.mode') === 'master' ? (c.get('aaa.1.ssid') ?? c.get('wireless.1.ssid')) : (c.get('wpasupplicant.profile.1.network.1.ssid') ?? c.get('wireless.1.ssid')));
 
 /** LAN = the interface served by the DHCP server (router); in bridge mode, the management bridge. */
 export function lanIndex(c: Cfg): string | null {
@@ -131,7 +134,7 @@ export const FIELDS: FieldDef[] = [
       { value: 'ap', label: 'Access Point' },
     ],
     read: (c) => (c.get('radio.1.mode') === 'master' ? 'ap' : c.get('radio.1.mode') === undefined ? undefined : 'station'),
-    write: (v) =>
+    write: (v, c, mode) =>
       v === 'ap'
         ? [
             ['radio.1.mode', 'master'],
@@ -141,7 +144,8 @@ export const FIELDS: FieldDef[] = [
             ['aaa.1.status', 'enabled'],
             ['aaa.1.devname', 'ath0'],
             ['aaa.1.br.devname', 'br0'],
-            ['aaa.1.ssid', '${SSID}'],
+            // CDA Net's SSID is chosen for each customer; a fixed one of the specialist's template stays
+            ['aaa.1.ssid', mode.free ? (c.get('wireless.1.ssid') ?? '${SSID}') : '${SSID}'],
             ['aaa.1.wpa.mode', '2'],
             ['aaa.1.wpa.key.1.mgmt', 'WPA-PSK'],
             ['aaa.1.wpa.1.pairwise', 'CCMP'],
@@ -169,6 +173,30 @@ export const FIELDS: FieldDef[] = [
     read: (c) => (c.get('radio.1.ptpmode') === undefined ? undefined : c.get('radio.1.ptpmode') === '1' ? 'ptp' : 'ptmp'),
     write: (v) => [['radio.1.ptpmode', v === 'ptp' ? '1' : '0']],
     fallback: 'ptmp',
+  },
+  {
+    // the specialist's templates (titolare, 17/10/2026): the company's AP may be always the same;
+    // CDA Net's SSID is chosen for each customer, its key comes from Reti Wi-Fi
+    id: 'ssid',
+    section: 'wireless',
+    label: 'SSID',
+    hint: 'In Station la rete dell’AP a cui collegarsi, in Access Point quella trasmessa. Vuoto: lo scrivi nel flusso per ogni CPE (${SSID}). La chiave Wi-Fi si imposta qui sotto.',
+    type: 'text',
+    free: true,
+    read: (c) => {
+      const v = ssidOf(c);
+      return v === undefined ? undefined : isPlaceholder(v) ? '' : v;
+    },
+    write: (v, c) => {
+      const s = String(v);
+      if (new TextEncoder().encode(s).length > 32) throw new Error('form_invalid_ssid');
+      const value = s === '' ? '${SSID}' : s;
+      return [
+        ['wireless.1.ssid', value],
+        c.get('radio.1.mode') === 'master' ? ['aaa.1.ssid', value] : ['wpasupplicant.profile.1.network.1.ssid', value],
+      ];
+    },
+    fallback: '',
   },
   {
     id: 'countryCode',
@@ -681,7 +709,7 @@ export function applyForm(text: string, params: TemplateParams, model: CpeModel,
       nextParams[id as keyof TemplateParams] = String(v);
       continue;
     }
-    for (const [key, value] of f.write!(v, parseKeys(out))) out = setKey(out, key, value);
+    for (const [key, value] of f.write!(v, parseKeys(out), mode)) out = setKey(out, key, value);
   }
   return { text: out, params: nextParams };
 }
@@ -913,6 +941,12 @@ export function skeletonFor(model: CpeModel): string {
 }
 
 /** What the rest of the server needs to know of a template (where the CPE answers after it). */
+/** The SSID a configuration connects to (Station) or transmits (AP); null when typed for each CPE. */
+export function templateSsid(text: string): string | null {
+  const v = ssidOf(parseKeys(text));
+  return v === undefined || isPlaceholder(v) ? null : v;
+}
+
 export function templateFacts(text: string) {
   const c = parseKeys(text);
   const lan = lanKey(c, 'ip');

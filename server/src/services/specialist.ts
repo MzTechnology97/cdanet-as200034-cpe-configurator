@@ -3,9 +3,9 @@ import { HttpError } from '../auth.ts';
 import type { Config } from '../config.ts';
 import { md5Crypt, sha256Hex, type Sealer } from '../crypto.ts';
 import { nowIso, type Db } from '../db.ts';
-import { templateFacts } from '../domain/airos-form.ts';
+import { templateFacts, templateSsid } from '../domain/airos-form.ts';
 import { BOARD_MATCH_SUGGESTIONS, TARGET_FIRMWARE, macSiblings, type CpeModel } from '../domain/policy.ts';
-import { askedFor, inspectFreeTemplate, isSsid, isWpa2Key, renderFreeCfg } from '../domain/specialist-cfg.ts';
+import { askedFor, inspectFreeTemplate, isSsid, isUispKey, isWpa2Key, OPTIONAL_PLACEHOLDERS, renderFreeCfg, unusedPlaceholders } from '../domain/specialist-cfg.ts';
 import { normalizeTemplate } from '../domain/systemcfg.ts';
 import { isPrivateIPv4, isPrivateIPv6 } from '../net/ip.ts';
 import { NOT_PUBLIC, publicUrlProblem } from '../net/public-address.ts';
@@ -34,6 +34,8 @@ export interface SpecialistTemplateInput {
   notes?: string;
   /** A value replaces the community, null removes it, absent keeps it. */
   snmpCommunity?: string | null;
+  /** The Wi-Fi key of the company's AP (titolare, 17/10/2026): sealed like the community, never returned. */
+  wpa2Psk?: string | null;
 }
 
 export interface ConnectorInput {
@@ -152,6 +154,8 @@ interface JobRow {
   uisp_error: string;
   /** Prepared before connecting to the CPE: MAC and serial come with the outcome. */
   cpe_at_write: number;
+  /** Written with UISP off (no key of the company): nothing to authorize. */
+  uisp_off: number;
   connector_name?: string | null;
 }
 
@@ -214,7 +218,10 @@ export function createSpecialist(
   };
 
   // ---- templates -------------------------------------------------------------------------------
-  const templateSecrets = (r: TemplateRow): { snmpCommunity?: string } => (r.secrets_ciphertext ? json(sealer.open(r.secrets_ciphertext), {}) : {});
+  /** The secrets of a template, sealed apart from its text and never returned: its author's (issue #275). */
+  type TemplateSecrets = { snmpCommunity?: string; wpa2Psk?: string };
+  const templateSecrets = (r: TemplateRow): TemplateSecrets => (r.secrets_ciphertext ? json(sealer.open(r.secrets_ciphertext), {}) : {});
+  const sealSecrets = (x: TemplateSecrets) => (x.snmpCommunity || x.wpa2Psk ? sealer.seal(JSON.stringify(x)) : '');
   /**
    * A template as [viewerId] sees it. Its secrets (the SNMP community) belong to its author: only he
    * sets them and only his installations use them; another member of the group types them in his
@@ -234,7 +241,7 @@ export function createSpecialist(
       facts: templateFacts(text),
       placeholders: report.placeholders,
       own: report.own,
-      secretsSet: { snmpCommunity: !!secrets.snmpCommunity },
+      secretsSet: { snmpCommunity: !!secrets.snmpCommunity, wpa2Psk: !!secrets.wpa2Psk },
       jobs: r.jobs ?? 0,
       /** Who made it: another member of a work group, or the specialist himself. */
       authorId: r.user_id,
@@ -264,6 +271,19 @@ export function createSpecialist(
     if (v.length > 200 || /[\r\n\0]/.test(v) || v.includes('${')) throw new HttpError(400, 'template_secret_invalid_snmpCommunity');
     return v;
   };
+  /** A value replaces a secret, null removes it, absent (or empty) keeps it. */
+  const changesSecrets = (input: SpecialistTemplateInput) => [input.snmpCommunity, input.wpa2Psk].some((v) => v === null || (typeof v === 'string' && v !== ''));
+  const nextSecrets = (cur: TemplateSecrets, input: SpecialistTemplateInput): TemplateSecrets => {
+    const out: TemplateSecrets = { ...cur };
+    if (input.snmpCommunity === null) delete out.snmpCommunity;
+    else if (typeof input.snmpCommunity === 'string' && input.snmpCommunity !== '') out.snmpCommunity = checkedCommunity(input.snmpCommunity);
+    if (input.wpa2Psk === null) delete out.wpa2Psk;
+    else if (typeof input.wpa2Psk === 'string' && input.wpa2Psk !== '') {
+      if (!isWpa2Key(input.wpa2Psk)) throw new HttpError(400, 'template_secret_invalid_wpa2Psk');
+      out.wpa2Psk = input.wpa2Psk;
+    }
+    return out;
+  };
   const nameTaken = (userId: number, model: string, name: string, exceptId = 0) =>
     !!db.prepare('SELECT 1 FROM specialist_templates WHERE user_id = ? AND model = ? AND name = ? COLLATE NOCASE AND id <> ?').get(userId, model, name, exceptId);
 
@@ -286,14 +306,14 @@ export function createSpecialist(
       const boardMatch = input.boardMatch ?? BOARD_MATCH_SUGGESTIONS[input.model];
       validateBoardMatch(boardMatch);
       const { text, sha, report } = checkedText(input.template);
-      const secrets = input.snmpCommunity ? { snmpCommunity: checkedCommunity(input.snmpCommunity) } : {};
+      const secrets = nextSecrets({}, input);
       const now = nowIso();
       const r = db
         .prepare(
           `INSERT INTO specialist_templates(user_id, model, name, board_match, notes, template_ciphertext, template_sha256, secrets_ciphertext, created_at, updated_at, cda_source_id)
            VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
         )
-        .run(userId, input.model, input.name, boardMatch, input.notes ?? '', sealer.seal(text), sha, secrets.snmpCommunity ? sealer.seal(JSON.stringify(secrets)) : '', now, now, input.cdaSourceId ?? null);
+        .run(userId, input.model, input.name, boardMatch, input.notes ?? '', sealer.seal(text), sha, sealSecrets(secrets), now, now, input.cdaSourceId ?? null);
       return { ...templates.get(userId, Number(r.lastInsertRowid)), report };
     },
 
@@ -306,13 +326,9 @@ export function createSpecialist(
       if (input.name !== undefined && nameTaken(cur.user_id, cur.model, input.name, id)) throw new HttpError(409, 'template_name_exists');
       if (input.boardMatch !== undefined) validateBoardMatch(input.boardMatch);
       // the secrets are the author's: another member neither sets nor clears them
-      if ((input.snmpCommunity === null || (typeof input.snmpCommunity === 'string' && input.snmpCommunity !== '')) && cur.user_id !== userId) {
-        throw new HttpError(403, 'template_secrets_author_only');
-      }
+      if (changesSecrets(input) && cur.user_id !== userId) throw new HttpError(403, 'template_secrets_author_only');
       const checked = input.template !== undefined ? checkedText(input.template) : null;
-      let secretsCipher = cur.secrets_ciphertext;
-      if (input.snmpCommunity === null) secretsCipher = '';
-      else if (typeof input.snmpCommunity === 'string' && input.snmpCommunity !== '') secretsCipher = sealer.seal(JSON.stringify({ snmpCommunity: checkedCommunity(input.snmpCommunity) }));
+      const secretsCipher = changesSecrets(input) ? sealSecrets(nextSecrets(templateSecrets(cur), input)) : cur.secrets_ciphertext;
       db.prepare(
         'UPDATE specialist_templates SET name = ?, board_match = ?, notes = ?, template_ciphertext = ?, template_sha256 = ?, secrets_ciphertext = ?, updated_at = ? WHERE id = ? AND user_id = ?',
       ).run(
@@ -526,7 +542,7 @@ export function createSpecialist(
     detected: json<Record<string, string>>(r.detected, {}),
     error: r.error,
     acceptance: r.acceptance_json ? { ...json<Record<string, unknown>>(r.acceptance_json, {}), at: r.acceptance_at } : null,
-    uisp: { deviceId: r.uisp_device_id, siteId: r.uisp_site_id, site: r.uisp_site, authorizedAt: r.uisp_authorized_at, error: r.uisp_error },
+    uisp: { deviceId: r.uisp_device_id, siteId: r.uisp_site_id, site: r.uisp_site, authorizedAt: r.uisp_authorized_at, error: r.uisp_error, off: !!r.uisp_off },
   });
 
   const isPrivateHost = (h: string) => isPrivateIPv4(h) || isPrivateIPv6(h);
@@ -542,6 +558,7 @@ export function createSpecialist(
     }
     if (typed.WPA2_PSK && !isWpa2Key(typed.WPA2_PSK)) throw new HttpError(400, 'invalid_value_WPA2_PSK');
     if (typed.SSID && !isSsid(typed.SSID)) throw new HttpError(400, 'invalid_value_SSID');
+    if (typed.UISP_ENROLLMENT && !isUispKey(typed.UISP_ENROLLMENT)) throw new HttpError(400, 'invalid_value_UISP_ENROLLMENT');
     const secrets = mine ? templateSecrets(tpl) : {};
     const name = (typed.DEVICE_NAME ?? '').trim();
     return {
@@ -554,6 +571,8 @@ export function createSpecialist(
       ...(input.mac ? { EXPECTED_MAC: input.mac, EXPECTED_SERIAL: input.serial || input.mac.replace(/:/g, '') } : {}),
       SNMP_LOCATION: typed.SNMP_LOCATION || name,
       SNMP_COMMUNITY: typed.SNMP_COMMUNITY || secrets.snmpCommunity || '',
+      // the key of the company's AP kept in the template (its author's), else typed for this CPE
+      WPA2_PSK: typed.WPA2_PSK || secrets.wpa2Psk || '',
       UISP_ENROLLMENT: typed.UISP_ENROLLMENT || uispKey || '',
     } as Record<string, string>;
   }
@@ -562,11 +581,14 @@ export function createSpecialist(
     /** What the specialist is asked for a template (and what the server fills in). */
     form(userId: number, templateId: number, connectorId: number | null) {
       const tpl = templateRow(userId, templateId);
-      const report = inspectFreeTemplate(sealer.open(tpl.template_ciphertext));
+      const text = sealer.open(tpl.template_ciphertext);
+      const report = inspectFreeTemplate(text);
       const uispKey = connectorId ? !!connectorSecrets(connectorRow(userId, connectorId)).uispKey : false;
-      // a template of another member: its community is his author's, typed here
+      // a template of another member: its secrets are his author's, typed here
       const mine = tpl.user_id === userId;
-      return { placeholders: report.placeholders, asked: askedFor(report.placeholders, { snmpCommunity: mine && !!templateSecrets(tpl).snmpCommunity, uispKey }) };
+      const secrets = mine ? templateSecrets(tpl) : {};
+      // in bridge the CPE has no PPPoE: its user and password are not asked
+      return { placeholders: report.placeholders, asked: askedFor(report.placeholders, { snmpCommunity: !!secrets.snmpCommunity, wpa2Psk: !!secrets.wpa2Psk, uispKey }, unusedPlaceholders(text)) };
     },
 
     /**
@@ -583,15 +605,20 @@ export function createSpecialist(
       if (!isPrivateHost(host)) throw new HttpError(400, 'target_not_private');
       const text0 = sealer.open(tpl.template_ciphertext);
       const values = jobValues(input, tpl, uispKey, tpl.user_id === user.id);
+      // in bridge the CPE has no PPPoE (titolare, 18/10/2026): its lines stay empty, whatever was typed
+      const unused = unusedPlaceholders(text0);
+      for (const p of unused) values[p] = '';
       const extra: Array<[string, string]> = input.location
         ? [
             ['system.latitude', input.location.latitude.toFixed(6)],
             ['system.longitude', input.location.longitude.toFixed(6)],
           ]
         : [];
+      // the company's UISP key is optional (titolare, 18/10/2026): without it the CPE has UISP off
+      if (!values.UISP_ENROLLMENT && inspectFreeTemplate(text0).placeholders.includes('UISP_ENROLLMENT')) extra.push(['unms.status', 'disabled']);
       let text: string;
       try {
-        text = renderFreeCfg(text0, values, extra);
+        text = renderFreeCfg(text0, values, extra, new Set([...unused, ...OPTIONAL_PLACEHOLDERS]));
       } catch (e) {
         const code = (e as Error).message;
         if ((code === 'missing_value_EXPECTED_MAC' || code === 'missing_value_EXPECTED_SERIAL') && !input.mac) throw new HttpError(409, 'template_needs_cpe');
@@ -606,13 +633,16 @@ export function createSpecialist(
       const sha = sha256Hex(text);
       const facts = templateFacts(text);
       const deviceName = values.DEVICE_NAME ?? '';
-      const ssid = values.SSID ?? '';
+      // the SSID written: the one of the template (fixed for the company's AP) or typed for this CPE
+      const ssid = templateSsid(text) ?? values.SSID ?? '';
       const pppoeUser = values.PPPOE_USER ?? '';
       const mac = input.mac ?? '';
+      // UISP off in the file written (the key left empty, or the template's choice): nothing to authorize
+      const uispOff = /^unms\.status=disabled$/m.test(text);
       db.prepare(
         `INSERT INTO specialist_jobs(id, user_id, username, created_at, expires_at, client, connector_id, company, template_id, template_name, model, mac, serial, firmware,
-           device_name, ssid, pppoe_user, customer, notes, latitude, longitude, location_source, config_sha256, cpe_at_write)
-         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           device_name, ssid, pppoe_user, customer, notes, latitude, longitude, location_source, config_sha256, cpe_at_write, uisp_off)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       ).run(
         id,
         user.id,
@@ -638,6 +668,7 @@ export function createSpecialist(
         input.location?.source ?? '',
         sha,
         mac ? 0 : 1,
+        uispOff ? 1 : 0,
       );
       return {
         jobId: id,
@@ -712,7 +743,7 @@ export function createSpecialist(
       const ids = visible(userId);
       const where = [`j.user_id IN (${inList(ids)})`];
       const params: Array<string | number> = [...ids];
-      if (f.status === 'to_authorize') where.push("j.status = 'success' AND j.connector_id IS NOT NULL AND j.uisp_authorized_at IS NULL");
+      if (f.status === 'to_authorize') where.push("j.status = 'success' AND j.connector_id IS NOT NULL AND j.uisp_authorized_at IS NULL AND j.uisp_off = 0");
       else if (f.status === 'no_acceptance') where.push("j.status = 'success' AND j.acceptance_json IS NULL");
       else if (f.status) {
         where.push('j.status = ?');
@@ -758,7 +789,7 @@ export function createSpecialist(
         connectors: n('SELECT count(*) n FROM specialist_connectors WHERE user_id = ?'),
         jobs30d: n('SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND created_at > ?', since),
         success30d: n("SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND status = 'success' AND created_at > ?", since),
-        toAuthorize: n("SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND status = 'success' AND connector_id IS NOT NULL AND uisp_authorized_at IS NULL"),
+        toAuthorize: n("SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND status = 'success' AND connector_id IS NOT NULL AND uisp_authorized_at IS NULL AND uisp_off = 0"),
         failed30d: n("SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND status = 'failed' AND created_at > ?", since),
       };
     },

@@ -907,6 +907,11 @@ const MIGRATIONS: Array<string | CodeMigration> = [
        AND e.target = specialist_templates.model || ' · ' || specialist_templates.name AND e.created_at >= specialist_templates.created_at
   );
   `,
+  // 49 · v1.36.4: a CPE of the specialist written with UISP off (the company's key left empty,
+  // titolare 18/10/2026): nothing to authorize in the company's UISP
+  `
+  ALTER TABLE specialist_jobs ADD COLUMN uisp_off INTEGER NOT NULL DEFAULT 0;
+  `,
 ];
 
 export function openDatabase(path: string): Db {

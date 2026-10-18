@@ -102,6 +102,8 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
         boardMatch: boardMatch.optional(),
         notes: notes.optional(),
         snmpCommunity: z.string().max(200).nullable().optional(),
+        /** The Wi-Fi key of the company's AP: sealed, never returned, used only in his installations. */
+        wpa2Psk: z.string().max(64).nullable().optional(),
       })
       .strict()
       .parse(req.body);
@@ -131,7 +133,7 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
   app.patch('/api/specialist/templates/:id', spec, async (req) => {
     const { id } = idParam.parse(req.params);
     const b = z
-      .object({ name: templateName.optional(), template: templateText.optional(), boardMatch: boardMatch.optional(), notes: notes.optional(), snmpCommunity: z.string().max(200).nullable().optional() })
+      .object({ name: templateName.optional(), template: templateText.optional(), boardMatch: boardMatch.optional(), notes: notes.optional(), snmpCommunity: z.string().max(200).nullable().optional(), wpa2Psk: z.string().max(64).nullable().optional() })
       .strict()
       .refine((x) => Object.keys(x).length > 0, 'empty')
       .parse(req.body);
@@ -375,7 +377,8 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
         a?.speedtest?.downMbps ?? '',
         a?.speedtest?.upMbps ?? '',
         j.uisp.site,
-        j.uisp.authorizedAt ?? '',
+        // written without the company's key: nothing to authorize
+        j.uisp.off ? 'UISP spento' : (j.uisp.authorizedAt ?? ''),
         j.location?.lat ?? '',
         j.location?.lon ?? '',
         j.notes,

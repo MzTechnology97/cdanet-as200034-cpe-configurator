@@ -127,6 +127,8 @@ data class SpecDone(
     val login: CredentialsDto,
     val lanIp: String?,
     val connectorId: Int?,
+    /** The file written has UISP off (the company's key left empty): nothing to authorize. */
+    val uispOff: Boolean = false,
 ) {
     override fun toString(): String = "SpecDone(jobId=$jobId, ok=$ok)"
 }
@@ -181,6 +183,8 @@ data class SpecEditorOpen(
     val template: String? = null,
     val boardMatch: String? = null,
     val snmpSet: Boolean = false,
+    /** The template keeps the Wi-Fi key of the AP (sealed, never returned). */
+    val wpa2Set: Boolean = false,
     /** A template of another member of the group (issue #275): its secrets stay with him. */
     val author: String? = null,
     val sha256: String = "",
@@ -203,6 +207,14 @@ object SpecialistRules {
     fun isWpa2Key(v: String): Boolean = WPA2.matches(v) || WPA2_HEX.matches(v)
 
     fun isSsid(v: String): Boolean = v.isNotEmpty() && v.toByteArray(Charsets.UTF_8).size <= 32 && v.none { it == '\r' || it == '\n' || it == '\u0000' }
+
+    /** A UISP key airOS takes: the «wss://…» of UISP → Impostazioni → Dispositivi. */
+    fun isUispKey(v: String): Boolean = UISP_KEY.matches(v)
+    private val UISP_KEY = Regex("""^(?i)wss://\S+$""")
+
+    /** The file has UISP off (the company's key left empty, or the template's choice). */
+    fun uispOff(cfg: String): Boolean = UISP_OFF.containsMatchIn(cfg)
+    private val UISP_OFF = Regex("""(?m)^unms\.status=disabled$""")
 
     /** The firmware may be written on: the required one, or the one he chose to keep. */
     fun firmwareReady(cpe: SpecCpe?, target: String, keep: Boolean): Boolean {
@@ -238,10 +250,12 @@ object SpecialistRules {
             val v = f.values[a.name].orEmpty()
             val label = a.label.ifBlank { a.name }
             when {
-                v.isBlank() -> add("Manca: $label")
+                // the company's UISP key may stay empty (owner, 18/10/2026): UISP off on the CPE
+                v.isBlank() -> if (!a.optional) add("Manca: $label") else Unit
                 v.any { it == '\n' || it == '\r' } -> add("$label: una sola riga")
                 a.name == "WPA2_PSK" && !isWpa2Key(v) -> add("Chiave Wi-Fi: da 8 a 63 caratteri, o 64 cifre esadecimali")
                 a.name == "SSID" && !isSsid(v) -> add("SSID: da 1 a 32 caratteri")
+                a.name == "UISP_ENROLLMENT" && !isUispKey(v) -> add("Chiave UISP: inizia con wss:// (UISP → Impostazioni → Dispositivi)")
                 else -> Unit
             }
         }
@@ -667,7 +681,7 @@ class SpecialistController(
                 busy = null,
                 // a failed write may be tried again with the same configuration (on the CPE read then)
                 pkg = if (ok) null else prepared,
-                done = SpecDone(pkg.jobId, pkg.summary, ok, pkg.credentials, pkg.afterApply.lanIp, f.connectorId),
+                done = SpecDone(pkg.jobId, pkg.summary, ok, pkg.credentials, pkg.afterApply.lanIp, f.connectorId, SpecialistRules.uispOff(pkg.config.text)),
                 writeError = if (ok) null else result.error,
             )
         }
