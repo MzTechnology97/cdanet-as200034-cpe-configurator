@@ -352,8 +352,9 @@ fun AppRoot(c: AppContainer) {
                 scope.launch { if (listOf("field_alignment", "field_diagnosis", "acceptance").any { c.moduleOn(it) }) c.field.prefetch() }
             } else {
                 c.field.forget()
-                // nor a CDA Net installation prepared before (it holds the keys of CDA Net)
+                // nor a CDA Net installation prepared before, for now or for the visits (they hold the keys of CDA Net)
                 if (c.provisioning.state.value.pkg != null) c.provisioning.reset()
+                c.provisioning.field.clear()
             }
         } else if (everSignedIn) {
             c.field.forget()

@@ -172,6 +172,8 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
     if (b.fullView !== undefined && b.fullView !== !!target.fullView) {
       // what he sees changes at once: his sessions start again
       db.prepare('UPDATE users SET full_view = ?, token_version = token_version + 1 WHERE id = ?').run(b.fullView ? 1 : 0, id);
+      // no more the director: what he had as such stays out of his colleagues' calendars
+      if (!b.fullView) ctx.workGroups.restart(id);
       ctx.notify.security(
         b.fullView
           ? `Visibilità piena data allo specialist <b>${escapeHtml(target.username)}</b> da ${escapeHtml(req.user!.username)}: vede clienti, rete e lavoro di tutti`

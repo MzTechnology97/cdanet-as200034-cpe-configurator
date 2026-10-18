@@ -190,8 +190,10 @@ export async function buildApp(
         const u = db.prepare('SELECT id, role, full_view fullView FROM users WHERE id = ?').get(userId) as { id: number; role: string; fullView: number } | undefined;
         if (!u) return false;
         const viewer = { id: u.id, role: u.role, fullView: !!u.fullView };
-        // 0: a copy made before (1.36.0-1.36.2) whose original is no longer found
-        return templateId === 0 ? seesAll(viewer) : ctx.templates.visibleTo(viewer).some((t) => t.id === templateId);
+        // 0 (a copy made before 1.36.3 whose original was not found) or an original deleted since:
+        // the source is unknown, only «visibilità piena»
+        const known = templateId !== 0 && !!db.prepare('SELECT 1 FROM profile_templates WHERE id = ?').get(templateId);
+        return known ? ctx.templates.visibleTo(viewer).some((t) => t.id === templateId) : seesAll(viewer);
       },
     }),
     version,

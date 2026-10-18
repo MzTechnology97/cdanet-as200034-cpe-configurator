@@ -388,15 +388,23 @@ export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
     const days = (Date.parse(`${q.to}T00:00:00Z`) - Date.parse(`${q.from}T00:00:00Z`)) / 86_400_000;
     if (!(days >= 0 && days <= 62)) throw new HttpError(400, 'invalid_range');
     const isAdmin = seesAll(req.user!);
-    // a specialist: his own orders and those of the members of his work groups (issue #275), never
-    // the rest of the team; an installer: his own
-    const team = !isAdmin && req.user!.role === 'specialist' ? ctx.workGroups.calendarIds(req.user!.id) : [req.user!.id];
-    const who: number[] | null = isAdmin ? (q.user ? [q.user] : null) : q.user && team.includes(q.user) ? [q.user] : team;
-    const rows = db
-      .prepare(
-        `${SELECT} WHERE w.day BETWEEN ? AND ? AND w.status <> 'cancelled'${who !== null ? ` AND w.assigned_to IN (${who.map(() => '?').join(',')})` : ''} ORDER BY w.day, w.slot, w.id`,
-      )
-      .all(q.from, q.to, ...(who ?? [])) as unknown as Row[];
+    // a specialist: his own orders and those of the members of his work groups since they are in a
+    // group with him (issue #275), never the rest of the team; an installer: his own
+    const team = !isAdmin && req.user!.role === 'specialist' ? ctx.workGroups.calendarScope(req.user!.id) : [{ id: req.user!.id, since: null }];
+    const who = isAdmin ? (q.user ? [{ id: q.user, since: null }] : null) : q.user && team.some((t) => t.id === q.user) ? team.filter((t) => t.id === q.user) : team;
+    const params: Array<string | number> = [];
+    const whom =
+      who === null
+        ? ''
+        : ` AND (${who
+            .map((t) => {
+              params.push(t.id);
+              if (t.since === null) return 'w.assigned_to = ?';
+              params.push(t.since);
+              return '(w.assigned_to = ? AND w.created_at >= ?)';
+            })
+            .join(' OR ')})`;
+    const rows = db.prepare(`${SELECT} WHERE w.day BETWEEN ? AND ? AND w.status <> 'cancelled'${whom} ORDER BY w.day, w.slot, w.id`).all(q.from, q.to, ...params) as unknown as Row[];
     const today = todayRome();
     const installers = isAdmin
       ? (db.prepare("SELECT id, username FROM users WHERE active = 1 AND role = 'installer' ORDER BY username").all() as Array<{ id: number; username: string }>)

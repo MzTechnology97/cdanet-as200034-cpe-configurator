@@ -93,6 +93,14 @@ describe('Specialist', () => {
     assert.equal((await call('GET', '/api/wireless-networks', I)).statusCode, 200, 'the installers keep them');
     assert.equal((await call('POST', '/api/field/access', { ...I, ...APP }, {})).statusCode, 200);
     assert.equal((await call('GET', '/api/tools/interfaces', I)).statusCode, 200, 'and the tools of the server');
+    // the aerial imagery is paid by CDA Net, with its keys: not for him; the terrain of the 3D map stays
+    const sat = await call('GET', '/api/admin/map/satellite', S);
+    assert.equal(sat.statusCode, 200, sat.body);
+    assert.deepEqual(sat.json().layers, []);
+    const tile = '/api/admin/map/imagery/esri/satellite/13/4419/3174';
+    assert.equal((await call('GET', tile, S)).statusCode, 403);
+    assert.notEqual((await call('GET', tile, A)).statusCode, 403, 'the admins as before');
+    assert.equal((await call('GET', '/api/admin/map/satellite', I)).statusCode, 403, 'the installers as before');
     // «visibilità piena», given by an admin: the views of the NOC (his sessions start again)
     assert.equal((await call('PATCH', `/api/admin/users/${inst}`, A, { fullView: true })).json().error, 'full_view_specialist_only');
     assert.equal((await call('PATCH', `/api/admin/users/${spec.user.id}`, S, { fullView: true })).statusCode, 403, 'not by himself');
@@ -110,6 +118,7 @@ describe('Specialist', () => {
     assert.equal((await call('GET', '/api/wireless-networks', F)).statusCode, 200);
     assert.equal((await call('POST', '/api/field/access', { ...F, ...APP }, {})).statusCode, 200);
     assert.equal((await call('GET', '/api/tools/interfaces', F)).statusCode, 200);
+    assert.notEqual((await call('GET', '/api/admin/map/imagery/esri/satellite/13/4419/3174', F)).statusCode, 403);
     assert.equal((await call('POST', '/api/admin/platform/backup', F, { password: 'Password-Backup-123' })).statusCode, 403, 'the backup stays with the admins');
     const users = (await call('GET', '/api/admin/users', A)).json() as Array<{ username: string; fullView: boolean }>;
     assert.equal(users.find((u) => u.username === SPEC.username)?.fullView, true);
@@ -203,6 +212,18 @@ describe('Specialist', () => {
     assert.equal((await call('POST', '/api/specialist/connectors/test', S, { url: 'https://uisp.azienda-x.test', token: 'sbagliato' })).json().error, 'uisp_auth_failed');
     const sites = (await call('GET', `/api/specialist/connectors/${c.id}/sites`, S)).json() as Array<{ id: string; name: string }>;
     assert.ok(sites.some((x) => x.id === 'site-n2'));
+    // never towards CDA Net's own network through the server (issue #275): private, CGNAT and local
+    // addresses refused, and nothing is asked to them
+    const asked0 = fake.calls.length;
+    for (const [i, u] of ['http://10.0.0.1:8080', 'https://100.64.0.1', 'https://127.0.0.1', 'https://[::1]', 'http://localhost:3000', 'https://[::ffff:192.168.1.1]'].entries()) {
+      assert.equal((await call('POST', '/api/specialist/connectors', S, { name: `Interno ${i}`, url: u, token: 'tok-secret' })).json().error, 'connector_target_not_public', u);
+      assert.equal((await call('POST', '/api/specialist/connectors/test', S, { url: u, token: 'tok-secret' })).json().error, 'connector_target_not_public', u);
+    }
+    assert.equal((await call('PATCH', `/api/specialist/connectors/${c.id}`, S, { url: 'https://192.168.1.10' })).json().error, 'connector_target_not_public');
+    assert.equal((await call('POST', '/api/specialist/connectors/test', S, { url: 'http://uisp.azienda-x.test/status?', token: 'tok-secret' })).statusCode, 400, 'no query to steer the path');
+    assert.equal((await call('POST', '/api/specialist/connectors/test', S, { url: 'https://user@uisp.azienda-x.test', token: 'tok-secret' })).statusCode, 400, 'no user in the address');
+    assert.equal(fake.calls.length, asked0, 'nothing asked to them');
+    assert.equal((await call('GET', '/api/specialist/connectors', S)).json().items.length, 1);
 
     // ---- what is typed for this template (the key of the devices comes from the connector)
     const asked = (await call('GET', `/api/specialist/templates/${tpl.id}/values?connectorId=${c.id}`, S)).json();
