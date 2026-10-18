@@ -180,9 +180,13 @@ fun CalendarScreen(c: AppContainer, onOpen: (Dest) -> Unit) {
     }
     val items = data?.takeIf { it.from <= from.toString() && it.to >= to.toString() }?.items.orEmpty()
     val today = data?.today?.takeIf { it.isNotBlank() }?.let { LocalDate.parse(it) } ?: LocalDate.now()
+    // the team's calendar comes from the server: the admins and «visibilità piena» (issue #275); a
+    // specialist without it gets his own orders and those of his work groups. Only admins plan.
     val planner = data?.installers != null
-    // the specialist sees the whole team's calendar; only admins create, move or cancel the orders
     val canPlan = planner && c.session.isAdmin
+    val me = c.session.state.collectAsState().value?.user?.id?.toLong()
+    // whose order it is, when the list has someone else's (the team, or a colleague of the group)
+    val others = planner || items.any { it.assignedTo != null && it.assignedTo != me }
     val create: (LocalDate, Int?) -> Unit = { d, h -> editing = OrderDraftMath.at(d, h, user) to null }
     // «Nuovo intervento» from Oggi opens the calendar with the editor
     LaunchedEffect(canPlan) {
@@ -210,7 +214,7 @@ fun CalendarScreen(c: AppContainer, onOpen: (Dest) -> Unit) {
         when (view) {
             CalView.Day -> {
                 Untimed(items.filter { it.day == anchor.toString() }) { open = it }
-                Timeline(listOf(anchor), items, today, showAssignee = planner, onEmpty = if (canPlan) create else null) { open = it }
+                Timeline(listOf(anchor), items, today, showAssignee = others, onEmpty = if (canPlan) create else null) { open = it }
             }
             CalView.Week -> {
                 val days = (0L until 7L).map { CalendarMath.weekStart(anchor).plusDays(it) }
@@ -223,7 +227,7 @@ fun CalendarScreen(c: AppContainer, onOpen: (Dest) -> Unit) {
                 Text(CalendarMath.title(CalView.Day, anchor), style = MaterialTheme.typography.titleSmall, fontWeight = FontWeight.SemiBold)
                 val day = items.filter { it.day == anchor.toString() }
                 if (day.isEmpty()) Text("Nessun intervento.", color = MaterialTheme.colorScheme.onSurfaceVariant)
-                day.forEach { o -> AgendaRow(o, showAssignee = data?.installers != null) { open = o } }
+                day.forEach { o -> AgendaRow(o, showAssignee = others) { open = o } }
             }
         }
         Text(

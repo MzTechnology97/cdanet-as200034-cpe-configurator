@@ -32,6 +32,8 @@ const TEST_ERRORS: Record<string, string> = {
   uisp_tls_error: 'certificato TLS non valido (prova «Certificato non verificato»)',
   uisp_error: 'UISP ha risposto con un errore',
   connector_incomplete: 'servono indirizzo e token',
+  connector_target_not_public: 'indirizzo non ammesso: l’UISP dell’azienda deve essere su Internet, non su una rete privata',
+  connector_url_invalid: 'indirizzo non valido: https://nome[:porta], senza ? né #',
 };
 
 function TestView({ r }: { r: TestResult }) {

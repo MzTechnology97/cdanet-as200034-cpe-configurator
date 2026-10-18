@@ -4,7 +4,8 @@ import { api, download } from '../../lib/api';
 import { toast } from '../../lib/toast';
 import type { PageContext } from '../../shell/routes';
 import { AsyncButton, Badge, Button, Card, Drawer, EmptyState, Field, Icon, Notice, PageHeader, Segmented, Skeleton, Stat, Table } from '../../ui';
-import { date, type SpecAcceptance, type SpecConnector, type SpecJob, type SpecSummary, STATUS, VERDICT } from './types';
+import { MyGroups } from './MyGroups';
+import { date, myId, type SpecAcceptance, type SpecConnector, type SpecJob, type SpecSummary, STATUS, VERDICT } from './types';
 
 /**
  * Storico Specialist: the specialist's installations for the companies he works for, apart from
@@ -67,6 +68,7 @@ export function SpecialistJobs({ params }: PageContext) {
           </AsyncButton>
         }
       />
+      <MyGroups shared="lo storico delle installazioni, in sola lettura, e il calendario" />
       <section className="ui-stats" aria-label="Riepilogo">
         <Stat label="installazioni negli ultimi 30 giorni" value={s ? s.jobs30d : '…'} onClick={() => filterBy('')} />
         <Stat label="scritte" value={s ? s.success30d : '…'} tone="good" onClick={() => filterBy('success')} />
@@ -117,6 +119,7 @@ export function SpecialistJobs({ params }: PageContext) {
             onRow={setOpen}
             columns={[
               { label: 'Data', render: (j) => <span className="ui-small">{date(j.createdAt)}</span> },
+              { label: 'Specialist', render: (j) => (j.authorId === myId() ? <span className="ui-small">io</span> : <Badge tone="neutral">{j.author}</Badge>) },
               { label: 'Azienda', render: (j) => j.company || <span className="ui-muted">—</span> },
               {
                 label: 'Cliente',
@@ -167,6 +170,7 @@ function JobDrawer({ j, onClose, onChanged, onDeleted }: { j: SpecJob; onClose: 
       <dd>{v || '—'}</dd>
     </div>
   );
+  const mine = j.authorId === myId();
   const remove = async () => {
     if (!confirm(`Eliminare dallo storico l’installazione di «${j.customer || j.deviceName || j.mac || j.model}»? La CPE resta configurata com’è; resta solo la voce nel registro attività.`)) return;
     await api(`/api/specialist/jobs/${j.id}`, { method: 'DELETE' });
@@ -179,13 +183,16 @@ function JobDrawer({ j, onClose, onChanged, onDeleted }: { j: SpecJob; onClose: 
       onClose={onClose}
       footer={
         <>
-          <AsyncButton variant="danger" icon="delete" onClick={remove} onError={fail}>
-            Elimina dallo storico
-          </AsyncButton>
+          {mine && (
+            <AsyncButton variant="danger" icon="delete" onClick={remove} onError={fail}>
+              Elimina dallo storico
+            </AsyncButton>
+          )}
           <Button onClick={onClose}>Chiudi</Button>
         </>
       }
     >
+      {!mine && <Notice tone="info">Installazione di {j.author || 'un altro specialist'} del tuo gruppo di lavoro: in sola lettura. Collaudo e autorizzazione in UISP li fa chi l’ha installata, con i suoi connettori.</Notice>}
       <div className="ui-row">
         <Badge tone={STATUS[j.status][1]}>{STATUS[j.status][0]}</Badge>
         {j.attempts > 1 && <Badge>{j.attempts} scritture</Badge>}
@@ -219,8 +226,8 @@ function JobDrawer({ j, onClose, onChanged, onDeleted }: { j: SpecJob; onClose: 
           <p className="ui-muted ui-small">Non registrata.</p>
         )}
       </section>
-      {j.status === 'success' && <AcceptanceSection j={j} onChanged={onChanged} />}
-      {j.status === 'success' && j.connector && <UispSection j={j} onChanged={onChanged} />}
+      {mine && j.status === 'success' && <AcceptanceSection j={j} onChanged={onChanged} />}
+      {mine && j.status === 'success' && j.connector && <UispSection j={j} onChanged={onChanged} />}
       {!!j.stages.length && (
         <section className="jb-sec">
           <h3>Fasi della scrittura</h3>

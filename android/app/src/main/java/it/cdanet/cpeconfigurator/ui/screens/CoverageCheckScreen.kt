@@ -127,7 +127,7 @@ private data class BaseAp(val id: String, val name: String, val lat: Double, val
 fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? = null, onAim: ((CompassTarget) -> Unit)? = null) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val admin = c.session.isStaff
+    val admin = c.session.seesAll
     val modules by c.modules.collectAsState()
     val gps = remember { it.cdanet.cpeconfigurator.network.LocationHelper(context) }
     var query by remember { mutableStateOf("") }
@@ -497,8 +497,9 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
             }
         }
         // the other operators at the same point (FTTH, FTTC, radio), by AGCOM sticker, with every check
-        // (installers without the operators' names)
-        if (p != null) OperatorsCoverageCard(c, p.lat, p.lon, admin)
+        // (installers without the operators' names; on CDA Net's account: not for a specialist
+        // without «visibilità piena», issue #275)
+        if (p != null && c.session.doesCdaWork) OperatorsCoverageCard(c, p.lat, p.lon, admin)
         Column(Modifier.bringIntoViewRequester(savedPos)) {
             SavedChecksCard(c, admin, savedVersion) { s ->
                 openSaved(s)

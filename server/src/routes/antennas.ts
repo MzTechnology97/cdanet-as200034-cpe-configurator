@@ -25,10 +25,13 @@ export function suggestedAzimuth(ap: { lat: number; lon: number }, clients: Arra
  */
 export function antennaRoutes(app: FastifyInstance, ctx: AppContext) {
   const admin = { preHandler: [ctx.auth.requireAdmin] };
-  // the specialist sees the antennas and loads the library; the APs' own data stay with the admins
+  // the makers' patterns: a technical tool for every specialist
   const staff = { preHandler: [ctx.auth.requireStaff] };
+  // CDA Net's APs (names, customers, azimuths) and loading the library they use: only with
+  // «visibilità piena» (issue #275); assigning an antenna to an AP stays with the admins
+  const all = { preHandler: [ctx.auth.requireSeesAll] };
 
-  app.get('/api/admin/antennas', staff, async () => {
+  app.get('/api/admin/antennas', all, async () => {
     const lib = ctx.antennas.library().map(({ az: _a, el: _e, ...p }) => p);
     const assigned = ctx.antennas.assigned();
     const aps = ctx.uisp
@@ -63,7 +66,7 @@ export function antennaRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   /** Downloads the patterns of Ubiquiti and RF elements (about 1 MB) and rebuilds the library. */
-  app.post('/api/admin/antennas/import', staff, async (req) => {
+  app.post('/api/admin/antennas/import', all, async (req) => {
     if (ctx.antennas.state().running) throw new HttpError(409, 'import_running');
     recordEvent(ctx.db, req.user!.id, 'antennas.import', 'Diagrammi delle antenne', 'Ubiquiti airMAX e RF elements');
     void ctx.antennas.importLibrary();

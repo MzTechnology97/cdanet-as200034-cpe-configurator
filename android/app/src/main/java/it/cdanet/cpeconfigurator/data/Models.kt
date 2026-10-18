@@ -3,8 +3,9 @@ package it.cdanet.cpeconfigurator.data
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
+/** [fullView]: a specialist an admin gave «visibilità piena» (issue #275): sees and works like CDA Net's staff. */
 @Serializable
-data class UserDto(val id: Int, val username: String, val role: String)
+data class UserDto(val id: Int, val username: String, val role: String, val fullView: Boolean = false)
 
 @Serializable
 data class LoginRequest(val username: String, val password: String)

@@ -12,6 +12,7 @@ import type { CrmSettings } from './services/crm.ts';
 import type { VrmSettings } from './services/victron.ts';
 import type { MyWicSettings } from './services/mywic.ts';
 import type { Nas } from './services/nas.ts';
+import type { WorkGroups } from './services/work-groups.ts';
 import type { PlatformHealth } from './services/platform-health.ts';
 import type { ProactiveAlerts } from './services/proactive-alerts.ts';
 import type { CoverageOps } from './services/coverage-operators.ts';
@@ -58,6 +59,7 @@ export interface AppContext {
   /** Multi-operator coverage (MyWic: FTTH, FTTC, FWA of the other operators), admins only, read only. */
   mywic: MyWicSettings;
   nas: Nas;
+  workGroups: WorkGroups;
   /** «Salute piattaforma»: the state of every source, alerts to the NOC and the encrypted backup. */
   platformHealth: PlatformHealth;
   /** Alerts to the NOC before the customers call: signal drops, busy APs, POPs on battery. */

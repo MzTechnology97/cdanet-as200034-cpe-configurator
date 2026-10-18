@@ -29,6 +29,10 @@ interface Account {
   warehouseMinStock?: number | null;
   warehouseSite?: string | null;
   stockBypass?: boolean;
+  /** A specialist with «visibilità piena» on CDA Net's data (issue #275). */
+  fullView?: boolean;
+  /** The work groups of a specialist. */
+  workGroups?: Array<{ id: number; name: string }>;
 }
 interface Template {
   model: string;
@@ -313,7 +317,7 @@ function AccountDrawer({ u, me, templates, initialTab = 'access', onClose, onCha
                     <AsyncButton
                       key={r}
                       onClick={async () => {
-                        if (r !== 'installer' && !confirm(`Rendere ${u.username} ${r === 'admin' ? 'amministratore' : 'specialist'}? ${r === 'admin' ? 'Gestirà tutta la piattaforma.' : 'Vedrà tutto come un amministratore, con la sua sezione Specialist.'} Le sessioni attive verranno chiuse.`)) return;
+                        if (r !== 'installer' && !confirm(`Rendere ${u.username} ${r === 'admin' ? 'amministratore' : 'specialist'}? ${r === 'admin' ? 'Gestirà tutta la piattaforma.' : 'Avrà la sua sezione Specialist e vedrà solo il proprio lavoro e quello dei suoi gruppi.'} Le sessioni attive verranno chiuse.`)) return;
                         await patch({ role: r }, 'Ruolo aggiornato');
                       }}
                       onError={fail}
@@ -324,6 +328,29 @@ function AccountDrawer({ u, me, templates, initialTab = 'access', onClose, onCha
               </div>
             )}
             <RoleHint role={u.role} />
+            {u.role === 'specialist' && (
+              <div className="us-full">
+                <label className="ui-check">
+                  <input
+                    type="checkbox"
+                    checked={!!u.fullView}
+                    onChange={async (e) => {
+                      const on = e.target.checked;
+                      if (on && !confirm(`Dare a ${u.username} la visibilità piena (direttore tecnico)? Vedrà clienti, rete, interventi e lavoro di CDA Net come un amministratore, potrà fare installazioni CDA Net (con le chiavi Wi-Fi delle reti e la password delle CPE di CDA Net), vedrà il lavoro di tutti gli specialist e gestirà i gruppi di lavoro. La visibilità non passa ai membri dei suoi gruppi. Da dare solo a uno specialist interno all’azienda. Le sue sessioni verranno chiuse.`)) return;
+                      try {
+                        await patch({ fullView: on }, on ? 'Visibilità piena data' : 'Visibilità piena tolta');
+                      } catch (err) {
+                        fail(err);
+                      }
+                    }}
+                  />
+                  Visibilità piena · direttore tecnico (solo per uno specialist interno)
+                </label>
+                <p className="ui-muted ui-small us-p">
+                  Gruppi di lavoro: {u.workGroups?.length ? u.workGroups.map((g) => g.name).join(', ') : 'nessuno'} · <a href="#/work-groups">Gruppi di lavoro</a>
+                </p>
+              </div>
+            )}
           </section>
           <section className="us-sec">
             <h3>Password</h3>
@@ -523,7 +550,7 @@ function RoleHint({ role }: { role: string }) {
   if (role === 'specialist') {
     return (
       <p className="ui-muted ui-small us-p">
-        Specialist: lavora in autonomia per altre aziende. Vede tutto come un amministratore e usa tutti gli strumenti, con la sua sezione (template suoi, connettori UISP delle aziende, storico a parte) e il flusso Specialist nell’app: niente magazzino, collaudo facoltativo, nessuna approvazione del NOC. Account, connettori, impostazioni, privacy, Claude, accessi bloccati e decisioni sul lavoro CDA Net restano agli admin.
+        Specialist: lavora in autonomia per altre aziende, anche esterno a CDA Net. Ha la sua sezione (template suoi, connettori UISP delle aziende, storico a parte), gli strumenti tecnici e il flusso Specialist nell’app: niente magazzino, collaudo facoltativo, nessuna approvazione del NOC. Vede solo il proprio lavoro e quello dei suoi gruppi di lavoro (template, storico, calendario); clienti, rete e lavoro di CDA Net, comprese le installazioni CDA Net con le chiavi Wi-Fi e la password delle CPE, solo con la visibilità piena. Account, connettori, impostazioni, privacy, Claude, accessi bloccati e decisioni sul lavoro CDA Net restano agli admin.
       </p>
     );
   }

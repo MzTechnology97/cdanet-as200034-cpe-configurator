@@ -120,8 +120,10 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
     val prov by c.provisioning.state.collectAsState()
     val install by c.install.state.collectAsState()
     val modules by c.modules.collectAsState()
-    // admins and the specialist see the whole network (the decisions on CDA Net's work stay with the admins)
-    val admin = session?.user?.role.let { it == "admin" || it == "specialist" }
+    // the admins and «visibilità piena» see the whole network (issue #275); the decisions on CDA Net's
+    // work stay with the admins; a specialist without it works for his companies only
+    val admin = session?.user?.let { it.role == "admin" || (it.role == "specialist" && it.fullView) } == true
+    val cdaWork = session?.user?.let { it.role != "specialist" || it.fullView } != false
     val specialist = session?.user?.role == "specialist"
     val spec = c.specialist.state.collectAsState().value
     val specPending = c.specialist.results.pending.collectAsState().value
@@ -139,11 +141,12 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
     var today by remember { mutableStateOf(Today(null, null, null)) }
     LaunchedEffect(offline, modules, c.refresh.collectAsState().value) {
         if (offline) return@LaunchedEffect
-        val todo = runCatching { toDoItems(c.api.myJobs()).size }.getOrNull()
+        // CDA Net's installations and CPEs: not for a specialist without «visibilità piena» (issue #275)
+        val todo = if (cdaWork) runCatching { toDoItems(c.api.myJobs()).size }.getOrNull() else null
         today = Today(todo, today.outages, today.cpeIssues)
         val out = if (modules["power_outages"] != false) runCatching { c.api.outages().active.size }.getOrNull() else null
         today = Today(today.todo, out, today.cpeIssues)
-        val issues = if (modules["cpe_health"] != false) runCatching { c.api.cpeHealth().totals.let { it.cpes - it.ok } }.getOrNull() else null
+        val issues = if (cdaWork && modules["cpe_health"] != false) runCatching { c.api.cpeHealth().totals.let { it.cpes - it.ok } }.getOrNull() else null
         today = Today(today.todo, today.outages, issues)
         if (specialist) specToAuthorize = runCatching { c.api.specSummary().toAuthorize }.getOrNull()
     }
@@ -169,6 +172,7 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
                         resume = spec.inProgress,
                         onConfigure = { onOpen(Dest(Screen.Specialist, SPECIALIST_TABS[0])) },
                         onHistory = { onOpen(Dest(Screen.Specialist, SPECIALIST_TABS[1])) },
+                        cdaWork = cdaWork,
                     )
                 } else {
                     null
@@ -192,10 +196,10 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
         if (!offline) {
             Enter(order++) { GroupHeader("Oggi", Area.Work) }
             val counters = buildList {
-                add(Counter(today.todo, "da completare", R.drawable.ic_pending_actions, Tone.Brand, Dest(Screen.Installations, "Da completare")))
+                if (cdaWork) add(Counter(today.todo, "da completare", R.drawable.ic_pending_actions, Tone.Brand, Dest(Screen.Installations, "Da completare")))
                 add(Counter(unread, "notifiche da leggere", R.drawable.ic_notifications, Tone.Brand, Dest(Screen.Notifications)))
                 if (modules["power_outages"] != false) add(Counter(today.outages, if (admin) "guasti Enel attivi" else "guasti nelle tue zone", R.drawable.ic_power_off, Tone.Warn, Dest(Screen.NetHub, "Guasti")))
-                if (modules["cpe_health"] != false) add(Counter(today.cpeIssues, "CPE con problemi", R.drawable.ic_monitor_heart, Tone.Warn, Dest(Screen.Installations, if (admin) "Salute CPE" else "Stato CPE")))
+                if (cdaWork && modules["cpe_health"] != false) add(Counter(today.cpeIssues, "CPE con problemi", R.drawable.ic_monitor_heart, Tone.Warn, Dest(Screen.Installations, if (admin) "Salute CPE" else "Stato CPE")))
                 if (specialist) add(Counter(specToAuthorize, "CPE Specialist da autorizzare in UISP", R.drawable.ic_cell_tower, Tone.Warn, Dest(Screen.Specialist, SPECIALIST_TABS[1])))
             }
             counters.chunked(2).forEach { pair ->
@@ -209,7 +213,7 @@ fun HomeScreen(c: AppContainer, offline: Boolean, unread: Int, onOpen: (Dest) ->
         }
 
         // shortcuts: the ones this account chose, in its order (Modifica)
-        val catalog = shortcutCatalog(modules, admin, offline, specialist)
+        val catalog = shortcutCatalog(modules, admin, offline, specialist, cdaWork)
         val shortcuts = if (saved == null) emptyList() else resolveShortcuts(savedShortcuts, catalog)
         Enter(order++) {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -264,8 +268,11 @@ private fun CounterTile(k: Counter, modifier: Modifier, onClick: () -> Unit) {
     StatTile(k.label, k.value?.toString(), modifier, tone = if ((k.value ?: 0) > 0) k.tone else Tone.Neutral, icon = k.icon, onClick = onClick)
 }
 
-/** The Specialist's actions on the hero card: his flow (or the CPE in progress) and his history. */
-private class SpecialistActions(val resume: Boolean, val onConfigure: () -> Unit, val onHistory: () -> Unit)
+/**
+ * The Specialist's actions on the hero card: his flow (or the CPE in progress) and his history;
+ * CDA Net's installations too only with «visibilità piena» ([cdaWork], issue #275).
+ */
+private class SpecialistActions(val resume: Boolean, val onConfigure: () -> Unit, val onHistory: () -> Unit, val cdaWork: Boolean = true)
 
 /** Brand card on top: greeting and the main actions of the day. */
 @Composable
@@ -343,7 +350,7 @@ private fun Hero(
                 Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
                     HeroButton("Configura una CPE", R.drawable.ic_settings_input_antenna, specialist.onConfigure, primary = true, modifier = Modifier.fillMaxWidth())
                     HeroButton("Storico Specialist", R.drawable.ic_history, specialist.onHistory, primary = false, modifier = Modifier.fillMaxWidth())
-                    HeroButton("Installazione CDA Net", R.drawable.ic_add_circle, onNew, primary = false, modifier = Modifier.fillMaxWidth())
+                    if (specialist.cdaWork) HeroButton("Installazione CDA Net", R.drawable.ic_add_circle, onNew, primary = false, modifier = Modifier.fillMaxWidth())
                 }
             } else {
                 Text("Che intervento fai oggi?", style = MaterialTheme.typography.bodyMedium, color = Color.White.copy(alpha = 0.9f))
@@ -611,6 +618,12 @@ internal val HeroBrush = Brush.linearGradient(
 
 /** «Inizia» of a work order (Oggi and Calendario): the acceptance test will check the GPS against its position. */
 internal fun startOrder(c: AppContainer, o: it.cdanet.cpeconfigurator.data.WorkOrderDto, onOpen: (Dest) -> Unit) {
+    // CDA Net's installation, with its keys: never for a specialist without «visibilità piena»
+    // (issue #275); the screen says why
+    if (!c.session.doesCdaWork && o.kind != "survey") {
+        onOpen(Dest(Screen.Provision))
+        return
+    }
     c.activeWorkOrder.value = o
     when (o.kind) {
         "new" -> {

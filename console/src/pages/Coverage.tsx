@@ -10,7 +10,7 @@ import { MapView } from '../map/MapView';
 import { CoverageAdmin, LinkCharts } from './CoverageAdmin';
 import type { PageContext } from '../shell/routes';
 import { AsyncButton, Badge, Button, Card, Field, Icon, Notice, PageHeader, Skeleton } from '../ui';
-import { isStaff } from '../lib/roles';
+import { doesCdaWork, seesAll } from '../lib/roles';
 
 /**
  * Copertura. Installers: the APs advised for an address, coordinates or this device's position
@@ -22,10 +22,11 @@ import { isStaff } from '../lib/roles';
 
 export function Coverage({ user }: PageContext) {
   // admins and specialists: the tools without limits
-  return isStaff(user) ? <CoverageAdmin /> : <InstallerCoverage />;
+  // the other operators (MyWic, CDA Net's account): not for a specialist without «visibilità piena»
+  return seesAll(user) ? <CoverageAdmin /> : <InstallerCoverage operators={doesCdaWork(user)} />;
 }
 
-function InstallerCoverage() {
+function InstallerCoverage({ operators }: { operators: boolean }) {
   const [addr, setAddr] = useState('');
   const [lat, setLat] = useState('');
   const [lon, setLon] = useState('');
@@ -213,7 +214,7 @@ function InstallerCoverage() {
           }
         />
       )}
-      {point && <OperatorsCard key={`${point.la},${point.lo}`} point={point} admin={false} />}
+      {point && operators && <OperatorsCard key={`${point.la},${point.lo}`} point={point} admin={false} />}
       <div ref={linkRef}>{link && point && <LinkCard link={link} onHeight={(v) => (setHeight(v), recheck({ height: v }))} />}</div>
       <SavedChecksCard
         kind="coverage"

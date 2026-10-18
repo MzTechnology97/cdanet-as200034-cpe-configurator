@@ -16,12 +16,16 @@ import it.cdanet.cpeconfigurator.data.SpecJobDto
 import it.cdanet.cpeconfigurator.data.SpecJobRequest
 import it.cdanet.cpeconfigurator.data.SpecRadioDto
 import it.cdanet.cpeconfigurator.data.SpecResultDto
+import it.cdanet.cpeconfigurator.data.Session
+import it.cdanet.cpeconfigurator.data.SessionState
 import it.cdanet.cpeconfigurator.data.SpecTemplateDto
 import it.cdanet.cpeconfigurator.data.TargetDto
+import it.cdanet.cpeconfigurator.data.UserDto
 import it.cdanet.cpeconfigurator.firmware.AirosImage
 import it.cdanet.cpeconfigurator.specialist.SpecCpe
 import it.cdanet.cpeconfigurator.specialist.SpecForm
 import it.cdanet.cpeconfigurator.specialist.SpecialistRules
+import it.cdanet.cpeconfigurator.ui.screens.shortcutCatalog
 import kotlinx.serialization.json.jsonObject
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -148,5 +152,40 @@ class SpecialistFlowTest {
         assertEquals("LiteBeam 5AC", prepared.title)
         assertEquals("MAC letto alla scrittura", prepared.macLabel)
         assertEquals("24:A4:3C:11:22:33", j.macLabel)
+    }
+
+    // issue #275: a specialist may be outside CDA Net. Without «visibilità piena» he sees his own work
+    // and his groups' (no team agenda on Oggi), never CDA Net's installations and keys
+    @Test
+    fun `a specialist sees his own and his groups', CDA Net only with full view`() {
+        val session = Session()
+        fun as_(user: UserDto) = session.set(SessionState("t", user, "2099-01-01T00:00:00Z"))
+        as_(UserDto(5, "spec.a", "specialist"))
+        assertTrue(session.isSpecialist)
+        assertFalse("no team agenda, no NOC views", session.seesAll)
+        assertFalse("no CDA Net installation", session.doesCdaWork)
+        as_(UserDto(5, "spec.a", "specialist", fullView = true))
+        assertTrue(session.seesAll && session.doesCdaWork)
+        as_(UserDto(7, "tecnico", "installer"))
+        assertFalse(session.seesAll)
+        assertTrue(session.doesCdaWork)
+        as_(UserDto(1, "cda", "admin"))
+        assertTrue(session.seesAll && session.doesCdaWork)
+        // the login as the server sends it: fullView only when an admin gave it
+        assertTrue(AppJson.decodeFromString(UserDto.serializer(), """{"id":5,"username":"spec.a","role":"specialist","fullView":true}""").fullView)
+        assertFalse(AppJson.decodeFromString(UserDto.serializer(), """{"id":5,"username":"spec.a","role":"specialist"}""").fullView)
+        // a template of another member: its author's, with its secrets
+        val shared = AppJson.decodeFromString(
+            SpecTemplateDto.serializer(),
+            """{"id":9,"model":"LiteBeam 5AC","name":"Azienda X","authorId":6,"author":"spec.b","mine":false,"secretsSet":{"snmpCommunity":true}}""",
+        )
+        assertFalse(shared.mine)
+        assertEquals("spec.b", shared.author)
+        assertTrue("an older server: his own", template.mine)
+        // Oggi: his flow, none of CDA Net's CPE tools and installations
+        val ids = shortcutCatalog(emptyMap(), admin = false, offline = false, specialist = true, cdaWork = false).map { it.id }
+        assertTrue(ids.toString(), ids.containsAll(listOf("spec_new", "spec_history", "spec_templates")))
+        assertFalse(ids.toString(), ids.any { it in setOf("cpe", "alignment", "diagnosis", "visible_aps", "acceptance", "firmware", "todo", "history", "cpe_health") })
+        assertTrue(shortcutCatalog(emptyMap(), admin = false, offline = false, specialist = true).any { it.id == "cpe" })
     }
 }

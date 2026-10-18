@@ -10,18 +10,21 @@ import { stockCheck } from './warehouse.ts';
 
 export function provisioningRoutes(app: FastifyInstance, ctx: AppContext) {
   const user = { preHandler: ctx.auth.requireUser };
+  // CDA Net's templates, Wi-Fi keys and CPE password: not for a specialist without «visibilità
+  // piena», who works for his companies only (issue #275); his own history stays readable
+  const cdaWork = { preHandler: ctx.auth.requireCdaWork };
 
   /** Templates selectable in the field app (names only, no content). */
-  app.get('/api/provisioning/templates', user, async (req) =>
+  app.get('/api/provisioning/templates', cdaWork, async (req) =>
     ctx.templates.visibleTo(req.user!),
   );
 
-  app.get('/api/wireless-networks', user, async () =>
+  app.get('/api/wireless-networks', cdaWork, async () =>
     ctx.db.prepare('SELECT ssid, updated_at updatedAt FROM wireless_secrets ORDER BY ssid').all(),
   );
 
   /** Dry-run: validates the request and reports readiness without exposing any secret. */
-  app.post('/api/provisioning/plan', user, async (req) => {
+  app.post('/api/provisioning/plan', cdaWork, async (req) => {
     const x = provisionRequestSchema.parse(req.body);
     return { ok: true, request: { ...x, pppoePassword: undefined }, ...ctx.provisioning.plan(x, req.user!) };
   });
@@ -30,7 +33,7 @@ export function provisioningRoutes(app: FastifyInstance, ctx: AppContext) {
    * Creates a short-lived job and returns the fully rendered system.cfg.
    * Only the Android field client (which applies it over SSH) may call this.
    */
-  app.post('/api/provisioning/jobs', user, async (req, reply) => {
+  app.post('/api/provisioning/jobs', cdaWork, async (req, reply) => {
     const client = parseClientHeader(req.headers['x-cda-client'] as string | undefined);
     if (!client) throw new HttpError(403, 'trusted_client_required');
     if (!versionAtLeast(client.version, ctx.cfg.minAndroidVersion)) {
@@ -56,7 +59,7 @@ export function provisioningRoutes(app: FastifyInstance, ctx: AppContext) {
     return { ok: true };
   });
 
-  app.post('/api/provisioning/jobs/:id/result', user, async (req) => {
+  app.post('/api/provisioning/jobs/:id/result', cdaWork, async (req) => {
     const id = z.string().uuid().parse((req.params as { id: string }).id);
     const body = provisionResultSchema.parse(req.body);
     const r = ctx.provisioning.recordResult(id, req.user!, body);

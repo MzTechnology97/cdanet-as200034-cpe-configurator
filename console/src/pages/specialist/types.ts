@@ -1,3 +1,4 @@
+import { session } from '../../lib/api';
 import type { Facts } from '../../templates/form';
 
 /**
@@ -19,10 +20,18 @@ export interface SpecTemplate {
   own: string[];
   secretsSet: { snmpCommunity: boolean };
   jobs: number;
+  /** Who made it: himself or another specialist of his work groups (issue #275). */
+  authorId: number;
+  author: string;
+  /** His own: he deletes it and sets its secrets (the others of the group type them). */
+  mine?: boolean;
   createdAt: string;
   updatedAt: string;
   template?: string;
 }
+
+/** The current specialist (the work of the others of his groups is shared, issue #275). */
+export const myId = (): number | null => session.get()?.user.id ?? null;
 
 export interface SpecConnector {
   id: number;
@@ -51,6 +60,9 @@ export interface SpecAcceptance {
 
 export interface SpecJob {
   id: string;
+  /** Who installed it: himself or another specialist of his work groups (read only then). */
+  authorId: number | null;
+  author: string;
   createdAt: string;
   completedAt: string | null;
   status: 'prepared' | 'success' | 'failed';

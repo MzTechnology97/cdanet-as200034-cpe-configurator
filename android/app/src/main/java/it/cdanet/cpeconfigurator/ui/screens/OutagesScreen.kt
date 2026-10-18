@@ -92,8 +92,8 @@ enum class OutageSection { List, Areas }
 fun OutagesScreen(c: AppContainer, section: OutageSection = OutageSection.List) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    // admins and specialists see every outage; the shared zones stay with the admins
-    val admin = c.session.isStaff
+    // the admins and «visibilità piena» see every outage (issue #275); the shared zones stay with the admins
+    val admin = c.session.seesAll
     var data by remember { mutableStateOf<OutagesDto?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf(false) }

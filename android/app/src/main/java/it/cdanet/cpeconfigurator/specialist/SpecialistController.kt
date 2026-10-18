@@ -181,6 +181,8 @@ data class SpecEditorOpen(
     val template: String? = null,
     val boardMatch: String? = null,
     val snmpSet: Boolean = false,
+    /** A template of another member of the group (issue #275): its secrets stay with him. */
+    val author: String? = null,
     val sha256: String = "",
     val updatedAt: String = "",
     val replacements: List<SpecReplacementDto> = emptyList(),

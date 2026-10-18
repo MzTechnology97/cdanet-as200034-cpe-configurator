@@ -868,6 +868,45 @@ const MIGRATIONS: Array<string | CodeMigration> = [
   `
   ALTER TABLE specialist_jobs ADD COLUMN cpe_at_write INTEGER NOT NULL DEFAULT 0;
   `,
+  // issue #275 (titolare, 17/10/2026): a specialist may be outside CDA Net. He sees his own work and
+  // that of his work groups (shared templates, installations, calendar); «visibilità piena» on CDA
+  // Net's data only when an admin gives it (off for everyone, the specialists of today included)
+  `
+  ALTER TABLE users ADD COLUMN full_view INTEGER NOT NULL DEFAULT 0;
+  CREATE TABLE work_groups(
+    id INTEGER PRIMARY KEY,
+    name TEXT NOT NULL,
+    notes TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    updated_at TEXT NOT NULL
+  );
+  CREATE UNIQUE INDEX work_groups_name ON work_groups(name COLLATE NOCASE);
+  CREATE TABLE work_group_members(
+    group_id INTEGER NOT NULL REFERENCES work_groups(id) ON DELETE CASCADE,
+    user_id INTEGER NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    added_at TEXT NOT NULL,
+    PRIMARY KEY(group_id, user_id)
+  );
+  CREATE INDEX work_group_members_user ON work_group_members(user_id);
+  -- a copy of a CDA Net template: shared in the group only with whoever may use the original
+  ALTER TABLE specialist_templates ADD COLUMN cda_source_id INTEGER;
+  `,
+  // the copies of CDA Net templates made before (1.36.0-1.36.2) carry no source: known by their
+  // note, or by the log of the copy made when the template was created (not an older one with the
+  // same name); 0 = its original is not found (shared only with «visibilità piena»)
+  `
+  UPDATE specialist_templates SET cda_source_id = COALESCE(
+    (SELECT p.id FROM profile_templates p WHERE p.model = specialist_templates.model AND specialist_templates.notes = 'Copia del template CDA Net «' || p.name || '»' ORDER BY p.id LIMIT 1),
+    0)
+  WHERE cda_source_id IS NULL AND notes LIKE 'Copia del template CDA Net «%';
+  UPDATE specialist_templates SET cda_source_id = 0
+  WHERE cda_source_id IS NULL AND EXISTS (
+    SELECT 1 FROM events e
+     WHERE e.action = 'specialist.template_copy' AND e.user_id = specialist_templates.user_id
+       AND e.target = specialist_templates.model || ' · ' || specialist_templates.name AND e.created_at >= specialist_templates.created_at
+  );
+  `,
 ];
 
 export function openDatabase(path: string): Db {

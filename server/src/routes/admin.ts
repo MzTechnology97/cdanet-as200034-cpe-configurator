@@ -24,6 +24,8 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
   const admin = { preHandler: ctx.auth.requireAdmin };
   // what the specialist sees and uses too (the CDA Net templates in read only, the form helpers)
   const staff = { preHandler: ctx.auth.requireStaff };
+  // CDA Net's templates, its status and the log: data of others (issue #275)
+  const all = { preHandler: ctx.auth.requireSeesAll };
   const actor = (req: { user?: { id: number } }) => req.user?.id ?? null;
 
   // ---- Funzionalità (modules) -------------------------------------------------------
@@ -77,7 +79,7 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
   app.get('/api/admin/users', admin, async () =>
     db
       .prepare(
-        `SELECT u.id, u.username, u.role, u.active, u.created_at createdAt, u.last_login_at lastLoginAt, u.totp_enabled totpEnabled,
+        `SELECT u.id, u.username, u.role, u.active, u.created_at createdAt, u.last_login_at lastLoginAt, u.totp_enabled totpEnabled, u.full_view fullView,
                 u.warehouse_site_id warehouseSiteId, u.warehouse_site warehouseSite, u.stock_bypass stockBypass, u.warehouse_min_stock warehouseMinStock,
                 (SELECT count(*) FROM provisioning_jobs j WHERE j.user_id = u.id) jobs
          FROM users u ORDER BY u.role, u.username`,
@@ -88,6 +90,8 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
         active: !!(r as { active: number }).active,
         totpEnabled: !!(r as { totpEnabled: number }).totpEnabled,
         stockBypass: !!(r as { stockBypass: number }).stockBypass,
+        fullView: !!(r as { fullView: number }).fullView,
+        workGroups: ctx.workGroups.ofUser((r as { id: number }).id).map((g) => ({ id: g.id, name: g.name })),
       })),
   );
 
@@ -118,8 +122,8 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
         .prepare('INSERT INTO users(username, password_hash, role, created_at, warehouse_site_id, warehouse_site, stock_bypass) VALUES(?,?,?,?,?,?,?)')
         .run(b.username, hashPassword(b.password), b.role, nowIso(), b.warehouseSiteId ?? null, site, b.stockBypass ? 1 : 0);
       recordEvent(db, actor(req), 'user.create', b.username, b.role);
-      // a new account that sees everything: the NOC hears of it
-      if (b.role === 'specialist') ctx.notify.security(`Nuovo account specialist <b>${escapeHtml(b.username)}</b> creato da ${escapeHtml(req.user!.username)}: vede tutto come un amministratore`);
+      // a new specialist: the NOC hears of it (he sees his own work and his groups', issue #275)
+      if (b.role === 'specialist') ctx.notify.security(`Nuovo account specialist <b>${escapeHtml(b.username)}</b> creato da ${escapeHtml(req.user!.username)}: vede il proprio lavoro e quello dei suoi gruppi`);
       return reply.code(201).send({ ok: true, id: Number(r.lastInsertRowid) });
     } catch {
       throw new HttpError(409, 'username_exists');
@@ -136,14 +140,17 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
         resetTotp: z.literal(true).optional(),
         warehouseSiteId: z.number().int().positive().nullable().optional(),
         stockBypass: z.boolean().optional(),
+        /** A specialist sees CDA Net's data of everyone (issue #275): given by an admin, off by default. */
+        fullView: z.boolean().optional(),
       })
       .strict()
       .refine((x) => Object.keys(x).length > 0, 'empty')
       .parse(req.body);
-    const target = db.prepare('SELECT id, username, role FROM users WHERE id = ?').get(id) as
-      | { id: number; username: string; role: string }
+    const target = db.prepare('SELECT id, username, role, full_view fullView FROM users WHERE id = ?').get(id) as
+      | { id: number; username: string; role: string; fullView: number }
       | undefined;
     if (!target) throw new HttpError(404, 'user_not_found');
+    if (b.fullView === true && (b.role ?? target.role) !== 'specialist') throw new HttpError(400, 'full_view_specialist_only');
     const demoted = b.active === false || (b.role !== undefined && b.role !== 'admin');
     if (id === req.user?.id && demoted) throw new HttpError(409, 'cannot_demote_current_admin');
     if (demoted && target.role === 'admin') {
@@ -161,7 +168,26 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
       ctx.notify.security(`Verifica in due passaggi di <b>${escapeHtml(target.username)}</b> azzerata da ${escapeHtml(req.user!.username)}`);
     }
     if (b.role === 'admin' && target.role !== 'admin') ctx.notify.security(`<b>${escapeHtml(target.username)}</b> promosso amministratore da ${escapeHtml(req.user!.username)}`);
-    if (b.role === 'specialist' && target.role !== 'specialist') ctx.notify.security(`<b>${escapeHtml(target.username)}</b> reso specialist da ${escapeHtml(req.user!.username)}: vede tutto come un amministratore`);
+    if (b.role === 'specialist' && target.role !== 'specialist') ctx.notify.security(`<b>${escapeHtml(target.username)}</b> reso specialist da ${escapeHtml(req.user!.username)}: vede il proprio lavoro e quello dei suoi gruppi`);
+    if (b.fullView !== undefined && b.fullView !== !!target.fullView) {
+      // what he sees changes at once: his sessions start again
+      db.prepare('UPDATE users SET full_view = ?, token_version = token_version + 1 WHERE id = ?').run(b.fullView ? 1 : 0, id);
+      // no more the director: what he had as such stays out of his colleagues' calendars
+      if (!b.fullView) ctx.workGroups.restart(id);
+      ctx.notify.security(
+        b.fullView
+          ? `Visibilità piena data allo specialist <b>${escapeHtml(target.username)}</b> da ${escapeHtml(req.user!.username)}: vede clienti, rete e lavoro di tutti`
+          : `Visibilità piena tolta allo specialist <b>${escapeHtml(target.username)}</b> da ${escapeHtml(req.user!.username)}`,
+      );
+    }
+    // a specialist no more: no «visibilità piena» and no work group left behind (if he becomes a
+    // specialist again, an admin decides again what he sees)
+    if (b.role !== undefined && b.role !== 'specialist' && target.fullView) db.prepare('UPDATE users SET full_view = 0 WHERE id = ?').run(id);
+    if (b.role !== undefined && b.role !== 'specialist' && target.role === 'specialist') {
+      const left = ctx.workGroups.ofUser(id).map((g) => g.name);
+      db.prepare('DELETE FROM work_group_members WHERE user_id = ?').run(id);
+      if (left.length) ctx.notify.security(`<b>${escapeHtml(target.username)}</b> non è più specialist: tolto dai gruppi di lavoro ${escapeHtml(left.join(', '))}`);
+    }
     if (b.active !== undefined) db.prepare('UPDATE users SET active = ?, token_version = token_version + 1 WHERE id = ?').run(b.active ? 1 : 0, id);
     if (b.role !== undefined) db.prepare('UPDATE users SET role = ?, token_version = token_version + 1 WHERE id = ?').run(b.role, id);
     // warehouse and bypass: no new login needed, the app reads them with «Le mie CPE»
@@ -402,7 +428,7 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
     return { template, params, values, missing, warnings: policyWarnings(values), facts: templateFacts(template), report: inspectTemplate(template) };
   };
 
-  app.get('/api/admin/profiles', staff, async () => {
+  app.get('/api/admin/profiles', all, async () => {
     const all = ctx.templates.list();
     return SUPPORTED_MODELS.map((model) => ({ model, firmware: TARGET_FIRMWARE, templates: all.filter((t) => t.model === model) }));
   });
@@ -461,7 +487,7 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
     return reply.code(201).send(t);
   });
 
-  app.get('/api/admin/templates/:id', staff, async (req) => ctx.templates.get(idParam.parse(req.params).id));
+  app.get('/api/admin/templates/:id', all, async (req) => ctx.templates.get(idParam.parse(req.params).id));
 
   app.patch('/api/admin/templates/:id', admin, async (req) => {
     const { id } = idParam.parse(req.params);
@@ -483,7 +509,7 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   // ---- Status / settings --------------------------------------------------------
-  app.get('/api/admin/status', staff, async () => {
+  app.get('/api/admin/status', all, async () => {
     const c = ctx.cfg;
     const count = (sql: string, ...params: string[]) => (db.prepare(sql).get(...params) as { n: number }).n;
     const since30d = new Date(Date.now() - 30 * 86400_000).toISOString();
@@ -528,7 +554,7 @@ export function adminRoutes(app: FastifyInstance, ctx: AppContext) {
     };
   });
 
-  app.get('/api/admin/events', staff, async (req) => {
+  app.get('/api/admin/events', all, async (req) => {
     const limit = z.coerce.number().int().min(1).max(500).default(200).parse((req.query as { limit?: string }).limit);
     return db
       .prepare(
