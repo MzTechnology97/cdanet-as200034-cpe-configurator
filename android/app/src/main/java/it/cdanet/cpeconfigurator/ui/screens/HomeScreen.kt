@@ -618,6 +618,12 @@ internal val HeroBrush = Brush.linearGradient(
 
 /** «Inizia» of a work order (Oggi and Calendario): the acceptance test will check the GPS against its position. */
 internal fun startOrder(c: AppContainer, o: it.cdanet.cpeconfigurator.data.WorkOrderDto, onOpen: (Dest) -> Unit) {
+    // CDA Net's installation, with its keys: never for a specialist without «visibilità piena»
+    // (issue #275); the screen says why
+    if (!c.session.doesCdaWork && o.kind != "survey") {
+        onOpen(Dest(Screen.Provision))
+        return
+    }
     c.activeWorkOrder.value = o
     when (o.kind) {
         "new" -> {

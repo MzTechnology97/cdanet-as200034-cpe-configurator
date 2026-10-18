@@ -8,7 +8,8 @@ import { BOARD_MATCH_SUGGESTIONS, TARGET_FIRMWARE, macSiblings, type CpeModel } 
 import { askedFor, inspectFreeTemplate, isSsid, isUispKey, isWpa2Key, OPTIONAL_PLACEHOLDERS, renderFreeCfg, unusedPlaceholders } from '../domain/specialist-cfg.ts';
 import { normalizeTemplate } from '../domain/systemcfg.ts';
 import { isPrivateIPv4, isPrivateIPv6 } from '../net/ip.ts';
-import { insecureFetch } from './connectors.ts';
+import { NOT_PUBLIC, publicUrlProblem } from '../net/public-address.ts';
+import { publicFetch } from '../net/public-fetch.ts';
 import { validateBoardMatch } from './templates.ts';
 import { createUisp, type Uisp, type UispDevice } from './uisp.ts';
 
@@ -198,11 +199,11 @@ export function createSpecialist(
 ) {
   const visible = (userId: number) => opts.visibleIds?.(userId) ?? [userId];
   /**
-   * A copy of a CDA Net template is CDA Net's work: only for whoever may use that original himself,
-   * its author too (a copy made before the full view was needed waits for it). «Visibilità piena» is
-   * personal, never passed on through a group.
+   * A copy of a CDA Net template is CDA Net's work: its author keeps it (he could use the original
+   * when he made it), the other members of his groups see it only when they may use that original
+   * themselves. «Visibilità piena» is personal, never passed on through a group.
    */
-  const sharedOk = (userId: number, r: TemplateRow) => r.cda_source_id == null || (opts.canUseCda?.(userId, r.cda_source_id) ?? false);
+  const sharedOk = (userId: number, r: TemplateRow) => r.user_id === userId || r.cda_source_id == null || (opts.canUseCda?.(userId, r.cda_source_id) ?? false);
   const inList = (ids: number[]) => ids.map(() => '?').join(',');
   const tx = <T>(fn: () => T): T => {
     db.exec('BEGIN');
@@ -385,8 +386,18 @@ export function createSpecialist(
   };
   // one client per connector and version of it (a saved change makes a new one)
   const clients = new Map<number, { at: string; client: Uisp }>();
+  /**
+   * A specialist may be outside CDA Net (issue #275): the UISP of his companies is on the
+   * Internet, and this server is never his way into CDA Net's own network (every connection is
+   * checked, redirects too). [opts.fetchImpl]: the tests' fake UISP.
+   */
+  const checkedUrl = (url: string) => {
+    const problem = publicUrlProblem(url);
+    if (problem) throw new HttpError(400, problem);
+    return url;
+  };
   const build = (url: string, token: string, ignoreTls: boolean): Uisp =>
-    createUisp({ url, token, cacheSeconds: 20, fetchImpl: ignoreTls ? insecureFetch() : opts.fetchImpl });
+    createUisp({ url: checkedUrl(url), token, cacheSeconds: 20, fetchImpl: ignoreTls ? publicFetch(true) : (opts.fetchImpl ?? publicFetch(false)) });
 
   const connectors = {
     list(userId: number) {
@@ -403,7 +414,7 @@ export function createSpecialist(
       const now = nowIso();
       const r = db
         .prepare('INSERT INTO specialist_connectors(user_id, kind, name, url, secrets_ciphertext, options_json, enabled, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?)')
-        .run(userId, 'uisp', input.name, input.url, sealer.seal(JSON.stringify(secrets)), JSON.stringify({ ignoreTls: !!input.ignoreTls }), input.enabled === false ? 0 : 1, now, now);
+        .run(userId, 'uisp', input.name, checkedUrl(input.url), sealer.seal(JSON.stringify(secrets)), JSON.stringify({ ignoreTls: !!input.ignoreTls }), input.enabled === false ? 0 : 1, now, now);
       return connectors.get(userId, Number(r.lastInsertRowid));
     },
 
@@ -420,7 +431,7 @@ export function createSpecialist(
       if (input.ignoreTls !== undefined) o.ignoreTls = input.ignoreTls;
       db.prepare('UPDATE specialist_connectors SET name = ?, url = ?, secrets_ciphertext = ?, options_json = ?, enabled = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(
         input.name ?? cur.name,
-        input.url ?? cur.url,
+        input.url !== undefined ? checkedUrl(input.url) : cur.url,
         sealer.seal(JSON.stringify(s)),
         JSON.stringify(o),
         input.enabled === undefined ? cur.enabled : input.enabled ? 1 : 0,
@@ -464,13 +475,18 @@ export function createSpecialist(
       const ignoreTls = input.ignoreTls ?? (saved ? !!json<{ ignoreTls?: boolean }>(saved.options_json, {}).ignoreTls : false);
       if (!url || !token) throw new HttpError(400, 'connector_incomplete');
       let out: Record<string, unknown>;
-      try {
-        out = { ...(await build(url, token, ignoreTls).test()) };
-      } catch (e) {
-        const err = e as HttpError;
-        const detail = String(err.extra?.detail ?? (e as Error).message ?? '');
-        const tls = /certificate|self[- ]signed|unable to verify|CERT_|SSL/i.test(detail);
-        out = { ok: false, error: tls ? 'uisp_tls_error' : (err.code ?? 'uisp_error'), status: err.extra?.status ?? null, detail: detail.slice(0, 200) };
+      const problem = publicUrlProblem(url);
+      if (problem) out = { ok: false, error: problem };
+      else {
+        try {
+          out = { ...(await build(url, token, ignoreTls).test()) };
+        } catch (e) {
+          const err = e as HttpError;
+          const detail = String(err.extra?.detail ?? (e as Error).message ?? '');
+          const tls = /certificate|self[- ]signed|unable to verify|CERT_|SSL/i.test(detail);
+          // what the address answered stays on the server (issue #275): the outcome and its HTTP status only
+          out = { ok: false, error: detail.includes(NOT_PUBLIC) ? NOT_PUBLIC : tls ? 'uisp_tls_error' : (err.code ?? 'uisp_error'), status: err.extra?.status ?? null };
+        }
       }
       if (saved && input.url === undefined && !input.token && input.ignoreTls === undefined) {
         const detail = out.ok ? `UISP ${String(out.version ?? '')} · ${String(out.devices ?? 0)} dispositivi`.trim() : String(out.error ?? 'errore');

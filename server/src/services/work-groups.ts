@@ -58,6 +58,7 @@ export function createWorkGroups(db: Db) {
     }
   };
 
+  // [added_at] of a member: from when his calendar is shared with the group (see calendarScope)
   const groups = {
     /** The specialists that may be put in a group (for the page of the groups). */
     specialists() {
@@ -105,14 +106,29 @@ export function createWorkGroups(db: Db) {
       return [...new Set([userId, ...ids.map((r) => r.id)])];
     },
     /**
-     * Whose work orders a specialist sees in his calendar: his own and those of the members of his
-     * groups, never those of a member with «visibilità piena» (the director's orders may be CDA
-     * Net's, with its customers: they never reach whoever does not see CDA Net's data).
+     * Whose work orders a specialist without «visibilità piena» sees in his calendar, and from
+     * when: his own, and those of the members of his groups made since they are in a group with
+     * him ([since], their entry). Never those of a member with «visibilità piena», nor what a
+     * colleague had before (as an installer, or as the director): those orders may be CDA Net's,
+     * with its customers, and never reach whoever does not see CDA Net's data.
      */
-    calendarIds(userId: number): number[] {
-      const ids = groups.visibleIds(userId);
-      const ok = db.prepare(`SELECT id FROM users WHERE id IN (${ids.map(() => '?').join(',')}) AND (id = ? OR full_view = 0)`).all(...ids, userId) as Array<{ id: number }>;
-      return [...new Set([userId, ...ok.map((r) => r.id)])];
+    calendarScope(userId: number): Array<{ id: number; since: string | null }> {
+      const rows = db
+        .prepare(
+          `SELECT m2.user_id id, MIN(m2.added_at) since FROM work_group_members m1
+             JOIN work_group_members m2 ON m2.group_id = m1.group_id AND m2.user_id <> m1.user_id
+             JOIN users u ON u.id = m2.user_id AND u.role = 'specialist' AND u.full_view = 0
+            WHERE m1.user_id = ? GROUP BY m2.user_id ORDER BY m2.user_id`,
+        )
+        .all(userId) as Array<{ id: number; since: string }>;
+      return [{ id: userId, since: null }, ...rows];
+    },
+    /**
+     * The «visibilità piena» of a member taken away: in his groups he starts again from now, so
+     * the orders he had as the director stay out of the colleagues' calendars.
+     */
+    restart(userId: number) {
+      db.prepare('UPDATE work_group_members SET added_at = ? WHERE user_id = ?').run(nowIso(), userId);
     },
     /** Whether [viewerId] sees the work of [authorId]. */
     sees(viewerId: number, authorId: number | null): boolean {

@@ -124,6 +124,8 @@ const MESSAGES: Record<string, string> = {
   form_invalid_ssid: 'SSID non valido: al massimo 32 caratteri',
   connector_not_found: 'Connettore non trovato: forse è stato eliminato',
   connector_name_exists: 'Esiste già un connettore con questo nome',
+  connector_target_not_public: 'Indirizzo non ammesso: l’UISP dell’azienda deve essere su Internet, non su una rete privata',
+  connector_url_invalid: 'Indirizzo non valido: https://nome[:porta], senza ? né #',
   connector_disabled: 'Connettore disattivato: riattivalo per usarlo',
   uisp_key_invalid: 'La chiave UISP deve iniziare con wss:// (UISP → Impostazioni → Dispositivi)',
   uisp_auth_failed: 'Token UISP rifiutato',

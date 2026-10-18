@@ -154,7 +154,8 @@ export function specialistRoutes(app: FastifyInstance, ctx: AppContext) {
     .string()
     .trim()
     .max(300)
-    .regex(/^https?:\/\/[^\s/$.?#][^\s]*$/i, 'URL non valido')
+    // no query, fragment or user: nothing to steer the path the server appends (issue #275)
+    .regex(/^https?:\/\/[^\s/$.?#@][^\s?#@]*$/i, 'URL non valido')
     .transform((v) => v.replace(/\/+(nms(\/api(\/v2\.1)?)?\/?)?$/i, '').replace(/\/+$/, ''));
   const token = z.string().trim().max(400);
   const uispKey = z.string().trim().max(2000);

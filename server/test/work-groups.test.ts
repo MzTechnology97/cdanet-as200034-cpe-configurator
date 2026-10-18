@@ -139,7 +139,8 @@ describe('Gruppi di lavoro degli Specialist (issue #275)', () => {
     const c = ids['spec.c']!;
     // A: «visibilità piena», in two groups (with B, with C)
     assert.equal((await call('PATCH', `/api/admin/users/${a}`, ADM, { fullView: true })).statusCode, 200);
-    assert.equal((await call('POST', '/api/admin/work-groups', ADM, { name: 'Gruppo AB', members: [a, b] })).statusCode, 201);
+    const gab = await call('POST', '/api/admin/work-groups', ADM, { name: 'Gruppo AB', members: [a, b] });
+    assert.equal(gab.statusCode, 201, gab.body);
     assert.equal((await call('POST', '/api/admin/work-groups', ADM, { name: 'Gruppo AC', members: [a, c] })).statusCode, 201);
     const A = await login(A_);
     const B = await login(B_);
@@ -199,6 +200,19 @@ describe('Gruppi di lavoro degli Specialist (issue #275)', () => {
     assert.ok((await names(B)).includes('Suo di D'), 'now in a group with D');
     assert.equal((await call('POST', '/api/admin/work-groups', B, { name: 'Da solo' })).statusCode, 403, 'a specialist without full view makes no groups');
     assert.equal((await call('PATCH', `/api/admin/users/${b}`, A, { fullView: true })).statusCode, 403, 'full view stays with the admins');
+
+    // A is the director no more: the orders he had as such stay out of his colleagues' calendars,
+    // the ones from now on are shared like everybody's
+    assert.equal((await call('PATCH', `/api/admin/users/${a}`, ADM, { fullView: false })).statusCode, 200);
+    assert.deepEqual(await cal(B), [], 'what he had as the director stays his');
+    const later = new Date(Date.now() + 1000).toISOString();
+    db.prepare("INSERT INTO work_orders(created_at, updated_at, day, kind, status, assigned_to, customer) VALUES(?,?,?,?,?,?,?)").run(later, later, '2026-10-23', 'new', 'open', a, 'Lavoro di A da specialist');
+    assert.deepEqual((await cal(B)).map((o) => o.customer), ['Lavoro di A da specialist']);
+    assert.deepEqual((await cal(C)).map((o) => o.customer), ['Lavoro di A da specialist']);
+    // an installer made a specialist and put in a group: his CDA Net orders of before stay out
+    assert.equal((await call('PATCH', `/api/admin/users/${inst}`, ADM, { role: 'specialist' })).statusCode, 200);
+    assert.equal((await call('PUT', `/api/admin/work-groups/${gab.json().id}`, ADM, { members: [a, b, inst] })).statusCode, 200);
+    assert.deepEqual((await cal(B)).map((o) => o.customer), ['Lavoro di A da specialist'], 'nothing of his orders as an installer');
     await app.close();
   });
 
@@ -301,7 +315,7 @@ describe('Gruppi di lavoro degli Specialist (issue #275)', () => {
     await app.close();
   });
 
-  it('the copies of CDA Net templates made before the groups keep their source (migration 47)', () => {
+  it('the copies of CDA Net templates made before the groups keep their source (migrations 47-48)', () => {
     const BEFORE_GROUPS = 46;
     const db = new DatabaseSync(':memory:');
     db.exec('PRAGMA foreign_keys = ON');
@@ -319,9 +333,14 @@ describe('Gruppi di lavoro degli Specialist (issue #275)', () => {
     const gone = id('Copia vecchia', 'Copia del template CDA Net «Non più in elenco»');
     const byLog = id('Copia con note sue', 'note scritte da lui');
     const own = id('Suo', '');
-    db.prepare("INSERT INTO events(created_at, user_id, action, target, detail) VALUES(?, ?, 'specialist.template_copy', 'LiteBeam 5AC · Copia con note sue', 'da CDA Net «Standard»')").run(now, uid);
-    migrate(db);
+    const log = db.prepare("INSERT INTO events(created_at, user_id, action, target, detail) VALUES(?, ?, 'specialist.template_copy', ?, 'da CDA Net «Standard»')");
+    log.run(now, uid, 'LiteBeam 5AC · Copia con note sue');
+    // a copy deleted long ago, then a template of his own with the same name: his own
+    log.run('2026-10-01T08:00:00Z', uid, 'LiteBeam 5AC · Suo');
+    migrate(db, BEFORE_GROUPS + 1);
     const src = (t: number) => (db.prepare('SELECT cda_source_id s FROM specialist_templates WHERE id = ?').get(t) as { s: number | null }).s;
+    assert.deepEqual([src(byNote), src(gone), src(byLog), src(own)], [null, null, null, null], 'the column first (a database already at 47 gets the next one)');
+    migrate(db);
     // the original when it is still there; 0 (only «visibilità piena») when it is not known; his own stay his
     assert.deepEqual([src(byNote), src(gone), src(byLog), src(own)], [pid, 0, 0, null]);
   });

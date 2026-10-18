@@ -19,7 +19,7 @@ La visibilità scende dall'alto verso il basso, mai al contrario.
 
 - **Template delle CPE**: i membri li vedono e li usano per installare. Li modifica e li elimina solo chi li ha creati (`template_author_only` per gli altri), gli altri li aprono in sola lettura. I **segreti del template** (la community SNMP e, dalla v1.36.4, la chiave Wi-Fi dell'AP) restano del suo autore: solo lui li imposta o li toglie e solo le sue installazioni li usano. Gli altri membri, e anche il direttore, li scrivono nel flusso per ogni CPE: il server li chiede (`asked`) come per le chiavi Wi-Fi.
 - **Storico provisioning**: le installazioni dei membri, in sola lettura. Collaudo e autorizzazione in UISP restano a chi ha installato, con i suoi connettori. Il CSV ha la colonna «Specialist».
-- **Calendario**: gli interventi assegnati ai membri, tranne quelli del direttore tecnico (possono essere interventi di CDA Net, con i suoi clienti).
+- **Calendario**: gli interventi assegnati ai membri da quando sono nel gruppo, tranne quelli del direttore tecnico (possono essere interventi di CDA Net, con i suoi clienti). Restano fuori anche quelli che un membro aveva prima: da installatore, o da direttore (se gli si toglie la visibilità piena riparte da quel momento).
 
 ## Cosa non passa mai
 
@@ -27,9 +27,10 @@ La visibilità scende dall'alto verso il basso, mai al contrario.
 - **I segreti dei template** degli altri membri (vedi sopra).
 - **I dati di CDA Net**: solo gli admin e il direttore tecnico.
 - **Le chiavi di CDA Net**: chiavi Wi-Fi delle reti e password delle CPE. Senza visibilità piena lo Specialist non fa lavoro di campo per CDA Net (`requireCdaWork`, `doesCdaWork`): niente installazioni CDA Net (`/api/provisioning/plan`, `/jobs`, `/result`, `/templates`, `/api/wireless-networks`, sostituzione), niente strumenti di campo sulle CPE di CDA Net (`/api/field/access`, `/relink`, `/cpe`, `/cpe/claim`, `/cpe/register`), nessun template CDA Net, nemmeno quelli per tutti. Lavora per le sue aziende nella sezione Specialist, con le credenziali scritte nel flusso.
-- **La rete di CDA Net**: gli strumenti che lavorano dal server di CDA Net (interfacce, vicini ARP, ping, traceroute, DNS, NetBIOS, scansione, SNMP, porte, ONVIF, Hikvision, BGP) e RouterOS dalla console partono dalla sua rete, quindi senza visibilità piena no (`requireCdaWork`). Restano aperti il produttore dei MAC e il catalogo RouterOS; nell'app gli strumenti di rete lavorano dal telefono. Lo stesso per la copertura degli altri operatori, che usa l'abbonamento di CDA Net.
+- **La rete di CDA Net**: gli strumenti che lavorano dal server di CDA Net (interfacce, vicini ARP, ping, traceroute, DNS, NetBIOS, scansione, SNMP, porte, ONVIF, Hikvision, BGP) e RouterOS dalla console partono dalla sua rete, quindi senza visibilità piena no (`requireCdaWork`). Restano aperti il produttore dei MAC e il catalogo RouterOS; nell'app gli strumenti di rete lavorano dal telefono. Lo stesso per la copertura degli altri operatori, che usa l'abbonamento di CDA Net, e per le immagini satellitari a pagamento (Google, Mapbox, Esri, con le chiavi di CDA Net): la mappa 3D resta, con il terreno.
+- **La rete di CDA Net attraverso i connettori**: l'UISP di un'azienda dev'essere su Internet. Il server rifiuta indirizzi privati, CGNAT, locali e riservati, anche quando ci arriva un nome DNS o un redirect, e un indirizzo con `?`, `#` o utente (`connector_target_not_public`, `connector_url_invalid`). Il test di un connettore riporta l'esito e lo stato HTTP, mai il testo della risposta.
 - **La visibilità piena del direttore**: non passa ai membri dei suoi gruppi.
-- **La copia di un template CDA Net**: la vede solo chi può già usare l'originale, anche il suo autore. Così il direttore non passa al gruppo un template riservato. Le copie fatte prima della 1.36.3 il server le riconosce dalla nota (`Copia del template CDA Net «…»`) o dal Registro (`specialist.template_copy`); se l'originale non c'è più, la copia resta visibile solo con la visibilità piena.
+- **La copia di un template CDA Net**: resta a chi l'ha fatta; nel gruppo la vede solo chi può già usare l'originale. Così il direttore non passa al gruppo un template riservato. Le copie fatte prima della 1.36.3 il server le riconosce dalla nota (`Copia del template CDA Net «…»`) o dal Registro (`specialist.template_copy` scritto quando è nato il template), con la migrazione 48; se l'originale non c'è più, nel gruppo la copia la vede solo chi ha la visibilità piena.
 - **Il lavoro da un gruppo all'altro**: i gruppi non si sommano. Se Luca è in due gruppi vede entrambi, ma Giulia, che sta solo nel primo, non vede Sara, che sta solo nel secondo.
 
 ## Regole
@@ -62,6 +63,7 @@ Tutto quello che mostra dati di CDA Net o di altri richiede la visibilità piena
 - precisione della copertura;
 - antenne degli AP di CDA Net (nomi, clienti, azimut) e importazione dei diagrammi;
 - copertura degli altri operatori (MyWic, sull'abbonamento di CDA Net): gli installatori hanno la loro risposta, senza i nomi; gli Specialist senza visibilità piena niente.
+- immagini satellitari (Google, Mapbox, Esri, con le chiavi di CDA Net): le tile solo con la visibilità piena, l'elenco dei livelli risponde vuoto; il terreno della mappa 3D resta.
 
 Nei controlli puntuali dei dati, `isStaff(role)` diventa `seesAll(user)`.
 

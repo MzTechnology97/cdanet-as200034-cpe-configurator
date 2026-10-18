@@ -4,7 +4,7 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { PmTilesReader } from '../domain/pmtiles.ts';
 import type { AppContext } from '../context.ts';
-import { HttpError } from '../auth.ts';
+import { HttpError, seesAll } from '../auth.ts';
 import { PROVIDERS } from '../services/imagery.ts';
 import { createTerrainTiles, TERRAIN_MAX_ZOOM, TERRAIN_MIN_ZOOM } from '../services/terrain-tiles.ts';
 
@@ -129,8 +129,10 @@ export function mapRoutes(app: FastifyInstance, ctx: AppContext) {
   });
 
   // ---- Aerial imagery (admins only): providers of Connettori through this server, keys never leave it ----
-  app.get('/api/admin/map/satellite', { preHandler: ctx.auth.requireStaff }, async () => {
-    const layers = ctx.imagery.layers();
+  app.get('/api/admin/map/satellite', { preHandler: ctx.auth.requireStaff }, async (req) => {
+    // the imagery is paid by CDA Net, with its keys: not for a specialist without «visibilità
+    // piena» (issue #275); the terrain of the 3D map stays
+    const layers = seesAll(req.user) ? ctx.imagery.layers() : [];
     const t = ctx.terrain.status();
     // the 3D map: elevation tiles of the coverage terrain (TINITALY where imported, else SRTM)
     return { available: layers.length > 0, layers, terrain: { minZoom: TERRAIN_MIN_ZOOM, maxZoom: TERRAIN_MAX_ZOOM, fine: t.dtmTiles > 0 } };
@@ -147,7 +149,7 @@ export function mapRoutes(app: FastifyInstance, ctx: AppContext) {
     return reply.type('image/png').send(png);
   });
 
-  app.get('/api/admin/map/imagery/:provider/:part/:z/:x/:y', { preHandler: ctx.auth.requireStaff }, async (req, reply) => {
+  app.get('/api/admin/map/imagery/:provider/:part/:z/:x/:y', { preHandler: ctx.auth.requireSeesAll }, async (req, reply) => {
     const p = z
       .object({ provider: z.enum(PROVIDERS), part: z.string().max(20), z: z.coerce.number().int().min(0).max(21), x: z.coerce.number().int().min(0), y: z.coerce.number().int().min(0) })
       .parse(req.params);
