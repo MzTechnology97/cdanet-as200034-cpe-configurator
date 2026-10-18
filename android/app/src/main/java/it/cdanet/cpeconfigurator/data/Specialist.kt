@@ -310,6 +310,8 @@ data class SpecReportDto(
     val warnings: List<String> = emptyList(),
     val placeholders: List<String> = emptyList(),
     val own: List<String> = emptyList(),
+    /** Never asked for this template (PPPoE in bridge): the server decides. */
+    val unused: List<String> = emptyList(),
     val lines: Int = 0,
 )
 

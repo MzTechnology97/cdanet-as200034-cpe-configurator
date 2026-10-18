@@ -58,6 +58,9 @@ test('in bridge or with PPPoE off no PPPoE is asked, and its lines stay empty; t
   assert.deepEqual([...unusedPlaceholders(router.replace('ppp.status=enabled', 'ppp.status=disabled'))].sort(), ['PPPOE_PASSWORD', 'PPPOE_USER'], 'a router without PPPoE');
   // used also outside PPPoE: still asked
   assert.deepEqual([...unusedPlaceholders(`${bridge}\nresolv.host.1.name=\${PPPOE_USER}`)], ['PPPOE_PASSWORD']);
+  // the editors read it from the report
+  assert.deepEqual(inspectFreeTemplate(bridge).unused, ['PPPOE_PASSWORD', 'PPPOE_USER']);
+  assert.deepEqual(inspectFreeTemplate(router).unused, []);
   const p = inspectFreeTemplate(bridge).placeholders;
   const asked = askedFor(p, { snmpCommunity: false, uispKey: false }, unusedPlaceholders(bridge));
   assert.ok(!asked.some((a) => a.name.startsWith('PPPOE_')));

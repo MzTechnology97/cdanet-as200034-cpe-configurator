@@ -455,6 +455,7 @@ describe('Specialist', () => {
     const bridge = (await call('POST', '/api/specialist/form/LiteBeam%205AC/apply', S, { template: draft.template, changes: { netMode: 'bridge' } })).json();
     assert.equal(parseKeys(bridge.template).get('netmode'), 'bridge');
     assert.ok(bridge.report.placeholders.includes('PPPOE_USER'), 'the lines of PPPoE stay in the text, switched off');
+    assert.deepEqual(bridge.report.unused, ['PPPOE_PASSWORD', 'PPPOE_USER'], 'the editors say they are not asked');
     const t = await call('POST', '/api/specialist/templates', S, { model: 'LiteBeam 5AC', name: 'Azienda Z · bridge', template: bridge.template });
     assert.equal(t.statusCode, 201, t.body);
     const id = t.json().id as number;

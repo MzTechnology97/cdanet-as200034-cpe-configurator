@@ -32,6 +32,8 @@ interface Report {
   warnings: string[];
   placeholders: string[];
   own: string[];
+  /** Never asked for this template (PPPoE in bridge): the server decides. */
+  unused?: string[];
   lines: number;
 }
 interface FormState {
@@ -590,13 +592,11 @@ function TemplateEditor({ opts, data, onDirty, onClose, onSaved }: { opts: Edito
                       </div>
                       <span className="ui-muted ui-small">
                         {/* a CPE in bridge cannot use PPPoE (titolare, 18/10/2026): not asked, its lines stay empty */}
-                        {(p === 'PPPOE_USER' || p === 'PPPOE_PASSWORD') && values.netMode === 'bridge'
-                          ? 'non chiesto: in bridge la CPE non usa il PPPoE'
-                          : (p === 'PPPOE_USER' || p === 'PPPOE_PASSWORD') && values.pppoe === false
-                            ? 'non chiesto: PPPoE spento nel template'
-                            : k
-                              ? FROM_TEXT[k.from]
-                              : 'scritto nell’app per ogni CPE'}
+                        {form.report.unused?.includes(p)
+                          ? 'non chiesto: la CPE non usa il PPPoE (bridge o PPPoE spento), la riga resta vuota'
+                          : k
+                            ? FROM_TEXT[k.from]
+                            : 'scritto nell’app per ogni CPE'}
                       </span>
                     </div>
                   </li>

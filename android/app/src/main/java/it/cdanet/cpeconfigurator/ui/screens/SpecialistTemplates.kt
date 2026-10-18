@@ -706,19 +706,15 @@ private fun PlaceholdersCard(fs: SpecFormStateDto, meta: SpecTemplateFormDto) {
         if (fs.report.placeholders.isEmpty()) {
             Text("Nessun segnaposto: ogni CPE riceve lo stesso file.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
-        // a CPE in bridge cannot use PPPoE (owner, 18/10/2026): its user and password are not asked
-        val bridge = (fs.values["netMode"] as? JsonPrimitive)?.content == "bridge"
-        val pppoeOff = (fs.values["pppoe"] as? JsonPrimitive)?.content == "false"
         fs.report.placeholders.forEach { p ->
             val k = known[p]
-            val pppoe = p == "PPPOE_USER" || p == "PPPOE_PASSWORD"
             Row(Modifier.fillMaxWidth().padding(vertical = 4.dp), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
                     Text("\${$p}", style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
                     Text(
                         (k?.label ?: "Tuo") + " · " + when {
-                            pppoe && bridge -> "non chiesto: in bridge la CPE non usa il PPPoE"
-                            pppoe && pppoeOff -> "non chiesto: PPPoE spento nel template"
+                            // a CPE in bridge cannot use PPPoE (owner, 18/10/2026): the server says which are not asked
+                            p in fs.report.unused -> "non chiesto: la CPE non usa il PPPoE (bridge o PPPoE spento), la riga resta vuota"
                             else -> FILLED_FROM[k?.from ?: "typed"] ?: "scritto nel flusso per ogni CPE"
                         },
                         style = MaterialTheme.typography.bodySmall,

@@ -26,6 +26,8 @@ export interface FreeTemplateReport {
   placeholders: string[];
   /** The ones CDA Net does not know: typed for each CPE. */
   own: string[];
+  /** The ones this template does not need, never asked (PPPoE in bridge, see unusedPlaceholders). */
+  unused: string[];
   lines: number;
 }
 
@@ -57,6 +59,7 @@ export function inspectFreeTemplate(raw: string): FreeTemplateReport {
     warnings,
     placeholders,
     own: placeholders.filter((p) => !(p in PLACEHOLDERS)),
+    unused: [...unusedPlaceholders(template)].sort(),
     lines: template.split('\n').length,
   };
 }
