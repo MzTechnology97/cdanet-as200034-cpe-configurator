@@ -74,13 +74,25 @@ describe('Specialist', () => {
       ['GET', '/api/admin/antennas', undefined],
       ['POST', '/api/admin/antennas/import', {}],
       ['GET', '/api/admin/coverage/operators?lat=37.5&lon=14.2', undefined],
+      ['GET', '/api/field/coverage/operators?lat=37.5&lon=14.2', undefined],
+      // the tools that work from CDA Net's server, that is from inside its network
+      ['GET', '/api/tools/interfaces', undefined],
+      ['GET', '/api/tools/neighbors', undefined],
+      ['POST', '/api/tools/ping', { host: '192.0.2.1' }],
+      ['POST', '/api/tools/discover', { cidr: '192.0.2.0/30' }],
+      ['POST', '/api/tools/snmp', { host: '192.0.2.1', community: 'public' }],
+      ['POST', '/api/routeros/action', {}],
     ] as const;
     for (const [method, url, body] of cdaWork) {
       const r = await call(method, url, { ...S, ...APP }, body);
       assert.equal(r.statusCode, 403, `${method} ${url}: ${r.statusCode} ${r.body}`);
     }
+    // what needs no network of CDA Net's stays his (the app runs its own tools on the phone)
+    assert.equal((await call('POST', '/api/tools/mac-vendors', { ...S, ...APP }, { macs: [] })).statusCode, 200, 'the MAC vendors');
+    assert.equal((await call('GET', '/api/routeros/catalog', { ...S, ...APP })).statusCode, 200, 'the RouterOS catalog');
     assert.equal((await call('GET', '/api/wireless-networks', I)).statusCode, 200, 'the installers keep them');
     assert.equal((await call('POST', '/api/field/access', { ...I, ...APP }, {})).statusCode, 200);
+    assert.equal((await call('GET', '/api/tools/interfaces', I)).statusCode, 200, 'and the tools of the server');
     // «visibilità piena», given by an admin: the views of the NOC (his sessions start again)
     assert.equal((await call('PATCH', `/api/admin/users/${inst}`, A, { fullView: true })).json().error, 'full_view_specialist_only');
     assert.equal((await call('PATCH', `/api/admin/users/${spec.user.id}`, S, { fullView: true })).statusCode, 403, 'not by himself');
@@ -97,6 +109,7 @@ describe('Specialist', () => {
     // an internal specialist with full view works for CDA Net too, like an installer
     assert.equal((await call('GET', '/api/wireless-networks', F)).statusCode, 200);
     assert.equal((await call('POST', '/api/field/access', { ...F, ...APP }, {})).statusCode, 200);
+    assert.equal((await call('GET', '/api/tools/interfaces', F)).statusCode, 200);
     assert.equal((await call('POST', '/api/admin/platform/backup', F, { password: 'Password-Backup-123' })).statusCode, 403, 'the backup stays with the admins');
     const users = (await call('GET', '/api/admin/users', A)).json() as Array<{ username: string; fullView: boolean }>;
     assert.equal(users.find((u) => u.username === SPEC.username)?.fullView, true);

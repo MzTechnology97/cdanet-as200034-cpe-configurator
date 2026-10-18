@@ -390,7 +390,7 @@ export function workOrderRoutes(app: FastifyInstance, ctx: AppContext) {
     const isAdmin = seesAll(req.user!);
     // a specialist: his own orders and those of the members of his work groups (issue #275), never
     // the rest of the team; an installer: his own
-    const team = !isAdmin && req.user!.role === 'specialist' ? ctx.workGroups.visibleIds(req.user!.id) : [req.user!.id];
+    const team = !isAdmin && req.user!.role === 'specialist' ? ctx.workGroups.calendarIds(req.user!.id) : [req.user!.id];
     const who: number[] | null = isAdmin ? (q.user ? [q.user] : null) : q.user && team.includes(q.user) ? [q.user] : team;
     const rows = db
       .prepare(

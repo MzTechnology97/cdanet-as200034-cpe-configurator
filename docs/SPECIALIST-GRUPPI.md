@@ -17,9 +17,9 @@ La visibilità scende dall'alto verso il basso, mai al contrario.
 
 ## Cosa si condivide in un gruppo
 
-- **Template delle CPE**: i membri li vedono, li usano per installare e li modificano. Li elimina solo chi li ha creati. I **segreti del template** (la community SNMP e, dalla v1.36.4, la chiave Wi-Fi dell'AP) restano del suo autore: solo lui li imposta o li toglie (`template_secrets_author_only` per gli altri) e solo le sue installazioni li usano. Gli altri membri, e anche il direttore, li scrivono nel flusso per ogni CPE: il server li chiede (`asked`) come per le chiavi Wi-Fi.
+- **Template delle CPE**: i membri li vedono e li usano per installare. Li modifica e li elimina solo chi li ha creati (`template_author_only` per gli altri), gli altri li aprono in sola lettura. I **segreti del template** (la community SNMP e, dalla v1.36.4, la chiave Wi-Fi dell'AP) restano del suo autore: solo lui li imposta o li toglie e solo le sue installazioni li usano. Gli altri membri, e anche il direttore, li scrivono nel flusso per ogni CPE: il server li chiede (`asked`) come per le chiavi Wi-Fi.
 - **Storico provisioning**: le installazioni dei membri, in sola lettura. Collaudo e autorizzazione in UISP restano a chi ha installato, con i suoi connettori. Il CSV ha la colonna «Specialist».
-- **Calendario**: gli interventi assegnati ai membri.
+- **Calendario**: gli interventi assegnati ai membri, tranne quelli del direttore tecnico (possono essere interventi di CDA Net, con i suoi clienti).
 
 ## Cosa non passa mai
 
@@ -27,8 +27,9 @@ La visibilità scende dall'alto verso il basso, mai al contrario.
 - **I segreti dei template** degli altri membri (vedi sopra).
 - **I dati di CDA Net**: solo gli admin e il direttore tecnico.
 - **Le chiavi di CDA Net**: chiavi Wi-Fi delle reti e password delle CPE. Senza visibilità piena lo Specialist non fa lavoro di campo per CDA Net (`requireCdaWork`, `doesCdaWork`): niente installazioni CDA Net (`/api/provisioning/plan`, `/jobs`, `/result`, `/templates`, `/api/wireless-networks`, sostituzione), niente strumenti di campo sulle CPE di CDA Net (`/api/field/access`, `/relink`, `/cpe`, `/cpe/claim`, `/cpe/register`), nessun template CDA Net, nemmeno quelli per tutti. Lavora per le sue aziende nella sezione Specialist, con le credenziali scritte nel flusso.
+- **La rete di CDA Net**: gli strumenti che lavorano dal server di CDA Net (interfacce, vicini ARP, ping, traceroute, DNS, NetBIOS, scansione, SNMP, porte, ONVIF, Hikvision, BGP) e RouterOS dalla console partono dalla sua rete, quindi senza visibilità piena no (`requireCdaWork`). Restano aperti il produttore dei MAC e il catalogo RouterOS; nell'app gli strumenti di rete lavorano dal telefono. Lo stesso per la copertura degli altri operatori, che usa l'abbonamento di CDA Net.
 - **La visibilità piena del direttore**: non passa ai membri dei suoi gruppi.
-- **La copia di un template CDA Net**: la vede solo chi può già usare l'originale. Così il direttore non passa al gruppo un template riservato.
+- **La copia di un template CDA Net**: la vede solo chi può già usare l'originale, anche il suo autore. Così il direttore non passa al gruppo un template riservato. Le copie fatte prima della 1.36.3 il server le riconosce dalla nota (`Copia del template CDA Net «…»`) o dal Registro (`specialist.template_copy`); se l'originale non c'è più, la copia resta visibile solo con la visibilità piena.
 - **Il lavoro da un gruppo all'altro**: i gruppi non si sommano. Se Luca è in due gruppi vede entrambi, ma Giulia, che sta solo nel primo, non vede Sara, che sta solo nel secondo.
 
 ## Regole
@@ -60,14 +61,14 @@ Tutto quello che mostra dati di CDA Net o di altri richiede la visibilità piena
 - salute piattaforma;
 - precisione della copertura;
 - antenne degli AP di CDA Net (nomi, clienti, azimut) e importazione dei diagrammi;
-- copertura degli altri operatori con i loro nomi (MyWic, sull'abbonamento di CDA Net): gli altri Specialist hanno la risposta degli installatori, senza i nomi.
+- copertura degli altri operatori (MyWic, sull'abbonamento di CDA Net): gli installatori hanno la loro risposta, senza i nomi; gli Specialist senza visibilità piena niente.
 
 Nei controlli puntuali dei dati, `isStaff(role)` diventa `seesAll(user)`.
 
 ## Decisioni (Carmelo, 17/10/2026)
 
 - **Connettori**: non si condividono nel gruppo.
-- **Template condivisi**: li modificano tutti i membri (`GROUP_EDITS_TEMPLATES` in `server/src/services/specialist.ts`), ma i segreti solo l'autore.
+- **Template condivisi**: li modifica solo chi li ha creati (Carmelo, 18/10/2026; `GROUP_EDITS_TEMPLATES = false` in `server/src/services/specialist.ts`). Se tutti i membri potessero cambiare il testo, potrebbero far finire i segreti dell'autore dove vogliono.
 - **Segreti di un template usato da un altro membro**: li scrive chi installa, mai quelli dell'autore.
 
 ## App Android
@@ -75,10 +76,10 @@ Nei controlli puntuali dei dati, `isStaff(role)` diventa `seesAll(user)`.
 - La sessione ha `fullView`: `seesAll` per le viste del NOC (agenda di squadra in Oggi, Salute CPE, guasti, rete, copertura), `doesCdaWork` per il lavoro di campo di CDA Net.
 - Senza visibilità piena le schermate di installazione e degli strumenti sulle CPE di CDA Net (Installazioni, Installazione CPE, CPE collegata, Puntamento, Diagnosi, Collaudo) mostrano che servono le chiavi di CDA Net e portano alla sezione Specialist; Oggi, scorciatoie e Strumenti non le propongono, e il telefono non tiene le credenziali delle CPE di CDA Net.
 - Il calendario riceve dal server solo i propri interventi e quelli del gruppo, senza `installers`, e mostra di chi è ogni intervento del gruppo.
-- Template e storico Specialist mostrano l'autore del lavoro di un collega; le installazioni dei colleghi sono in sola lettura; la community di un template altrui non si modifica; la copia di un template CDA Net c'è solo con la visibilità piena.
+- Template e storico Specialist mostrano l'autore del lavoro di un collega; template e installazioni dei colleghi sono in sola lettura; la copia di un template CDA Net c'è solo con la visibilità piena.
 
 ## In console
 
-**Amministrazione → Gruppi di lavoro** mostra lo schema «Chi vede cosa», i gruppi e i loro membri. In **Account** c'è la casella «Visibilità piena · direttore tecnico». Nelle sue pagine (template e storico) lo Specialist vede i suoi gruppi e i colleghi; la copia di un template CDA Net c'è solo con la visibilità piena e la community di un template altrui non si modifica.
+**Amministrazione → Gruppi di lavoro** mostra lo schema «Chi vede cosa», i gruppi e i loro membri. In **Account** c'è la casella «Visibilità piena · direttore tecnico». Nelle sue pagine (template e storico) lo Specialist vede i suoi gruppi e i colleghi; il template di un collega si apre in sola lettura e la copia di un template CDA Net c'è solo con la visibilità piena. Senza visibilità piena non ci sono MikroTik · RouterOS né la copertura degli altri operatori.
 
 ![La pagina Gruppi di lavoro](img/gruppi-di-lavoro-console.png)

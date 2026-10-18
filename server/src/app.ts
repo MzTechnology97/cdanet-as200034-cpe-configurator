@@ -5,7 +5,7 @@ import { dirname, join } from 'node:path';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance, type FastifyReply } from 'fastify';
 import { ZodError } from 'zod';
-import { HttpError, createAuth } from './auth.ts';
+import { HttpError, createAuth, seesAll } from './auth.ts';
 import type { Config } from './config.ts';
 import type { AppContext } from './context.ts';
 import { createSealer, hashPassword } from './crypto.ts';
@@ -188,7 +188,10 @@ export async function buildApp(
     specialist: createSpecialist(db, cfg, sealer, { fetchImpl: opts.fetchImpl, visibleIds: (u) => ctx.workGroups.visibleIds(u),
       canUseCda: (userId, templateId) => {
         const u = db.prepare('SELECT id, role, full_view fullView FROM users WHERE id = ?').get(userId) as { id: number; role: string; fullView: number } | undefined;
-        return !!u && ctx.templates.visibleTo({ id: u.id, role: u.role, fullView: !!u.fullView }).some((t) => t.id === templateId);
+        if (!u) return false;
+        const viewer = { id: u.id, role: u.role, fullView: !!u.fullView };
+        // 0: a copy made before (1.36.0-1.36.2) whose original is no longer found
+        return templateId === 0 ? seesAll(viewer) : ctx.templates.visibleTo(viewer).some((t) => t.id === templateId);
       },
     }),
     version,

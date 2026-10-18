@@ -175,10 +175,12 @@ const clean = (text: string) =>
     .slice(0, 500);
 
 /**
- * The specialists of a work group may change each other's templates (true) or only use them (false):
- * a choice left to the review of issue #275. Deleting a template is always for its author only.
+ * The specialists of a work group may change each other's templates (true) or only see and use
+ * them (false). Carmelo, 18/10/2026: only their author changes them, because whoever changes the
+ * text decides where the server writes the author's secrets (community, UISP key, CPE password) at
+ * his installations. Deleting a template is always for its author only.
  */
-export const GROUP_EDITS_TEMPLATES = true;
+export const GROUP_EDITS_TEMPLATES = false;
 
 export function createSpecialist(
   db: Db,
@@ -194,10 +196,11 @@ export function createSpecialist(
 ) {
   const visible = (userId: number) => opts.visibleIds?.(userId) ?? [userId];
   /**
-   * A template of another member made as a copy of a CDA Net template: shared only with whoever may
-   * use that original himself. «Visibilità piena» is personal, never passed on through a group.
+   * A copy of a CDA Net template is CDA Net's work: only for whoever may use that original himself,
+   * its author too (a copy made before the full view was needed waits for it). «Visibilità piena» is
+   * personal, never passed on through a group.
    */
-  const sharedOk = (userId: number, r: TemplateRow) => r.user_id === userId || r.cda_source_id == null || (opts.canUseCda?.(userId, r.cda_source_id) ?? false);
+  const sharedOk = (userId: number, r: TemplateRow) => r.cda_source_id == null || (opts.canUseCda?.(userId, r.cda_source_id) ?? false);
   const inList = (ids: number[]) => ids.map(() => '?').join(',');
   const tx = <T>(fn: () => T): T => {
     db.exec('BEGIN');
@@ -312,7 +315,10 @@ export function createSpecialist(
     },
 
     update(userId: number, id: number, input: SpecialistTemplateInput) {
-      const cur = templateRow(userId, id, GROUP_EDITS_TEMPLATES);
+      const cur = templateRow(userId, id);
+      // only its author changes a template (Carmelo, 18/10/2026): whoever changes the text decides
+      // where the server writes the author's secrets at his installations
+      if (cur.user_id !== userId && !GROUP_EDITS_TEMPLATES) throw new HttpError(403, 'template_author_only');
       // names are unique for each author: a member renaming a shared template checks the author's
       if (input.name !== undefined && nameTaken(cur.user_id, cur.model, input.name, id)) throw new HttpError(409, 'template_name_exists');
       if (input.boardMatch !== undefined) validateBoardMatch(input.boardMatch);

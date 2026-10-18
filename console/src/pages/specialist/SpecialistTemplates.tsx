@@ -189,7 +189,7 @@ export function SpecialistTemplates({ user }: PageContext) {
                         </div>
                         <div className="hl-actions">
                           <AsyncButton onClick={() => open(t)} onError={fail}>
-                            Modifica
+                            {t.authorId === myId() ? 'Modifica' : 'Apri'}
                           </AsyncButton>
                           {t.authorId === myId() && (
                             <AsyncButton variant="ghost" icon="delete" onClick={() => remove(t)} onError={fail}>
@@ -455,7 +455,12 @@ function TemplateEditor({ opts, data, onDirty, onClose, onSaved }: { opts: Edito
   const usesKey = form.report.placeholders.includes('WPA2_PSK');
 
   return (
-    <Card title={isNew ? `Nuovo template · ${opts.model}` : `Modifica · ${opts.model} · ${opts.name}`}>
+    <Card title={isNew ? `Nuovo template · ${opts.model}` : `${opts.author ? 'Template' : 'Modifica'} · ${opts.model} · ${opts.name}`}>
+      {opts.author && (
+        <Notice tone="info" title={`Template di ${opts.author}, del tuo gruppo di lavoro`}>
+          Lo puoi guardare e usare nell’app, con i tuoi valori e i tuoi segreti; lo modifica e lo elimina solo {opts.author}.
+        </Notice>
+      )}
       {!isNew && opts.updatedAt && (
         <p className="ui-muted ui-small pf-p">
           Ultima modifica {date(opts.updatedAt)} · SHA-256 {opts.sha256?.slice(0, 16)}…
@@ -602,9 +607,12 @@ function TemplateEditor({ opts, data, onDirty, onClose, onSaved }: { opts: Edito
         </section>
       )}
       <div className="ui-row pf-actions">
-        <AsyncButton variant="primary" onClick={save} onError={fail}>
-          Salva template
-        </AsyncButton>
+        {/* only its author changes a template (Carmelo, 18/10/2026) */}
+        {!opts.author && (
+          <AsyncButton variant="primary" onClick={save} onError={fail}>
+            Salva template
+          </AsyncButton>
+        )}
         <Button variant="ghost" onClick={onClose}>
           Chiudi
         </Button>

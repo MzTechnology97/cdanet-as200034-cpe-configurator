@@ -16,7 +16,8 @@ export function coverageOpsRoutes(app: FastifyInstance, ctx: AppContext) {
   // with the operators' names and a new reading on CDA Net's account: admins and «visibilità piena»
   // (issue #275); the other specialists get the installers' answer
   const admin = { preHandler: ctx.auth.requireSeesAll };
-  const field = { preHandler: [ctx.auth.requireUser, ctx.modules.require('coverage')] };
+  // the installers' answer, on CDA Net's account too: not for a specialist without «visibilità piena»
+  const field = { preHandler: [ctx.auth.requireCdaWork, ctx.modules.require('coverage')] };
 
   const where = z.object({
     lat: z.coerce.number().optional(),

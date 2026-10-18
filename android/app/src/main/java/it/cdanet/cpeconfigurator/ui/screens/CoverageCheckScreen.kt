@@ -497,8 +497,9 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
             }
         }
         // the other operators at the same point (FTTH, FTTC, radio), by AGCOM sticker, with every check
-        // (installers without the operators' names)
-        if (p != null) OperatorsCoverageCard(c, p.lat, p.lon, admin)
+        // (installers without the operators' names; on CDA Net's account: not for a specialist
+        // without «visibilità piena», issue #275)
+        if (p != null && c.session.doesCdaWork) OperatorsCoverageCard(c, p.lat, p.lon, admin)
         Column(Modifier.bringIntoViewRequester(savedPos)) {
             SavedChecksCard(c, admin, savedVersion) { s ->
                 openSaved(s)

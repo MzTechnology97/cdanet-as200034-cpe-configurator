@@ -442,6 +442,10 @@ private fun TemplateEditorBody(c: AppContainer, open: SpecEditorOpen, onClose: (
     val m = meta
     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 24.dp)) {
         SectionCard(if (savedId == null) "Nuovo template · ${open.model}" else "Template · ${open.model}", icon = R.drawable.ic_memory) {
+            // a template of a colleague of the group (Carmelo, 18/10/2026): only its author changes it
+            open.author?.let { a ->
+                Notice("Template di $a, del tuo gruppo di lavoro: lo usi nel flusso con i tuoi valori e i tuoi segreti; lo modifica e lo elimina solo $a.", NoticeKind.Info)
+            }
             if (savedId != null && open.updatedAt.isNotBlank()) {
                 Text("Ultima modifica ${localTime(open.updatedAt)} · SHA-256 ${open.sha256.take(16)}…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -605,8 +609,10 @@ private fun TemplateEditorBody(c: AppContainer, open: SpecEditorOpen, onClose: (
         }
         ErrorBanner(error) { error = null }
         saved?.let { Notice(it, NoticeKind.Good) }
-        BusyButton("Salva template", busy == "save", Modifier.fillMaxWidth(), enabled = busy == null && fs != null) {
-            scope.launch { step("save") { save() } }
+        if (open.author == null) {
+            BusyButton("Salva template", busy == "save", Modifier.fillMaxWidth(), enabled = busy == null && fs != null) {
+                scope.launch { step("save") { save() } }
+            }
         }
         // saved: the configuration of a CPE with it, without the CPE's Wi-Fi (the CPE comes after)
         val usable = savedId
@@ -617,7 +623,7 @@ private fun TemplateEditorBody(c: AppContainer, open: SpecEditorOpen, onClose: (
             }, modifier = Modifier.fillMaxWidth(), enabled = busy == null) { Text("Prepara una configurazione con questo template") }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (savedId != null) TextButton(onClick = { confirmDelete = true }, enabled = busy == null) { Text("Elimina template") }
+            if (savedId != null && open.author == null) TextButton(onClick = { confirmDelete = true }, enabled = busy == null) { Text("Elimina template") }
             Spacer(Modifier.weight(1f))
             TextButton(onClick = { if (dirty) askClose = true else onClose() }) { Text("Chiudi") }
         }
