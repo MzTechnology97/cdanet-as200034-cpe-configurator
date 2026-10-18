@@ -13,7 +13,7 @@
     <li><a href="#g-wifi">Reti Wi-Fi (WPA2)</a></li>
     <li><a href="#g-profili">Profili airOS e template</a></li>
     <li><a href="#g-funzionalita">Funzionalità</a>
-      <ol><li><a href="#g-interventi">Agenda e calendario degli interventi</a></li><li><a href="#g-firmware">Firmware airOS</a></li></ol>
+      <ol><li><a href="#g-interventi">Agenda e calendario degli interventi</a></li><li><a href="#g-firmware">Firmware airOS</a></li><li><a href="#g-tvcc">Telecamere e NVR Hikvision</a></li></ol>
     </li>
     <li><a href="#g-account">Account e POP/AP assegnati</a></li>
     <li><a href="#g-nuovo-installatore">Un nuovo installatore, dall'account al primo intervento</a></li>
@@ -145,6 +145,9 @@
 <figure><img data-guide="admin-modules.jpg" alt="Funzionalità"><figcaption>Funzionalità: moduli con ambito web, app o entrambi.</figcaption></figure>
 <figure><img data-guide="admin-calendar.jpg" alt="Calendario degli interventi"><figcaption>Calendario, vista settimana: gli interventi di tutti gli installatori.</figcaption></figure>
 
+<h3 id="g-tvcc">Telecamere e NVR Hikvision</h3>
+<p>Nell'app, <i>Strumenti → Apparati in LAN → TVCC → Hikvision SADP</i> trova telecamere, NVR e DVR Hikvision sulla rete del telefono, anche con un indirizzo di un'altra subnet: modello, indirizzo, MAC, seriale, firmware, DHCP o IP statico. Quelli <b>NON ATTIVATI</b>, ancora senza password, compaiono in cima. Di fabbrica rispondono a 192.168.1.64 (i modelli recenti partono in DHCP e, senza un server DHCP, restano lì; alcuni NVR e DVR vecchi usano 192.0.0.64).</p>
+<p>L'attivazione e il cambio di IP, subnet e gateway si fanno con il <b>SADP Tool</b> di Hikvision da PC, in LAN o in Wi-Fi sulla stessa rete, oppure dalla pagina web della telecamera (<i>Interfaccia web</i> nell'app) con il telefono o il PC nella sua stessa subnet. La password delle telecamere non passa dall'app né dal server. I passi sono nella <a href="/wiki/#hik-attivazione" target="_blank" rel="noopener">guida installatore</a>.</p>
 <h2 id="g-account">9. Account e POP/AP assegnati</h2>
 <p><b>Nuovo account</b>: username, password iniziale (da comunicare a voce o di persona) e ruolo (<i>Installatore</i>, <i>Admin</i> o <i>Specialist</i>, vedi <a href="#g-specialist">Lo Specialist</a>). Nella tabella ci sono stato, verifica in due passaggi, ultimo accesso e numero di provisioning; da ogni riga si può disabilitare l'account o reimpostarne la password.</p>
 <p><b>Magazzino dell'account</b>: per installatori e partner l'amministratore sceglie il loro <b>magazzino ISP Billing</b> e decide se possono installare anche CPE che non ci sono (<i>Può installare CPE non presenti nel suo magazzino</i>). Si cambia anche sugli account esistenti, senza dover rifare l'accesso. Senza l'opzione, nelle nuove installazioni l'app non mostra nemmeno i campi MAC e seriale: la CPE si sceglie solo dal suo magazzino, e il server rifiuta comunque una CPE che non c'è.</p>

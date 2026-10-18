@@ -231,7 +231,7 @@ fun CameraScreen(c: AppContainer) {
             SectionCard("Hikvision SADP: ${list.size} dispositivi") {
                 if (list.isEmpty()) Text("Nessuna risposta: verifica di essere sulla stessa rete dei dispositivi (stesso segmento, multicast non filtrato).", style = MaterialTheme.typography.bodySmall)
                 val inactive = list.count { it.activated == false }
-                if (inactive > 0) Text("$inactive da attivare: impostare la password di amministrazione (es. da interfaccia web o SADP) prima dell'uso.", color = BadRed, style = MaterialTheme.typography.bodySmall)
+                if (inactive > 0) Text("$inactive da attivare: prima dell'uso va impostata la password di amministrazione, con il SADP Tool da PC o dalla sua Interfaccia web (Guida installatore → Telecamere e NVR).", color = BadRed, style = MaterialTheme.typography.bodySmall)
                 list.forEachIndexed { i, d ->
                     if (i > 0) androidx.compose.material3.HorizontalDivider()
                     Text("${d.description.ifBlank { d.model }} · ${d.ip}", fontWeight = FontWeight.SemiBold)

@@ -346,6 +346,7 @@ Strumento locale: tutto avviene dal telefono collegato alla Wi-Fi della LAN, nul
 - Ricerca di telecamere, NVR e DVR Hikvision con il protocollo SADP (UDP 37020): sonda inviata due volte in multicast e broadcast, risposte ascoltate anche sul gruppo multicast (molti apparati rispondono lì).
 - Per ogni dispositivo: modello, seriale, firmware, MAC, IP/maschera/gateway, DHCP o statico, porte HTTP e SDK, canali, Hik-Connect e **stato di attivazione**: quelli **non attivati** (password di amministrazione ancora da impostare) sono evidenziati in cima.
 - Azioni: interfaccia web, verifica porte (HTTP, HTTPS, RTSP, SDK), "Usa per RTSP" che compila l'anteprima dello stream.
+- Attivazione e cambio di IP, subnet e gateway: con il SADP Tool di Hikvision da PC (in LAN o in Wi-Fi sulla stessa rete, anche tra subnet diverse) o dalla pagina web del dispositivo nella sua stessa subnet. I passi sono nella guida installatore («Attivare una telecamera Hikvision e cambiarne l'indirizzo»); l'app non tratta le password delle telecamere.
 
 ### Port scanner
 - Preset (top 30, apparati di rete, TVCC/NVR, Windows/server, database, stampanti, prime 1024) o elenco libero come `1-1024,8291,8728,20443` (fino a 10.000 porte).

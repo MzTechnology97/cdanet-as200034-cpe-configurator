@@ -61,6 +61,8 @@
         <li><a href="#topologia">Topologia della rete</a></li>
         <li><a href="#discovery">Discovery multi-vendor</a></li>
         <li><a href="#porte">Porte</a></li>
+        <li><a href="#tvcc">Telecamere e NVR (TVCC)</a></li>
+        <li><a href="#hik-attivazione">Attivare una telecamera Hikvision e cambiarne l'indirizzo</a></li>
       </ol>
     </li>
     <li><a href="#impostazioni">Impostazioni</a></li>
@@ -421,6 +423,24 @@
   <figure><img src="img/app-strumenti.jpg" alt="Strumenti" loading="lazy"><figcaption>Strumenti: con la CPE e per la rete del cliente.</figcaption></figure>
   <figure><img src="img/app-wifi-router.jpg" alt="Router del cliente" loading="lazy"><figcaption>Wi-Fi Analyzer: canale e larghezza consigliati per il router del cliente.</figcaption></figure>
 </div>
+<h3 id="tvcc">Telecamere e NVR (TVCC)</h3>
+<p>In <b>Strumenti → Apparati in LAN</b>, scheda <b>TVCC</b>, con il telefono sulla Wi-Fi della rete delle telecamere:</p>
+<ul>
+  <li><b>ONVIF WS-Discovery</b> trova le telecamere ONVIF di ogni marca.</li>
+  <li><b>Hikvision SADP</b> trova telecamere, NVR e DVR Hikvision, anche quando hanno un indirizzo di un'altra subnet. Per ognuno mostra modello, indirizzo, MAC, seriale, firmware, maschera e gateway, <i>DHCP</i> o <i>IP statico</i> e le porte HTTP e SDK. In cima compaiono quelli <b>NON ATTIVATI</b>, che non hanno ancora una password: prima di usarli vanno attivati (<a href="#hik-attivazione">sotto</a>). Su ogni dispositivo <b>Interfaccia web</b> apre la sua pagina, <b>Usa per RTSP</b> compila l'anteprima e <b>Porte</b> verifica HTTP, HTTPS, RTSP e SDK.</li>
+  <li><b>Telecamera / NVR</b>: verifica delle porte e anteprima dello stream RTSP (main o sub Hikvision, Dahua). Utente e password servono solo per l'anteprima e non vengono salvati.</li>
+  <li><b>Calcolo banda e storage</b>: dal numero di telecamere, dai Mbps di ognuna e dalle ore di registrazione al giorno, la banda totale e lo spazio su disco al giorno e per i giorni scelti.</li>
+</ul>
+<h3 id="hik-attivazione">Attivare una telecamera Hikvision e cambiarne l'indirizzo</h3>
+<p>Una telecamera Hikvision nuova, o dopo un reset, non è attivata: finché non ha una password di amministrazione non si configura e non registra. Di fabbrica risponde a <b>192.168.1.64</b>. I modelli più recenti partono in DHCP e, se non trovano un server DHCP, restano su 192.168.1.64: in SADP compare <i>DHCP</i> con quell'indirizzo. Alcuni NVR e DVR più vecchi usano <b>192.0.0.64</b>. L'indirizzo vero lo dice sempre SADP.</p>
+<p><b>Con il SADP Tool da PC</b>, il programma gratuito di Hikvision per Windows e Mac. Funziona con il PC in LAN o in Wi-Fi sulla stessa rete delle telecamere, anche se queste hanno un indirizzo di un'altra subnet.</p>
+<ol>
+  <li>Avviare il SADP Tool: compare l'elenco dei dispositivi, e quelli da attivare hanno lo stato <i>Inactive</i>.</li>
+  <li>Selezionare il dispositivo (o più dispositivi, per dare a tutti la stessa password), scrivere la nuova password due volte e confermare con <b>Activate</b> (<b>OK</b> in alcune versioni). La password va da 8 a 16 caratteri; Hikvision la vuole forte, con almeno tre tipi tra cifre, minuscole, maiuscole e caratteri speciali.</li>
+  <li>Per cambiare indirizzo: selezionare il dispositivo e, a destra, impostare <b>IP Address</b>, <b>Subnet Mask</b> e <b>Gateway</b>, oppure attivare il DHCP. Poi scrivere la password del dispositivo e salvare con <b>Modify</b> (<b>Save</b> nelle versioni più recenti).</li>
+</ol>
+<p><b>Dal browser</b>, anche dal telefono con <b>Interfaccia web</b>. Serve un PC o un telefono nella stessa subnet della telecamera: per una telecamera di fabbrica, una rete 192.168.1.x. Si apre <code>http://192.168.1.64</code>, la pagina chiede di creare la password di amministrazione, poi si entra con l'utente <code>admin</code>. L'indirizzo si cambia in <i>Configurazione → Rete → Impostazioni di base → TCP/IP</i>.</p>
+<div class="note">La password delle telecamere non passa dall'app né dal server di CDA Net: si scrive solo nel SADP Tool o nella pagina della telecamera.</div>
 
 <h2 id="impostazioni">11. Impostazioni</h2>
 <p>Dall'ingranaggio: l'account, <b>Esci</b> (la volta dopo serve la password), <b>Cambia password</b> (almeno 12 caratteri), <b>Accesso su questo telefono</b> con <b>Sblocco con impronta o volto</b>, <b>Notifiche su Telegram</b>, <b>Esci da tutti i dispositivi</b> (in caso di telefono perso) e l'indirizzo del server.</p>
