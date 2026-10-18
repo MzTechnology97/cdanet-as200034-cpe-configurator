@@ -1,7 +1,8 @@
 import assert from 'node:assert/strict';
 import { describe, it } from 'node:test';
+import { DatabaseSync } from 'node:sqlite';
 import { buildApp } from '../src/app.ts';
-import { openDatabase } from '../src/db.ts';
+import { migrate, openDatabase } from '../src/db.ts';
 import { ADMIN, SAMPLE_TEMPLATE, testConfig } from './helpers.ts';
 
 const A_ = { username: 'spec.a', password: 'Specialist-Password-A1' };
@@ -44,7 +45,7 @@ describe('Gruppi di lavoro degli Specialist (issue #275)', () => {
     );
     assert.deepEqual((await call('GET', '/api/specialist/work-groups', C)).json().items, []);
 
-    // a template of A: B sees it, uses it and (choice of the review) changes it; only A deletes it; C nothing
+    // a template of A: B sees it and uses it; only A changes it and deletes it (Carmelo, 18/10/2026); C nothing
     const t = await call('POST', '/api/specialist/templates', A, { model: 'LiteBeam 5AC', name: 'Azienda X', template: SAMPLE_TEMPLATE, snmpCommunity: 'community-di-a' });
     assert.equal(t.statusCode, 201, t.body);
     const tid = t.json().id as number;
@@ -54,8 +55,9 @@ describe('Gruppi di lavoro degli Specialist (issue #275)', () => {
       [[tid, 'spec.a', a]],
     );
     assert.equal((await call('GET', `/api/specialist/templates/${tid}`, B)).statusCode, 200);
-    const edit = await call('PATCH', `/api/specialist/templates/${tid}`, B, { notes: 'rivisto da B' });
-    assert.equal(edit.statusCode, 200, edit.body);
+    assert.equal((await call('PATCH', `/api/specialist/templates/${tid}`, B, { notes: 'rivisto da B' })).json().error, 'template_author_only', 'only its author changes it');
+    assert.equal((await call('PATCH', `/api/specialist/templates/${tid}`, B, { template: `${SAMPLE_TEMPLATE}syslog.remote.ip=203.0.113.9\n` })).statusCode, 403, 'not even its text');
+    assert.equal((await call('PATCH', `/api/specialist/templates/${tid}`, A, { notes: 'rivisto da A' })).statusCode, 200);
     assert.equal((await call('DELETE', `/api/specialist/templates/${tid}`, B)).statusCode, 404, 'only its author deletes it');
     assert.deepEqual((await call('GET', '/api/specialist/templates', C)).json(), []);
     assert.equal((await call('GET', `/api/specialist/templates/${tid}`, C)).statusCode, 404);
@@ -155,6 +157,11 @@ describe('Gruppi di lavoro degli Specialist (issue #275)', () => {
     const cal = async (h: Record<string, string>) => (await call('GET', '/api/work-orders/calendar?from=2026-10-20&to=2026-10-26', h)).json().items as Array<{ customer: string }>;
     assert.equal((await cal(A)).length, 1);
     assert.deepEqual(await cal(B), []);
+    // an order of the director himself (it may be CDA Net's, with its customer): not to his groups
+    db.prepare("INSERT INTO work_orders(created_at, updated_at, day, kind, status, assigned_to, customer) VALUES(?,?,?,?,?,?,?)").run(now, now, '2026-10-22', 'new', 'open', a, 'Cliente CDA Net del direttore');
+    assert.equal((await cal(A)).length, 2);
+    assert.deepEqual(await cal(B), [], 'B is in a group with the director: still nothing of his');
+    assert.deepEqual(await cal(C), []);
 
     // a CDA Net template kept for one installer: A (full view) copies it, the copy does not reach B
     const cda = await call('POST', '/api/admin/profiles/LiteBeam%205AC/templates', ADM, { name: 'Riservato', template: SAMPLE_TEMPLATE, boardMatch: 'board\.name=LiteBeam', audience: 'users', userIds: [inst] });
@@ -192,7 +199,6 @@ describe('Gruppi di lavoro degli Specialist (issue #275)', () => {
     assert.ok((await names(B)).includes('Suo di D'), 'now in a group with D');
     assert.equal((await call('POST', '/api/admin/work-groups', B, { name: 'Da solo' })).statusCode, 403, 'a specialist without full view makes no groups');
     assert.equal((await call('PATCH', `/api/admin/users/${b}`, A, { fullView: true })).statusCode, 403, 'full view stays with the admins');
-    assert.ok(b !== c);
     await app.close();
   });
 
@@ -248,10 +254,11 @@ describe('Gruppi di lavoro degli Specialist (issue #275)', () => {
     assert.equal(pkgB.statusCode, 201, pkgB.body);
     assert.match(pkgB.json().config.text, /^snmp\.community=community-di-b$/m);
     assert.ok(!pkgB.body.includes('community-di-a'), "the author's community never reaches another member");
-    // only the author sets or clears it; the rest of the template stays shared
-    assert.equal((await call('PATCH', `/api/specialist/templates/${tid}`, B, { snmpCommunity: 'community-scelta-da-b' })).json().error, 'template_secrets_author_only');
-    assert.equal((await call('PATCH', `/api/specialist/templates/${tid}`, B, { snmpCommunity: null })).json().error, 'template_secrets_author_only');
-    assert.equal((await call('PATCH', `/api/specialist/templates/${tid}`, B, { notes: 'rivisto da B' })).statusCode, 200);
+    // only the author changes it: its secrets, nor its text where the server writes them
+    assert.equal((await call('PATCH', `/api/specialist/templates/${tid}`, B, { snmpCommunity: 'community-scelta-da-b' })).json().error, 'template_author_only');
+    assert.equal((await call('PATCH', `/api/specialist/templates/${tid}`, B, { snmpCommunity: null })).json().error, 'template_author_only');
+    assert.equal((await call('PATCH', `/api/specialist/templates/${tid}`, B, { template: `${SAMPLE_TEMPLATE}resolv.host.1.name=\${SNMP_COMMUNITY}\n` })).json().error, 'template_author_only');
+    assert.equal((await call('PATCH', `/api/specialist/templates/${tid}`, A, { notes: 'rivisto da A' })).statusCode, 200);
     const pkgA = await job(A);
     assert.equal(pkgA.statusCode, 201, pkgA.body);
     assert.match(pkgA.json().config.text, /^snmp\.community=community-di-a$/m, "the author's installations keep his");
@@ -259,7 +266,8 @@ describe('Gruppi di lavoro degli Specialist (issue #275)', () => {
     // the log: whose template and which group, never a secret
     const ev = db.prepare("SELECT u.username who, e.action, e.detail FROM events e JOIN users u ON u.id = e.user_id WHERE e.action LIKE 'specialist.%' ORDER BY e.id").all() as Array<{ who: string; action: string; detail: string }>;
     const byB = ev.filter((e) => e.who === 'spec.b');
-    assert.match(byB.find((e) => e.action === 'specialist.template_update')!.detail, /template di spec\.a · gruppo Squadra Est/);
+    assert.ok(!byB.some((e) => e.action === 'specialist.template_update'), 'refused: nothing changed');
+    assert.match(ev.find((e) => e.who === 'spec.a' && e.action === 'specialist.template_update')!.detail, /gruppo Squadra Est/);
     assert.match(byB.find((e) => e.action === 'specialist.job')!.detail, /template di spec\.a.*gruppo Squadra Est/);
     assert.match(ev.find((e) => e.who === 'spec.a' && e.action === 'specialist.template_create')!.detail, /gruppo Squadra Est/);
     for (const secret of ['community-di-a', 'community-di-b', 'community-scelta-da-b', 'Chiave-WiFi-Azienda-1', 'Pppoe-Segreta-1', 'Cpe-Password-X-1']) {
@@ -282,5 +290,30 @@ describe('Gruppi di lavoro degli Specialist (issue #275)', () => {
     }
     assert.ok(!/community-di|Chiave-WiFi|Pppoe-Segreta/.test(noc), 'no secret to the NOC');
     await app.close();
+  });
+
+  it('the copies of CDA Net templates made before the groups keep their source (migration 47)', () => {
+    const BEFORE_GROUPS = 46;
+    const db = new DatabaseSync(':memory:');
+    db.exec('PRAGMA foreign_keys = ON');
+    migrate(db, BEFORE_GROUPS);
+    const cols = (db.prepare('PRAGMA table_info(specialist_templates)').all() as Array<{ name: string }>).map((c) => c.name);
+    assert.ok(!cols.includes('cda_source_id'), 'the schema before the groups');
+    const now = '2026-10-10T08:00:00Z';
+    const uid = Number(db.prepare("INSERT INTO users(username, password_hash, role, created_at) VALUES('spec.x', 'x', 'specialist', ?)").run(now).lastInsertRowid);
+    const pid = Number(
+      db.prepare("INSERT INTO profile_templates(model, firmware, name, board_match, template_ciphertext, template_sha256, created_at, updated_at) VALUES('LiteBeam 5AC', '8.7.11', 'Standard', 'x', 'c', 'h', ?, ?)").run(now, now).lastInsertRowid,
+    );
+    const add = db.prepare("INSERT INTO specialist_templates(user_id, model, name, notes, template_ciphertext, template_sha256, created_at, updated_at) VALUES(?, 'LiteBeam 5AC', ?, ?, 'c', 'h', ?, ?)");
+    const id = (name: string, notes: string) => Number(add.run(uid, name, notes, now, now).lastInsertRowid);
+    const byNote = id('Copia', 'Copia del template CDA Net «Standard»');
+    const gone = id('Copia vecchia', 'Copia del template CDA Net «Non più in elenco»');
+    const byLog = id('Copia con note sue', 'note scritte da lui');
+    const own = id('Suo', '');
+    db.prepare("INSERT INTO events(created_at, user_id, action, target, detail) VALUES(?, ?, 'specialist.template_copy', 'LiteBeam 5AC · Copia con note sue', 'da CDA Net «Standard»')").run(now, uid);
+    migrate(db);
+    const src = (t: number) => (db.prepare('SELECT cda_source_id s FROM specialist_templates WHERE id = ?').get(t) as { s: number | null }).s;
+    // the original when it is still there; 0 (only «visibilità piena») when it is not known; his own stay his
+    assert.deepEqual([src(byNote), src(gone), src(byLog), src(own)], [pid, 0, 0, null]);
   });
 });

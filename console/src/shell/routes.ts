@@ -32,6 +32,8 @@ export interface Route {
   staff?: boolean;
   /** CDA Net's data of everyone: admins and specialists with «visibilità piena» (issue #275). */
   all?: boolean;
+  /** Works from CDA Net's own network (the server's tools): not for a specialist without «visibilità piena». */
+  cdaWork?: boolean;
   /** Only the specialists: their own section. */
   specialist?: boolean;
   installer?: boolean;
@@ -73,7 +75,7 @@ export const ROUTES: Array<Route | Group> = [
   { id: 'mytemplates', icon: 'memory', label: 'Template disponibili', installer: true, react: () => import('../pages/MyTemplates').then((m) => m.MyTemplates) },
   { id: 'coverage', icon: 'explore', label: 'Copertura', module: 'coverage', bottom: true, react: () => import('../pages/Coverage').then((m) => m.Coverage) },
   { id: 'feasibility', icon: 'my_location', label: 'Fattibilità', all: true, module: 'coverage', react: () => import('../pages/Feasibility').then((m) => m.Feasibility) },
-  { id: 'routeros', icon: 'router', label: 'MikroTik · RouterOS', module: 'routeros', react: () => import('../pages/RouterOs').then((m) => m.RouterOs) },
+  { id: 'routeros', icon: 'router', label: 'MikroTik · RouterOS', module: 'routeros', cdaWork: true, react: () => import('../pages/RouterOs').then((m) => m.RouterOs) },
   { group: 'Amministrazione' },
   { id: 'users', icon: 'person', label: 'Account', admin: true, react: () => import('../pages/Users').then((m) => m.Users) },
   { id: 'work-groups', icon: 'person', label: 'Gruppi di lavoro', all: true, react: () => import('../pages/WorkGroups').then((m) => m.WorkGroups) },
@@ -106,6 +108,7 @@ export function allowed(r: Route, user: User | null, isOn: (key: string) => bool
   if (r.installer) return user?.role === 'installer';
   if (r.specialist) return user?.role === 'specialist';
   if (r.all) return seesAllUser(user);
+  if (r.cdaWork && user?.role === 'specialist' && !user.fullView) return false;
   if (r.staff) return user?.role === 'admin' || user?.role === 'specialist';
   return !r.admin || user?.role === 'admin';
 }

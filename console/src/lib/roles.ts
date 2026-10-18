@@ -17,6 +17,8 @@ export const isStaff = (u?: { role: string } | null) => u?.role === 'admin' || u
 /** The views of the NOC (CDA Net's data of everyone): admins, and specialists with «visibilità piena». */
 export const seesAll = (u?: { role: string; fullView?: boolean } | null) => u?.role === 'admin' || (u?.role === 'specialist' && !!u.fullView);
 export const isSpecialist = (u?: { role: string } | null) => u?.role === 'specialist';
+/** CDA Net's own work and resources (its keys, its network, its paid sources): all but a specialist without «visibilità piena». */
+export const doesCdaWork = (u?: { role: string; fullView?: boolean } | null) => !!u && (u.role !== 'specialist' || !!u.fullView);
 
 /** Only the admins manage the platform and decide on CDA Net's work (the user logged in now). */
 export const canManage = () => current === 'admin';

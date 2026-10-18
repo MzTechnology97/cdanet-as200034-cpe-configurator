@@ -35,12 +35,26 @@ export function createWorkGroups(db: Db) {
     return r;
   };
   const nameTaken = (name: string, exceptId = 0) => !!db.prepare('SELECT 1 FROM work_groups WHERE name = ? COLLATE NOCASE AND id <> ?').get(name, exceptId);
-  /** Only active specialists are members of a group. */
+  /** Only specialists are members of a group (a disabled one stays, his work keeps its author). */
   const checkMembers = (ids: number[]) => {
     for (const id of ids) {
       const u = db.prepare('SELECT role FROM users WHERE id = ?').get(id) as { role: string } | undefined;
       if (!u) throw new HttpError(400, 'user_not_found', { id });
       if (u.role !== 'specialist') throw new HttpError(400, 'work_group_specialists_only', { id });
+    }
+  };
+
+  /** One change at a time, all or nothing; the same name written at once by two admins is a 409. */
+  const tx = <T>(fn: () => T): T => {
+    db.exec('BEGIN');
+    try {
+      const out = fn();
+      db.exec('COMMIT');
+      return out;
+    } catch (e) {
+      db.exec('ROLLBACK');
+      if (/UNIQUE constraint failed: work_groups/.test((e as Error).message)) throw new HttpError(409, 'work_group_name_exists');
+      throw e;
     }
   };
 
@@ -90,6 +104,16 @@ export function createWorkGroups(db: Db) {
         .all(userId) as Array<{ id: number }>;
       return [...new Set([userId, ...ids.map((r) => r.id)])];
     },
+    /**
+     * Whose work orders a specialist sees in his calendar: his own and those of the members of his
+     * groups, never those of a member with «visibilità piena» (the director's orders may be CDA
+     * Net's, with its customers: they never reach whoever does not see CDA Net's data).
+     */
+    calendarIds(userId: number): number[] {
+      const ids = groups.visibleIds(userId);
+      const ok = db.prepare(`SELECT id FROM users WHERE id IN (${ids.map(() => '?').join(',')}) AND (id = ? OR full_view = 0)`).all(...ids, userId) as Array<{ id: number }>;
+      return [...new Set([userId, ...ok.map((r) => r.id)])];
+    },
     /** Whether [viewerId] sees the work of [authorId]. */
     sees(viewerId: number, authorId: number | null): boolean {
       return authorId !== null && (authorId === viewerId || groups.visibleIds(viewerId).includes(authorId));
@@ -99,9 +123,12 @@ export function createWorkGroups(db: Db) {
       const members = [...new Set(input.members ?? [])];
       checkMembers(members);
       const now = nowIso();
-      const r = db.prepare('INSERT INTO work_groups(name, notes, created_at, created_by, updated_at) VALUES(?,?,?,?,?)').run(input.name, input.notes ?? '', now, by, now);
-      const id = Number(r.lastInsertRowid);
-      for (const u of members) db.prepare('INSERT INTO work_group_members(group_id, user_id, added_at) VALUES(?,?,?)').run(id, u, now);
+      const id = tx(() => {
+        const r = db.prepare('INSERT INTO work_groups(name, notes, created_at, created_by, updated_at) VALUES(?,?,?,?,?)').run(input.name, input.notes ?? '', now, by, now);
+        const gid = Number(r.lastInsertRowid);
+        for (const u of members) db.prepare('INSERT INTO work_group_members(group_id, user_id, added_at) VALUES(?,?,?)').run(gid, u, now);
+        return gid;
+      });
       return groups.get(id);
     },
     /** Name, notes and, when given, the whole list of members. */
@@ -116,11 +143,13 @@ export function createWorkGroups(db: Db) {
         checkMembers(next);
         added = next.filter((u) => !before.includes(u));
         removed = before.filter((u) => !next.includes(u));
+      }
+      tx(() => {
         const now = nowIso();
         for (const u of removed) db.prepare('DELETE FROM work_group_members WHERE group_id = ? AND user_id = ?').run(id, u);
         for (const u of added) db.prepare('INSERT INTO work_group_members(group_id, user_id, added_at) VALUES(?,?,?)').run(id, u, now);
-      }
-      db.prepare('UPDATE work_groups SET name = ?, notes = ?, updated_at = ? WHERE id = ?').run(input.name ?? cur.name, input.notes ?? cur.notes, nowIso(), id);
+        db.prepare('UPDATE work_groups SET name = ?, notes = ?, updated_at = ? WHERE id = ?').run(input.name ?? cur.name, input.notes ?? cur.notes, now, id);
+      });
       return { group: groups.get(id), added, removed };
     },
     remove(id: number) {
