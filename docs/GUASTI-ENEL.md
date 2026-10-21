@@ -33,18 +33,25 @@ Console → **Guasti Enel** → "POP e AP da UISP" (admin):
 
 Un guasto più vicino di un raggio configurabile (default **1 km**, 0,1–5 km) a un POP o a un AP monitorato viene segnalato come **impatto probabile** anche fuori dalle zone: in console è in cima all'elenco con i POP/AP coinvolti, la distanza e le CPE collegate; su Telegram il messaggio inizia con 🚨 e riporta "Potenzialmente impattati".
 
-## Mappa
+## Pagina e mappa
 
-Anche nell'**app** (Guasti Enel → Mappa) c'è la stessa mappa, con gli stessi limiti per gli installatori. In cima alla pagina della console una mappa (Protomaps, ospitata sul nostro server: vedi [MAPPE.md](MAPPE.md)) mostra guasti, zone, POP e AP, con quelli potenzialmente impattati in rosso. Gli installatori vedono POP e AP solo come **area approssimativa**.
+In cima alla pagina della console un riepilogo in riquadri colorati (guasti in corso, di cui media tensione, lavori programmati, clienti Enel disalimentati, POP/AP potenzialmente impattati), poi la mappa (Protomaps, ospitata sul nostro server: vedi [MAPPE.md](MAPPE.md)) con guasti, zone, POP e AP, quelli potenzialmente impattati in rosso. Sotto: guasti in corso e ripristinati, le zone (condivise, personali, le mie) e la selezione dei POP/AP da UISP. La pagina si aggiorna da sola quando il server trova un guasto nuovo.
+
+Nell'**app** (Guasti Enel) ci sono le stesse righe, compatte, con «Sulla mappa» e la stessa mappa, con gli stessi limiti per gli installatori. Gli installatori vedono POP e AP solo come **area approssimativa**.
+
+### Batterie dei POP
+
+Con il connettore Victron (vedi [NOC.md](NOC.md#batterie-dei-pop-victron)) ogni POP colpito da un guasto mostra lo stato della sua batteria: carica, se è in scarica, autonomia. Per i POP **off-grid** il guasto colpisce «solo i clienti», anche nei messaggi Telegram.
 
 ## Cosa vede l'installatore
 
-- **Le sue zone di interesse**: ogni installatore crea le proprie (massimo 20) da web o app, con GPS, indirizzo o coordinate, e vede guasti e lavori in quelle zone.
+- **Le sue zone di interesse**: ogni utente crea le proprie (massimo 20) da web o app, con GPS, indirizzo o coordinate e un raggio da 0,2 a 50 km, e vede guasti e lavori in quelle zone. Ogni zona ha le sue **regole**: attiva o in pausa, e quali eventi notificare (media tensione, bassa tensione, lavori programmati). Le zone personali non dipendono dai POP/AP assegnati: si può seguire qualsiasi posto.
 - **POP/AP potenzialmente impattati**: solo per i POP e gli AP che l'amministratore gli ha assegnato (un POP include tutti i suoi AP). Senza assegnazioni vede i guasti nelle sue zone, senza POP/AP.
 - Vede anche i guasti sui POP/AP e sulle zone condivise che gli sono stati assegnati.
 - Gli **amministratori vedono tutto**.
 - Il **numero di clienti (CPE)** dei POP/AP è nascosto agli installatori, salvo che l'amministratore lo abiliti (Account → "POP/AP assegnati agli installatori"). Le distanze da POP/AP sono arrotondate.
 - Nella console e nell'app l'installatore non vede riferimenti a UISP, alla fonte dei dati o ai moduli.
+- Uno **Specialist** senza visibilità piena vede quello che vede un installatore; con la visibilità piena (direttore tecnico) quello che vede un amministratore.
 
 Le assegnazioni si fanno in Console → **Account** → "POP/AP assegnati agli installatori" e valgono anche per la **verifica copertura** (vedi [UISP.md](UISP.md)).
 

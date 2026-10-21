@@ -4,6 +4,24 @@ Issue #275 (v1.36.3). Uno Specialist può essere una persona esterna a CDA Net, 
 
 ![Specialist e gruppi di lavoro: chi vede cosa](img/specialist-gruppi.png)
 
+## Il lavoro dello Specialist
+
+Lo Specialist è un ruolo accanto ad amministratore e installatore, per chi lavora in autonomia per altre aziende, con CPE che non sono di CDA Net (v1.36.0). Ha una sezione sua, separata dal lavoro di CDA Net:
+- **Console**: Storico Specialist (separato da storico, statistiche, NOC, magazzino e Salute CPE, con CSV), I miei template e I miei connettori (l'UISP di ogni azienda, cifrato).
+- **App**: l'area Specialist al posto di Installa.
+
+Il flusso **Nuova CPE** nell'app:
+1. **Prepara la configurazione** (basta Internet, senza collegarsi alla CPE): si sceglie un proprio template (nell'elenco il modello è davanti al nome) e si scrivono i valori per quella CPE: SSID e chiave Wi-Fi dell'AP dell'azienda se il template non li ha, PPPoE (non chiesto per un template in bridge o con il PPPoE spento), gateway se il template in bridge non lo fissa, VLAN e gli altri segnaposto propri. La WPA2, il PPPoE e le password scritte nel flusso non vengono mai salvati. La chiave UISP dell'azienda è facoltativa: senza, la CPE viene scritta con UISP spento e lo storico la segna «UISP spento». La configurazione vale 24 ore (Impostazioni server → Validità di una configurazione Specialist, da 1 a 72) e l'app mostra il tempo rimasto.
+2. **Collegati alla CPE**: la discovery la trova qualunque sia l'IP; MAC, seriale, modello e firmware si leggono via SSH (credenziali di fabbrica o quelle attuali), senza etichette né magazzino. La scrittura è bloccata se il modello non è quello del template. Il firmware si aggiorna nel flusso o si tiene.
+3. **Scrittura**, anche senza Internet; l'esito con MAC e seriale letti arriva al server anche più tardi. Una scrittura non riuscita si riprova, anche su un'altra CPE.
+4. **Verifica** con le credenziali nuove, **collaudo** facoltativo (senza NOC) e **autorizzazione** nell'UISP dell'azienda, cercando la CPE solo dopo la scrittura.
+
+Resta anche il modo di prima: chi è già sulla Wi-Fi della CPE la legge subito e prepara la configurazione per quella. Un template che usa il MAC o il seriale della CPE richiede la CPE letta prima. Dall'editor dei template, «Prepara una configurazione con questo template» porta a Nuova CPE con il template scelto.
+
+I template dello Specialist (console e app, anche dalla CPE collegata) hanno il modulo come la CPE e un testo tutto suo, con VLAN e segnaposto propri; nella scheda Wireless SSID e chiave Wi-Fi, in Rete gateway e DNS del bridge (vedi [PROVISIONING.md](PROVISIONING.md#template-degli-specialist)).
+
+Strumenti tecnici aperti a tutti gli Specialist, anche senza visibilità piena: discovery, strumenti di rete dal telefono, Trova l'AP, simulazione A → B nell'app (vedi [COPERTURA.md](COPERTURA.md#simulazione-a--b)).
+
 ## La piramide
 
 La visibilità scende dall'alto verso il basso, mai al contrario.

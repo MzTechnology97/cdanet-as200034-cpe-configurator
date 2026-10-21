@@ -88,7 +88,7 @@ sudo cdanet-cpe https-ca > cdanet-root-ca.crt
 
 Windows: doppio clic → Installa certificato → "Autorità di certificazione radice attendibili". Android: Impostazioni → Sicurezza → Crittografia e credenziali → Installa un certificato → Certificato CA. Senza la CA il browser chiede di accettare il certificato (e può richiederlo di nuovo dopo il rinnovo).
 
-**App Android**: accetta la CA installata dall'utente sul telefono (consigliato). Solo per i test c'è anche Impostazioni → Server → **"Accetta certificato non verificato (solo test)"**: vale solo verso il server CDA Net (API, aggiornamenti, notifiche, mappa) e va spento appena possibile.
+**App Android**: dalla v1.35.2 l'indirizzo del server è interno all'app (`https://app.cda-net.it`, `DEFAULT_BACKEND_URL` della build) e non si vede né si modifica dal telefono: al login e in Impostazioni resta solo «Verifica collegamento». La radice pubblica della CA locale di Caddy è inclusa nell'app (`.crt`, mai la chiave) e vale solo per quel nome: nessun avviso e nessuna CA da installare sul telefono.
 
 L'HTTPS serve anche per il GPS del browser (zone dei guasti da "Usa GPS di questo dispositivo").
 
@@ -117,7 +117,12 @@ Se rendi privati la repo o il pacchetto GHCR (consigliato):
 
 Console → **Amministrazione → Impostazioni server** (solo admin): i parametri che prima andavano scritti nel file `.env` si impostano dal web e hanno la precedenza sul `.env` (che resta il valore di partenza, ripristinabile con "Ripristina .env"):
 - **Credenziali delle CPE**: utente e **password amministratore CPE** (`CPE_ADMIN_USERNAME`/`CPE_ADMIN_PASSWORD`) e IP di fabbrica. Dalla v1.35.11 rete, DHCP, PPPoE, porte, NTP, watchdog, SNMP e chiave UISP sono di ogni template (Profili airOS, vedi [PROVISIONING.md](PROVISIONING.md)); le variabili `CPE_LAN_*`, `CPE_DHCP_*`, `CPE_PPPOE_*`, `CPE_WATCHDOG_HOST`, `CPE_NTP_SERVER`, `CPE_SSH_PORT`, `CPE_DISCOVERY_PORT`, `UISP_ENROLLMENT` e `SNMP_*` servono solo a convertire una volta i template salvati prima;
-- **Provisioning e app**: validità di un provisioning, versione minima dell'app, durata delle sessioni, conservazione dello storico, indirizzo pubblico della console, RouterOS su IP pubblici;
+- **Provisioning e app**: validità di un provisioning e di una configurazione Specialist, versione minima dell'app e aggiornamento obbligatorio, durata delle sessioni (e quella con la verifica in due passaggi, 30 giorni di serie), sessione dell'app senza Internet (24 ore di serie), provisioning con firmware diverso dopo 2 aggiornamenti non riusciti, conservazione dello storico, indirizzo pubblico della console, RouterOS su IP pubblici;
+- **Soglie di collaudo e salute CPE**: segnale buono e minimo, CINR, catene, capacità, porta LAN, calo rispetto al collaudo, CPE offline da nascondere;
+- **Collaudo: speedtest e Wi-Fi**: server di speedtest Ookla (host:porta), durata, connessioni, velocità minima rispetto al profilo, soglie del Wi-Fi del telefono;
+- **Copertura per gli installatori**, **Simulazione radio** e **Copertura altri operatori** (vedi [COPERTURA.md](COPERTURA.md));
+- **Assistente rete** (IA-AP, ottimizzazione automatica) e **Avvisi proattivi** (vedi [NOC.md](NOC.md));
+- **Magazzino**: CPE minime per installatore;
 - **Rilasci dell'app Android**: repository/token GitHub e frequenza di controllo.
 
 I segreti sono cifrati con la chiave master del server e **non vengono mai mostrati** (solo "impostata/non impostata"); nel Registro attività compare quali parametri sono cambiati, mai i valori. Quasi tutto vale subito; durata delle sessioni e rilasci valgono dopo **Riavvia l'app ora** (pulsante nella stessa pagina). La nuova password CPE vale per le CPE configurate da quel momento: quelle già installate mantengono la loro (per quelle gli strumenti di campo permettono di inserirla a mano).
@@ -168,7 +173,9 @@ Ogni import ed eliminazione multipla compare nel **Registro attività**, senza l
 
 ## HTTPS
 
-Imposta `APP_LISTEN=cpe.example.it` in `.env`: Caddy ottiene il certificato automaticamente. Servono il DNS verso il server e le porte TCP 80/443 raggiungibili. Con `APP_LISTEN=:80` la console è in HTTP sulla LAN.
+Imposta `APP_LISTEN=cpe.example.it` in `.env` (o dalla scheda Infrastruttura): Caddy ottiene e rinnova da solo il certificato Let's Encrypt. Servono il DNS verso il server e le porte TCP 80/443 raggiungibili. Con `APP_LISTEN=:80` la console è in HTTP sulla LAN.
+
+**Solo HTTPS**: con `HTTP_REDIRECT_LISTEN="http://"` e `HTTP_REDIRECT="https://app.example.it"` in chiaro non si serve più nulla: l'HTTP risponde solo con un rinvio all'indirizzo HTTPS.
 
 ## Auto-update: controllo
 
@@ -194,7 +201,7 @@ sudo ls /var/lib/docker/volumes/cdanet-cpe-configurator_appdata/_data/backups
 
 `cdanet-cpe` viene installato da `install-debian.sh`. Su un server installato prima che esistesse, rilancia l'installer da una copia aggiornata della repo: `.env` e i dati non vengono toccati.
 
-I backup (`VACUUM INTO`, ultimi 20) si trovano nel volume dati, in `backups/`. Se un'immagine fallisce l'health-check:
+I backup (`VACUUM INTO`, ultimi 20) si trovano nel volume dati, in `backups/`. Dalla console, in Salute piattaforma, si scarica una copia cifrata del database (con la chiave principale, se richiesta) e con il connettore **NAS** il server ne copia una ogni notte su una cartella SMB/CIFS, con la prova di ripristino (vedi [NOC.md](NOC.md#salute-piattaforma-e-backup)). L'immagine contiene `smbclient` per questo. Se un'immagine fallisce l'health-check:
 - viene scritta in `bad-images` (volume `updater_state`) e non viene più riprovata;
 - serve una nuova build per sbloccare l'aggiornamento.
 

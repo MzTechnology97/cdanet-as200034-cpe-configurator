@@ -2,7 +2,9 @@
 
 ## Modelli e firmware
 
-NanoStation Loco 5AC, NanoStation 5AC, NanoBeam 5AC, LiteBeam 5AC, PowerBeam 5AC. Il firmware di produzione è **airOS 8.7.4**. 8.7.11 e 8.7.25 vengono rilevati, ma la scrittura è bloccata finché la normalizzazione a 8.7.4 non è collaudata al banco.
+NanoStation Loco 5AC, NanoStation 5AC, NanoBeam 5AC, LiteBeam 5AC, PowerBeam 5AC. Il firmware di produzione è **airOS 8.7.4**.
+
+Con il modulo **Aggiornamento firmware** l'amministratore carica i firmware di riferimento (Amministrazione → Firmware airOS); l'app li scarica sul telefono finché c'è Internet. Una CPE con un firmware diverso (8.7.11, 8.7.25 o anche più vecchio) viene portata alla 8.7.4 dall'app prima della scrittura, nell'installazione e nella scheda Firmware di «CPE collegata»: invio, controllo MD5, scrittura, attesa del riavvio e rilettura della versione. Dopo 2 aggiornamenti non riusciti l'installatore può scrivere comunque con il firmware che ha la CPE, se Impostazioni server → «Provisioning con firmware diverso dopo 2 aggiornamenti non riusciti» lo consente (acceso di serie): resta annotato nell'esito. La versione si legge anche dalle CPE che scrivono solo «WA.v8.7.11» in `/etc/version`.
 
 ## Template airOS (più template con nome per ogni modello)
 
@@ -15,7 +17,7 @@ Console → **Profili airOS** → modello → **Nuovo template** oppure **Modifi
 | Scheda | Cosa si imposta |
 |---|---|
 | **Wireless** | modalità **Station / Access Point**, **PtMP airMAX / PtP**, codice paese, larghezza di canale, frequenza (AP), limite delle frequenze di scansione (Station), DFS, potenza, guadagno antenna e perdita cavo, distanza (ACK), airMAX, SSID nascosto e isolamento client (AP), WDS |
-| **Rete** | **Router / Bridge**, IP e netmask della CPE (LAN), server DHCP (intervallo, lease, DNS proxy), PPPoE (MTU/MRU), NAT, MSS clamping, firewall, port forwarding, UPnP, proxy IGMP, STP |
+| **Rete** | **Router / Bridge**, IP e netmask della CPE (LAN), server DHCP (intervallo, lease, DNS proxy), PPPoE (MTU/MRU), NAT, MSS clamping, firewall, port forwarding, UPnP, proxy IGMP, STP. In **bridge**: **Gateway**, **DNS primario** e **DNS secondario** (`route.1.*`, `resolv.nameserver.*`); passando in bridge i DNS predefiniti sono 1.1.1.1 e 8.8.8.8, e un gateway vuoto vuol dire nessun gateway |
 | **Servizi** | porte HTTP/HTTPS, SSH (porta, password), Telnet, NTP, ping watchdog (indirizzo, intervallo, attesa, tentativi), contatto e **community SNMP**, UISP e **chiave UISP**, discovery, CDP, syslog remoto |
 | **Sistema** | fuso orario, LED (notte, segnale), pulsante di reset, airView, controllo aggiornamenti, invio crash, lingua |
 | **Accesso** | chi può usarlo e predefinito (vedi sotto) |
@@ -50,6 +52,10 @@ Righe sostituite in automatico (nomi chiave di airOS 8):
 | `resolv.host.1.name` | `${DEVICE_NAME}` |
 
 Se dopo la sostituzione resta un valore che sembra un segreto (chiave che termina in `psk`, `password`, `secret`, `key`…), l'anteprima lo segnala.
+
+### Template degli Specialist
+
+Gli Specialist hanno i propri template (**I miei template**, nella console e nell'app), con lo stesso modulo e un testo tutto loro: possono usare le VLAN e segnaposto propri (`${VLAN_ID}`, `${LAN_IP}`, `${GATEWAY}`, `${DEVICE_NAME}`…), che il flusso chiede per ogni CPE. In più, nella scheda Wireless, l'**SSID** (fisso o da scrivere per ogni CPE) e la **chiave Wi-Fi** (tenuta nel template, cifrata, o scritta per ogni CPE). Con un template in bridge, o con il PPPoE spento, utente e password PPPoE non si chiedono; un gateway vuoto diventa `${GATEWAY}` e si chiede per ogni CPE («Gateway della CPE (IP)», controllato come IPv4). Un template si crea anche dall'app, pure dalla CPE collegata, o come copia di un template CDA Net, che resta com'è. Dettagli in [SPECIALIST-GRUPPI.md](SPECIALIST-GRUPPI.md).
 
 ### Template salvati prima della v1.35.11
 
@@ -99,7 +105,7 @@ Sono rimasti solo i valori che cambiano per ogni cliente e i segreti:
 | `${CPE_PASSWORD}` | Password in chiaro: solo dove airOS la vuole in chiaro, mai in `users.N.password` |
 | `${UISP_ENROLLMENT}` | Chiave UISP **del template** |
 | `${SNMP_COMMUNITY}` | Community SNMP **del template** |
-| `${SNMP_LOCATION}` / `${DEVICE_NAME}` | `COGNOME NOME` del cliente |
+| `${SNMP_LOCATION}` / `${DEVICE_NAME}` | nome di sistema: «COGNOME NOME» o la ragione sociale dal CRM, poi dal cliente dell'intervento, per ultimo dall'utente PPPoE; maiuscolo, solo lettere, cifre e spazi |
 | `${EXPECTED_MAC}` / `${EXPECTED_SERIAL}` | MAC e seriale indicati dall'installatore |
 
 I placeholder che erano valori del server (`${LAN_IP}`, `${LAN_NETMASK}`, `${DHCP_START}`, `${DHCP_END}`, `${DHCP_LEASE}`, `${PPPOE_MTU}`, `${PPPOE_MRU}`, `${HTTP_PORT}`, `${HTTPS_PORT}`, `${SSH_PORT}`, `${DISCOVERY_PORT}`, `${NTP_SERVER}`, `${WATCHDOG_HOST}`, `${SNMP_CONTACT}`) non sono più accettati (`retired_placeholders`): al loro posto si scrive il valore o si usa il modulo.
@@ -122,13 +128,13 @@ Indipendentemente dal testo del template, con i valori **del template**:
 - `resolv.host.1.status=enabled`
 - `system.latitude` / `system.longitude` = posizione della CPE
 
-Un profilo con `vlan.*`, `ebtables.sys.vlan.*` o `ppp.N.devname=ath0.X` viene rifiutato sia al caricamento sia al rendering.
+Un template CDA Net con `vlan.*`, `ebtables.sys.vlan.*` o `ppp.N.devname=ath0.X` viene rifiutato sia al caricamento sia al rendering (WAN wireless in PPPoE senza VLAN). I template degli Specialist possono usare le VLAN.
 
 ## Controlli eseguiti dall'app prima di scrivere
 
 1. Il pacchetto non è scaduto e lo SHA-256 della configurazione coincide.
-2. Il target è un indirizzo privato (`192.168.172.1` di default).
-3. La stringa di `/etc/version` contiene esattamente `v8.7.4` (non 8.7.41, 18.7.4…).
+2. Il target è un indirizzo privato: quello trovato dalla discovery, altrimenti gli indirizzi abituali (vedi [FIELD-TOOLS.md](FIELD-TOOLS.md#come-il-telefono-raggiunge-la-cpe)).
+3. La stringa di `/etc/version` contiene esattamente `v8.7.4` (non 8.7.41, 18.7.4…); altrimenti l'app aggiorna il firmware, o scrive con il firmware della CPE se l'installatore lo sceglie dopo 2 aggiornamenti non riusciti.
 4. Il board match del profilo corrisponde.
 5. `board.hwaddr` / `eth0.macaddr` coincidono con il MAC indicato.
 6. Dopo il trasferimento, dimensione e MD5 di `/tmp/system.cfg` coincidono.
@@ -139,7 +145,8 @@ Un profilo con `vlan.*`, `ebtables.sys.vlan.*` o `ppp.N.devname=ath0.X` viene ri
 - [ ] associazione al nodo previsto, PPPoE autenticato
 - [ ] UISP connesso, SNMP risponde con location corretta
 - [ ] management HTTP 20080 / HTTPS 20443
-- [ ] CPE con firmware diverso da 8.7.4 → scrittura bloccata
+- [ ] CPE con firmware diverso da 8.7.4 → aggiornamento alla 8.7.4 dall'app, poi scrittura
+- [ ] template in Access Point, PtP e Bridge (con gateway e DNS) su una CPE di laboratorio
 - [ ] MAC errato → scrittura bloccata
 - [ ] interruzione (Wi-Fi staccata) prima di `cfgmtd` → CPE invariata, nuovo tentativo riuscito
 - [ ] esito sincronizzato sul server; nessuna password in storico, log o cache

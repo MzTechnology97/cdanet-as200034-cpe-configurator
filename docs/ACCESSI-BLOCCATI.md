@@ -20,6 +20,8 @@ La piattaforma registra ogni tentativo di accesso: dalla console web, dall'app e
 
 ## Console
 
+Amministrazione → **Accessi bloccati**: i blocchi in corso (o tutti) con il bloccato, dal, fino a, motivo, utenti tentati e ultimo tentativo, e il pulsante per sbloccare; sotto, il registro dei tentativi di accesso con i filtri. API:
+
 - `GET /api/admin/bans`: blocchi in corso e passati, con `lastAttemptAt`, gli utenti tentati e i flag `active` / `expired`.
 - `DELETE /api/admin/bans/:id`: sblocca subito.
 - `GET /api/admin/login-attempts?failed=1&ip=&username=&limit=`: il registro dei tentativi.
