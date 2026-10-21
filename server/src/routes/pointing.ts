@@ -8,9 +8,9 @@ import { nowIso, recordEvent } from '../db.ts';
 import { approxPoint, roughDistance } from '../domain/approx.ts';
 import { distanceM, isValidLatLon } from '../domain/geo.ts';
 import { lineOfSight, pathPoints, resolveApAltitude } from '../domain/los.ts';
-import { MAX_LINK_M, rankCoverage, VIEW_MAX_KM, type ApModel } from '../domain/coverage-model.ts';
+import { linkSignalDbm, MAX_LINK_M, rankCoverage, VIEW_MAX_KM, type ApModel } from '../domain/coverage-model.ts';
 import { failuresNear, fieldFailures } from '../services/field-samples.ts';
-import { buildProfile, estimateForAp, obstacles, pointingConfig, profileEffect, terrainSampler } from '../services/terrain.ts';
+import { buildLinkProfile, buildProfile, estimateForAp, obstacles, pointingConfig, profileEffect, terrainSampler } from '../services/terrain.ts';
 import { elevationAngle } from '../services/dem.ts';
 import { computeHorizon, type Horizon } from '../services/horizon.ts';
 
@@ -168,6 +168,86 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
       // admins: where the AP antenna is put (altitude a.s.l., above its ground, from GPS / UISP / default)
       ...(keys ? {} : { apAntenna: { altitude: Math.round(p.to), aboveGroundM: Math.round(p.to - p.ground[p.ground.length - 1]!), from: p.altitudeFrom, reported: ap.gpsAltitude ?? null } }),
       ...r,
+      chart,
+    };
+  });
+
+  /**
+   * Simulazione A → B (titolare and Carmelo, 21/10/2026): a link between two points chosen by hand,
+   * with the same terrain, buildings and trees of Visibilità and Copertura: the profile with the
+   * Fresnel zone, the obstacles, the loss and the expected signal and modulation. Two points on the
+   * map, nothing of the network: a technical tool for admins and specialists.
+   */
+  app.get('/api/coverage/link', { preHandler: [ctx.auth.requireStaff, ctx.modules.require('coverage')] }, async (req) => {
+    const c = config();
+    const q = z
+      .object({
+        aLat: z.coerce.number(),
+        aLon: z.coerce.number(),
+        bLat: z.coerce.number(),
+        bLon: z.coerce.number(),
+        /** Antenna heights above the ground, m (defaults: CPE and AP of Puntamento). */
+        aH: z.coerce.number().min(0).max(200).optional(),
+        bH: z.coerce.number().min(0).max(200).optional(),
+        freq: z.coerce.number().int().min(2400).max(6200).default(5600),
+        /** Transmitted at A (EIRP, dBm) and the gain of the antenna at B (dBi). */
+        eirp: z.coerce.number().min(0).max(60).optional(),
+        gain: z.coerce.number().min(0).max(40).optional(),
+        noise: z.coerce.number().min(-120).max(-60).default(-92),
+        /** Raise each antenna over the roofs and trees right around it (as it is mounted). */
+        raise: z.enum(['0', '1']).default('1'),
+      })
+      .parse(req.query);
+    const a = { lat: q.aLat, lon: q.aLon };
+    const b = { lat: q.bLat, lon: q.bLon };
+    if (!isValidLatLon(a.lat, a.lon) || !isValidLatLon(b.lat, b.lon)) throw new HttpError(400, 'invalid_position');
+    const D = distanceM(a, b);
+    if (D < 30) throw new HttpError(400, 'link_too_short');
+    if (D > VIEW_MAX_KM * 1000) throw new HttpError(400, 'link_too_long');
+    const at = await terrainSampler(ctx.terrain, [a, b], 500);
+    if (!at) throw new HttpError(503, 'dem_not_configured');
+    const hA = q.aH ?? c.cpeHeightM;
+    const hB = q.bH ?? c.apHeightM;
+    const p = buildLinkProfile(at, a, hA, b, hB, q.freq, obstacles(ctx), q.raise === '1');
+    if (!p) throw new HttpError(503, 'dem_unavailable');
+    const solid = p.d.map((d, i) => ({ d, ground: p.ground[i]! + (p.obstacle[i]?.kind === 'edificio' ? p.obstacle[i]!.h : 0) }));
+    const los = lineOfSight(solid, p.from, p.to, p.freq);
+    const effect = profileEffect(p);
+    const R_EFF = 6371000 * (4 / 3);
+    const chart = los.chart.map((pt, i) => {
+      const bulge = (p.d[i]! * (p.D - p.d[i]!)) / (2 * R_EFF);
+      const o = p.obstacle[i];
+      return { ...pt, ground: Math.round((p.ground[i]! + bulge) * 10) / 10, ...(o ? { obstacle: o.kind, top: Math.round((p.ground[i]! + bulge + o.h) * 10) / 10 } : {}) };
+    });
+    const eirp = q.eirp ?? ctx.cfg.coverageEirpDbm;
+    const gain = q.gain ?? ctx.cfg.coverageCpeGainDbi;
+    const signalDbm = linkSignalDbm(p.D, p.freq, eirp, gain, effect.lossDb);
+    const mod = expectedModulation(signalDbm, q.noise);
+    const end = (pt: { lat: number; lon: number }, h: number, alt: number, ground: number) => ({
+      lat: pt.lat,
+      lon: pt.lon,
+      ground: Math.round(ground),
+      heightM: h,
+      // raised over the roofs or trees around it
+      mountedM: Math.round((alt - ground) * 10) / 10,
+      roofM: at.building?.(pt.lat, pt.lon) || null,
+    });
+    return {
+      a: end(a, hA, p.from, p.ground[0]!),
+      b: end(b, hB, p.to, p.ground[p.ground.length - 1]!),
+      // as the profile of Visibilità: B in the place of the AP
+      ap: { lat: b.lat, lon: b.lon },
+      distanceM: Math.round(p.D),
+      frequencyMhz: p.freq,
+      terrainSource: at.fine ? 'tinitaly' : 'srtm',
+      lossDb: effect.lossDb,
+      foliageM: effect.foliageM ?? 0,
+      buildings: effect.buildings ?? false,
+      radio: { eirpDbm: eirp, gainDbi: gain, noiseDbm: q.noise },
+      estimate: { signalDbm, snrDb: mod?.snrDb ?? null, mcs: mod?.mcs ?? null, label: mod?.label ?? null },
+      // beyond the farthest realistic link: drawn, never promised
+      tooFar: p.D > MAX_LINK_M,
+      ...los,
       chart,
     };
   });

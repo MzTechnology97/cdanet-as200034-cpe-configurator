@@ -147,6 +147,14 @@ const angleDiff = (a: number, b: number) => {
 };
 
 /** Free-space path loss, dB (distance in metres, frequency in MHz). */
+/**
+ * The signal of a link between two antennas chosen by hand (Simulazione A → B): transmitted EIRP,
+ * receiving antenna gain, the real-world losses of the model, free space and the terrain/obstacles.
+ */
+export function linkSignalDbm(d: number, freqMHz: number, eirpDbm: number, rxGainDbi: number, terrainLossDb: number): number {
+  return Math.round(eirpDbm + rxGainDbi - REAL_LOSS_DB - freeSpaceLossDb(d, freqMHz) - terrainLossDb);
+}
+
 export function freeSpaceLossDb(d: number, freqMHz: number | null): number {
   const f = freqMHz && freqMHz > 1000 ? freqMHz : 5600;
   return 20 * Math.log10(Math.max(30, d) / 1000) + 20 * Math.log10(f) + 32.44;
