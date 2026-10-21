@@ -111,6 +111,7 @@ private val ERRORS = mapOf(
     "template_secret_invalid_wpa2Psk" to "Chiave Wi-Fi non valida: da 8 a 63 caratteri, o 64 cifre esadecimali",
     "template_author_only" to "Questo template lo modifica solo chi l'ha creato",
     "template_secrets_author_only" to "Community SNMP e chiave Wi-Fi le imposta solo chi ha creato il template",
+    "invalid_value_GATEWAY" to "Gateway della CPE non valido: scrivi un indirizzo IPv4, es. 192.168.1.1",
     "invalid_value_UISP_ENROLLMENT" to "La chiave UISP deve iniziare con wss:// (UISP → Impostazioni → Dispositivi)",
     "board_match_invalid_regex" to "Board match non valido (espressione regolare)",
     "profile_render_failed" to "Configurazione non generabile da questo template",

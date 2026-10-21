@@ -259,3 +259,4 @@ Mappe nell'app: verificate sul telefono con la v1.32 (tile singole dal server). 
 - v1.0.9: OpenStreetMap locale (Nominatim) installato dall'installer, regione Sicilia.
 - v1.0.8: Connettori (UISP configurabile e testabile dalla console, TLS ignorabile), verifica API su UISP 3.1.65.
 - v1.0.0–v1.0.7: riscrittura server/web/Android, template airOS da backup, reti Wi-Fi da CSV, permessi template, UISP, GPS e Copertura.
+- v1.36.8: **App: raggio di ricerca degli AP e testi della copertura**. Nella verifica di copertura gli amministratori scelgono il raggio di ricerca degli AP (10–100 km, fino al limite del server); il testo «oltre N km: troppo lontano» usa il valore del server; messaggio chiaro per un gateway della CPE non valido.
