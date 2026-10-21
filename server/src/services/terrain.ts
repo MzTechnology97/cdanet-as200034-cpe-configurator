@@ -130,6 +130,39 @@ export function buildProfile(at: TerrainSampler, point: LatLon, cpeHeightM: numb
 }
 
 /**
+ * A link between two points chosen by hand (Copertura → Simulazione A → B, titolare 21/10/2026):
+ * each antenna [hA]/[hB] m above its own ground, raised over the roofs and trees right around it
+ * when [raise] (as an installer mounts it); ground, buildings and trees of the land cover between.
+ */
+export function buildLinkProfile(
+  at: TerrainSampler,
+  a: LatLon,
+  hA: number,
+  b: LatLon,
+  hB: number,
+  freqMHz: number,
+  obstacles: ObstacleHeights | null,
+  raise = true,
+  stepM = 25,
+  maxPoints = 1200,
+): BuiltProfile | null {
+  const D = distanceM(a, b);
+  const n = Math.max(12, Math.min(maxPoints, Math.round(D / stepM)));
+  const pts = pathPoints(a, b, n);
+  const ground: number[] = [];
+  const obstacle: BuiltProfile['obstacle'] = [];
+  for (const p of pts) {
+    const g = at.ground(p.lat, p.lon);
+    if (g === null) return null;
+    ground.push(g);
+    const d = p.f * D;
+    obstacle.push(obstacles && d > NEAR_ANTENNA_M && D - d > NEAR_ANTENNA_M ? obstacleAt(at, p.lat, p.lon, obstacles) : null);
+  }
+  const mount = (p: LatLon, h: number) => (obstacles && raise ? Math.max(h, localTop(at, p, obstacles) + ABOVE_M) : h);
+  return { D, freq: freqMHz, from: ground[0]! + mount(a, hA), to: ground[n]! + mount(b, hB), ground, obstacle, d: pts.map((p) => p.f * D), altitudeFrom: null };
+}
+
+/**
  * What stands on the ground at a point: the building of the basemap footprints with its height
  * where they were imported (a street between two houses is free there), else the class of the
  * land cover with the average height; trees with their own height from the canopy map where it

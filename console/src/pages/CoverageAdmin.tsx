@@ -1,7 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { OperatorsCard } from '../coverage/Operators';
 import { OpenedCheck, SaveCheckButton, SavedChecksCard, type SavedCheck } from '../coverage/SavedChecks';
-import { type ReactNode, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { LinkSimCard } from '../coverage/LinkSim';
 import { toast } from '../lib/toast';
 import { drawFresnelLink, pointPicker, simulationOverlay, towards, MAP_COLORS as C } from '../map/leaflet';
 import { openLink3d, openSimulation3d } from '../map/map3d';
@@ -151,6 +152,11 @@ export function CoverageAdmin() {
   const view3d = useRef<{ sim: Record<string, unknown> | null; link: Record<string, unknown> | null }>({ sim: null, link: null });
   const accuracy = useRef<Promise<{ points?: Array<Record<string, number & string>>; failurePoints?: Array<Record<string, string & number>> }> | null>(null);
   const handlers = useRef({ onPick: (_la: number, _lo: number) => {}, view3d: () => ({}) });
+  // Simulazione A → B is picking A or B: that click is not a point of the coverage check
+  const abPicking = useRef(false);
+  const onAbPicking = useCallback((on: boolean) => {
+    abPicking.current = on;
+  }, []);
 
   // CPE height: starts from the default of Impostazioni server, changed for every check
   useEffect(() => {
@@ -167,6 +173,10 @@ export function CoverageAdmin() {
   cur.current = { height, cpe, radius, point, link, aps };
   handlers.current = {
     onPick: (la, lo) => {
+      if (abPicking.current) {
+        if (!cur.current.point) ctl?.picker.arm();
+        return;
+      }
       setOpened(null);
       void check(la, lo, 'Punto scelto sulla mappa');
     },
@@ -559,7 +569,7 @@ export function CoverageAdmin() {
         version={version}
         onOpen={(c) => {
           // the same point with the same radius, CPE and height, the other operators with it
-          const o = { radius: c.params.km && [5, 10, 15, 20].includes(c.params.km) ? c.params.km : radius, cpe: c.params.cpe ?? 'auto', height: c.params.height != null ? String(c.params.height) : height };
+          const o = { radius: c.params.km && [5, 10, 15, 20, 30, 50, 100].includes(c.params.km) ? c.params.km : radius, cpe: c.params.cpe ?? 'auto', height: c.params.height != null ? String(c.params.height) : height };
           setRadius(o.radius);
           setCpe(o.cpe);
           setHeight(o.height);
@@ -568,6 +578,8 @@ export function CoverageAdmin() {
           void check(c.point.lat, c.point.lon, c.point.label || c.name, o);
         }}
       />
+
+      <LinkSimCard map={ctl?.map ?? null} L={ctl?.L ?? null} onPicking={onAbPicking} />
 
       <Card>
         <Segmented label="Strumenti" options={TABS} value={tab} onChange={setTab} />
