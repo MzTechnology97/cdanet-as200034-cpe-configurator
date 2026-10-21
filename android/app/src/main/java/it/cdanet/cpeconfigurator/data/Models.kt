@@ -1064,7 +1064,11 @@ data class LinkSimDto(
     val foliageM: Int = 0,
     val buildings: Boolean = false,
     val radio: LinkRadioDto = LinkRadioDto(),
+    /** As in Copertura: the obstruction penalty of UISP Design, calibrated on the connected customers. */
     val estimate: LinkEstimateDto = LinkEstimateDto(),
+    /** The physics of the obstacles (Deygout and foliage, at most 60 dB) and the signal with it. */
+    val diffractionDb: Double? = null,
+    val physical: LinkEstimateDto? = null,
     /** Beyond the farthest realistic link (20 km): drawn, never promised. */
     val tooFar: Boolean = false,
     val verdict: String = "clear",

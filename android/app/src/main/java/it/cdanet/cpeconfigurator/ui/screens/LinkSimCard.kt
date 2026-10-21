@@ -190,6 +190,14 @@ private fun LinkSimResult(d: LinkSimDto) {
         when (d.verdict) { "clear" -> NoticeKind.Good; "fresnel" -> NoticeKind.Warn; else -> NoticeKind.Bad },
     )
     if (d.tooFar) Notice("Oltre 20 km: collegamento poco realistico, la stima è solo indicativa.", NoticeKind.Warn)
+    // a line cut by the terrain: the physics decides (a design, not a connected customer); as the console
+    val physical = d.physical
+    val shown = if (d.verdict == "blocked" && physical != null) physical else d.estimate
+    val physicalDbm = physical?.signalDbm
+    val estimateDbm = d.estimate.signalDbm
+    if (d.verdict != "clear" && physicalDbm != null && estimateDbm != null && physicalDbm < estimateDbm - 6) {
+        Notice("Con la diffrazione pura il segnale in B è $physicalDbm dBm" + if (physicalDbm < -80) ": da non progettare così." else ".", NoticeKind.Warn)
+    }
     val ab = bearing(d.a, d.b)
     val tilt = tiltDeg(los)
     val decl = declinationDeg(d.a.lat, d.a.lon)
@@ -201,11 +209,30 @@ private fun LinkSimResult(d: LinkSimDto) {
             add(Triple("B → A", "${(ab + 180) % 360}°", "inclinazione ${signedDeg(-tilt)}°"))
             add(Triple("Antenna A", "${m(d.a.mountedM ?: d.a.heightM)} m", end(d.a)))
             add(Triple("Antenna B", "${m(d.b.mountedM ?: d.b.heightM)} m", end(d.b)))
-            add(Triple("Perdita per ostacoli", "${m(d.lossDb)} dB", if (d.foliageM > 0) "${d.foliageM} m di vegetazione" else "colline ed edifici"))
-            d.estimate.signalDbm?.let { add(Triple("Segnale atteso", "$it dBm", "EIRP ${m(d.radio.eirpDbm)} dBm · ${m(d.radio.gainDbi)} dBi")) }
+            d.diffractionDb?.takeIf { d.verdict != "clear" }?.let { diff ->
+                add(Triple("Diffrazione pura", "${m(diff)} dB", physicalDbm?.let { "segnale $it dBm" + (physical.label?.let { l -> " · $l" } ?: "") } ?: "fisica degli ostacoli"))
+            }
+            add(
+                Triple(
+                    "Perdita stimata (come Copertura)",
+                    "${m(d.lossDb)} dB",
+                    listOfNotNull(if (d.buildings) "edifici" else null, if (d.foliageM > 0) "${d.foliageM} m di alberi" else null).joinToString(" · ")
+                        .ifEmpty { if (d.lossDb > 0) "il terreno" else "nessun ostacolo" },
+                ),
+            )
+            shown.signalDbm?.let {
+                add(
+                    Triple(
+                        "Segnale atteso in B",
+                        "$it dBm",
+                        if (shown === d.estimate) "EIRP ${m(d.radio.eirpDbm)} dBm · ${m(d.radio.gainDbi)} dBi"
+                        else "con la diffrazione pura · come Copertura ${estimateDbm ?: "—"} dBm",
+                    ),
+                )
+            }
         },
     )
-    SignalBar(SignalEstimateDto(signalDbm = d.estimate.signalDbm, snrDb = d.estimate.snrDb, mcs = d.estimate.mcs))
+    SignalBar(SignalEstimateDto(signalDbm = shown.signalDbm, snrDb = shown.snrDb, mcs = shown.mcs))
     ProfileChart(los, "A" to "B")
     Text(
         (if (d.terrainSource == "tinitaly") "Terreno a 10 m con edifici (grigio) e alberi (verde) della mappa del suolo, ad altezze medie: verifica a vista."
@@ -219,10 +246,11 @@ private fun LinkSimResult(d: LinkSimDto) {
 /** The note under an antenna: from the ground, on the roof or over the trees around it. */
 private fun end(e: LinkEndDto): String {
     val mounted = e.mountedM
+    val asl = e.ground + (mounted ?: e.heightM).roundToInt()
     return when {
-        e.roofM != null -> "sul tetto di ${e.roofM} m · ${e.ground} m s.l.m."
-        mounted != null && mounted > e.heightM + 0.5 -> "sopra gli ostacoli intorno · ${e.ground} m s.l.m."
-        else -> "dal suolo · ${e.ground} m s.l.m."
+        e.roofM != null -> "sul tetto di ${e.roofM} m · $asl m s.l.m."
+        mounted != null && mounted > e.heightM + 0.5 -> "sopra gli ostacoli intorno · $asl m s.l.m."
+        else -> "dal suolo · $asl m s.l.m."
     }
 }
 
