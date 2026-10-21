@@ -54,7 +54,7 @@ Il modello unisce la teoria radio, il terreno e i clienti reali:
 
 ## Simulazione A → B
 
-Un collegamento tra due punti qualsiasi: un nuovo AP, un ponte radio, una CPE lontana dagli AP esistenti. Il server la consente ad amministratori e Specialist. Nell'app è la scheda sotto la mappa della verifica di copertura, per amministratori e Specialist.
+Un collegamento tra due punti qualsiasi: un nuovo AP, un ponte radio, una CPE lontana dagli AP esistenti. Il server la consente ad amministratori e Specialist. Nell'app è la scheda «Simulazione A → B» sotto la mappa della verifica di copertura, per amministratori e Specialist: dalla v1.36.15 ha lo stesso schema del collegamento AP–cliente, cioè **A** (arancione, come la CPE), il **collegamento** e **B** (blu, come l'AP), uno sotto l'altro. A e B hanno l'altezza con − e + (la simulazione si rifà da sola), l'antenna, il puntamento vero e magnetico e l'inclinazione; al centro ci sono esito, distanza, Fresnel libera, segnale, capacità stimata nel canale scelto, perdite e modulazione. «A ⇄ B» scambia i due punti. Il profilo si tocca o si trascina con il dito.
 
 Nella console (Copertura completa, amministratori e direttore tecnico) è il **collegamento PTP**, dalla v1.36.14: il pulsante «Collegamento PTP (A → B)» sotto la mappa apre sopra la mappa lo stesso pannello del collegamento AP–cliente.
 - **A** a sinistra e **B** a destra: un AP della rete, «Sulla mappa» (dopo A la mappa chiede B), il punto verificato per A; altezza con − e +, quota, puntamento (anche magnetico) e inclinazione.
