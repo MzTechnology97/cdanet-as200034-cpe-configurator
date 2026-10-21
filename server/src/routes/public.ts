@@ -61,16 +61,19 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
    * 17/10/2026): it lasts the days of Impostazioni server (30), and the console keeps it in the
    * browser beyond its closing (remember).
    */
+  /** A specialist with «visibilità piena» (issue #275): the console shows him the views of the NOC. */
+  const fullView = (id: number) => !!(ctx.db.prepare('SELECT full_view f FROM users WHERE id = ? AND role = ?').get(id, 'specialist') as { f: number } | undefined)?.f;
+
   async function session(u: { id: number; username: string; role: Role; token_version: number; totp_enabled?: number }, ip: string, notify = true, mfa = false) {
     ctx.db.prepare('UPDATE users SET last_login_at = ? WHERE id = ?').run(nowIso(), u.id);
     const { token, expiresAt } = await ctx.auth.issueToken(u, { mfa });
-    // admins and specialists see everything: a login from a new address is told to the NOC
+    // admins and specialists: a login from a new address is told to the NOC
     if (isStaff(u.role) && notify) ctx.notify.adminLogin(u.id, u.username, ip, roleLabel(u.role));
     const mfaSetupRequired = isStaff(u.role) && ctx.auth.totpRequiredForAdmins() && !u.totp_enabled;
     return {
       token,
       expiresAt,
-      user: { id: u.id, username: u.username, role: u.role },
+      user: { id: u.id, username: u.username, role: u.role, ...(fullView(u.id) ? { fullView: true } : {}) },
       ...(mfaSetupRequired ? { mfaSetupRequired: true } : {}),
       ...(mfa ? { remember: true } : {}),
     };
@@ -127,6 +130,8 @@ export function publicRoutes(app: FastifyInstance, ctx: AppContext) {
       id: u.id,
       username: u.username,
       role: u.role,
+      fullView: fullView(u.id),
+      workGroups: ctx.workGroups.ofUser(u.id).map((g) => g.name),
       lastLoginAt: u.last_login_at,
       createdAt: u.created_at,
       totpEnabled: !!t.totp_enabled,

@@ -36,6 +36,8 @@ export interface FieldDef {
   policy?: { value: FormValue; message: string };
   /** Keys guessed from the airOS documentation, not yet seen in a lab export: to try on the bench. */
   experimental?: boolean;
+  /** An address that may be left empty (no gateway, or typed for each CPE). */
+  optional?: true;
   /** Kept in the template's parameters (forced by the server at every provisioning), not in the text. */
   param?: true;
   /**
@@ -44,7 +46,8 @@ export interface FieldDef {
    */
   free?: true;
   read?: (c: Cfg) => FormValue | undefined;
-  write?: (v: FormValue, c: Cfg) => Writes;
+  /** [mode]: CDA Net's templates or the specialist's ones (free). */
+  write?: (v: FormValue, c: Cfg, mode: FormMode) => Writes;
   fallback: FormValue | ((model: CpeModel) => FormValue);
 }
 
@@ -52,6 +55,8 @@ const on = (v: string | undefined) => (v === undefined ? undefined : v === 'enab
 const st = (v: FormValue) => (v ? 'enabled' : 'disabled');
 const num = (v: string | undefined) => (v === undefined || v.trim() === '' || !/^-?\d+$/.test(v.trim()) ? undefined : Number(v));
 const isPlaceholder = (v: string | undefined) => !!v && v.includes('${');
+/** The SSID of the template: the AP's one in Station, its own as an AP; a placeholder is typed for each CPE. */
+const ssidOf = (c: Cfg) => (c.get('radio.1.mode') === 'master' ? (c.get('aaa.1.ssid') ?? c.get('wireless.1.ssid')) : (c.get('wpasupplicant.profile.1.network.1.ssid') ?? c.get('wireless.1.ssid')));
 
 /** LAN = the interface served by the DHCP server (router); in bridge mode, the management bridge. */
 export function lanIndex(c: Cfg): string | null {
@@ -131,7 +136,7 @@ export const FIELDS: FieldDef[] = [
       { value: 'ap', label: 'Access Point' },
     ],
     read: (c) => (c.get('radio.1.mode') === 'master' ? 'ap' : c.get('radio.1.mode') === undefined ? undefined : 'station'),
-    write: (v) =>
+    write: (v, c, mode) =>
       v === 'ap'
         ? [
             ['radio.1.mode', 'master'],
@@ -141,7 +146,8 @@ export const FIELDS: FieldDef[] = [
             ['aaa.1.status', 'enabled'],
             ['aaa.1.devname', 'ath0'],
             ['aaa.1.br.devname', 'br0'],
-            ['aaa.1.ssid', '${SSID}'],
+            // CDA Net's SSID is chosen for each customer; a fixed one of the specialist's template stays
+            ['aaa.1.ssid', mode.free ? (c.get('wireless.1.ssid') ?? '${SSID}') : '${SSID}'],
             ['aaa.1.wpa.mode', '2'],
             ['aaa.1.wpa.key.1.mgmt', 'WPA-PSK'],
             ['aaa.1.wpa.1.pairwise', 'CCMP'],
@@ -169,6 +175,30 @@ export const FIELDS: FieldDef[] = [
     read: (c) => (c.get('radio.1.ptpmode') === undefined ? undefined : c.get('radio.1.ptpmode') === '1' ? 'ptp' : 'ptmp'),
     write: (v) => [['radio.1.ptpmode', v === 'ptp' ? '1' : '0']],
     fallback: 'ptmp',
+  },
+  {
+    // the specialist's templates (titolare, 17/10/2026): the company's AP may be always the same;
+    // CDA Net's SSID is chosen for each customer, its key comes from Reti Wi-Fi
+    id: 'ssid',
+    section: 'wireless',
+    label: 'SSID',
+    hint: 'In Station la rete dell’AP a cui collegarsi, in Access Point quella trasmessa. Vuoto: lo scrivi nel flusso per ogni CPE (${SSID}). La chiave Wi-Fi si imposta qui sotto.',
+    type: 'text',
+    free: true,
+    read: (c) => {
+      const v = ssidOf(c);
+      return v === undefined ? undefined : isPlaceholder(v) ? '' : v;
+    },
+    write: (v, c) => {
+      const s = String(v);
+      if (new TextEncoder().encode(s).length > 32) throw new Error('form_invalid_ssid');
+      const value = s === '' ? '${SSID}' : s;
+      return [
+        ['wireless.1.ssid', value],
+        c.get('radio.1.mode') === 'master' ? ['aaa.1.ssid', value] : ['wpasupplicant.profile.1.network.1.ssid', value],
+      ];
+    },
+    fallback: '',
   },
   {
     id: 'countryCode',
@@ -372,7 +402,7 @@ export const FIELDS: FieldDef[] = [
       { value: 'bridge', label: 'Bridge' },
     ],
     read: (c) => c.get('netmode'),
-    write: (v, c) => {
+    write: (v, c, mode) => {
       if (v === 'bridge') {
         const out: Writes = [
           ['netmode', 'bridge'],
@@ -396,6 +426,14 @@ export const FIELDS: FieldDef[] = [
               out.push([`netconf.${lan}.role`, '']);
             }
           }
+        }
+        // with a fixed address the CPE needs a way out (Carmelo, 21/10/2026): DNS by default, and in the
+        // specialist's templates a gateway typed for each CPE until one is written here
+        if (c.get('resolv.nameserver.1.ip') === undefined) {
+          out.push(['resolv.nameserver.status', 'enabled'], ['resolv.nameserver.1.status', 'enabled'], ['resolv.nameserver.1.ip', '1.1.1.1'], ['resolv.nameserver.2.status', 'enabled'], ['resolv.nameserver.2.ip', '8.8.8.8']);
+        }
+        if (mode.free && c.get('route.1.gateway') === undefined) {
+          out.push(['route.status', 'enabled'], ['route.1.status', 'enabled'], ['route.1.devname', 'br0'], ['route.1.ip', '0.0.0.0'], ['route.1.netmask', '0'], ['route.1.gateway', '${GATEWAY}']);
         }
         return out;
       }
@@ -444,6 +482,77 @@ export const FIELDS: FieldDef[] = [
       return out;
     },
     fallback: '255.255.255.0',
+  },
+  {
+    // bridge with a fixed address (Carmelo, 21/10/2026): without a gateway the CPE reaches nothing
+    // beyond its own LAN (UISP, the time, updates). The keys of airOS 8 as on the APs of the network:
+    // route.status, route.1.{status,devname,ip=0.0.0.0,netmask=0,gateway}
+    id: 'gateway',
+    section: 'network',
+    label: 'Gateway',
+    hint: 'In bridge con IP statico: il router da cui la CPE esce (UISP, ora, aggiornamenti). Vuoto: nessun gateway.',
+    type: 'ip',
+    optional: true,
+    only: { netMode: 'bridge' },
+    read: (c) => {
+      const v = c.get('route.1.gateway');
+      if (v === undefined) return undefined;
+      if (isPlaceholder(v) || c.get('route.status') === 'disabled' || c.get('route.1.status') === 'disabled' || v === '0.0.0.0') return '';
+      return v;
+    },
+    write: (v, c, mode) => {
+      const s = String(v);
+      if (s === '' && !mode.free) return [['route.status', 'disabled'], ['route.1.status', 'disabled']];
+      const lan = lanIndex(c);
+      const dev = (lan && c.get(`netconf.${lan}.devname`)) || 'br0';
+      return [
+        ['route.status', 'enabled'],
+        ['route.1.status', 'enabled'],
+        ['route.1.devname', dev],
+        ['route.1.ip', '0.0.0.0'],
+        ['route.1.netmask', '0'],
+        ['route.1.gateway', s === '' ? '${GATEWAY}' : s],
+      ];
+    },
+    fallback: '',
+  },
+  {
+    id: 'dns1',
+    section: 'network',
+    label: 'DNS primario',
+    hint: 'In bridge con IP statico: il server DNS della CPE (per raggiungere UISP e l’ora per nome). Vuoto: nessuno.',
+    type: 'ip',
+    optional: true,
+    only: { netMode: 'bridge' },
+    read: (c) => (isPlaceholder(c.get('resolv.nameserver.1.ip')) ? undefined : c.get('resolv.nameserver.1.status') === 'disabled' ? '' : c.get('resolv.nameserver.1.ip')),
+    write: (v) =>
+      String(v) === ''
+        ? [['resolv.nameserver.1.status', 'disabled']]
+        : [
+            ['resolv.nameserver.status', 'enabled'],
+            ['resolv.nameserver.1.status', 'enabled'],
+            ['resolv.nameserver.1.ip', String(v)],
+          ],
+    fallback: '1.1.1.1',
+  },
+  {
+    id: 'dns2',
+    section: 'network',
+    label: 'DNS secondario',
+    hint: 'Usato se il primario non risponde. Vuoto: nessuno.',
+    type: 'ip',
+    optional: true,
+    only: { netMode: 'bridge' },
+    read: (c) => (isPlaceholder(c.get('resolv.nameserver.2.ip')) ? undefined : c.get('resolv.nameserver.2.status') === 'disabled' ? '' : c.get('resolv.nameserver.2.ip')),
+    write: (v) =>
+      String(v) === ''
+        ? [['resolv.nameserver.2.status', 'disabled']]
+        : [
+            ['resolv.nameserver.status', 'enabled'],
+            ['resolv.nameserver.2.status', 'enabled'],
+            ['resolv.nameserver.2.ip', String(v)],
+          ],
+    fallback: '8.8.8.8',
   },
   {
     id: 'dhcp',
@@ -583,6 +692,7 @@ const FREE_HINTS: Record<string, string> = {
   snmpContact: 'Il contatto SNMP scritto nella CPE.',
   uisp: 'La CPE si collega all’UISP dell’azienda con la chiave del connettore (o quella scritta).',
   updateCheck: 'La CPE cerca nuovi firmware da sola.',
+  gateway: 'In bridge con IP statico: il router da cui la CPE esce (UISP, ora, aggiornamenti). Vuoto: lo scrivi nel flusso per ogni CPE (${GATEWAY}).',
 };
 
 /** The fields as the console and the app get them (no code), with each model's default. */
@@ -656,7 +766,7 @@ function checked(f: FieldDef, v: unknown): FormValue {
   const s = typeof v === 'string' ? v.trim() : typeof v === 'number' ? String(v) : bad();
   if (/[\r\n\0]/.test(s as string) || (s as string).length > 253) bad();
   if (f.type === 'select' && !f.options?.some((o) => o.value === s)) bad();
-  if (f.type === 'ip' && !/^(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)$/.test(s as string)) bad();
+  if (f.type === 'ip' && !(f.optional && s === '') && !/^(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)$/.test(s as string)) bad();
   if (f.type === 'host' && s !== '' && !/^[A-Za-z0-9.:-]+$/.test(s as string)) bad();
   if (f.type === 'text' && (s as string).includes('${')) bad();
   return s as string;
@@ -681,7 +791,7 @@ export function applyForm(text: string, params: TemplateParams, model: CpeModel,
       nextParams[id as keyof TemplateParams] = String(v);
       continue;
     }
-    for (const [key, value] of f.write!(v, parseKeys(out))) out = setKey(out, key, value);
+    for (const [key, value] of f.write!(v, parseKeys(out), mode)) out = setKey(out, key, value);
   }
   return { text: out, params: nextParams };
 }
@@ -913,6 +1023,12 @@ export function skeletonFor(model: CpeModel): string {
 }
 
 /** What the rest of the server needs to know of a template (where the CPE answers after it). */
+/** The SSID a configuration connects to (Station) or transmits (AP); null when typed for each CPE. */
+export function templateSsid(text: string): string | null {
+  const v = ssidOf(parseKeys(text));
+  return v === undefined || isPlaceholder(v) ? null : v;
+}
+
 export function templateFacts(text: string) {
   const c = parseKeys(text);
   const lan = lanKey(c, 'ip');

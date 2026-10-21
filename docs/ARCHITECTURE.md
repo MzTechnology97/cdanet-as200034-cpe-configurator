@@ -11,36 +11,38 @@ La PWA senza APK o Web Bridge non poteva fare quasi nulla. La v1 concentra la lo
 
 ## Server (`server/`)
 
-Node.js 24 esegue TypeScript direttamente (type stripping): non c'è uno step di build e `tsc` serve solo come typecheck. Componenti: Fastify 5, `node:sqlite` (nessuna dipendenza nativa), zod, jose (JWT HS256), ssh2.
+Node.js 24 esegue TypeScript direttamente (type stripping): non c'è uno step di build e `tsc` serve solo come typecheck. Componenti: Fastify 5, `node:sqlite` (nessuna dipendenza nativa), zod, jose (JWT HS256), ssh2. Nessuna libreria per PDF, ZIP, TIFF o tessere vettoriali: sono scritti nel server (`services/pdf.ts`, `zip.ts`, `tiff.ts`, `domain/mvt.ts`, `domain/pmtiles.ts`).
 
-| Modulo | Contenuto |
+| Cartella | Contenuto |
 |---|---|
-| `config.ts` | Validazione dell'ambiente (zod). Fallisce all'avvio con un messaggio chiaro. |
-| `db.ts` | Migrazioni con `PRAGMA user_version`. La migrazione 1 adotta lo schema v0.5.x; la 2 aggiunge job, eventi e revoca delle sessioni. |
-| `crypto.ts` | AES-256-GCM (formato compatibile con v0.5), scrypt per le password, MD5-crypt per `users.N.password`. |
-| `auth.ts` | JWT con `token_version`: disabilitare un account, resettarne la password o cambiarne il ruolo revoca subito le sessioni. Include il rate limit sul login. |
-| `domain/policy.ts` | Modelli supportati, firmware target, regole SSID e RADIUS, versione minima del client. |
-| `domain/systemcfg.ts` | Ispezione e rendering del template (sostituzione in un solo passaggio, chiavi di policy forzate, blocco VLAN). |
-| `domain/routeros.ts` | Catalogo dei comandi in sola lettura, validazione del terminale, redazione dei segreti (servito anche all'app). |
-| `services/provisioning.ts` | Piano, creazione job con config renderizzata, esiti idempotenti, retention. |
-| `services/releases.ts` | Canale APK e sincronizzazione dalla GitHub Release più recente, con verifica SHA-256. |
-| `net/*` | Tool lato server: ping, traceroute, DNS, scan /24, SNMP BER, NetBIOS, ONVIF/SADP, porte, BGP, MAC vendor, RouterOS SSH. |
+| `config.ts`, `context.ts` | Validazione dell'ambiente (zod), che fallisce all'avvio con un messaggio chiaro; il contesto condiviso dai moduli. |
+| `db.ts` | Migrazioni con `PRAGMA user_version` (circa 50: dalla 1, che adotta lo schema v0.5.x, alla 49 della v1.36.4). |
+| `crypto.ts` | AES-256-GCM per i segreti (formato compatibile con v0.5), scrypt per le password, MD5-crypt per `users.N.password`. |
+| `auth.ts` | JWT con `token_version`: disattivare un account, cambiarne password o ruolo revoca subito le sessioni. Ruoli `admin`, `installer`, `specialist` (con `full_view`); `requireAdmin`, `requireStaff`, `requireSeesAll`, `requireCdaWork`. |
+| `domain/` | Logica pura e testata: policy e modelli, `system.cfg` e modulo dei template (`systemcfg.ts`, `airos-form.ts`, `specialist-cfg.ts`), salute CPE, modello di copertura e linea di vista (`coverage-model.ts`, `los.ts`), carico degli AP, ottimizzatore e IA-AP, ruoli (`roles.ts`), TOTP, CSV, confronto con il template. |
+| `services/` | I servizi con stato: provisioning e template, UISP e CRM di UISP, ISP Billing (CRM e magazzino), terreno, edifici, alberi e antenne, guasti Enel, Victron, MyWic, notifiche (pagina, Telegram, Firebase), avvisi proattivi, salute della piattaforma, backup sul NAS, report mensile, diagnosi, blocco degli accessi, strumenti MCP, eventi in tempo reale. |
+| `routes/` | Le API, un file per area (vedi sotto). |
+| `net/` | Strumenti lato server: ping, traceroute, DNS, scansione /24, SNMP BER, NetBIOS, ONVIF/SADP, porte, BGP, produttore dei MAC, RouterOS via SSH. |
+| `guide-admin/` | La guida amministratore, servita solo agli account autorizzati (non sta in `web/`). |
+
+I test (`npm test`, oltre 330) coprono dominio, API e flussi completi con server finti di UISP, ISP Billing, Telegram, WIC e smbclient. Un test d'oro confronta la configurazione generata con quella della v1.35.10.
 
 ### API
 
-| Metodo | Percorso | Ruolo |
+Tutte sotto `/api`, tranne il connettore MCP (`/mcp`, `/.well-known/oauth-*`, `/oauth/*`) e le tessere della mappa (`/map/*`). Un modulo spento risponde `404 module_disabled` (vedi [MODULI.md](MODULI.md)).
+
+| Area | Percorsi | Chi |
 |---|---|---|
-| GET | `/api/health` | pubblico |
-| POST | `/api/auth/login` (alias `/api/login` per APK v0.5) | pubblico, rate-limited |
-| GET | `/api/mobile/update`, `/api/mobile/apk` | pubblico (recupero app rotta) |
-| GET | `/api/auth/me`, `/api/meta`, `/api/wireless-networks` | utente |
-| POST | `/api/provisioning/plan` | utente: dry-run senza segreti |
-| POST | `/api/provisioning/jobs` | utente + `X-CDA-Client: android/x.y.z` ≥ `MIN_ANDROID_VERSION` |
-| POST | `/api/provisioning/jobs/:id/result` | proprietario o admin, idempotente |
-| GET | `/api/provisioning/jobs` | i propri job (admin: tutti), con filtri |
-| * | `/api/tools/*`, `/api/routeros/*` | utente |
-| GET | `/api/provisioning/templates` | utente: nomi dei template per modello (senza contenuto) |
-| * | `/api/admin/users`, `/wireless-networks` (+ `/import`, `/bulk-delete`), `/profiles`, `/profiles/:model/templates`, `/templates/:id`, `/status`, `/events`, `/placeholders` | admin |
+| Pubbliche | `/api/health`, `/api/auth/login`, `/api/auth/login/totp`, `/api/auth/device-login`, `/api/mobile/update`, `/api/mobile/apk`, `/privacy` | pubblico, con limiti e blocco degli accessi |
+| Account | `/api/auth/*` (me, sessioni, verifica in due passaggi, accesso rapido, scorciatoie), `/api/meta` | utente |
+| Provisioning | `/api/provisioning/plan`, `/jobs`, `/jobs/:id/result`, `/templates`, collaudo, foto, rapporto PDF, `/api/wireless-networks`, sostituzione | utente (installazioni CDA Net: `requireCdaWork`); il pacchetto del job solo all'app (`X-CDA-Client: android/x.y.z` ≥ versione minima) |
+| Campo | `/api/field/*` (credenziali della CPE, ripuntamento, registrazione di una CPE, eventi offline, diagnosi dell'intervento), `/api/speedtest*`, `/api/firmware/*` | utente |
+| Interventi | `/api/work-orders/*`, `/api/admin/work-orders*` | utente (i propri), amministratori |
+| Copertura | `/api/coverage`, `/api/coverage/link`, `/api/pointing/*`, `/api/saved-checks*`, `/api/geocode*`, `/api/admin/coverage/simulation`, `/api/admin/feasibility*` | modulo Copertura, con limiti per ruolo |
+| Rete | `/api/network/status`, `/api/cpe-health*`, `/api/outages/*`, `/api/notifications/*`, `/api/events` (SSE) | utente, per modulo |
+| Specialist | `/api/specialist/*` (template, connettori, flusso, storico, gruppi) | Specialist |
+| Amministrazione | `/api/admin/*`: account, gruppi di lavoro, template, reti Wi-Fi, firmware, connettori, impostazioni, moduli, UISP, CPE, IA-AP, magazzino, statistiche e report, terreno e antenne, accessi bloccati, MCP, privacy, salute piattaforma e backup, NAS, Registro | amministratori; le viste dei dati di CDA Net anche al direttore tecnico (`requireSeesAll`) |
+| Strumenti | `/api/tools/*`, `/api/routeros/*` | utente (dalla rete di CDA Net: `requireCdaWork`) |
 
 ### Pacchetto del job (solo all'app, `Cache-Control: no-store`)
 
@@ -55,11 +57,11 @@ Node.js 24 esegue TypeScript direttamente (type stripping): non c'è uno step di
 }
 ```
 
-Il client non esegue comandi forniti dal server: lettura, scrittura e `cfgmtd` sono costanti nell'app.
+Il client non esegue comandi forniti dal server: lettura, scrittura e `cfgmtd` sono costanti nell'app. `afterApply` viene dal template (`templateFacts`).
 
 ### Dati
 
-`users`, `wireless_secrets` (cifrate), `provision_profiles` (template cifrati), `provisioning_jobs` (solo metadati: niente password, niente config), `events` (registro delle attività admin), `audits` (tabella v0.5 mantenuta in sola lettura e migrata nei job). La retention `GDPR_AUDIT_RETENTION_DAYS` si applica a job, eventi e audits.
+Le tabelle principali: `users` (con `full_view` e i moduli per utente), `wireless_secrets` (cifrate), `provision_profiles` (template cifrati, con `params_json` e `secrets_ciphertext`), `provisioning_jobs` (solo metadati: niente password, niente configurazioni), collaudi, foto e speedtest, `work_orders`, interventi e loro cronologia, `events` (Registro attività), tentativi di accesso e blocchi, notifiche, gruppi di lavoro, verifiche salvate, copie di ISP Billing (`crm_radius`, `crm_customers`, `crm_addresses`, magazzino), stato degli avvisi e `settings`. La retention `GDPR_AUDIT_RETENTION_DAYS` (Impostazioni server → Conservazione) si applica a installazioni, eventi e audit.
 
 ## Console web (`console/` e `web/`)
 
@@ -73,18 +75,26 @@ La console è un'applicazione React 19 in TypeScript (`console/`), compilata con
 
 ## App Android (`android/`)
 
-Kotlin 2.0 e Compose Material 3, minSdk 26, un solo modulo `:app`.
+Kotlin 2.0 e Compose Material 3, minSdk 26, targetSdk 35, un solo modulo `:app`. Il server è fisso nella build (`DEFAULT_BACKEND_URL`, di serie `https://app.cda-net.it`) con la radice della sua CA inclusa.
 
 | Package | Contenuto |
 |---|---|
-| `data` | `ApiClient` (OkHttp + kotlinx.serialization). `Session` tiene il token solo in memoria. `ResultQueue` è la coda persistente degli esiti, senza segreti. `Settings` è una DataStore che contiene solo l'URL del server. |
-| `network` | `NetworkHelper.onWifi { … }` lega temporaneamente il processo alla Wi-Fi (socket, DNS, WebView). Serve quando la Wi-Fi della CPE non ha Internet e Android preferisce la rete cellulare. |
-| `ssh` | Wrapper JSch con algoritmi legacy *aggiunti* (dropbear factory). |
-| `provisioning` | `DeviceCheck` (logica pura, testata), `CpeProvisioner`, `ProvisioningController` (stato del flusso, il pacchetto vive solo in memoria). |
-| `tools` | Tool LAN, SNMP BER, player RTSP (Media3). |
+| `core` | `AppContainer` (dipendenze e stato condiviso: sessione, moduli, campo, coda), blocco degli screenshot e segnalazione dei tentativi. |
+| `data` | `ApiClient` (OkHttp + kotlinx.serialization, errori in italiano), `Session` (token in memoria, `isStaff`, `seesAll`, `doesCdaWork`), `ResultQueue` (coda persistente degli esiti, senza segreti), modelli, verifiche salvate, Specialist. |
+| `security` | `SecureStore` (cifratura con il Keystore), sessione senza Internet (`OfflineSession`, `OfflineLog`), accesso rapido con impronta o volto. |
+| `network` | `NetworkHelper.onWifi { … }` lega il traffico alla Wi-Fi della CPE anche senza Internet, mentre il server resta sulla rete mobile; GPS. |
+| `install` | Il percorso guidato (`InstallController`, passi da Configurazione a Collaudo), consiglio degli AP, cambio AP. |
+| `provisioning` | `DeviceCheck` e `DiscoveryCheck` (logica pura, testata), `CpeProvisioner`, configurazioni pronte offline, magazzino sul telefono. |
+| `field` | «CPE collegata»: client airOS, puntamento con il bip, diagnosi, collaudo e sua coda, foto e loro controlli, realtà aumentata, bussola, CPE smontate. |
+| `firmware` | Firmware sul telefono e aggiornamento della CPE. |
+| `specialist` | Il flusso Nuova CPE dello Specialist. |
+| `tools` | Discovery Ubiquiti (v1 e v2, riavvio con la sfida), scansione LAN e topologia, SNMP BER, Wi-Fi Analyzer, speedtest Ookla, RTSP (Media3). |
 | `routeros` | Client SSH in sola lettura; il catalogo arriva dal server, con fallback locale. |
-| `update` | Download dell'APK con verifica SHA-256 e installazione tramite FileProvider. |
-| `ui` | Navigazione a stack, schermate Compose. |
+| `push`, `alerts`, `outages` | Notifiche: Firebase o collegamento proprio con il server, avvisi sul telefono, guasti Enel ad app chiusa. |
+| `update` | Download dell'APK con verifica SHA-256, aggiornamento obbligatorio, installazione tramite FileProvider. |
+| `ui` | Navigazione, schermate Compose, componenti e colori presi dai token della console (`console/src/styles/tokens.css` → `android/tools/console-tokens.mjs`), mappa nella WebView. |
+
+I test (`testDebugUnitTest`) coprono la logica pura e i flussi dell'app contro un server di prova locale (installazione offline, collaudo dal tetto, foto, ripuntamento).
 
 ## Deploy
 

@@ -1,3 +1,4 @@
+import { session } from '../../lib/api';
 import type { Facts } from '../../templates/form';
 
 /**
@@ -17,12 +18,21 @@ export interface SpecTemplate {
   placeholders: string[];
   /** Placeholders of his own (not CDA Net's): typed for each CPE. */
   own: string[];
-  secretsSet: { snmpCommunity: boolean };
+  /** Which secrets the template keeps (sealed, never returned): its author's. */
+  secretsSet: { snmpCommunity: boolean; wpa2Psk?: boolean };
   jobs: number;
+  /** Who made it: himself or another specialist of his work groups (issue #275). */
+  authorId: number;
+  author: string;
+  /** His own: he deletes it and sets its secrets (the others of the group type them). */
+  mine?: boolean;
   createdAt: string;
   updatedAt: string;
   template?: string;
 }
+
+/** The current specialist (the work of the others of his groups is shared, issue #275). */
+export const myId = (): number | null => session.get()?.user.id ?? null;
 
 export interface SpecConnector {
   id: number;
@@ -51,6 +61,9 @@ export interface SpecAcceptance {
 
 export interface SpecJob {
   id: string;
+  /** Who installed it: himself or another specialist of his work groups (read only then). */
+  authorId: number | null;
+  author: string;
   createdAt: string;
   completedAt: string | null;
   status: 'prepared' | 'success' | 'failed';
@@ -60,6 +73,8 @@ export interface SpecJob {
   templateId: number | null;
   mac: string;
   serial: string;
+  /** Prepared before connecting to the CPE: MAC and serial are read at the write (empty until then). */
+  cpeAtWrite?: boolean;
   firmware: string;
   deviceName: string;
   ssid: string;
@@ -73,7 +88,8 @@ export interface SpecJob {
   detected: { firmware?: string; board?: string; mac?: string };
   error: string;
   acceptance: SpecAcceptance | null;
-  uisp: { deviceId: string | null; siteId: string | null; site: string; authorizedAt: string | null; error: string };
+  /** [off]: written with UISP off (no key of the company), nothing to authorize. */
+  uisp: { deviceId: string | null; siteId: string | null; site: string; authorizedAt: string | null; error: string; off?: boolean };
 }
 
 export interface SpecSummary {
@@ -98,8 +114,8 @@ export const FROM_TEXT: Record<SpecPlaceholder['from'], string> = {
   mac: 'dalla CPE trovata (discovery)',
   serial: 'dalla CPE trovata (discovery)',
   cpe: 'dalle credenziali scritte nell’app',
-  template: 'dalla community del template, o scritta nell’app',
-  connector: 'dal connettore UISP dell’azienda, o scritta nell’app',
+  template: 'dal template (cifrata, la imposta chi l’ha creato), o scritta nell’app',
+  connector: 'dal connettore UISP dell’azienda, o scritta nell’app (facoltativa: vuota, la CPE resta senza UISP)',
   name: 'dal nome della CPE',
 };
 

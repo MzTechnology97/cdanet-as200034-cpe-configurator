@@ -99,7 +99,7 @@ fun CpeHealthScreen(c: AppContainer, onRepoint: (() -> Unit)? = null) {
     var open by remember { mutableStateOf<String?>(null) }
     var history by remember { mutableStateOf<String?>(null) }
     var filters by remember { mutableStateOf(false) }
-    val admin = c.session.isStaff
+    val admin = c.session.seesAll
     var showStale by remember { mutableStateOf(false) }
 
     suspend fun load() {

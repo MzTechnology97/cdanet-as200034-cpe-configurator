@@ -127,13 +127,15 @@ private data class BaseAp(val id: String, val name: String, val lat: Double, val
 fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? = null, onAim: ((CompassTarget) -> Unit)? = null) {
     val scope = rememberCoroutineScope()
     val context = LocalContext.current
-    val admin = c.session.isStaff
+    val admin = c.session.seesAll
     val modules by c.modules.collectAsState()
     val gps = remember { it.cdanet.cpeconfigurator.network.LocationHelper(context) }
     var query by remember { mutableStateOf("") }
     var height by remember { mutableStateOf("") }
     // the CPE to install: proposed for each AP ("auto") or one model for all
     var cpe by remember { mutableStateOf("auto") }
+    // admins: how far the APs are looked for (the server allows them up to 100 km; installers 20)
+    var radiusKm by remember { mutableStateOf<Int?>(null) }
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var suggestions by remember { mutableStateOf<List<GeocodeResult>>(emptyList()) }
@@ -155,6 +157,8 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
     var saving by remember { mutableStateOf(false) }
     var opened by remember { mutableStateOf<SavedCheckDto?>(null) }
     val savedPos = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    // admins and specialists: the simulation A → B, its points chosen on the map too
+    val linkSim = remember { LinkSimState() }
 
     // admins: every AP on the map (and for the search by name), the default CPE height
     LaunchedEffect(admin) {
@@ -183,7 +187,7 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
             busy = "check"
             try {
                 val h = height.replace(',', '.').toDoubleOrNull()?.takeIf { it in 0.5..100.0 }
-                val json = if (admin) c.api.coverageJson(lat, lon, 10, null, h, cpe) else c.api.coverageJson(lat, lon, h, cpe)
+                val json = if (admin) c.api.coverageJson(lat, lon, 10, radiusKm, h, cpe) else c.api.coverageJson(lat, lon, h, cpe)
                 result = AppJson.decodeFromString(CoverageDto.serializer(), json)
                 resultJson = json
                 point = CheckedPoint(lat, lon, label ?: runCatching { c.api.reverseGeocode(lat, lon)?.label }.getOrNull()?.takeIf { it.isNotBlank() } ?: String.format(java.util.Locale.US, "%.5f, %.5f", lat, lon))
@@ -248,8 +252,13 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
     }
 
     val onTap by rememberUpdatedState { la: Double, lo: Double ->
-        opened = null
-        check(la, lo, null)
+        // choosing A or B of the simulation: the tap is that point, no coverage check
+        if (linkSim.picking != null) {
+            linkSim.place(la, lo)
+        } else {
+            opened = null
+            check(la, lo, null)
+        }
     }
     val onSim by rememberUpdatedState { id: String -> simulate(id) }
     var map3d by remember { mutableStateOf(false) }
@@ -328,6 +337,13 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                 supporting = if (height.isNotBlank() && heightM == null) "Da 0,5 a 100 m" else "Dal terreno all'antenna montata: conta per il segnale stimato e la visibilità.",
                 isError = height.isNotBlank() && heightM == null,
             )
+            it.cdanet.cpeconfigurator.ui.Dropdown(
+                "Raggio di ricerca degli AP",
+                listOf(null, 10, 20, 30, 50, 100),
+                radiusKm,
+                { km -> km?.let { "$it km" } ?: "Predefinito del server" },
+                { radiusKm = it },
+            )
             val models = result?.cpeModels.orEmpty()
             if (models.isNotEmpty()) {
                 val options = listOf("auto") + models.map { it.id }
@@ -358,6 +374,14 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                 Text("Trascina il punto per spostarlo.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                 TextButton(onClick = { page?.evaluateJavascript("window.cdaPickPoint()", null) }) { Text("Nuovo punto sulla mappa") }
             }
+        }
+        if (c.session.isStaff) {
+            LinkSimCard(
+                c,
+                linkSim,
+                onArm = { page?.evaluateJavascript("window.cdaPickPoint()", null) },
+                onDraw = { json, a -> page?.evaluateJavascript(if (json != null && a != null) "window.cdaLink($json, ${a.first}, ${a.second})" else "window.cdaClearLink()", null) },
+            )
         }
         if (busy == "check" || busy == "sim") Text(if (busy == "sim") "Simulazione in corso…" else "Valutazione degli AP…", style = MaterialTheme.typography.bodySmall)
 
@@ -497,8 +521,9 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
             }
         }
         // the other operators at the same point (FTTH, FTTC, radio), by AGCOM sticker, with every check
-        // (installers without the operators' names)
-        if (p != null) OperatorsCoverageCard(c, p.lat, p.lon, admin)
+        // (installers without the operators' names; on CDA Net's account: not for a specialist
+        // without «visibilità piena», issue #275)
+        if (p != null && c.session.doesCdaWork) OperatorsCoverageCard(c, p.lat, p.lon, admin)
         Column(Modifier.bringIntoViewRequester(savedPos)) {
             SavedChecksCard(c, admin, savedVersion) { s ->
                 openSaved(s)

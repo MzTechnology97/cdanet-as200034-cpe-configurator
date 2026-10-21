@@ -3,12 +3,13 @@ import { HttpError } from '../auth.ts';
 import type { Config } from '../config.ts';
 import { md5Crypt, sha256Hex, type Sealer } from '../crypto.ts';
 import { nowIso, type Db } from '../db.ts';
-import { templateFacts } from '../domain/airos-form.ts';
+import { templateFacts, templateSsid } from '../domain/airos-form.ts';
 import { BOARD_MATCH_SUGGESTIONS, TARGET_FIRMWARE, macSiblings, type CpeModel } from '../domain/policy.ts';
-import { askedFor, inspectFreeTemplate, isSsid, isWpa2Key, renderFreeCfg } from '../domain/specialist-cfg.ts';
+import { askedFor, inspectFreeTemplate, isSsid, isUispKey, isWpa2Key, OPTIONAL_PLACEHOLDERS, renderFreeCfg, unusedPlaceholders } from '../domain/specialist-cfg.ts';
 import { normalizeTemplate } from '../domain/systemcfg.ts';
 import { isPrivateIPv4, isPrivateIPv6 } from '../net/ip.ts';
-import { insecureFetch } from './connectors.ts';
+import { NOT_PUBLIC, publicUrlProblem } from '../net/public-address.ts';
+import { publicFetch } from '../net/public-fetch.ts';
 import { validateBoardMatch } from './templates.ts';
 import { createUisp, type Uisp, type UispDevice } from './uisp.ts';
 
@@ -33,6 +34,8 @@ export interface SpecialistTemplateInput {
   notes?: string;
   /** A value replaces the community, null removes it, absent keeps it. */
   snmpCommunity?: string | null;
+  /** The Wi-Fi key of the company's AP (titolare, 17/10/2026): sealed like the community, never returned. */
+  wpa2Psk?: string | null;
 }
 
 export interface ConnectorInput {
@@ -51,7 +54,11 @@ export interface JobInput {
   connectorId?: number | null | undefined;
   company?: string | undefined;
   model: CpeModel;
-  mac: string;
+  /**
+   * Absent (with serial, firmware and host): prepared before connecting to the CPE (titolare,
+   * 17/10/2026); the app reads them from the CPE at the write and they come with the outcome.
+   */
+  mac?: string | undefined;
   serial?: string | undefined;
   firmware?: string | undefined;
   host?: string | undefined;
@@ -70,6 +77,8 @@ export interface JobResultInput {
   error: string;
   detected: { firmware?: string | undefined; board?: string | undefined; mac?: string | undefined };
   completedAt?: string | undefined;
+  /** The CPE written, read by the app, for a configuration prepared before connecting to it. */
+  cpe?: { mac: string; serial?: string | undefined } | undefined;
 }
 
 interface TemplateRow {
@@ -85,6 +94,8 @@ interface TemplateRow {
   created_at: string;
   updated_at: string;
   jobs?: number;
+  author?: string | null;
+  cda_source_id?: number | null;
 }
 
 interface ConnectorRow {
@@ -141,6 +152,10 @@ interface JobRow {
   uisp_site: string;
   uisp_authorized_at: string | null;
   uisp_error: string;
+  /** Prepared before connecting to the CPE: MAC and serial come with the outcome. */
+  cpe_at_write: number;
+  /** Written with UISP off (no key of the company): nothing to authorize. */
+  uisp_off: number;
   connector_name?: string | null;
 }
 
@@ -162,7 +177,34 @@ const clean = (text: string) =>
     .replace(/[\r\n\t]+/g, ' ')
     .slice(0, 500);
 
-export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fetchImpl?: typeof fetch | undefined } = {}) {
+/**
+ * The specialists of a work group may change each other's templates (true) or only see and use
+ * them (false). Carmelo, 18/10/2026: only their author changes them, because whoever changes the
+ * text decides where the server writes the author's secrets (community, UISP key, CPE password) at
+ * his installations. Deleting a template is always for its author only.
+ */
+export const GROUP_EDITS_TEMPLATES = false;
+
+export function createSpecialist(
+  db: Db,
+  cfg: Config,
+  sealer: Sealer,
+  opts: {
+    fetchImpl?: typeof fetch | undefined;
+    /** Whose work a specialist sees: himself and the members of his work groups (issue #275). */
+    visibleIds?: ((userId: number) => number[]) | undefined;
+    /** Whether a specialist may use a CDA Net template himself (his own visibility, never a member's). */
+    canUseCda?: ((userId: number, templateId: number) => boolean) | undefined;
+  } = {},
+) {
+  const visible = (userId: number) => opts.visibleIds?.(userId) ?? [userId];
+  /**
+   * A copy of a CDA Net template is CDA Net's work: its author keeps it (he could use the original
+   * when he made it), the other members of his groups see it only when they may use that original
+   * themselves. «Visibilità piena» is personal, never passed on through a group.
+   */
+  const sharedOk = (userId: number, r: TemplateRow) => r.user_id === userId || r.cda_source_id == null || (opts.canUseCda?.(userId, r.cda_source_id) ?? false);
+  const inList = (ids: number[]) => ids.map(() => '?').join(',');
   const tx = <T>(fn: () => T): T => {
     db.exec('BEGIN');
     try {
@@ -176,8 +218,16 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
   };
 
   // ---- templates -------------------------------------------------------------------------------
-  const templateSecrets = (r: TemplateRow): { snmpCommunity?: string } => (r.secrets_ciphertext ? json(sealer.open(r.secrets_ciphertext), {}) : {});
-  const templateMeta = (r: TemplateRow) => {
+  /** The secrets of a template, sealed apart from its text and never returned: its author's (issue #275). */
+  type TemplateSecrets = { snmpCommunity?: string; wpa2Psk?: string };
+  const templateSecrets = (r: TemplateRow): TemplateSecrets => (r.secrets_ciphertext ? json(sealer.open(r.secrets_ciphertext), {}) : {});
+  const sealSecrets = (x: TemplateSecrets) => (x.snmpCommunity || x.wpa2Psk ? sealer.seal(JSON.stringify(x)) : '');
+  /**
+   * A template as [viewerId] sees it. Its secrets (the SNMP community) belong to its author: only he
+   * sets them and only his installations use them; another member of the group types them in his
+   * own flow (titolare, 17/10/2026). Never returned to anyone.
+   */
+  const templateMeta = (r: TemplateRow, viewerId: number) => {
     const text = sealer.open(r.template_ciphertext);
     const report = inspectFreeTemplate(text);
     const secrets = templateSecrets(r);
@@ -191,16 +241,24 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
       facts: templateFacts(text),
       placeholders: report.placeholders,
       own: report.own,
-      secretsSet: { snmpCommunity: !!secrets.snmpCommunity },
+      secretsSet: { snmpCommunity: !!secrets.snmpCommunity, wpa2Psk: !!secrets.wpa2Psk },
       jobs: r.jobs ?? 0,
+      /** Who made it: another member of a work group, or the specialist himself. */
+      authorId: r.user_id,
+      author: r.author ?? '',
+      /** His own: he deletes it and sets its secrets, his installations use them. */
+      mine: r.user_id === viewerId,
       createdAt: r.created_at,
       updatedAt: r.updated_at,
     };
   };
-  const TEMPLATE_SELECT = 'SELECT t.*, (SELECT count(*) FROM specialist_jobs j WHERE j.template_id = t.id) jobs FROM specialist_templates t';
-  const templateRow = (userId: number, id: number) => {
-    const r = db.prepare(`${TEMPLATE_SELECT} WHERE t.id = ? AND t.user_id = ?`).get(id, userId) as TemplateRow | undefined;
-    if (!r) throw new HttpError(404, 'template_not_found');
+  const TEMPLATE_SELECT =
+    'SELECT t.*, (SELECT count(*) FROM specialist_jobs j WHERE j.template_id = t.id) jobs, (SELECT username FROM users u WHERE u.id = t.user_id) author FROM specialist_templates t';
+  /** A template of the specialist, or ([shared]) of a member of his work groups too. */
+  const templateRow = (userId: number, id: number, shared = true) => {
+    const ids = shared ? visible(userId) : [userId];
+    const r = db.prepare(`${TEMPLATE_SELECT} WHERE t.id = ? AND t.user_id IN (${inList(ids)})`).get(id, ...ids) as TemplateRow | undefined;
+    if (!r || !sharedOk(userId, r)) throw new HttpError(404, 'template_not_found');
     return r;
   };
   const checkedText = (raw: string) => {
@@ -213,43 +271,64 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
     if (v.length > 200 || /[\r\n\0]/.test(v) || v.includes('${')) throw new HttpError(400, 'template_secret_invalid_snmpCommunity');
     return v;
   };
+  /** A value replaces a secret, null removes it, absent (or empty) keeps it. */
+  const changesSecrets = (input: SpecialistTemplateInput) => [input.snmpCommunity, input.wpa2Psk].some((v) => v === null || (typeof v === 'string' && v !== ''));
+  const nextSecrets = (cur: TemplateSecrets, input: SpecialistTemplateInput): TemplateSecrets => {
+    const out: TemplateSecrets = { ...cur };
+    if (input.snmpCommunity === null) delete out.snmpCommunity;
+    else if (typeof input.snmpCommunity === 'string' && input.snmpCommunity !== '') out.snmpCommunity = checkedCommunity(input.snmpCommunity);
+    if (input.wpa2Psk === null) delete out.wpa2Psk;
+    else if (typeof input.wpa2Psk === 'string' && input.wpa2Psk !== '') {
+      if (!isWpa2Key(input.wpa2Psk)) throw new HttpError(400, 'template_secret_invalid_wpa2Psk');
+      out.wpa2Psk = input.wpa2Psk;
+    }
+    return out;
+  };
   const nameTaken = (userId: number, model: string, name: string, exceptId = 0) =>
     !!db.prepare('SELECT 1 FROM specialist_templates WHERE user_id = ? AND model = ? AND name = ? COLLATE NOCASE AND id <> ?').get(userId, model, name, exceptId);
 
   const templates = {
+    /** His templates and those of the members of his work groups. */
     list(userId: number) {
-      return (db.prepare(`${TEMPLATE_SELECT} WHERE t.user_id = ? ORDER BY t.model, t.name COLLATE NOCASE`).all(userId) as unknown as TemplateRow[]).map(templateMeta);
+      const ids = visible(userId);
+      return (db.prepare(`${TEMPLATE_SELECT} WHERE t.user_id IN (${inList(ids)}) ORDER BY t.model, t.name COLLATE NOCASE`).all(...ids) as unknown as TemplateRow[])
+        .filter((r) => sharedOk(userId, r))
+        .map((r) => templateMeta(r, userId));
     },
 
     get(userId: number, id: number) {
       const r = templateRow(userId, id);
-      return { ...templateMeta(r), template: sealer.open(r.template_ciphertext) };
+      return { ...templateMeta(r, userId), template: sealer.open(r.template_ciphertext) };
     },
 
-    create(userId: number, input: SpecialistTemplateInput & { model: CpeModel; name: string; template: string }) {
+    create(userId: number, input: SpecialistTemplateInput & { model: CpeModel; name: string; template: string; cdaSourceId?: number | undefined }) {
       if (nameTaken(userId, input.model, input.name)) throw new HttpError(409, 'template_name_exists');
       const boardMatch = input.boardMatch ?? BOARD_MATCH_SUGGESTIONS[input.model];
       validateBoardMatch(boardMatch);
       const { text, sha, report } = checkedText(input.template);
-      const secrets = input.snmpCommunity ? { snmpCommunity: checkedCommunity(input.snmpCommunity) } : {};
+      const secrets = nextSecrets({}, input);
       const now = nowIso();
       const r = db
         .prepare(
-          `INSERT INTO specialist_templates(user_id, model, name, board_match, notes, template_ciphertext, template_sha256, secrets_ciphertext, created_at, updated_at)
-           VALUES(?,?,?,?,?,?,?,?,?,?)`,
+          `INSERT INTO specialist_templates(user_id, model, name, board_match, notes, template_ciphertext, template_sha256, secrets_ciphertext, created_at, updated_at, cda_source_id)
+           VALUES(?,?,?,?,?,?,?,?,?,?,?)`,
         )
-        .run(userId, input.model, input.name, boardMatch, input.notes ?? '', sealer.seal(text), sha, secrets.snmpCommunity ? sealer.seal(JSON.stringify(secrets)) : '', now, now);
+        .run(userId, input.model, input.name, boardMatch, input.notes ?? '', sealer.seal(text), sha, sealSecrets(secrets), now, now, input.cdaSourceId ?? null);
       return { ...templates.get(userId, Number(r.lastInsertRowid)), report };
     },
 
     update(userId: number, id: number, input: SpecialistTemplateInput) {
       const cur = templateRow(userId, id);
-      if (input.name !== undefined && nameTaken(userId, cur.model, input.name, id)) throw new HttpError(409, 'template_name_exists');
+      // only its author changes a template (Carmelo, 18/10/2026): whoever changes the text decides
+      // where the server writes the author's secrets at his installations
+      if (cur.user_id !== userId && !GROUP_EDITS_TEMPLATES) throw new HttpError(403, 'template_author_only');
+      // names are unique for each author: a member renaming a shared template checks the author's
+      if (input.name !== undefined && nameTaken(cur.user_id, cur.model, input.name, id)) throw new HttpError(409, 'template_name_exists');
       if (input.boardMatch !== undefined) validateBoardMatch(input.boardMatch);
+      // the secrets are the author's: another member neither sets nor clears them
+      if (changesSecrets(input) && cur.user_id !== userId) throw new HttpError(403, 'template_secrets_author_only');
       const checked = input.template !== undefined ? checkedText(input.template) : null;
-      let secretsCipher = cur.secrets_ciphertext;
-      if (input.snmpCommunity === null) secretsCipher = '';
-      else if (typeof input.snmpCommunity === 'string' && input.snmpCommunity !== '') secretsCipher = sealer.seal(JSON.stringify({ snmpCommunity: checkedCommunity(input.snmpCommunity) }));
+      const secretsCipher = changesSecrets(input) ? sealSecrets(nextSecrets(templateSecrets(cur), input)) : cur.secrets_ciphertext;
       db.prepare(
         'UPDATE specialist_templates SET name = ?, board_match = ?, notes = ?, template_ciphertext = ?, template_sha256 = ?, secrets_ciphertext = ?, updated_at = ? WHERE id = ? AND user_id = ?',
       ).run(
@@ -261,15 +340,16 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
         secretsCipher,
         nowIso(),
         id,
-        userId,
+        cur.user_id,
       );
       return { ...templates.get(userId, id), report: checked?.report ?? null };
     },
 
+    /** Only its author deletes a template, also when it is shared in a work group. */
     remove(userId: number, id: number) {
-      const cur = templateRow(userId, id);
+      const cur = templateRow(userId, id, false);
       db.prepare('DELETE FROM specialist_templates WHERE id = ? AND user_id = ?').run(id, userId);
-      return templateMeta(cur);
+      return templateMeta(cur, userId);
     },
   };
 
@@ -306,8 +386,18 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
   };
   // one client per connector and version of it (a saved change makes a new one)
   const clients = new Map<number, { at: string; client: Uisp }>();
+  /**
+   * A specialist may be outside CDA Net (issue #275): the UISP of his companies is on the
+   * Internet, and this server is never his way into CDA Net's own network (every connection is
+   * checked, redirects too). [opts.fetchImpl]: the tests' fake UISP.
+   */
+  const checkedUrl = (url: string) => {
+    const problem = publicUrlProblem(url);
+    if (problem) throw new HttpError(400, problem);
+    return url;
+  };
   const build = (url: string, token: string, ignoreTls: boolean): Uisp =>
-    createUisp({ url, token, cacheSeconds: 20, fetchImpl: ignoreTls ? insecureFetch() : opts.fetchImpl });
+    createUisp({ url: checkedUrl(url), token, cacheSeconds: 20, fetchImpl: ignoreTls ? publicFetch(true) : (opts.fetchImpl ?? publicFetch(false)) });
 
   const connectors = {
     list(userId: number) {
@@ -324,7 +414,7 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
       const now = nowIso();
       const r = db
         .prepare('INSERT INTO specialist_connectors(user_id, kind, name, url, secrets_ciphertext, options_json, enabled, created_at, updated_at) VALUES(?,?,?,?,?,?,?,?,?)')
-        .run(userId, 'uisp', input.name, input.url, sealer.seal(JSON.stringify(secrets)), JSON.stringify({ ignoreTls: !!input.ignoreTls }), input.enabled === false ? 0 : 1, now, now);
+        .run(userId, 'uisp', input.name, checkedUrl(input.url), sealer.seal(JSON.stringify(secrets)), JSON.stringify({ ignoreTls: !!input.ignoreTls }), input.enabled === false ? 0 : 1, now, now);
       return connectors.get(userId, Number(r.lastInsertRowid));
     },
 
@@ -341,7 +431,7 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
       if (input.ignoreTls !== undefined) o.ignoreTls = input.ignoreTls;
       db.prepare('UPDATE specialist_connectors SET name = ?, url = ?, secrets_ciphertext = ?, options_json = ?, enabled = ?, updated_at = ? WHERE id = ? AND user_id = ?').run(
         input.name ?? cur.name,
-        input.url ?? cur.url,
+        input.url !== undefined ? checkedUrl(input.url) : cur.url,
         sealer.seal(JSON.stringify(s)),
         JSON.stringify(o),
         input.enabled === undefined ? cur.enabled : input.enabled ? 1 : 0,
@@ -385,13 +475,18 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
       const ignoreTls = input.ignoreTls ?? (saved ? !!json<{ ignoreTls?: boolean }>(saved.options_json, {}).ignoreTls : false);
       if (!url || !token) throw new HttpError(400, 'connector_incomplete');
       let out: Record<string, unknown>;
-      try {
-        out = { ...(await build(url, token, ignoreTls).test()) };
-      } catch (e) {
-        const err = e as HttpError;
-        const detail = String(err.extra?.detail ?? (e as Error).message ?? '');
-        const tls = /certificate|self[- ]signed|unable to verify|CERT_|SSL/i.test(detail);
-        out = { ok: false, error: tls ? 'uisp_tls_error' : (err.code ?? 'uisp_error'), status: err.extra?.status ?? null, detail: detail.slice(0, 200) };
+      const problem = publicUrlProblem(url);
+      if (problem) out = { ok: false, error: problem };
+      else {
+        try {
+          out = { ...(await build(url, token, ignoreTls).test()) };
+        } catch (e) {
+          const err = e as HttpError;
+          const detail = String(err.extra?.detail ?? (e as Error).message ?? '');
+          const tls = /certificate|self[- ]signed|unable to verify|CERT_|SSL/i.test(detail);
+          // what the address answered stays on the server (issue #275): the outcome and its HTTP status only
+          out = { ok: false, error: detail.includes(NOT_PUBLIC) ? NOT_PUBLIC : tls ? 'uisp_tls_error' : (err.code ?? 'uisp_error'), status: err.extra?.status ?? null };
+        }
       }
       if (saved && input.url === undefined && !input.token && input.ignoreTls === undefined) {
         const detail = out.ok ? `UISP ${String(out.version ?? '')} · ${String(out.devices ?? 0)} dispositivi`.trim() : String(out.error ?? 'errore');
@@ -408,13 +503,21 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
 
   // ---- installations ---------------------------------------------------------------------------
   const JOB_SELECT = 'SELECT j.*, c.name connector_name FROM specialist_jobs j LEFT JOIN specialist_connectors c ON c.id = j.connector_id';
-  const jobRow = (userId: number, id: string) => {
-    const r = db.prepare(`${JOB_SELECT} WHERE j.id = ? AND j.user_id = ?`).get(id, userId) as JobRow | undefined;
+  /**
+   * An installation of the specialist, or ([shared]) of a member of his work groups too: those are
+   * read only (the outcome, the test and UISP stay with their author and his connectors).
+   */
+  const jobRow = (userId: number, id: string, shared = false) => {
+    const ids = shared ? visible(userId) : [userId];
+    const r = db.prepare(`${JOB_SELECT} WHERE j.id = ? AND j.user_id IN (${inList(ids)})`).get(id, ...ids) as JobRow | undefined;
     if (!r) throw new HttpError(404, 'job_not_found');
     return r;
   };
   const jobView = (r: JobRow) => ({
     id: r.id,
+    /** Who installed it: the specialist or another member of his work groups. */
+    authorId: r.user_id,
+    author: r.username,
     createdAt: r.created_at,
     completedAt: r.completed_at,
     status: r.status,
@@ -424,6 +527,8 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
     templateId: r.template_id,
     mac: r.mac,
     serial: r.serial,
+    /** Prepared before connecting to the CPE: MAC and serial are the ones read at the write. */
+    cpeAtWrite: !!r.cpe_at_write,
     firmware: r.firmware,
     deviceName: r.device_name,
     ssid: r.ssid,
@@ -437,20 +542,25 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
     detected: json<Record<string, string>>(r.detected, {}),
     error: r.error,
     acceptance: r.acceptance_json ? { ...json<Record<string, unknown>>(r.acceptance_json, {}), at: r.acceptance_at } : null,
-    uisp: { deviceId: r.uisp_device_id, siteId: r.uisp_site_id, site: r.uisp_site, authorizedAt: r.uisp_authorized_at, error: r.uisp_error },
+    uisp: { deviceId: r.uisp_device_id, siteId: r.uisp_site_id, site: r.uisp_site, authorizedAt: r.uisp_authorized_at, error: r.uisp_error, off: !!r.uisp_off },
   });
 
   const isPrivateHost = (h: string) => isPrivateIPv4(h) || isPrivateIPv6(h);
 
-  /** The values of the placeholders of a job: typed ones, then those the server fills in. */
-  function jobValues(input: JobInput, tpl: TemplateRow, uispKey: string | null) {
+  /**
+   * The values of the placeholders of a job: typed ones, then those the server fills in. The
+   * template's secrets only for its author ([mine]): the others type them.
+   */
+  function jobValues(input: JobInput, tpl: TemplateRow, uispKey: string | null, mine: boolean) {
     const typed = Object.fromEntries(Object.entries(input.values).map(([k, v]) => [k, v.trim() === '' ? '' : v]));
     for (const [k, v] of Object.entries(typed)) {
       if (v.length > 4096 || /[\r\n\0]/.test(v)) throw new HttpError(400, `invalid_value_${k}`);
     }
     if (typed.WPA2_PSK && !isWpa2Key(typed.WPA2_PSK)) throw new HttpError(400, 'invalid_value_WPA2_PSK');
     if (typed.SSID && !isSsid(typed.SSID)) throw new HttpError(400, 'invalid_value_SSID');
-    const secrets = templateSecrets(tpl);
+    if (typed.GATEWAY && !/^(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)$/.test(typed.GATEWAY.trim())) throw new HttpError(400, 'invalid_value_GATEWAY');
+    if (typed.UISP_ENROLLMENT && !isUispKey(typed.UISP_ENROLLMENT)) throw new HttpError(400, 'invalid_value_UISP_ENROLLMENT');
+    const secrets = mine ? templateSecrets(tpl) : {};
     const name = (typed.DEVICE_NAME ?? '').trim();
     return {
       ...typed,
@@ -458,10 +568,12 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
       CPE_USERNAME: input.cpe.username,
       CPE_PASSWORD: input.cpe.password,
       CPE_PASSWORD_HASH: md5Crypt(input.cpe.password),
-      EXPECTED_MAC: input.mac,
-      EXPECTED_SERIAL: input.serial || input.mac.replace(/:/g, ''),
+      // prepared before connecting to the CPE: not known yet (a template using them needs the CPE first)
+      ...(input.mac ? { EXPECTED_MAC: input.mac, EXPECTED_SERIAL: input.serial || input.mac.replace(/:/g, '') } : {}),
       SNMP_LOCATION: typed.SNMP_LOCATION || name,
       SNMP_COMMUNITY: typed.SNMP_COMMUNITY || secrets.snmpCommunity || '',
+      // the key of the company's AP kept in the template (its author's), else typed for this CPE
+      WPA2_PSK: typed.WPA2_PSK || secrets.wpa2Psk || '',
       UISP_ENROLLMENT: typed.UISP_ENROLLMENT || uispKey || '',
     } as Record<string, string>;
   }
@@ -470,9 +582,14 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
     /** What the specialist is asked for a template (and what the server fills in). */
     form(userId: number, templateId: number, connectorId: number | null) {
       const tpl = templateRow(userId, templateId);
-      const report = inspectFreeTemplate(sealer.open(tpl.template_ciphertext));
+      const text = sealer.open(tpl.template_ciphertext);
+      const report = inspectFreeTemplate(text);
       const uispKey = connectorId ? !!connectorSecrets(connectorRow(userId, connectorId)).uispKey : false;
-      return { placeholders: report.placeholders, asked: askedFor(report.placeholders, { snmpCommunity: !!templateSecrets(tpl).snmpCommunity, uispKey }) };
+      // a template of another member: its secrets are his author's, typed here
+      const mine = tpl.user_id === userId;
+      const secrets = mine ? templateSecrets(tpl) : {};
+      // in bridge the CPE has no PPPoE: its user and password are not asked
+      return { placeholders: report.placeholders, asked: askedFor(report.placeholders, { snmpCommunity: !!secrets.snmpCommunity, wpa2Psk: !!secrets.wpa2Psk, uispKey }, unusedPlaceholders(text)) };
     },
 
     /**
@@ -488,34 +605,45 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
       const host = input.host?.trim() || cfg.network.factoryIp;
       if (!isPrivateHost(host)) throw new HttpError(400, 'target_not_private');
       const text0 = sealer.open(tpl.template_ciphertext);
-      const values = jobValues(input, tpl, uispKey);
+      const values = jobValues(input, tpl, uispKey, tpl.user_id === user.id);
+      // in bridge the CPE has no PPPoE (titolare, 18/10/2026): its lines stay empty, whatever was typed
+      const unused = unusedPlaceholders(text0);
+      for (const p of unused) values[p] = '';
       const extra: Array<[string, string]> = input.location
         ? [
             ['system.latitude', input.location.latitude.toFixed(6)],
             ['system.longitude', input.location.longitude.toFixed(6)],
           ]
         : [];
+      // the company's UISP key is optional (titolare, 18/10/2026): without it the CPE has UISP off
+      if (!values.UISP_ENROLLMENT && inspectFreeTemplate(text0).placeholders.includes('UISP_ENROLLMENT')) extra.push(['unms.status', 'disabled']);
       let text: string;
       try {
-        text = renderFreeCfg(text0, values, extra);
+        text = renderFreeCfg(text0, values, extra, new Set([...unused, ...OPTIONAL_PLACEHOLDERS]));
       } catch (e) {
         const code = (e as Error).message;
+        if ((code === 'missing_value_EXPECTED_MAC' || code === 'missing_value_EXPECTED_SERIAL') && !input.mac) throw new HttpError(409, 'template_needs_cpe');
         if (code.startsWith('missing_value_')) throw new HttpError(400, code, { placeholder: code.slice('missing_value_'.length) });
         throw new HttpError(409, code.startsWith('invalid_value_') || code.startsWith('profile_') || code.startsWith('template_') ? code : 'profile_render_failed');
       }
       const id = randomUUID();
       const created = new Date();
-      // a professional on a roof: at least an hour (firmware updates included)
-      const expiresAt = new Date(created.getTime() + Math.max(cfg.jobTtlMinutes, 60) * 60_000).toISOString();
+      // prepared before going to the CPE and written later (titolare, 17/10/2026): the hours of
+      // Impostazioni server, 24 by default; at least one (firmware updates included)
+      const expiresAt = new Date(created.getTime() + Math.max(cfg.specialistJobTtlHours, 1) * 3600_000).toISOString();
       const sha = sha256Hex(text);
       const facts = templateFacts(text);
       const deviceName = values.DEVICE_NAME ?? '';
-      const ssid = values.SSID ?? '';
+      // the SSID written: the one of the template (fixed for the company's AP) or typed for this CPE
+      const ssid = templateSsid(text) ?? values.SSID ?? '';
       const pppoeUser = values.PPPOE_USER ?? '';
+      const mac = input.mac ?? '';
+      // UISP off in the file written (the key left empty, or the template's choice): nothing to authorize
+      const uispOff = /^unms\.status=disabled$/m.test(text);
       db.prepare(
         `INSERT INTO specialist_jobs(id, user_id, username, created_at, expires_at, client, connector_id, company, template_id, template_name, model, mac, serial, firmware,
-           device_name, ssid, pppoe_user, customer, notes, latitude, longitude, location_source, config_sha256)
-         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+           device_name, ssid, pppoe_user, customer, notes, latitude, longitude, location_source, config_sha256, cpe_at_write, uisp_off)
+         VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       ).run(
         id,
         user.id,
@@ -528,7 +656,7 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
         tpl.id,
         tpl.name,
         input.model,
-        input.mac,
+        mac,
         values.EXPECTED_SERIAL ?? '',
         (input.firmware ?? '').slice(0, 80),
         deviceName.slice(0, 120),
@@ -540,6 +668,8 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
         input.location?.longitude ?? null,
         input.location?.source ?? '',
         sha,
+        mac ? 0 : 1,
+        uispOff ? 1 : 0,
       );
       return {
         jobId: id,
@@ -547,10 +677,11 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
         // the port of the CPE as it is now (factory: 22, else what the discovery read), not the template's
         target: { host, sshPort: input.sshPort ?? 22 },
         credentials: { username: input.cpe.username, password: input.cpe.password },
-        // an expert: after failed updates he may write on the firmware the CPE has
-        checks: { firmware: TARGET_FIRMWARE, boardMatch: tpl.board_match, mac: input.mac, firmwareBypass: true },
+        // an expert: after failed updates he may write on the firmware the CPE has;
+        // MAC empty: prepared before connecting to the CPE, the app checks the one it reads
+        checks: { firmware: TARGET_FIRMWARE, boardMatch: tpl.board_match, mac, firmwareBypass: true },
         config: { path: '/tmp/system.cfg', text, sha256: sha },
-        summary: { model: input.model, template: tpl.name, ssid, pppoeUser, deviceName, mac: input.mac, serial: values.EXPECTED_SERIAL ?? '' },
+        summary: { model: input.model, template: tpl.name, ssid, pppoeUser, deviceName, mac, serial: values.EXPECTED_SERIAL ?? '' },
         afterApply: { lanIp: facts.lanIp ?? host, httpPort: facts.httpPort, httpsPort: facts.httpsPort },
         alternatives: [],
       };
@@ -565,13 +696,22 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
       }
       const retry = job.status === 'failed';
       if (retry && input.completedAt && job.completed_at === input.completedAt) return { ok: true, duplicate: true };
-      db.prepare(`UPDATE specialist_jobs SET status = ?, completed_at = ?, stages = ?, detected = ?, error = ?, firmware = COALESCE(NULLIF(?, ''), firmware), attempts = attempts + 1 WHERE id = ?`).run(
+      // prepared before connecting to the CPE: the one the app read at the write is the job's (a
+      // failed write may be tried again on another one, until a success)
+      const site = job.cpe_at_write ? input.cpe : undefined;
+      if (job.cpe_at_write && input.result === 'success' && !site) throw new HttpError(400, 'cpe_mac_required');
+      db.prepare(
+        `UPDATE specialist_jobs SET status = ?, completed_at = ?, stages = ?, detected = ?, error = ?, firmware = COALESCE(NULLIF(?, ''), firmware),
+           mac = COALESCE(?, mac), serial = COALESCE(?, serial), attempts = attempts + 1 WHERE id = ?`,
+      ).run(
         input.result,
         input.completedAt ?? nowIso(),
         JSON.stringify(input.stages.map((s) => clean(s).slice(0, 200)).slice(0, 40)),
         JSON.stringify(input.detected),
         clean(input.error),
         (input.detected.firmware ?? '').slice(0, 80),
+        site?.mac ?? null,
+        site ? (site.serial || site.mac.replace(/:/g, '')).slice(0, 128) : null,
         id,
       );
       return { ok: true, duplicate: false, ...(retry ? { retry: true } : {}) };
@@ -593,16 +733,18 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
     },
 
     get(userId: number, id: string) {
-      return jobView(jobRow(userId, id));
+      return jobView(jobRow(userId, id, true));
     },
 
     list(
       userId: number,
       f: { q?: string | undefined; status?: string | undefined; connectorId?: number | undefined; from?: string | undefined; to?: string | undefined; limit: number },
     ) {
-      const where = ['j.user_id = ?'];
-      const params: Array<string | number> = [userId];
-      if (f.status === 'to_authorize') where.push("j.status = 'success' AND j.connector_id IS NOT NULL AND j.uisp_authorized_at IS NULL");
+      // his installations and those of the members of his work groups
+      const ids = visible(userId);
+      const where = [`j.user_id IN (${inList(ids)})`];
+      const params: Array<string | number> = [...ids];
+      if (f.status === 'to_authorize') where.push("j.status = 'success' AND j.connector_id IS NOT NULL AND j.uisp_authorized_at IS NULL AND j.uisp_off = 0");
       else if (f.status === 'no_acceptance') where.push("j.status = 'success' AND j.acceptance_json IS NULL");
       else if (f.status) {
         where.push('j.status = ?');
@@ -648,7 +790,7 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
         connectors: n('SELECT count(*) n FROM specialist_connectors WHERE user_id = ?'),
         jobs30d: n('SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND created_at > ?', since),
         success30d: n("SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND status = 'success' AND created_at > ?", since),
-        toAuthorize: n("SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND status = 'success' AND connector_id IS NOT NULL AND uisp_authorized_at IS NULL"),
+        toAuthorize: n("SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND status = 'success' AND connector_id IS NOT NULL AND uisp_authorized_at IS NULL AND uisp_off = 0"),
         failed30d: n("SELECT count(*) n FROM specialist_jobs WHERE user_id = ? AND status = 'failed' AND created_at > ?", since),
       };
     },
@@ -657,6 +799,8 @@ export function createSpecialist(db: Db, cfg: Config, sealer: Sealer, opts: { fe
     async uispDevice(userId: number, id: string): Promise<{ job: JobRow; uisp: Uisp; connector: string; device: UispDevice | null }> {
       const job = jobRow(userId, id);
       if (!job.connector_id) throw new HttpError(409, 'job_without_connector');
+      // prepared before connecting to the CPE and not written yet: its MAC comes with the outcome
+      if (!job.mac) throw new HttpError(409, 'job_not_completed');
       const { client, name } = connectors.client(userId, job.connector_id);
       if (job.uisp_device_id) {
         const d = await client.device(job.uisp_device_id);

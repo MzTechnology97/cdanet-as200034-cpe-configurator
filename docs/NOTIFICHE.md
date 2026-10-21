@@ -1,20 +1,39 @@
 # Notifiche
 
-## Pagina Notifiche (console e app, v1.32.7)
+## Pagina Notifiche (console e app)
 
-Ogni utente ha la sua pagina **Notifiche**, con la campanella e il numero da leggere: nella console in alto e nel menu, nell'app nella barra in alto e nella schermata principale. Si possono eliminare una per una, le lette o tutte; dopo 14 giorni si cancellano da sole.
+Ogni utente ha la sua pagina **Notifiche**, con la campanella e il numero da leggere: nella console in alto e nel menu, nell'app nella barra in alto. Si eliminano una per una, le lette o tutte (con conferma); ognuno elimina solo le proprie. Dopo 14 giorni si cancellano da sole.
 
-| Notifica | A chi | Quando |
+| Notifica | A chi | Su Telegram di serie |
 |---|---|---|
-| Provisioning fallito | NOC (tutti gli amministratori) | l'app registra una scrittura fallita (con "tentativo N" se ritentata) |
-| Installazione KO o rimandata | NOC | il tecnico usa *Segnala KO*: tipo, fase, motivo, motivazione, giorno per riprovare, segnale |
-| Collaudo da approvare | NOC | collaudo con segnale sotto il minimo o un controllo radio rosso |
-| Esito dell'approvazione del NOC | chi ha installato e chi ha fatto il collaudo | il NOC approva o rifiuta (con la nota) |
-| Installazione attivata dal NOC | chi ha installato | la CPE viene accettata in rete dalla console |
+| Provisioning fallito | NOC (tutti gli amministratori) | no |
+| Installazione KO o rimandata | NOC | no |
+| Collaudo con segnale pessimo da approvare | NOC | no |
+| Esito dell'approvazione del NOC | chi ha installato e chi ha fatto il collaudo | sì |
+| Installazione attivata dal NOC | chi ha installato | sì |
+| Intervento assegnato o modificato | installatore | sì |
+| Promemoria degli interventi (24 h, 2 h, 1 h e 30 minuti prima) | installatore | sì |
+| Intervento in ritardo o non fatto | installatore | sì |
+| Interventi in ritardo o non fatti, posizione non corrispondente | NOC | sì |
+| Assistente rete: nuovi problemi critici su AP e CPE (IA-AP, al massimo una volta alla settimana per avviso) | NOC | no |
+| IA-AP: esito delle ottimizzazioni automatiche | NOC | sì |
+| Tentativi di screenshot nell'app (screenshot o registrazione, con l'ora se l'avviso arriva in ritardo) | NOC | sì |
+| CPE installata che non risulta nel magazzino dell'installatore | NOC | no |
+| Magazzino di un installatore sotto il minimo | NOC | sì |
+| Ripuntamento senza intervento (anche di CPE installate da altri) | NOC | sì |
+| Salute piattaforma: un servizio si è fermato o è ripartito | NOC | no (va già al gruppo come «Servizi giù / di nuovo su») |
+| Avvisi proattivi: segnale delle CPE in calo, AP vicini alla saturazione, batteria critica di un POP | NOC | sì |
 
-Per ogni tipo l'utente sceglie, nella console in **Notifiche → Anche su Telegram**, se riceverlo anche nella sua chat Telegram personale. Di default l'installatore riceve su Telegram l'esito delle sue installazioni. Le notifiche del NOC vanno di default solo nella pagina, perché arrivano già al gruppo del NOC se configurato.
+Per ogni tipo l'utente sceglie, in **Notifiche → Anche su Telegram**, se riceverlo anche nella sua chat Telegram personale. Le notifiche del NOC che arrivano già al gruppo del NOC partono di serie solo nella pagina.
 
-API: `GET /api/notifications`, `GET /api/notifications/count`, `POST /api/notifications/read` (`{ids}` o `{all:true}`), `GET`/`PUT /api/notifications/prefs`.
+API: `GET /api/notifications`, `GET /api/notifications/count`, `POST /api/notifications/read` (`{ids}` o `{all:true}`), eliminazione, `GET`/`PUT /api/notifications/prefs`.
+
+## Notifiche nell'app ad app chiusa
+
+- **Con Firebase** (Connettori → **Firebase**: service account e `google-services.json`, la chiave resta cifrata sul server) l'app riceve le notifiche push di Firebase. Se arriva un push e l'app non trova nulla di nuovo tra le Notifiche del server, mostra comunque il messaggio. «Invia notifica di prova» la mostra subito. I rifiuti di Firebase finiscono nel log del server.
+- **Senza Firebase** l'app resta collegata al server da sola, con una notifica fissa e silenziosa «CDA Net: notifiche attive».
+
+Il passaggio dall'una all'altra è automatico a ogni accesso. Su Android 13+ l'app chiede il permesso di notifica. I guasti Enel delle proprie zone hanno anche il loro controllo ogni 15 minuti (vedi [GUASTI-ENEL.md](GUASTI-ENEL.md#notifiche)).
 
 # Notifiche Telegram
 
@@ -22,13 +41,13 @@ Console → **Connettori → Telegram**, solo per amministratori. Un solo bot se
 
 ## Notifiche personali (tutti gli utenti)
 
-Basta il **token del bot**: incollalo in Connettori → Telegram e salva. Il gruppo del NOC non serve. L'opzione "Ogni utente può collegare il proprio Telegram" è attiva di default, e l'amministratore può spegnerla.
+Basta il **token del bot**: incollalo in Connettori → Telegram e salva. Il gruppo del NOC non serve. L'opzione «Ogni utente può collegare il proprio Telegram» è attiva di serie e l'amministratore può spegnerla.
 
-Ogni utente, amministratore o installatore, collega il proprio Telegram:
+Ogni utente collega il proprio Telegram:
 - dalla console, in **Il mio account → Notifiche Telegram**;
 - dall'app, in **Impostazioni** (o in Guasti Enel): **Collega Telegram**, poi nel bot **Avvia** e **Verifica**. In alternativa si inserisce il proprio ID Telegram.
 
-Oggi arrivano i guasti Enel delle proprie zone e dei POP/AP assegnati, per chi ha il modulo Guasti Enel. Se le notifiche non sono disponibili:
+Arrivano le notifiche scelte in «Anche su Telegram» (tabella sopra) e, per chi ha il modulo Guasti Enel, i guasti delle proprie zone e dei POP/AP assegnati. Se le notifiche non sono disponibili:
 - l'amministratore vede cosa manca e dove sistemarlo: bot non configurato, notifiche personali spente o modulo Telegram spento;
 - l'installatore vede a chi chiedere.
 
@@ -39,33 +58,23 @@ Oggi arrivano i guasti Enel delle proprie zone e dei POP/AP assegnati, per chi h
 3. Nella console incolla il token, premi **Trova chat ID** e scegli il gruppo.
 4. Premi **Invia messaggio di prova**, scegli gli eventi, l'ora del riepilogo e salva.
 
-Il token è salvato cifrato con la master key e non viene più mostrato (resta visibile solo l'id del bot). I messaggi partono dal server, al massimo uno al secondo.
+Il token è salvato cifrato con la master key e non viene più mostrato (resta visibile solo l'id del bot). I messaggi partono dal server, al massimo uno al secondo; il bot sa inviare anche file (il PDF del report mensile).
 
-Per avere nei messaggi il link alla console imposta nel `.env` l'indirizzo pubblico, per esempio:
+Per avere nei messaggi il link alla console imposta l'indirizzo pubblico in Impostazioni server → Provisioning e app (`PUBLIC_URL`). Il link apre lo storico già filtrato sul MAC della CPE (`/#/jobs?q=<MAC>`).
 
-```
-PUBLIC_URL=https://cpe.cda-net.it
-```
+## Eventi del gruppo
 
-Il link apre lo storico già filtrato sul MAC della CPE (`/#/jobs?q=<MAC>`).
+| Evento | Quando |
+|---|---|
+| Installazioni da seguire | provisioning fallito, installazione KO o rimandata (con il motivo), collaudo con segnale pessimo da approvare |
+| CPE da accettare in UISP | collaudo superato o approvato dal NOC, una sola volta per installazione, con il link allo storico; mai per una CPE già autorizzata in UISP |
+| Servizi giù / di nuovo su | UISP, ISP Billing, magazzino, guasti Enel, Victron, backup sul NAS e spazio su disco: controllo ogni 5 minuti, messaggio solo al cambio di stato |
+| Sicurezza | account o IP bloccato per troppi tentativi; amministratore da un indirizzo nuovo; password di un amministratore o di uno Specialist cambiata o reimpostata; utente promosso amministratore o reso Specialist; nuovo Specialist; verifica in due passaggi attivata, disattivata, azzerata o resa obbligatoria; chiavi WPA2 esportate in chiaro; Claude collegato e ogni sua modifica; gruppi di lavoro creati o cambiati |
+| Guasti Enel | nuovo guasto o lavoro e-distribuzione in una zona di interesse o vicino a un AP, e ripristino; batteria critica e rientro dei POP |
+| Riepilogo serale e report mensile | ogni sera all'ora scelta (ora italiana): installazioni riuscite e fallite, rimandate e KO, collaudi, CPE ancora da accettare, versione del server. Il 1° del mese alle 8 il report del mese finito, testo e PDF |
 
-## Eventi
-
-| Evento | Quando | Contenuto |
-|---|---|---|
-| Installazioni da seguire (prima "Provisioning fallito") | scrittura fallita; installazione KO o rimandata; collaudo con segnale pessimo da approvare | installatore, CPE, SSID, fase, motivo e motivazione, segnale, tentativo |
-| CPE da accettare in UISP | provisioning riuscito (con UISP configurato) | modello, MAC, SSID, installatore, indicazione se è una sostituzione |
-| UISP giù / di nuovo su | controllo ogni 5 minuti, messaggio solo al cambio di stato | — |
-| Sicurezza | account bloccato per troppi tentativi; admin che accede da un indirizzo mai usato da quell'account; password di un admin cambiata o reimpostata; utente promosso admin | utente, indirizzo IP |
-| Guasti Enel | nuovo guasto o lavoro e-distribuzione in una zona di interesse (o vicino a un AP), e ripristino | tipo (MT/BT/lavoro), località, zona/AP e distanza, clienti, ripristino previsto, mappa |
-| Riepilogo serale | ogni giorno all'ora scelta (ora italiana) | installazioni riuscite e fallite, rimandate e KO, collaudi registrati, CPE ancora da accettare in UISP, versione del server |
-
-Ogni provisioning riuscito non genera un messaggio singolo, ma entra nel riepilogo serale.
-
-**Assistente rete (IA-AP, v1.32.55)**: i nuovi problemi critici su AP e CPE trovati dall'analisi oraria arrivano solo nella pagina Notifiche degli admin (non su Telegram), con il link alla pagina IA-AP. Dalla v1.32.65 un avviso critico viene notificato al massimo una volta alla settimana, anche se sparisce e ricompare tra un'analisi e l'altra. Vedi [NOC.md](NOC.md#ia-ap-assistente-della-rete-admin-v13255).
-
-**IA-AP, ottimizzazione automatica (v1.32.57)**: l'esito di ogni ottimizzazione di un AP (canale migliore tenuto, ripristinato, CPE non riagganciate, ripristino incompleto) arriva agli admin nella pagina Notifiche e, se scelto, su Telegram.
+Un provisioning riuscito non genera un messaggio singolo: entra nel riepilogo serale.
 
 ## Privacy
 
-Telegram è un servizio esterno. I messaggi contengono solo modello, MAC, SSID e nome utente dell'installatore, **mai** nome, indirizzo o posizione del cliente, utente o password PPPoE, chiavi Wi-Fi o credenziali.
+Telegram è un servizio esterno. I messaggi sulle installazioni contengono solo modello, MAC, SSID e nome utente dell'installatore. **Mai** indirizzo o posizione del cliente, utente o password PPPoE, chiavi Wi-Fi o credenziali. Il nome del cliente compare solo dove serve a chi lo riceve: negli avvisi sugli interventi (all'installatore assegnato e al NOC) e, come nome della CPE, nei cali di segnale degli avvisi proattivi al NOC.

@@ -64,7 +64,7 @@ const THIN_FRESNEL = 14;
  * or below the line is cut at the edges. 'auto': the zone view when the zone would be a thin line
  * in the whole profile. [height]: of the drawing, out of a width of 980 (a lower one for a strip).
  */
-export function ProfileChart({ p, view = 'full', height = 300 }: { p: LinkProfile; view?: 'full' | 'fresnel' | 'auto'; height?: number }) {
+export function ProfileChart({ p, view = 'full', height = 300, ends = ['CPE', 'AP'] }: { p: LinkProfile; view?: 'full' | 'fresnel' | 'auto'; height?: number; ends?: [string, string] }) {
   const clip = `link-clip-${useId().replace(/:/g, '')}`;
   const W = 980;
   const H = height;
@@ -137,8 +137,8 @@ export function ProfileChart({ p, view = 'full', height = 300 }: { p: LinkProfil
         {/* the antennas on their masts */}
         {(
           [
-            [first, `CPE ${dec(first.los - first.ground)} m`, 'start', 6],
-            [last, `AP ${dec(last.los - last.ground)} m`, 'end', -6],
+            [first, `${ends[0]} ${dec(first.los - first.ground)} m`, 'start', 6],
+            [last, `${ends[1]} ${dec(last.los - last.ground)} m`, 'end', -6],
           ] as const
         ).map(([q, label, anchor, dx]) => (
           <g key={anchor}>

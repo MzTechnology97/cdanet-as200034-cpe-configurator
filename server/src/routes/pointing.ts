@@ -2,15 +2,15 @@ import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { eveningShare, expectedModulation } from '../domain/ap-load.ts';
 import { apModels } from '../services/model-inputs.ts';
-import { HttpError, isStaff } from '../auth.ts';
+import { HttpError, seesAll } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { approxPoint, roughDistance } from '../domain/approx.ts';
 import { distanceM, isValidLatLon } from '../domain/geo.ts';
 import { lineOfSight, pathPoints, resolveApAltitude } from '../domain/los.ts';
-import { MAX_LINK_M, rankCoverage, type ApModel } from '../domain/coverage-model.ts';
+import { linkSignalDbm, MAX_LINK_M, rankCoverage, VIEW_MAX_KM, type ApModel } from '../domain/coverage-model.ts';
 import { failuresNear, fieldFailures } from '../services/field-samples.ts';
-import { buildProfile, estimateForAp, obstacles, pointingConfig, profileEffect, terrainSampler } from '../services/terrain.ts';
+import { buildLinkProfile, buildProfile, estimateForAp, obstacles, pointingConfig, profileEffect, terrainSampler } from '../services/terrain.ts';
 import { elevationAngle } from '../services/dem.ts';
 import { computeHorizon, type Horizon } from '../services/horizon.ts';
 
@@ -28,7 +28,7 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
   const config = () => pointingConfig(db);
 
   // with how many APs actually use the configured antenna height (those without altitude in UISP)
-  app.get('/api/admin/pointing/config', { preHandler: ctx.auth.requireStaff }, async () => ({
+  app.get('/api/admin/pointing/config', { preHandler: ctx.auth.requireSeesAll }, async () => ({
     ...config(),
     dem: ctx.dem.enabled,
     apSources: ctx.uisp ? await ctx.uisp.apAltitudeSources().catch(() => null) : null,
@@ -52,15 +52,18 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
         lon: z.coerce.number(),
         height: z.coerce.number().min(0).max(100).optional(),
         limit: z.coerce.number().int().min(1).max(15).default(8),
+        /** Admins and specialists with «visibilità piena»: how far to look (default VIEW_MAX_KM). */
+        km: z.coerce.number().min(1).max(VIEW_MAX_KM).optional(),
       })
       .parse(req.query);
     if (!isValidLatLon(q.lat, q.lon)) throw new HttpError(400, 'invalid_position');
     if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
-    const keys = isStaff(req.user!.role) ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
+    const keys = seesAll(req.user!) ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
     const allow = keys ? (a: { id: string; siteId: string | null }) => keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`)) : undefined;
     // same choice as Copertura: every AP within range rated by estimated signal, the limit last
     // (installers: the number set in Impostazioni server, no inactive or hopeless APs)
-    const maxKm = Math.min(ctx.uispSettings.coverageMaxKm, MAX_LINK_M / 1000);
+    // admins (and «visibilità piena»): their POPs beyond 20 km too, shown as too far (Carmelo, 21/10/2026)
+    const maxKm = keys ? Math.min(ctx.uispSettings.coverageMaxKm, MAX_LINK_M / 1000) : (q.km ?? VIEW_MAX_KM);
     const inRange = await ctx.uisp.nearestAps({ lat: q.lat, lon: q.lon }, 500, maxKm, allow);
     const radio = { eirpDbm: ctx.cfg.coverageEirpDbm, cpeGainDbi: ctx.cfg.coverageCpeGainDbi };
     const models = await apModels(ctx, inRange.map((a) => a.id), radio).catch(() => new Map<string, ApModel>());
@@ -127,10 +130,10 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
       .parse(req.query);
     if (!isValidLatLon(q.lat, q.lon)) throw new HttpError(400, 'invalid_position');
     if (!ctx.uisp) throw new HttpError(503, 'uisp_not_configured');
-    const keys = isStaff(req.user!.role) ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
+    const keys = seesAll(req.user!) ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
     const allow = keys ? (a: { id: string; siteId: string | null }) => keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`)) : undefined;
     // any AP within range: the list may have ranked a farther one first (admins: as far as Copertura goes)
-    const aps = await ctx.uisp.nearestAps({ lat: q.lat, lon: q.lon }, 500, keys ? ctx.uispSettings.coverageMaxKm : 200, allow);
+    const aps = await ctx.uisp.nearestAps({ lat: q.lat, lon: q.lon }, 500, keys ? Math.min(ctx.uispSettings.coverageMaxKm, MAX_LINK_M / 1000) : 200, allow);
     const ap = aps.find((a) => a.id === q.apId);
     if (!ap) throw new HttpError(404, 'ap_not_found');
     const height = q.height ?? c.cpeHeightM;
@@ -165,6 +168,94 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
       // admins: where the AP antenna is put (altitude a.s.l., above its ground, from GPS / UISP / default)
       ...(keys ? {} : { apAntenna: { altitude: Math.round(p.to), aboveGroundM: Math.round(p.to - p.ground[p.ground.length - 1]!), from: p.altitudeFrom, reported: ap.gpsAltitude ?? null } }),
       ...r,
+      chart,
+    };
+  });
+
+  /**
+   * Simulazione A → B (titolare and Carmelo, 21/10/2026): a link between two points chosen by hand,
+   * with the same terrain, buildings and trees of Visibilità and Copertura: the profile with the
+   * Fresnel zone, the obstacles, the loss and the expected signal and modulation. Two points on the
+   * map, nothing of the network: a technical tool for admins and specialists.
+   */
+  app.get('/api/coverage/link', { preHandler: [ctx.auth.requireStaff, ctx.modules.require('coverage')] }, async (req) => {
+    const c = config();
+    const q = z
+      .object({
+        aLat: z.coerce.number(),
+        aLon: z.coerce.number(),
+        bLat: z.coerce.number(),
+        bLon: z.coerce.number(),
+        /** Antenna heights above the ground, m (defaults: CPE and AP of Puntamento). */
+        aH: z.coerce.number().min(0).max(200).optional(),
+        bH: z.coerce.number().min(0).max(200).optional(),
+        freq: z.coerce.number().int().min(2400).max(6200).default(5600),
+        /** Transmitted at A (EIRP, dBm) and the gain of the antenna at B (dBi). */
+        eirp: z.coerce.number().min(0).max(60).optional(),
+        gain: z.coerce.number().min(0).max(40).optional(),
+        noise: z.coerce.number().min(-120).max(-60).default(-92),
+        /** Raise each antenna over the roofs and trees right around it (as it is mounted). */
+        raise: z.enum(['0', '1']).default('1'),
+      })
+      .parse(req.query);
+    const a = { lat: q.aLat, lon: q.aLon };
+    const b = { lat: q.bLat, lon: q.bLon };
+    if (!isValidLatLon(a.lat, a.lon) || !isValidLatLon(b.lat, b.lon)) throw new HttpError(400, 'invalid_position');
+    const D = distanceM(a, b);
+    if (D < 30) throw new HttpError(400, 'link_too_short');
+    if (D > VIEW_MAX_KM * 1000) throw new HttpError(400, 'link_too_long');
+    const at = await terrainSampler(ctx.terrain, [a, b], 500);
+    if (!at) throw new HttpError(503, 'dem_not_configured');
+    const hA = q.aH ?? c.cpeHeightM;
+    const hB = q.bH ?? c.apHeightM;
+    const p = buildLinkProfile(at, a, hA, b, hB, q.freq, obstacles(ctx), q.raise === '1');
+    if (!p) throw new HttpError(503, 'dem_unavailable');
+    const solid = p.d.map((d, i) => ({ d, ground: p.ground[i]! + (p.obstacle[i]?.kind === 'edificio' ? p.obstacle[i]!.h : 0) }));
+    const los = lineOfSight(solid, p.from, p.to, p.freq);
+    const effect = profileEffect(p);
+    const R_EFF = 6371000 * (4 / 3);
+    const chart = los.chart.map((pt, i) => {
+      const bulge = (p.d[i]! * (p.D - p.d[i]!)) / (2 * R_EFF);
+      const o = p.obstacle[i];
+      return { ...pt, ground: Math.round((p.ground[i]! + bulge) * 10) / 10, ...(o ? { obstacle: o.kind, top: Math.round((p.ground[i]! + bulge + o.h) * 10) / 10 } : {}) };
+    });
+    const eirp = q.eirp ?? ctx.cfg.coverageEirpDbm;
+    const gain = q.gain ?? ctx.cfg.coverageCpeGainDbi;
+    const signalDbm = linkSignalDbm(p.D, p.freq, eirp, gain, effect.lossDb);
+    const mod = expectedModulation(signalDbm, q.noise);
+    // the physics of the obstacle (Deygout knife edges and the foliage crossed): the empirical loss of
+    // UISP Design matches connected customers, a planned link over a big hill is worse (fork, 21/10/2026)
+    const diffractionDb = effect.diffractionDb ?? effect.lossDb;
+    const physicalDbm = linkSignalDbm(p.D, p.freq, eirp, gain, diffractionDb);
+    const physical = expectedModulation(physicalDbm, q.noise);
+    const end = (pt: { lat: number; lon: number }, h: number, alt: number, ground: number) => ({
+      lat: pt.lat,
+      lon: pt.lon,
+      ground: Math.round(ground),
+      heightM: h,
+      // raised over the roofs or trees around it
+      mountedM: Math.round((alt - ground) * 10) / 10,
+      roofM: at.building?.(pt.lat, pt.lon) || null,
+    });
+    return {
+      a: end(a, hA, p.from, p.ground[0]!),
+      b: end(b, hB, p.to, p.ground[p.ground.length - 1]!),
+      // as the profile of Visibilità: B in the place of the AP
+      ap: { lat: b.lat, lon: b.lon },
+      distanceM: Math.round(p.D),
+      frequencyMhz: p.freq,
+      terrainSource: at.fine ? 'tinitaly' : 'srtm',
+      lossDb: effect.lossDb,
+      diffractionDb,
+      foliageM: effect.foliageM ?? 0,
+      buildings: effect.buildings ?? false,
+      radio: { eirpDbm: eirp, gainDbi: gain, noiseDbm: q.noise },
+      // as Copertura (the empirical loss), and with the pure diffraction: the worst case of a new link
+      estimate: { signalDbm, snrDb: mod?.snrDb ?? null, mcs: mod?.mcs ?? null, label: mod?.label ?? null },
+      physical: { signalDbm: physicalDbm, snrDb: physical?.snrDb ?? null, mcs: physical?.mcs ?? null, label: physical?.label ?? null },
+      // beyond the farthest realistic link: drawn, never promised
+      tooFar: p.D > MAX_LINK_M,
+      ...los,
       chart,
     };
   });

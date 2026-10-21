@@ -1,10 +1,13 @@
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { api } from '../../lib/api';
+import { seesAll } from '../../lib/roles';
 import { toast } from '../../lib/toast';
+import type { PageContext } from '../../shell/routes';
 import { downloadText, type Facts, type FieldDef, FormField, modeText, type Section, SECTIONS, type Value } from '../../templates/form';
 import { AsyncButton, Badge, Button, Card, Drawer, EmptyState, Field, Notice, PageHeader, Segmented, Skeleton, Tabs } from '../../ui';
-import { date, FROM_TEXT, type SpecPlaceholder, type SpecTemplate } from './types';
+import { MyGroups } from './MyGroups';
+import { date, FROM_TEXT, myId, type SpecPlaceholder, type SpecTemplate } from './types';
 
 /**
  * I miei template: the specialist's airOS templates for the companies he works for, apart from
@@ -29,6 +32,8 @@ interface Report {
   warnings: string[];
   placeholders: string[];
   own: string[];
+  /** Never asked for this template (PPPoE in bridge): the server decides. */
+  unused?: string[];
   lines: number;
 }
 interface FormState {
@@ -46,6 +51,10 @@ interface EditorOpts {
   template?: string;
   boardMatch?: string;
   snmpSet?: boolean;
+  /** The template keeps the Wi-Fi key of the AP (sealed, never returned). */
+  wpa2Set?: boolean;
+  /** Of another member of the group (issue #275): its secrets stay with [author]. */
+  author?: string;
   updatedAt?: string;
   sha256?: string;
   /** Made from a backup: what was replaced with placeholders. */
@@ -61,10 +70,27 @@ const ERRORS: Record<string, string> = {
   too_many_placeholders: 'Troppi segnaposto (al massimo 40)',
   users_password_requires_hash_placeholder: 'users.N.password deve usare ${CPE_PASSWORD_HASH}, non ${CPE_PASSWORD}',
   non_key_value_lines: 'Alcune righe non sono nel formato chiave=valore',
+  literal_secrets:
+    'Il testo contiene una chiave o una password in chiaro (Wi-Fi, PPPoE, community SNMP, chiave UISP, password admin): i colleghi del tuo gruppo di lavoro leggono il testo. Usa i segnaposto, es. ${WPA2_PSK}, e tieni la chiave nel template, cifrata.',
 };
 const errText = (c: string) => ERRORS[c] ?? c;
 
-export function SpecialistTemplates() {
+/** The editor of a template as it is: its secrets only to its author. */
+const editorOf = (t: SpecTemplate): EditorOpts => ({
+  model: t.model,
+  id: t.id,
+  name: t.name,
+  notes: t.notes,
+  template: t.template,
+  boardMatch: t.boardMatch,
+  snmpSet: t.secretsSet.snmpCommunity,
+  wpa2Set: !!t.secretsSet.wpa2Psk,
+  ...(t.authorId !== myId() ? { author: t.author } : {}),
+  updatedAt: t.updatedAt,
+  sha256: t.sha256,
+});
+
+export function SpecialistTemplates({ user }: PageContext) {
   const qc = useQueryClient();
   const list = useQuery({ queryKey: ['specialist', 'templates'], queryFn: () => api<SpecTemplate[]>('/api/specialist/templates') });
   const form = useQuery({ queryKey: ['specialist', 'template-form'], queryFn: () => api<FormData>('/api/specialist/template-form'), staleTime: 10 * 60_000 });
@@ -73,8 +99,7 @@ export function SpecialistTemplates() {
   const [dirty, setDirty] = useState(false);
   const reload = () => qc.invalidateQueries({ queryKey: ['specialist'] });
   const open = async (t: SpecTemplate) => {
-    const full = await api<SpecTemplate>(`/api/specialist/templates/${t.id}`);
-    setEditing({ model: full.model, id: full.id, name: full.name, notes: full.notes, template: full.template, boardMatch: full.boardMatch, snmpSet: full.secretsSet.snmpCommunity, updatedAt: full.updatedAt, sha256: full.sha256 });
+    setEditing(editorOf(await api<SpecTemplate>(`/api/specialist/templates/${t.id}`)));
   };
   const remove = async (t: SpecTemplate) => {
     if (!confirm(`Eliminare il template «${t.name}» (${t.model})? Le installazioni fatte con esso restano nello storico.`)) return;
@@ -110,7 +135,7 @@ export function SpecialistTemplates() {
           onSaved={async (t) => {
             setDirty(false);
             await reload();
-            setEditing({ model: t.model, id: t.id, name: t.name, notes: t.notes, template: t.template, boardMatch: t.boardMatch, snmpSet: t.secretsSet.snmpCommunity, updatedAt: t.updatedAt, sha256: t.sha256 });
+            setEditing(editorOf(t));
           }}
         />
       </div>
@@ -131,6 +156,7 @@ export function SpecialistTemplates() {
           </Button>
         }
       />
+      <MyGroups shared="i template" />
       {list.error ? (
         <Notice tone="bad">{(list.error as Error).message}</Notice>
       ) : !list.data ? (
@@ -155,6 +181,7 @@ export function SpecialistTemplates() {
                         <div className="hl-main">
                           <div className="hl-name">
                             <strong>{t.name}</strong>
+                            {t.authorId !== myId() && <Badge tone="neutral">{`gruppo · di ${t.author}`}</Badge>}
                             {t.own.map((p) => (
                               <Badge key={p} tone="info">{`\${${p}}`}</Badge>
                             ))}
@@ -166,11 +193,13 @@ export function SpecialistTemplates() {
                         </div>
                         <div className="hl-actions">
                           <AsyncButton onClick={() => open(t)} onError={fail}>
-                            Modifica
+                            {t.authorId === myId() ? 'Modifica' : 'Apri'}
                           </AsyncButton>
-                          <AsyncButton variant="ghost" icon="delete" onClick={() => remove(t)} onError={fail}>
-                            Elimina
-                          </AsyncButton>
+                          {t.authorId === myId() && (
+                            <AsyncButton variant="ghost" icon="delete" onClick={() => remove(t)} onError={fail}>
+                              Elimina
+                            </AsyncButton>
+                          )}
                         </div>
                       </li>
                     ))}
@@ -182,6 +211,7 @@ export function SpecialistTemplates() {
       {creating && form.data && (
         <NewTemplate
           models={models}
+          canCopyCda={seesAll(user)}
           onClose={() => setCreating(false)}
           onStart={async (o) => {
             setCreating(false);
@@ -194,15 +224,19 @@ export function SpecialistTemplates() {
   );
 }
 
-/** Where a new template starts from: the form alone, a CPE backup, or a copy of a CDA Net template. */
-function NewTemplate({ models, onClose, onStart }: { models: string[]; onClose: () => void; onStart: (o: EditorOpts) => Promise<void> }) {
+/**
+ * Where a new template starts from: the form alone, a CPE backup, or a copy of a CDA Net template
+ * ([canCopyCda]: CDA Net's work, only with «visibilità piena», issue #275).
+ */
+function NewTemplate({ models, canCopyCda, onClose, onStart }: { models: string[]; canCopyCda: boolean; onClose: () => void; onStart: (o: EditorOpts) => Promise<void> }) {
   const [model, setModel] = useState(models[0] ?? '');
   const [from, setFrom] = useState<'form' | 'backup' | 'cda'>('form');
   const [file, setFile] = useState<File | null>(null);
   const [cdaId, setCdaId] = useState('');
   const [name, setName] = useState('');
-  const cda = useQuery({ queryKey: ['admin', 'profiles'], queryFn: () => api<Array<{ model: string; templates: Array<{ id: number; name: string }> }>>('/api/admin/profiles'), enabled: from === 'cda', retry: false });
-  const cdaOfModel = cda.data?.find((m) => m.model === model)?.templates ?? [];
+  // the CDA Net templates: only with «visibilità piena» (issue #275)
+  const cda = useQuery({ queryKey: ['provisioning', 'templates'], queryFn: () => api<Array<{ id: number; model: string; name: string }>>('/api/provisioning/templates'), enabled: canCopyCda && from === 'cda', retry: false });
+  const cdaOfModel = (cda.data ?? []).filter((t) => t.model === model);
   const start = async () => {
     if (!model) throw new Error('Scegli il modello');
     if (from === 'form') return onStart({ model, name: name.trim() });
@@ -252,7 +286,7 @@ function NewTemplate({ models, onClose, onStart }: { models: string[]; onClose: 
         options={[
           { value: 'form', label: 'Modulo' },
           { value: 'backup', label: 'Backup della CPE' },
-          { value: 'cda', label: 'Template CDA Net' },
+          ...(canCopyCda ? [{ value: 'cda' as const, label: 'Template CDA Net' }] : []),
         ]}
       />
       {from === 'form' && <p className="ui-muted ui-small">Una configurazione airOS 8.7.4 completa (Station, Router, PPPoE): la modifichi dal modulo come l’interfaccia della CPE.</p>}
@@ -300,6 +334,9 @@ function TemplateEditor({ opts, data, onDirty, onClose, onSaved }: { opts: Edito
   const [boardMatch, setBoardMatch] = useState(opts.boardMatch ?? data.boardMatch[opts.model] ?? '');
   const [snmp, setSnmp] = useState('');
   const [removeSnmp, setRemoveSnmp] = useState(false);
+  // the Wi-Fi key of the company's AP (titolare, 17/10/2026): sealed like the community
+  const [wpa2, setWpa2] = useState('');
+  const [removeWpa2, setRemoveWpa2] = useState(false);
   const [form, setFormState] = useState<FormState | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -395,12 +432,15 @@ function TemplateEditor({ opts, data, onDirty, onClose, onSaved }: { opts: Edito
       boardMatch: boardMatch.trim(),
       notes: notes.trim(),
       ...(snmp ? { snmpCommunity: snmp } : removeSnmp ? { snmpCommunity: null } : {}),
+      ...(wpa2 ? { wpa2Psk: wpa2 } : removeWpa2 ? { wpa2Psk: null } : {}),
     };
     const t = isNew ? await api<SpecTemplate>('/api/specialist/templates', { method: 'POST', body: { model: opts.model, ...body } }) : await api<SpecTemplate>(`/api/specialist/templates/${opts.id}`, { method: 'PATCH', body });
     toast(`Template «${t.name}» salvato · ${t.sha256.slice(0, 12)}…`);
     setDirtyState(false);
     setSnmp('');
     setRemoveSnmp(false);
+    setWpa2('');
+    setRemoveWpa2(false);
     await onSaved(t);
   };
 
@@ -416,9 +456,15 @@ function TemplateEditor({ opts, data, onDirty, onClose, onSaved }: { opts: Edito
     !(f.id.startsWith('watchdog') && f.id !== 'watchdog' && values.watchdog === false);
   const known = new Map(data.placeholders.map((p) => [p.name, p]));
   const usesCommunity = form.report.placeholders.includes('SNMP_COMMUNITY');
+  const usesKey = form.report.placeholders.includes('WPA2_PSK');
 
   return (
-    <Card title={isNew ? `Nuovo template · ${opts.model}` : `Modifica · ${opts.model} · ${opts.name}`}>
+    <Card title={isNew ? `Nuovo template · ${opts.model}` : `${opts.author ? 'Template' : 'Modifica'} · ${opts.model} · ${opts.name}`}>
+      {opts.author && (
+        <Notice tone="info" title={`Template di ${opts.author}, del tuo gruppo di lavoro`}>
+          Lo puoi guardare e usare nell’app, con i tuoi valori e i tuoi segreti; lo modifica e lo elimina solo {opts.author}.
+        </Notice>
+      )}
       {!isNew && opts.updatedAt && (
         <p className="ui-muted ui-small pf-p">
           Ultima modifica {date(opts.updatedAt)} · SHA-256 {opts.sha256?.slice(0, 16)}…
@@ -477,15 +523,47 @@ function TemplateEditor({ opts, data, onDirty, onClose, onSaved }: { opts: Edito
                 onCommit={() => void flush().catch(fail)}
               />
             ))}
+          {tab === 'wireless' && (
+            <div>
+              <Field
+                label="Chiave Wi-Fi (WPA2)"
+                hint={
+                  opts.author
+                    ? `La imposta solo ${opts.author}, che ha creato il template, e vale solo per le sue installazioni: nelle tue la scrivi nell’app per ogni CPE.`
+                    : opts.wpa2Set
+                      ? 'Impostata: lascia vuoto per non cambiarla. Cifrata, mai mostrata. Vale solo per le tue installazioni: gli altri del gruppo la scrivono nell’app.'
+                      : usesKey
+                        ? 'Facoltativa: la chiave dell’AP dell’azienda, da 8 a 63 caratteri. Senza, la scrivi nell’app per ogni CPE. Cifrata, mai mostrata.'
+                        : 'Il template non usa ${WPA2_PSK}.'
+                }
+              >
+                <input type="password" autoComplete="new-password" value={wpa2} maxLength={64} disabled={removeWpa2 || !!opts.author} onChange={(e) => (setWpa2(e.target.value), mark())} />
+              </Field>
+              {opts.wpa2Set && !opts.author && (
+                <label className="ui-check ui-small">
+                  <input type="checkbox" checked={removeWpa2} onChange={(e) => (setRemoveWpa2(e.target.checked), setWpa2(''), mark())} />
+                  Rimuovi la chiave da questo template
+                </label>
+              )}
+            </div>
+          )}
           {tab === 'services' && (
             <div>
               <Field
                 label="SNMP: community"
-                hint={opts.snmpSet ? 'Impostata: lascia vuoto per non cambiarla. Cifrata, mai mostrata.' : usesCommunity ? 'Facoltativa: senza, la scrivi nell’app per ogni CPE. Cifrata, mai mostrata.' : 'Il template non usa ${SNMP_COMMUNITY}.'}
+                hint={
+                  opts.author
+                    ? `La imposta solo ${opts.author}, che ha creato il template, e vale solo per le sue installazioni: nelle tue la scrivi nell’app per ogni CPE.`
+                    : opts.snmpSet
+                      ? 'Impostata: lascia vuoto per non cambiarla. Cifrata, mai mostrata. Vale solo per le tue installazioni: gli altri del gruppo la scrivono nell’app.'
+                      : usesCommunity
+                        ? 'Facoltativa: senza, la scrivi nell’app per ogni CPE. Cifrata, mai mostrata.'
+                        : 'Il template non usa ${SNMP_COMMUNITY}.'
+                }
               >
-                <input type="password" autoComplete="new-password" value={snmp} disabled={removeSnmp} onChange={(e) => (setSnmp(e.target.value), mark())} />
+                <input type="password" autoComplete="new-password" value={snmp} disabled={removeSnmp || !!opts.author} onChange={(e) => (setSnmp(e.target.value), mark())} />
               </Field>
-              {opts.snmpSet && (
+              {opts.snmpSet && !opts.author && (
                 <label className="ui-check ui-small">
                   <input type="checkbox" checked={removeSnmp} onChange={(e) => (setRemoveSnmp(e.target.checked), setSnmp(''), mark())} />
                   Rimuovi la community da questo template
@@ -512,7 +590,14 @@ function TemplateEditor({ opts, data, onDirty, onClose, onSaved }: { opts: Edito
                         <strong>{k?.label ?? 'Tuo'}</strong>
                         {k?.secret && <Badge tone="warn">segreto</Badge>}
                       </div>
-                      <span className="ui-muted ui-small">{k ? FROM_TEXT[k.from] : 'scritto nell’app per ogni CPE'}</span>
+                      <span className="ui-muted ui-small">
+                        {/* a CPE in bridge cannot use PPPoE (titolare, 18/10/2026): not asked, its lines stay empty */}
+                        {form.report.unused?.includes(p)
+                          ? 'non chiesto: la CPE non usa il PPPoE (bridge o PPPoE spento), la riga resta vuota'
+                          : k
+                            ? FROM_TEXT[k.from]
+                            : 'scritto nell’app per ogni CPE'}
+                      </span>
                     </div>
                   </li>
                 );
@@ -533,9 +618,12 @@ function TemplateEditor({ opts, data, onDirty, onClose, onSaved }: { opts: Edito
         </section>
       )}
       <div className="ui-row pf-actions">
-        <AsyncButton variant="primary" onClick={save} onError={fail}>
-          Salva template
-        </AsyncButton>
+        {/* only its author changes a template (Carmelo, 18/10/2026) */}
+        {!opts.author && (
+          <AsyncButton variant="primary" onClick={save} onError={fail}>
+            Salva template
+          </AsyncButton>
+        )}
         <Button variant="ghost" onClick={onClose}>
           Chiudi
         </Button>

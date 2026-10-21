@@ -25,7 +25,7 @@ Le chiamate usano `Authorization: Bearer {api_id}:{api_key}`.
 
 Con il connettore attivo il server copia ogni 10 minuti (prima volta un minuto dopo l'avvio) lo stato RADIUS nella tabella `crm_radius`: tutti gli account ISPRadius con profilo, cliente, gruppo, sospensioni (account `Sospeso`, cliente `suspended`, servizio sospeso) e, per gli account non terminati, la sessione (`/accounts/{id}/status`: online/offline, MAC, IP, durata). Circa un minuto per mille account, quattro letture in parallelo; se una lettura di sessione fallisce resta quella precedente.
 
-- **Salute CPE** (solo amministratori): colonna PPPoE e problemi `pppoe_offline` (CPE online in UISP, sessione giù) e `account_suspended`; la CPE si abbina con il MAC della sessione (≈80% sul campo: le CPE Ubiquiti fanno PPPoE con il MAC che UISP conosce) o con l'utente PPPoE dell'installazione. Riquadro **Account PPPoE** con offline, sospesi e account senza CPE in rete.
+- **Salute CPE** (amministratori e direttore tecnico): colonna PPPoE e problemi `pppoe_offline` (CPE online in UISP, sessione giù) e `account_suspended`; la CPE si abbina con il MAC della sessione (≈80% sul campo: le CPE Ubiquiti fanno PPPoE con il MAC che UISP conosce) o con l'utente PPPoE dell'installazione. Riquadro **Account PPPoE** con offline, sospesi e account senza CPE in rete.
 - **Stato rete** (solo amministratori): sessioni PPPoE online, offline e sospese delle CPE di ogni AP.
 - **Connettori → CRM**: ultima sincronizzazione, conteggi e *Sincronizza stato RADIUS*.
 
@@ -35,14 +35,28 @@ Velocità del piano dal nome del profilo (`CDA-NET-HOME-30-6` → 30/6 Mbit/s).
 
 ## Clienti (console)
 
-**Clienti** (solo amministratori): le anagrafiche copiate a ogni sincronizzazione (tabelle `crm_customers` e `crm_addresses`, migrazione 23) con le **sedi di installazione**: la sede di un account è il suo `address_id`, quasi sempre un indirizzo aggiuntivo del cliente, letto con `additional-addresses?include_main=1`. Per ogni sede: indirizzo e coordinate del CRM, sessione PPPoE, CPE in UISP (MAC della sessione o utente PPPoE dell'installazione) e distanza tra le due posizioni; la posizione UISP uguale a quella di un AP o di un sito (entro 15 m) è segnalata come sospetta. Filtri: con PPPoE, offline, sospesi, sede e CPE distanti oltre 100 m, sede senza coordinate, tutte. La scheda del cliente mostra la mappa; una sede senza coordinate viene posizionata dall'indirizzo con il geocoder locale (approssimativa). Ogni scheda aperta finisce nel Registro attività (`crm.customer.view`). Solo letture.
+**Clienti** (amministratori e direttore tecnico): le anagrafiche copiate a ogni sincronizzazione (tabelle `crm_customers` e `crm_addresses`, migrazione 23) con le **sedi di installazione**: la sede di un account è il suo `address_id`, quasi sempre un indirizzo aggiuntivo del cliente, letto con `additional-addresses?include_main=1`. Per ogni sede: indirizzo e coordinate del CRM, sessione PPPoE, CPE in UISP (MAC della sessione o utente PPPoE dell'installazione) e distanza tra le due posizioni; la posizione UISP uguale a quella di un AP o di un sito (entro 15 m) è segnalata come sospetta. Filtri: con PPPoE, offline, sospesi, sede e CPE distanti oltre 100 m, sede senza coordinate, tutte. La scheda del cliente mostra la mappa; una sede senza coordinate viene posizionata dall'indirizzo con il geocoder locale (approssimativa). Ogni scheda aperta finisce nel Registro attività (`crm.customer.view`). Solo letture.
 
 Sul campo (10/10/2026): 695 sedi su 696 hanno già le coordinate nel CRM; distanza dalla CPE in UISP mediana 13 m, ma 282 oltre 100 m e 89 oltre 5 km. La correzione si farà da una pagina di revisione caso per caso (serve il permesso di scrittura sui Clienti nella chiave).
+
+## Altri usi del CRM
+
+Lo stesso connettore serve anche a:
+- **Interventi**: «Cerca nel CRM» compila cliente, indirizzo e posizione, contatto e utente PPPoE (vedi [NOC.md](NOC.md#interventi-e-calendario)). La password PPPoE si scrive a mano.
+- **Nome di sistema della CPE**: tutto maiuscolo, «COGNOME NOME» o la ragione sociale dal CRM (nome e cognome separati, salvati a ogni sincronizzazione), poi dal cliente dell'intervento, per ultimo dall'utente PPPoE. Solo lettere, cifre e spazi, perché airOS non accetta altro: «D'Angelo & Figli S.r.l.» diventa «D ANGELO FIGLI S R L».
+- **Speedtest del collaudo**: le velocità del profilo del cliente, anche con il solo MAC della CPE. L'app le scarica in anticipo per usarle quando dalla Wi-Fi del cliente il server non si raggiunge.
+- **Nuovo subscriber UISP**: il piano di UISP già scelto dal profilo PPPoE (vedi [UISP.md](UISP.md#accettazione-della-cpe)).
+- **Diagnosi a distanza** e **Gestione CPE**: account e sessione PPPoE della CPE (vedi [NOC.md](NOC.md#diagnosi-a-distanza)).
+- **Verifiche di copertura salvate**: gli amministratori possono collegarle a un cliente (vedi [COPERTURA.md](COPERTURA.md#verifiche-salvate)).
+- **Magazzino**: le giacenze di tutti i magazzini, rilette ogni ora; serve il permesso Magazzino della chiave (vedi [NOC.md](NOC.md#magazzino)).
+
+Gli installatori, e gli Specialist senza visibilità piena, non vedono mai i clienti di ISP Billing né il nome della fonte.
 
 ## Prossimi passi
 
 Decisi con l'utente (vedi la [ROADMAP](ROADMAP.md)):
-- preparazione del provisioning: account inesistente → creato in ISP Billing; account sospeso → blocco, notifica al NOC, all'installatore "contatta l'assistenza" con un codice d'errore;
-- collaudo: "PPPoE autenticato" obbligatorio (online, MAC della CPE, velocità del profilo), con notifica al NOC e codice d'errore bloccante;
-- coordinate delle CPE da UISP scritte nelle anagrafiche e sede di installazione dall'anagrafica;
-- attività ISP Billing nell'agenda interventi, seriali del magazzino.
+- preparazione del provisioning: account inesistente → creato in ISP Billing; account sospeso → blocco, notifica al NOC, all'installatore «contatta l'assistenza» con un codice d'errore;
+- collaudo: «PPPoE autenticato» obbligatorio (online, MAC della CPE, velocità del profilo), con notifica al NOC e codice d'errore bloccante;
+- coordinate delle CPE da UISP scritte nelle anagrafiche (serve il permesso di scrittura sui Clienti);
+- attività di ISP Billing nell'agenda interventi;
+- **scarico della CPE al cliente** dopo il collaudo: aspetta un'API di scarico del magazzino, che ISP Billing oggi non ha.

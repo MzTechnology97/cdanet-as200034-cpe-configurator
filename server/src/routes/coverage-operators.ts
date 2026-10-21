@@ -13,8 +13,11 @@ import { forInstaller } from '../services/coverage-operators.ts';
  * address is never written whole in the activity log.
  */
 export function coverageOpsRoutes(app: FastifyInstance, ctx: AppContext) {
-  const admin = { preHandler: ctx.auth.requireStaff };
-  const field = { preHandler: [ctx.auth.requireUser, ctx.modules.require('coverage')] };
+  // with the operators' names and a new reading on CDA Net's account: admins and «visibilità piena»
+  // (issue #275); the other specialists get the installers' answer
+  const admin = { preHandler: ctx.auth.requireSeesAll };
+  // the installers' answer, on CDA Net's account too: not for a specialist without «visibilità piena»
+  const field = { preHandler: [ctx.auth.requireCdaWork, ctx.modules.require('coverage')] };
 
   const where = z.object({
     lat: z.coerce.number().optional(),

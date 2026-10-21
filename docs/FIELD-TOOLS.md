@@ -1,28 +1,49 @@
 # Strumenti di campo (app Android)
 
-Strumenti per l'installatore su una CPE **già provisionata**: puntamento, diagnosi guasti e, a seguire, collaudo e sostituzione.
+L'app accompagna l'installatore dall'intervento in Oggi al collaudo, e gli dà gli strumenti per le CPE già installate e per la rete del cliente. Le aree della barra in basso sono **Oggi**, **Installa**, **Copertura**, **Rete** e **Strumenti**. Gli Specialist hanno la loro area al posto di Installa (vedi [SPECIALIST-GRUPPI.md](SPECIALIST-GRUPPI.md)).
 
-## Installazione CPE (procedura guidata, v1.28)
+## Oggi e calendario
 
-La voce **Installazione CPE** (prima "Provisioning CPE") chiede che intervento fare e poi guida passo per passo. Gli strumenti sono quelli descritti più sotto, messi in ordine.
+- **Interventi di oggi**: quelli assegnati dall'ufficio, con cliente, indirizzo, PPPoE e il profilo del cliente già scaricato. «Inizia» apre l'installazione o il ripuntamento con i dati compilati; «Naviga» apre il navigatore; «Rimanda» chiede il motivo. All'inizio il telefono deve essere entro 500 m dalla posizione dell'intervento, altrimenti il NOC viene avvisato e il collaudo resta bloccato.
+- **Pronto offline**: per ogni nuova installazione della giornata l'app prepara da sola, con rete, la configurazione per l'AP migliore e per i successivi tra quelli assegnati (fino a 5, solo AP con chiave Wi-Fi). Sull'intervento compare «pronto offline» e «Inizia» va dritto alla scrittura anche senza rete. Sul posto si sceglie l'AP verso cui si punta; MAC, seriale e AP arrivano al server con l'esito. La configurazione resta cifrata sul telefono e non è mai visibile al tecnico.
+- **Diagnosi a distanza** nella scheda dell'intervento: cosa dice la rete del cliente prima di partire, dal problema più grave, con lo stato di CPE e AP. Parte da sola per guasti e ripuntamenti (vedi [NOC.md](NOC.md#diagnosi-a-distanza)).
+- **Calendario**: viste giorno, settimana e mese, come Google Calendar. L'installatore vede i suoi interventi; un amministratore quelli di tutti, e crea, modifica, sposta o annulla un intervento (vedi [NOC.md](NOC.md#interventi-e-calendario)).
+- **Da completare**: installazioni fallite o preparate e mai scritte. «Modifica e riprova» le riapre con tutti i dati da correggere.
+- **Scorciatoie** personalizzabili per account (salvate sul server, uguali su ogni telefono).
+
+Gli orari sono nel fuso del telefono.
+
+## Installazione CPE (procedura guidata)
+
+**Installa** chiede che intervento fare e poi guida passo per passo. Gli strumenti sono quelli descritti più sotto, messi in ordine.
 
 **Nuova installazione**:
-1. **Configurazione**: modello, MAC, cliente, PPPoE. Con il **GPS del telefono** l'app propone gli **AP consigliati**: solo AP CDA Net con chiave WPA2 configurata, ordinati per segnale stimato dai clienti già installati e poi per distanza. "Usa" imposta nodo e distretto. Poi il server prepara il `.cfg`.
-2. **Scrittura nella CPE**: Wi-Fi di management della CPE, primo avvio se serve, scrittura e riavvio (come prima).
-3. **Verifica della CPE**: dopo il riavvio l'app rilegge la CPE e convalida la configurazione: SSID previsto, nome dispositivo, credenziali CDA Net attive, firmware, PPPoE e cavo LAN.
-4. **Aggancio all'AP**: stato del collegamento (segnale, SNR, modulazione). Se la CPE non si aggancia, parte da sola la **scansione degli AP che la CPE sente**. Sono mostrati solo gli AP CDA Net, e su richiesta anche le altre reti. Il **consigliato** è quello con segnale migliore: a parità entro 3 dB vince il più vicino. **Aggancia** sposta la CPE su quell'AP:
+1. **Configurazione**:
+   - **CPE**: si sceglie dal **magazzino** dell'installatore («Dal tuo magazzino») e modello, MAC e seriale si compilano da soli. Un MAC fuori dal magazzino blocca la preparazione, anche senza rete, salvo l'opzione dell'account. Senza l'opzione, MAC e seriale non si scrivono a mano: la CPE viene solo dal magazzino. Con l'opzione, MAC e seriale hanno ciascuno il tasto di scansione, con i controlli (un codice che non può essere un MAC è scartato, un MAC nel campo Seriale è segnalato).
+   - **Controlla la CPE collegata** (discovery Ubiquiti, parte da sola e riprova ogni 8 secondi): modello, MAC rispetto all'etichetta (±3), firmware 8.7.4, se è di fabbrica, che non sia la CPE da sostituire; riconosce la CPE del magazzino. Con un firmware diverso propone l'aggiornamento lì (vedi [Discovery Ubiquiti](#discovery-ubiquiti)).
+   - **AP consigliati** dal GPS del telefono (o dalla posizione dell'intervento): solo AP CDA Net con chiave WPA2, ordinati per segnale stimato e poi per distanza. «Usa» imposta nodo e distretto.
+   - Cliente, PPPoE e posizione; il server prepara il `.cfg` (vedi [PROVISIONING.md](PROVISIONING.md)).
+2. **Scrittura nella CPE**: un solo pulsante, «Installa sulla CPE». L'app entra nella CPE anche se è nuova o resettata, con le credenziali di fabbrica; se il firmware è diverso la porta alla 8.7.4 e aspetta il riavvio; poi verifica board e MAC, scrive e riavvia. Dopo 2 aggiornamenti del firmware non riusciti l'installatore può scrivere comunque con il firmware che ha la CPE, se Impostazioni server lo consente: resta annotato nell'esito.
+3. **Verifica della CPE**: dopo il riavvio l'app rilegge la CPE e convalida la configurazione: SSID previsto, nome di sistema, credenziali CDA Net attive, firmware, PPPoE e cavo LAN.
+4. **Aggancio all'AP**: stato del collegamento (segnale, SNR, modulazione). Se la CPE non si aggancia parte da sola la **scansione degli AP che la CPE sente**: solo gli AP CDA Net, e su richiesta anche le altre reti. Il **consigliato** è quello con segnale migliore; a parità entro 3 dB vince il più vicino. **Aggancia** sposta la CPE su quell'AP:
    - il server consegna la chiave WPA2 del nuovo SSID solo all'app, e l'operazione finisce nel Registro attività senza la chiave;
-   - l'app riscrive SSID e chiave nella CPE via SSH, sblocca un eventuale "Lock to AP" (o lo imposta sul nuovo AP, se richiesto), salva e riavvia;
+   - l'app riscrive SSID e chiave nella CPE via SSH, sblocca un eventuale «Lock to AP» (o lo imposta sul nuovo AP), salva e riavvia;
    - l'app aspetta che la CPE si agganci al nuovo AP.
 
    Se la CPE è già agganciata ma un altro AP si sente meglio di almeno 6 dB, l'app lo segnala.
-5. **Puntamento**: segnale in tempo reale con bip, picco e grafico; direzione, tilt e distanza dell'AP agganciato. Da qui si aprono il **mirino in realtà aumentata** (che mostra anche il segnale della CPE e suona il bip), la bussola, la mappa "Trova l'AP" e il puntamento a schermo intero.
-6. **Verifica finale e collaudo**: segnale, SNR, CINR, modulazione in ricezione e trasmissione, capacità airMAX, segnale lato AP, catene, LAN e PPPoE, con il verdetto delle soglie del NOC. **Apri il collaudo** porta alle misure mediate, al test di velocità dal lato cliente, alle foto e alle note (verbale dalla console).
+5. **Puntamento**: segnale in tempo reale con bip, picco e grafico; direzione, tilt e distanza dell'AP agganciato. Da qui si aprono il **mirino in realtà aumentata** (con il segnale della CPE e il bip), la bussola, la mappa «Trova l'AP» e il puntamento a schermo intero.
+6. **Fine lavori sul tetto**: con il telefono ancora sulla Wi-Fi della CPE, le 10 letture radio del collaudo, l'altezza della CPE dal suolo e le **foto del tetto** (antenna, staffa o palo, cablaggio). In una nuova installazione «Scendi: router del cliente» resta bloccato finché le tre foto non ci sono, così il tecnico non deve risalire.
+7. **Router e velocità**, in casa: il telefono va sulla Wi-Fi del router del cliente (vedi [Speedtest](#speedtest-e-wi-fi-del-cliente)).
+8. **Verifica finale e collaudo**: il collaudo ritrova già pronto quello che è stato fatto (misure, altezza, foto, speedtest) e chiede la foto del router. Si apre da solo a fine installazione.
 
 **CPE già installata: ripuntamento o cambio AP**: salta configurazione e scrittura e parte dal passo 3.
-- L'app riconosce la CPE dai suoi MAC e la cerca tra le installazioni visibili al tecnico: le sue e quelle delle CPE assegnate da Salute CPE.
-- Se la trova, collaudo e foto vanno in quella installazione.
-- Altrimenti (CPE installata prima dell'app) ripuntamento e cambio AP funzionano lo stesso, e il rapporto finale si condivide con il NOC.
+- L'app riconosce la CPE dai suoi MAC (anche il MAC della LAN, quarto byte +1 rispetto all'etichetta) e la cerca tra le installazioni visibili al tecnico: le sue e quelle assegnate da Salute CPE.
+- Se la trova, collaudo e foto vanno in quella installazione, come collaudo nuovo; quelli precedenti restano.
+- Una CPE installata da un collega si può ripuntare se il telefono è dal cliente (GPS entro 500 m dall'installazione): l'accesso dura 24 ore e il NOC lo sa.
+- Una CPE installata prima dell'app si registra con **Registra la CPE**: MAC, modello, nome e SSID dalla CPE, posizione dal GPS (obbligatoria). Il suo collaudo vale come quello di una nuova installazione, con le foto obbligatorie.
+- Se il server non si raggiunge l'app lo dice e riprova da sola al ritorno di Internet.
+
+**Sostituzione**: dalla scheda di un'installazione (vedi [Sostituzione CPE](#sostituzione-cpe)). Alla fine l'app chiede «La CPE smontata funziona?» (Funziona, Guasta, Non so, con una nota facoltativa); la risposta parte con l'esito, anche più tardi. Nello Storico, «CPE smontate da riportare» le elenca.
 
 ### KO, rimandi e ritentativi (v1.32.7)
 
@@ -51,14 +72,20 @@ API: `POST /api/admin/provisioning/jobs/{id}/review` con `{ decision: approved|r
 
 ## Come il telefono raggiunge la CPE
 
-L'app prova da sola, in quest'ordine:
-1. il **gateway della Wi-Fi** a cui è collegato il telefono;
-2. gli **IP LAN dei template** (prima quello del predefinito, es. `192.168.1.254`): telefono sulla Wi-Fi del router del cliente, dietro la CPE;
-3. l'**IP di management** (`CPE_FACTORY_IP`, default `192.168.172.1`): telefono sulla **Wi-Fi di management** della CPE (radio 2,4 GHz dei modelli airMAX AC Gen2), se il template la lascia attiva.
+Il telefono si collega alla CPE in due modi:
+- **Wi-Fi di management della CPE** (radio 2,4 GHz dei modelli airMAX AC Gen2): «Collegati alla Wi-Fi della CPE» (Android 10+) mostra le reti di management delle CPE vicine (es. «LBE-5AC-Gen2:…»). Il tecnico ne tocca una e l'app la usa per la CPE, mentre il telefono resta su Internet con la rete mobile: niente impostazioni Wi-Fi né avvisi «rete senza Internet». «Altre reti Wi-Fi» resta per il router del cliente e per i telefoni più vecchi.
+- **Wi-Fi del router del cliente**, dietro la CPE.
 
-Su ogni indirizzo prova l'interfaccia web di airOS: `https` sulle porte 443 e 20443, poi `http` sulle porte 80 e 20080. Con "IP manuale" si indica direttamente l'indirizzo.
+Poi l'app cerca la CPE da sola, in quest'ordine:
+1. la **discovery Ubiquiti**, qualunque IP abbia la CPE. Se ne rispondono più di una, il tecnico sceglie quella da sistemare; la scelta vale per tutti gli strumenti (barra della CPE in «CPE collegata»);
+2. la CPE già scelta;
+3. il **gateway IPv4 della Wi-Fi**, anche quando la rete annuncia pure un router IPv6;
+4. gli indirizzi abituali: `192.168.1.254` (LAN dei template) e `192.168.172.1` (management, `CPE_FACTORY_IP`);
+5. l'**IP manuale**, sempre disponibile.
 
-Il traffico verso la CPE passa sempre dalla Wi-Fi (anche se la Wi-Fi non ha Internet), mentre il server resta raggiungibile con i dati mobili.
+Su ogni indirizzo l'app prova l'interfaccia web di airOS: `https` sulle porte 443 e 20443, poi `http` sulle porte 80 e 20080 (o le porte annunciate dalla discovery).
+
+Il traffico verso la CPE passa sempre dalla Wi-Fi, anche se la Wi-Fi non ha Internet, mentre il server resta raggiungibile con i dati mobili. Se il Wi-Fi cade durante il lavoro l'app se ne accorge subito; con il Wi-Fi spento chiede di accenderlo.
 
 ## Credenziali
 
@@ -135,22 +162,32 @@ Il rapporto si copia o si condivide con il NOC (WhatsApp, Telegram, email). Non 
 
 ## Soglie
 
-Le decide il server (`server/src/routes/field.ts`, `FIELD_THRESHOLDS`), così il NOC può cambiarle senza pubblicare una nuova app: segnale buono −65 dBm, minimo −75 dBm, CINR 20 dB, sbilanciamento catene 6 dB, capacità minima 100 Mbit/s, porta LAN minima 100 Mbit/s.
+Le decide il server, così il NOC può cambiarle senza pubblicare una nuova app: Impostazioni server → Soglie di collaudo e salute CPE. Valori di serie: segnale buono −65 dBm, minimo −75 dBm, CINR 20 dB, sbilanciamento delle catene 6 dB, capacità minima 100 Mbit/s, porta LAN minima 100 Mbit/s, calo rispetto al collaudo 6 dB.
 
 ## Collaudo dell'installazione
 
-Dall'app: **Storico → job completato → Collaudo**, oppure subito dopo un provisioning riuscito.
+Si apre da solo a fine installazione; altrimenti da **Storico → installazione → Collaudo**. Funziona anche senza Internet (le credenziali della CPE restano sul telefono) e parte appena c'è rete.
 
-1. **Misure radio**: 10 letture in 10 secondi. Il segnale viene mediato (con minimo e massimo) e i controlli della diagnosi vengono applicati alla media.
-2. **Internet dal lato cliente**: con il telefono sulla Wi-Fi del router del cliente, ping e velocità verso il server CDA Net passano dalla nuova linea (mai dai dati mobili). Se il telefono è sulla Wi-Fi di management della CPE, la misura viene segnalata come non eseguita.
-3. **Foto**: fino a 8, con didascalia (Antenna, Staffa/palo, Cablaggio, Router cliente, Altro). Vengono ridotte a 1600 px e raddrizzate prima dell'invio.
-4. **Note** per il NOC.
+1. **Misure radio**: 10 letture in 10 secondi, già fatte a «Fine lavori sul tetto». Il segnale viene mediato (con minimo e massimo) e i controlli della diagnosi vengono applicati alla media.
+2. **Velocità del profilo**: lo speedtest del passo «Router e velocità» (vedi sotto), senza ripeterlo, e la Wi-Fi del router del cliente con SSID, canale, banda e reti vicine.
+3. **Foto**: per una nuova installazione sono obbligatorie antenna, staffa o palo, cablaggio e router del cliente; senza queste il collaudo non si salva (ripuntamenti e sostituzioni ne sono esenti). Fino a 8 foto con il loro tipo, ridotte a 1600 px e raddrizzate. Ogni foto nuova viene controllata: la stessa foto due volte non entra; se sembra mossa, sfocata, troppo scura o quasi uguale a un'altra l'app propone «Rifai la foto» o «Tieni comunque».
+4. **Altezza della CPE** e **note** per il NOC.
 
-L'esito (superato, con riserva, non superato) è calcolato dalle soglie del server. Prima dell'invio l'app manda l'esito del provisioning, se è ancora in coda. Le foto non inviate restano nell'app per riprovare.
+L'esito (superato, con riserva, non superato) è calcolato dalle soglie del server; lo speedtest sotto il minimo porta il collaudo con riserva. Dopo «Salva e invia collaudo» il pulsante diventa «Collaudo inviato». Prima del collaudo l'app manda l'esito del provisioning, se è ancora in coda.
 
-Sul server: `PUT /api/provisioning/jobs/{id}/acceptance` e `POST /api/provisioning/jobs/{id}/photos` (JPEG, max 3 MB, max 8 per job). Le foto sono salvate su disco in `PHOTOS_DIR` (default `photos/` accanto al database, quindi nel volume `/data` del container) e vengono cancellate insieme al job dalla retention GDPR.
+Il **rapporto di collaudo in PDF** si apre («Visualizza rapporto», con il lettore del telefono) o si salva («Scarica PDF», in Download/CDA Net) dallo Storico e dalla schermata Collaudo. Se il NOC ha deciso di segnarlo superato, l'app lo mostra con chi, quando e il motivo.
 
-Nella **console web**, Storico → job, la sezione *Collaudo* mostra misure, controlli, note e foto. Il pulsante **Verbale di installazione** apre un verbale stampabile (o salvabile in PDF) con dati dell'installazione, misure, controlli, foto e spazio per le firme di installatore e cliente.
+Sul server: `PUT /api/provisioning/jobs/{id}/acceptance` e `POST /api/provisioning/jobs/{id}/photos` (JPEG, max 3 MB, max 8 per installazione, con il tipo). Le foto sono salvate su disco in `PHOTOS_DIR` (di serie `photos/` accanto al database, quindi nel volume `/data` del container) e vengono cancellate insieme all'installazione dalla retention. Nella console, Storico → installazione, la sezione *Collaudo* mostra misure, controlli, speedtest, note e foto, e il rapporto in PDF (vedi [NOC.md](NOC.md#storico-provisioning-e-collaudi)).
+
+## Speedtest e Wi-Fi del cliente
+
+Il passo **Router e velocità** dell'installazione (e degli interventi):
+- il telefono va sulla Wi-Fi del router del cliente, mai sui dati mobili. Sotto la soglia di segnale del telefono il test è bloccato con «Avvicinati al router»; tra avviso e blocco compare un avviso (Impostazioni server → Collaudo: speedtest e Wi-Fi);
+- l'app legge canale e larghezza della rete del router, conta le reti sullo stesso canale e quelle sovrapposte e consiglia cosa cambiare;
+- poi lo **speedtest Ookla** verso il server di speedtest di CDA Net (download, upload, ping e jitter, 4 connessioni) confrontato con il profilo del cliente al minimo impostato (80%). L'upload conta solo i dati che il server conferma, con richieste da 64 KB a 4 MB secondo la velocità della linea;
+- sotto il minimo: la lista delle cose da controllare e «Ripeti il test» senza limiti. Se il tecnico prosegue lo stesso, il collaudo va con riserva.
+
+Il profilo del cliente (da ISP Billing, anche con il solo MAC della CPE) si scarica già in Oggi e alla preparazione: se dalla Wi-Fi del cliente il server non si raggiunge, l'app lo usa e lo dice («server non raggiungibile, la prova resta sul telefono»), riprovando ogni 20 secondi. Ogni prova si salva sul server, anche più tardi. Lo **Speedtest (server CDA Net)** c'è anche in Strumenti.
 
 ## Sostituzione CPE
 
@@ -175,11 +212,12 @@ La bussola serve per il puntamento grossolano; quello fine si fa con il segnale 
 
 ## Verifica copertura (area "Copertura")
 
-Quinta area della barra in basso (dopo Installa) e scorciatoia in Oggi, con il modulo Copertura attivo. Serve prima del sopralluogo: indirizzo, coordinate, GPS del telefono o tocco sulla mappa; per ogni AP segnale stimato, direzione, **Collegamento** (tocco sulla scheda o pulsante: puntamento vero e magnetico, inclinazione, Fresnel, capacità, segnale atteso sulla scala MCS, profilo; CPE da installare consigliata o scelta e altezza ± che ricalcolano la verifica; rumore dell'AP solo per gli admin) e **Bussola**. Lo stesso pannello è nella Copertura web degli installatori, senza posizione esatta dell'AP né dati di carico.
-- **Installatori**: solo gli AP assegnati (POP o AP), in posizione approssimativa, e al massimo il numero impostato in Impostazioni server; lo filtra il server (`/api/coverage`), non l'app.
-- **Admin**: tutti gli AP sulla mappa (da `/api/network/status`), ricerca per nome dell'AP, fino a 10 risultati e **Simula copertura** (`/api/admin/coverage/simulation`) con la stessa scala colori della console.
+Quinta area della barra in basso e scorciatoia in Oggi, con il modulo Copertura. Serve prima del sopralluogo: indirizzo, coordinate, GPS del telefono o tocco sulla mappa; per ogni AP segnale stimato, modulazione, capacità e velocità la sera, direzione, **Collegamento** (puntamento vero e magnetico, inclinazione, Fresnel, segnale atteso sulla scala delle modulazioni, profilo; CPE da installare consigliata o scelta e altezza ± che ricalcolano la verifica) e **Bussola**. Sotto: gli altri operatori nel punto per bollino AGCOM e le **verifiche salvate**.
+- **Installatori**: solo gli AP assegnati, in posizione approssimativa, entro 20 km e al massimo il numero impostato in Impostazioni server; lo filtra il server (`/api/coverage`), non l'app.
+- **Amministratori**: tutti gli AP sulla mappa, ricerca per nome dell'AP, **raggio di ricerca** da 10 a 100 km (oltre 20 km «troppo lontano»), **Simula copertura**, vista **3D** e **Realtà aumentata**.
+- **Simulazione A → B** (amministratori e Specialist): due punti scelti sulla mappa, con il GPS o con le coordinate, e il collegamento tra loro con profilo, segnale e modulazione; con la linea ostruita contano la diffrazione pura e il segnale fisico.
 
-La mappa è la pagina `/map-embed.html` del server; i tocchi tornano all'app tramite l'interfaccia JavaScript `CdaApp`, aggiunta solo su quella pagina.
+Tutto il calcolo è descritto in [COPERTURA.md](COPERTURA.md). La mappa è la pagina `/map-embed.html` del server; i tocchi tornano all'app tramite l'interfaccia JavaScript `CdaApp`, aggiunta solo su quella pagina.
 
 ## Trova l'AP (mappa, lista e mirino in fotocamera)
 
@@ -296,13 +334,13 @@ La stessa discovery serve anche negli altri flussi:
 
   Le reti vicine pesano in base al segnale.
 
-### Collaudo senza rete
+### Lavoro senza rete
 
-Misure, note e foto vengono **sempre** salvate prima nella memoria privata dell'app e poi inviate da una coda:
+Collaudi, esiti, speedtest, foto, segnalazioni e CPE smontate vengono **sempre** salvati prima nella memoria privata dell'app e poi inviati da una coda:
 - se c'è rete partono subito;
-- altrimenti restano sul telefono e vengono ritentate dopo il login e ogni 2 minuti, oppure a mano da Impostazioni → *Invia collaudi ora*. Prima viene sempre inviato l'esito del provisioning.
+- altrimenti restano sul telefono e partono appena torna Internet, oppure a mano da Impostazioni → *Invia collaudi ora*. Prima viene sempre inviato l'esito del provisioning. Lo stesso collaudo inviato due volte dalla coda resta uno solo.
 
-La Home e le Impostazioni mostrano quanti collaudi e foto sono in attesa. Le foto inviate vengono cancellate dal telefono.
+Oggi e Impostazioni mostrano quanti collaudi e foto sono in attesa. Le foto inviate vengono cancellate dal telefono. La configurazione preparata resta cifrata sul telefono fino alla scadenza: se Android chiude l'app sul tetto, alla riapertura senza rete «Riprendi l'intervento» riparte dalla scrittura. Cambiando account sul telefono, l'intervento lasciato aperto e le configurazioni preparate del precedente vengono cancellati.
 
 ## Strumenti di rete professionali (v1.13)
 
@@ -346,6 +384,7 @@ Strumento locale: tutto avviene dal telefono collegato alla Wi-Fi della LAN, nul
 - Ricerca di telecamere, NVR e DVR Hikvision con il protocollo SADP (UDP 37020): sonda inviata due volte in multicast e broadcast, risposte ascoltate anche sul gruppo multicast (molti apparati rispondono lì).
 - Per ogni dispositivo: modello, seriale, firmware, MAC, IP/maschera/gateway, DHCP o statico, porte HTTP e SDK, canali, Hik-Connect e **stato di attivazione**: quelli **non attivati** (password di amministrazione ancora da impostare) sono evidenziati in cima.
 - Azioni: interfaccia web, verifica porte (HTTP, HTTPS, RTSP, SDK), "Usa per RTSP" che compila l'anteprima dello stream.
+- Attivazione e cambio di IP, subnet e gateway: con il SADP Tool di Hikvision da PC (in LAN o in Wi-Fi sulla stessa rete, anche tra subnet diverse) o dalla pagina web del dispositivo nella sua stessa subnet. I passi sono nella guida installatore («Attivare una telecamera Hikvision e cambiarne l'indirizzo»); l'app non tratta le password delle telecamere.
 
 ### Port scanner
 - Preset (top 30, apparati di rete, TVCC/NVR, Windows/server, database, stampanti, prime 1024) o elenco libero come `1-1024,8291,8728,20443` (fino a 10.000 porte).
@@ -362,3 +401,13 @@ Strumento locale: tutto avviene dal telefono collegato alla Wi-Fi della LAN, nul
 - **Wake-on-LAN**: magic packet in broadcast (UDP 9 e 7).
 
 Il produttore dei MAC compare anche nella scansione e nella tabella ARP degli Strumenti di rete della console web.
+
+## Strumenti degli amministratori nell'app
+
+Agli amministratori (e al direttore tecnico, dove indicato in [NOC.md](NOC.md)) l'app dà anche:
+- **Rete → Stato rete**, **IA-AP** (con «Ottimizza…»), **Salute CPE** con **Gestisci** (la CPE come nell'app di UISP), **Guasti Enel** con le zone condivise;
+- **Calendario** con nuovo intervento, modifica, spostamento e annullamento;
+- **Copertura** completa (vedi sopra);
+- nel collaudo, «Segna come superato» con il motivo.
+
+Gli screenshot sono sempre permessi agli amministratori; per installatori e partner l'app li blocca, salvo il modulo «Screenshot nell'app» attivo per quell'account (vedi [SECURITY.md](../SECURITY.md#app-android)).

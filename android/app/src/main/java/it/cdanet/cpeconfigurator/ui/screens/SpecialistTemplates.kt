@@ -65,6 +65,7 @@ import it.cdanet.cpeconfigurator.ui.ListHeader
 import it.cdanet.cpeconfigurator.ui.Notice
 import it.cdanet.cpeconfigurator.ui.NoticeKind
 import it.cdanet.cpeconfigurator.ui.PrimaryButton
+import it.cdanet.cpeconfigurator.ui.SecondaryButton
 import it.cdanet.cpeconfigurator.ui.SectionCard
 import it.cdanet.cpeconfigurator.ui.Segmented
 import it.cdanet.cpeconfigurator.ui.SkeletonRows
@@ -90,6 +91,7 @@ private val TEMPLATE_ERRORS = mapOf(
     "too_many_placeholders" to "troppi segnaposto (al massimo 40)",
     "users_password_requires_hash_placeholder" to "users.N.password deve usare \${CPE_PASSWORD_HASH}, non \${CPE_PASSWORD}",
     "non_key_value_lines" to "alcune righe non sono nel formato chiave=valore",
+    "literal_secrets" to "il testo contiene una chiave o una password in chiaro (Wi-Fi, PPPoE, community SNMP, chiave UISP, password admin): i colleghi del tuo gruppo di lavoro leggono il testo. Usa i segnaposto, es. \${WPA2_PSK}, e tieni la chiave nel template, cifrata.",
 )
 
 private fun templateError(code: String) = TEMPLATE_ERRORS[code] ?: code
@@ -100,8 +102,8 @@ private val FILLED_FROM = mapOf(
     "mac" to "dalla CPE letta (MAC)",
     "serial" to "dalla CPE letta (seriale)",
     "cpe" to "dalle credenziali scritte nel flusso",
-    "template" to "dalla community del template, o scritta nel flusso",
-    "connector" to "dal connettore UISP dell'azienda, o scritta nel flusso",
+    "template" to "dal template (cifrata, la imposta chi l'ha creato), o scritta nel flusso",
+    "connector" to "dal connettore UISP dell'azienda, o scritta nel flusso (facoltativa: vuota, la CPE resta senza UISP)",
     "name" to "dal nome della CPE",
 )
 
@@ -166,6 +168,8 @@ fun SpecialistTemplateList(c: AppContainer, onEdit: () -> Unit) {
                                                 template = full.template,
                                                 boardMatch = full.boardMatch,
                                                 snmpSet = full.secretsSet.snmpCommunity,
+                                                wpa2Set = full.secretsSet.wpa2Psk,
+                                                author = full.author.takeIf { !full.mine },
                                                 sha256 = full.sha256,
                                                 updatedAt = full.updatedAt,
                                             ),
@@ -181,6 +185,8 @@ fun SpecialistTemplateList(c: AppContainer, onEdit: () -> Unit) {
                 ) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Text(t.name, style = MaterialTheme.typography.titleSmall, maxLines = 1, overflow = TextOverflow.Ellipsis, modifier = Modifier.weight(1f))
+                        // a template of another member of the group (issue #275)
+                        if (!t.mine) StatusChip("di ${t.author}", NoticeKind.Info)
                         if (t.own.isNotEmpty()) StatusChip("${t.own.size} tuoi", NoticeKind.Info)
                     }
                     Text(
@@ -229,7 +235,8 @@ private fun NewTemplateDialog(c: AppContainer, meta: SpecTemplateFormDto, onDism
         text = {
             Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                 Dropdown("Modello della CPE", meta.models, model, { it }, { model = it; cdaPick = null }, Modifier.fillMaxWidth())
-                Segmented(listOf("form" to "Modulo", "cpe" to "Dalla CPE", "cda" to "CDA Net"), from, { from = it })
+                // CDA Net's templates: CDA Net's work, only with «visibilità piena» (issue #275)
+                Segmented(listOfNotNull("form" to "Modulo", "cpe" to "Dalla CPE", ("cda" to "CDA Net").takeIf { c.session.seesAll }), from, { from = it })
                 when (from) {
                     "form" -> Text("Una configurazione airOS completa (Station, Router, PPPoE): la modifichi dal modulo come l'interfaccia della CPE.", style = MaterialTheme.typography.bodySmall)
                     "cpe" -> {
@@ -310,19 +317,22 @@ private fun NewTemplateDialog(c: AppContainer, meta: SpecTemplateFormDto, onDism
     )
 }
 
-/** The editor of one template (a screen of its own): the form like the CPE's web interface, the values, the text. */
+/**
+ * The editor of one template (a screen of its own): the form like the CPE's web interface, the
+ * values, the text. [onUse]: to «Nuova CPE» with this template chosen, the configuration first.
+ */
 @Composable
-fun SpecialistTemplateEditor(c: AppContainer, onClose: () -> Unit) {
+fun SpecialistTemplateEditor(c: AppContainer, onClose: () -> Unit, onUse: () -> Unit = onClose) {
     val open = c.specialist.editing.collectAsState().value
     if (open == null) {
         EmptyState(R.drawable.ic_memory, "Nessun template aperto", "Torna all'elenco dei template.")
         return
     }
-    key(open) { TemplateEditorBody(c, open, onClose) }
+    key(open) { TemplateEditorBody(c, open, onClose, onUse) }
 }
 
 @Composable
-private fun TemplateEditorBody(c: AppContainer, open: SpecEditorOpen, onClose: () -> Unit) {
+private fun TemplateEditorBody(c: AppContainer, open: SpecEditorOpen, onClose: () -> Unit, onUse: () -> Unit) {
     val scope = rememberCoroutineScope()
     var meta by remember { mutableStateOf<SpecTemplateFormDto?>(null) }
     var form by remember { mutableStateOf<SpecFormStateDto?>(null) }
@@ -333,6 +343,10 @@ private fun TemplateEditorBody(c: AppContainer, open: SpecEditorOpen, onClose: (
     var snmp by remember { mutableStateOf("") }
     var snmpSet by remember { mutableStateOf(open.snmpSet) }
     var removeSnmp by remember { mutableStateOf(false) }
+    // the Wi-Fi key of the company's AP (titolare, 17/10/2026): sealed like the community
+    var wpa2 by remember { mutableStateOf("") }
+    var wpa2Set by remember { mutableStateOf(open.wpa2Set) }
+    var removeWpa2 by remember { mutableStateOf(false) }
     var section by remember { mutableStateOf("wireless") }
     var text by remember { mutableStateOf<String?>(null) }
     var busy by remember { mutableStateOf<String?>(null) }
@@ -398,14 +412,17 @@ private fun TemplateEditorBody(c: AppContainer, open: SpecEditorOpen, onClose: (
         }
         val id = savedId
         val r = if (id == null) {
-            c.api.specCreateTemplate(open.model, name.trim(), cur.template, boardMatch.trim(), notes.trim(), snmp.ifEmpty { null })
+            c.api.specCreateTemplate(open.model, name.trim(), cur.template, boardMatch.trim(), notes.trim(), snmp.ifEmpty { null }, wpa2.ifEmpty { null })
         } else {
-            c.api.specUpdateTemplate(id, name.trim(), cur.template, boardMatch.trim(), notes.trim(), snmp.ifEmpty { null }, removeSnmp)
+            c.api.specUpdateTemplate(id, name.trim(), cur.template, boardMatch.trim(), notes.trim(), snmp.ifEmpty { null }, removeSnmp, wpa2.ifEmpty { null }, removeWpa2)
         }
         savedId = r.id
         snmpSet = r.secretsSet.snmpCommunity
         snmp = ""
         removeSnmp = false
+        wpa2Set = r.secretsSet.wpa2Psk
+        wpa2 = ""
+        removeWpa2 = false
         dirty = false
         saved = "Template «${r.name}» salvato · ${r.sha256.take(12)}…"
         c.specialist.templatesChanged()
@@ -426,6 +443,10 @@ private fun TemplateEditorBody(c: AppContainer, open: SpecEditorOpen, onClose: (
     val m = meta
     Column(verticalArrangement = Arrangement.spacedBy(12.dp), modifier = Modifier.padding(bottom = 24.dp)) {
         SectionCard(if (savedId == null) "Nuovo template · ${open.model}" else "Template · ${open.model}", icon = R.drawable.ic_memory) {
+            // a template of a colleague of the group (Carmelo, 18/10/2026): only its author changes it
+            open.author?.let { a ->
+                Notice("Template di $a, del tuo gruppo di lavoro: lo usi nel flusso con i tuoi valori e i tuoi segreti; lo modifica e lo elimina solo $a.", NoticeKind.Info)
+            }
             if (savedId != null && open.updatedAt.isNotBlank()) {
                 Text("Ultima modifica ${localTime(open.updatedAt)} · SHA-256 ${open.sha256.take(16)}…", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
@@ -517,6 +538,37 @@ private fun TemplateEditorBody(c: AppContainer, open: SpecEditorOpen, onClose: (
                             )
                         }
                     }
+                    if (section == "wireless") {
+                        val uses = "WPA2_PSK" in fs.report.placeholders
+                        Field(
+                            "Chiave Wi-Fi (WPA2)",
+                            wpa2,
+                            {
+                                wpa2 = it.take(64)
+                                dirty = true
+                            },
+                            password = true,
+                            readOnly = removeWpa2 || open.author != null,
+                            supporting = when {
+                                // the secrets of a template are its author's (issue #275)
+                                open.author != null -> "La imposta solo ${open.author}, che ha creato il template, e vale solo per le sue installazioni: nelle tue la scrivi nel flusso per ogni CPE."
+                                wpa2Set && !removeWpa2 -> "Impostata: lascia vuoto per non cambiarla. Cifrata, mai mostrata. Vale solo per le tue installazioni."
+                                uses -> "Facoltativa: la chiave dell'AP dell'azienda, da 8 a 63 caratteri. Senza, la scrivi nel flusso per ogni CPE. Cifrata, mai mostrata."
+                                else -> "Il template non usa \${WPA2_PSK}."
+                            },
+                        )
+                        if (wpa2Set && open.author == null) {
+                            Row(verticalAlignment = Alignment.CenterVertically) {
+                                Switch(checked = removeWpa2, onCheckedChange = {
+                                    removeWpa2 = it
+                                    if (it) wpa2 = ""
+                                    dirty = true
+                                })
+                                Spacer(Modifier.width(10.dp))
+                                Text("Rimuovi la chiave da questo template", style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    }
                     if (section == "services") {
                         val uses = "SNMP_COMMUNITY" in fs.report.placeholders
                         Field(
@@ -527,14 +579,16 @@ private fun TemplateEditorBody(c: AppContainer, open: SpecEditorOpen, onClose: (
                                 dirty = true
                             },
                             password = true,
-                            readOnly = removeSnmp,
+                            readOnly = removeSnmp || open.author != null,
                             supporting = when {
-                                snmpSet && !removeSnmp -> "Impostata: lascia vuoto per non cambiarla. Cifrata, mai mostrata."
+                                // the secrets of a template are its author's (issue #275)
+                                open.author != null -> "La imposta solo ${open.author}, che ha creato il template, e vale solo per le sue installazioni: nelle tue la scrivi nel flusso per ogni CPE."
+                                snmpSet && !removeSnmp -> "Impostata: lascia vuoto per non cambiarla. Cifrata, mai mostrata. Vale solo per le tue installazioni."
                                 uses -> "Facoltativa: senza, la scrivi nel flusso per ogni CPE. Cifrata, mai mostrata."
                                 else -> "Il template non usa \${SNMP_COMMUNITY}."
                             },
                         )
-                        if (snmpSet) {
+                        if (snmpSet && open.author == null) {
                             Row(verticalAlignment = Alignment.CenterVertically) {
                                 Switch(checked = removeSnmp, onCheckedChange = {
                                     removeSnmp = it
@@ -556,11 +610,21 @@ private fun TemplateEditorBody(c: AppContainer, open: SpecEditorOpen, onClose: (
         }
         ErrorBanner(error) { error = null }
         saved?.let { Notice(it, NoticeKind.Good) }
-        BusyButton("Salva template", busy == "save", Modifier.fillMaxWidth(), enabled = busy == null && fs != null) {
-            scope.launch { step("save") { save() } }
+        if (open.author == null) {
+            BusyButton("Salva template", busy == "save", Modifier.fillMaxWidth(), enabled = busy == null && fs != null) {
+                scope.launch { step("save") { save() } }
+            }
+        }
+        // saved: the configuration of a CPE with it, without the CPE's Wi-Fi (the CPE comes after)
+        val usable = savedId
+        if (usable != null && !dirty) {
+            SecondaryButton(onClick = {
+                c.specialist.updateForm { it.copy(templateId = usable) }
+                onUse()
+            }, modifier = Modifier.fillMaxWidth(), enabled = busy == null) { Text("Prepara una configurazione con questo template") }
         }
         Row(verticalAlignment = Alignment.CenterVertically) {
-            if (savedId != null) TextButton(onClick = { confirmDelete = true }, enabled = busy == null) { Text("Elimina template") }
+            if (savedId != null && open.author == null) TextButton(onClick = { confirmDelete = true }, enabled = busy == null) { Text("Elimina template") }
             Spacer(Modifier.weight(1f))
             TextButton(onClick = { if (dirty) askClose = true else onClose() }) { Text("Chiudi") }
         }
@@ -648,7 +712,11 @@ private fun PlaceholdersCard(fs: SpecFormStateDto, meta: SpecTemplateFormDto) {
                 Column(Modifier.weight(1f)) {
                     Text("\${$p}", style = MaterialTheme.typography.bodyMedium, fontFamily = FontFamily.Monospace)
                     Text(
-                        (k?.label ?: "Tuo") + " · " + (FILLED_FROM[k?.from ?: "typed"] ?: "scritto nel flusso per ogni CPE"),
+                        (k?.label ?: "Tuo") + " · " + when {
+                            // a CPE in bridge cannot use PPPoE (owner, 18/10/2026): the server says which are not asked
+                            p in fs.report.unused -> "non chiesto: la CPE non usa il PPPoE (bridge o PPPoE spento), la riga resta vuota"
+                            else -> FILLED_FROM[k?.from ?: "typed"] ?: "scritto nel flusso per ogni CPE"
+                        },
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )

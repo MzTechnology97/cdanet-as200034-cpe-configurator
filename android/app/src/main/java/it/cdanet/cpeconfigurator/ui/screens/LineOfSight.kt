@@ -193,6 +193,12 @@ private fun LinkFacts(d: LosDto, bearing: Int?, estimate: SignalEstimateDto?, la
         if (last != null) add(Triple("Antenna AP", "${fmt(last.los - last.ground)} m", "${last.los.roundToInt()} m s.l.m."))
         estimate?.signalDbm?.let { add(Triple("Segnale stimato", "$it dBm", if (estimate.low != null) "${estimate.low}…${estimate.high} dBm" else "")) }
     }
+    FactGrid(facts)
+}
+
+/** Figures of a link two per row: label, value and a note under it. */
+@Composable
+internal fun FactGrid(facts: List<Triple<String, String, String>>) {
     Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
         facts.chunked(2).forEach { row ->
             Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -257,7 +263,7 @@ private fun CpeControls(k: LinkControls, d: LosDto) {
  * the AP, from the server), not the signal alone; the bar fills with the SNR, the reached one lit.
  */
 @Composable
-private fun SignalBar(e: SignalEstimateDto?) {
+internal fun SignalBar(e: SignalEstimateDto?) {
     val dbm = e?.signalDbm ?: return
     val snr = e.snrDb ?: (dbm + 92)
     val reached = e.mcs ?: mcsReached(snr)
@@ -290,7 +296,7 @@ private fun SignalBar(e: SignalEstimateDto?) {
 }
 
 @Composable
-private fun ProfileChart(d: LosDto) {
+internal fun ProfileChart(d: LosDto, ends: Pair<String, String> = "CPE" to "AP") {
     val st = StatusPalette
     val ground = MaterialTheme.colorScheme.outline
     val groundFill = MaterialTheme.colorScheme.surfaceContainerHighest
@@ -369,7 +375,7 @@ private fun ProfileChart(d: LosDto) {
         // line of sight and the two antennas on their masts
         drawLine(sight, Offset(x(pts.first().d), y(pts.first(), pts.first().los)), Offset(x(pts.last().d), y(pts.last(), pts.last().los)), strokeWidth = 2.5.dp.toPx())
         val label = android.graphics.Paint().apply { isAntiAlias = true; textSize = 11.dp.toPx(); isFakeBoldText = true; color = ink.toArgb() }
-        listOf(pts.first() to "CPE", pts.last() to "AP").forEachIndexed { i, (p, name) ->
+        listOf(pts.first() to ends.first, pts.last() to ends.second).forEachIndexed { i, (p, name) ->
             drawLine(ink, Offset(x(p.d), y(p, p.ground)), Offset(x(p.d), y(p, p.los)), strokeWidth = 2.dp.toPx())
             drawCircle(DataColors.CpeEnd, 5.dp.toPx(), Offset(x(p.d), y(p, p.los)))
             label.textAlign = if (i == 0) android.graphics.Paint.Align.LEFT else android.graphics.Paint.Align.RIGHT
@@ -396,7 +402,7 @@ private fun ProfileChart(d: LosDto) {
 
 
 /** Beyond this extra height a mast is not a realistic answer: another AP is. */
-private const val MAX_MAST_M = 12.0
+internal const val MAX_MAST_M = 12.0
 
 private fun fmt(v: Double) = if (abs(v % 1.0) < 0.05) v.roundToInt().toString() else "%.1f".format(java.util.Locale.ITALY, v)
 

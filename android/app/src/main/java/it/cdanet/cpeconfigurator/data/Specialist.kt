@@ -29,8 +29,9 @@ data class SpecFactsDto(
     val mode: String get() = (if (wirelessMode == "ap") "Access Point" else "Station") + (if (ptp) " PtP" else " PtMP") + " · " + (if (netMode == "bridge") "Bridge" else "Router")
 }
 
+/** Which secrets the template keeps (sealed on the server, never returned): its author's. */
 @Serializable
-data class SpecSecretsSetDto(val snmpCommunity: Boolean = false)
+data class SpecSecretsSetDto(val snmpCommunity: Boolean = false, val wpa2Psk: Boolean = false)
 
 @Serializable
 data class SpecTemplateDto(
@@ -46,6 +47,11 @@ data class SpecTemplateDto(
     val own: List<String> = emptyList(),
     val secretsSet: SpecSecretsSetDto = SpecSecretsSetDto(),
     val jobs: Int = 0,
+    /** Who made it: he, or another specialist of his work groups (issue #275). */
+    val authorId: Int? = null,
+    val author: String = "",
+    /** His own: he deletes it and sets its secrets; with another's he types them in the flow. */
+    val mine: Boolean = true,
     val createdAt: String = "",
     val updatedAt: String = "",
     /** The text, only when one template is read. */
@@ -76,9 +82,12 @@ data class SpecConnectorDto(
 @Serializable
 data class SpecConnectorsDto(val items: List<SpecConnectorDto> = emptyList())
 
-/** A value typed for each CPE: a placeholder of the template the server does not fill by itself. */
+/**
+ * A value typed for each CPE: a placeholder of the template the server does not fill by itself.
+ * [optional]: it may stay empty (the company's UISP key: without it the CPE has UISP off).
+ */
 @Serializable
-data class SpecAskedDto(val name: String, val label: String = "", val secret: Boolean = false, val own: Boolean = false)
+data class SpecAskedDto(val name: String, val label: String = "", val secret: Boolean = false, val own: Boolean = false, val optional: Boolean = false)
 
 @Serializable
 data class SpecValuesDto(val placeholders: List<String> = emptyList(), val asked: List<SpecAskedDto> = emptyList())
@@ -99,7 +108,8 @@ data class SpecJobRequest(
     val connectorId: Int? = null,
     val company: String? = null,
     val model: String,
-    val mac: String,
+    /** Null (with serial, firmware, host): prepared before connecting to the CPE, read at the write. */
+    val mac: String? = null,
     val serial: String? = null,
     val firmware: String? = null,
     val host: String? = null,
@@ -121,6 +131,8 @@ data class SpecResultDto(
     val error: String = "",
     val detected: DetectedDto = DetectedDto(),
     val completedAt: String? = null,
+    /** The CPE written (MAC and serial read over SSH), for a configuration prepared before connecting to it. */
+    val cpe: CpeIdDto? = null,
 )
 
 @Serializable
@@ -164,11 +176,22 @@ data class SpecAcceptanceDto(
 data class SpecConnectorRefDto(val id: Int, val name: String = "")
 
 @Serializable
-data class SpecUispDto(val deviceId: String? = null, val siteId: String? = null, val site: String = "", val authorizedAt: String? = null, val error: String = "")
+data class SpecUispDto(
+    val deviceId: String? = null,
+    val siteId: String? = null,
+    val site: String = "",
+    val authorizedAt: String? = null,
+    val error: String = "",
+    /** Written with UISP off (no key of the company): nothing to authorize. */
+    val off: Boolean = false,
+)
 
 @Serializable
 data class SpecJobDto(
     val id: String,
+    /** Who installed it: he, or another specialist of his work groups (read only for him, issue #275). */
+    val authorId: Int? = null,
+    val author: String = "",
     val createdAt: String = "",
     val completedAt: String? = null,
     val status: String = "prepared",
@@ -178,6 +201,8 @@ data class SpecJobDto(
     val templateId: Int? = null,
     val mac: String = "",
     val serial: String = "",
+    /** Prepared before connecting to the CPE: MAC and serial are the ones read at the write (empty until then). */
+    val cpeAtWrite: Boolean = false,
     val firmware: String = "",
     val deviceName: String = "",
     val ssid: String = "",
@@ -193,9 +218,12 @@ data class SpecJobDto(
     val acceptance: SpecAcceptanceDto? = null,
     val uisp: SpecUispDto = SpecUispDto(),
 ) {
-    /** Written, with a company's UISP, and not yet authorized there. */
-    val toAuthorize: Boolean get() = status == "success" && connector != null && uisp.authorizedAt == null
-    val title: String get() = customer.ifBlank { deviceName }.ifBlank { mac }
+    /** Written, with a company's UISP, and not yet authorized there (never with UISP off). */
+    val toAuthorize: Boolean get() = status == "success" && connector != null && uisp.authorizedAt == null && !uisp.off
+    val title: String get() = customer.ifBlank { deviceName }.ifBlank { mac }.ifBlank { model }
+
+    /** The CPE in a line: its MAC, or why there is none yet. */
+    val macLabel: String get() = mac.ifBlank { if (cpeAtWrite) "MAC letto alla scrittura" else "" }
 }
 
 @Serializable
@@ -282,6 +310,8 @@ data class SpecReportDto(
     val warnings: List<String> = emptyList(),
     val placeholders: List<String> = emptyList(),
     val own: List<String> = emptyList(),
+    /** Never asked for this template (PPPoE in bridge): the server decides. */
+    val unused: List<String> = emptyList(),
     val lines: Int = 0,
 )
 
@@ -383,7 +413,7 @@ suspend fun ApiClient.specAutoTemplate(model: String, backup: String): SpecFormS
     AppJson.decodeFromString(SpecFormStateDto.serializer(), request("POST", "/api/specialist/form/${enc(model)}/autotemplate", buildJsonObject { put("backup", backup) }))
 
 /** A new template of his ([snmpCommunity]: sealed apart, never returned). */
-suspend fun ApiClient.specCreateTemplate(model: String, name: String, template: String, boardMatch: String, notes: String, snmpCommunity: String?): SpecTemplateDto =
+suspend fun ApiClient.specCreateTemplate(model: String, name: String, template: String, boardMatch: String, notes: String, snmpCommunity: String?, wpa2Psk: String? = null): SpecTemplateDto =
     AppJson.decodeFromString(
         SpecTemplateDto.serializer(),
         request("POST", "/api/specialist/templates", buildJsonObject {
@@ -393,11 +423,25 @@ suspend fun ApiClient.specCreateTemplate(model: String, name: String, template: 
             if (boardMatch.isNotBlank()) put("boardMatch", boardMatch)
             put("notes", notes)
             snmpCommunity?.takeIf { it.isNotEmpty() }?.let { put("snmpCommunity", it) }
+            wpa2Psk?.takeIf { it.isNotEmpty() }?.let { put("wpa2Psk", it) }
         }),
     )
 
-/** Changes to a template: [snmpCommunity] a value replaces it, [removeCommunity] removes it, else it stays. */
-suspend fun ApiClient.specUpdateTemplate(id: Int, name: String, template: String, boardMatch: String, notes: String, snmpCommunity: String?, removeCommunity: Boolean): SpecTemplateDto =
+/**
+ * Changes to a template: [snmpCommunity] a value replaces it, [removeCommunity] removes it, else it
+ * stays; the same for the Wi-Fi key of the AP ([wpa2Psk], [removeKey]).
+ */
+suspend fun ApiClient.specUpdateTemplate(
+    id: Int,
+    name: String,
+    template: String,
+    boardMatch: String,
+    notes: String,
+    snmpCommunity: String?,
+    removeCommunity: Boolean,
+    wpa2Psk: String? = null,
+    removeKey: Boolean = false,
+): SpecTemplateDto =
     AppJson.decodeFromString(
         SpecTemplateDto.serializer(),
         request("PATCH", "/api/specialist/templates/$id", buildJsonObject {
@@ -408,6 +452,10 @@ suspend fun ApiClient.specUpdateTemplate(id: Int, name: String, template: String
             when {
                 !snmpCommunity.isNullOrEmpty() -> put("snmpCommunity", snmpCommunity)
                 removeCommunity -> put("snmpCommunity", kotlinx.serialization.json.JsonNull)
+            }
+            when {
+                !wpa2Psk.isNullOrEmpty() -> put("wpa2Psk", wpa2Psk)
+                removeKey -> put("wpa2Psk", kotlinx.serialization.json.JsonNull)
             }
         }),
     )

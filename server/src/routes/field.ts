@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { HttpError, isStaff } from '../auth.ts';
+import { HttpError, seesAll } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { nowIso, recordEvent } from '../db.ts';
 import { SSID_RX, TARGET_FIRMWARE, parseClientHeader, parseMac, versionAtLeast, macSiblings, deviceNameFromCustomer, REPOINT_GRANT_HOURS, REPOINT_CLAIM_MAX_M } from '../domain/policy.ts';
@@ -28,7 +28,9 @@ export const FIELD_THRESHOLDS = {
 } as const;
 
 export function fieldRoutes(app: FastifyInstance, ctx: AppContext) {
-  const user = { preHandler: [ctx.auth.requireUser, ctx.modules.require('field_alignment', 'field_diagnosis', 'acceptance')] };
+  // CDA Net's CPEs and their keys: not for a specialist without «visibilità piena» (issue #275); his
+  // own CPEs have the credentials typed in his flow
+  const user = { preHandler: [ctx.auth.requireCdaWork, ctx.modules.require('field_alignment', 'field_diagnosis', 'acceptance')] };
 
   /** Secrets go only to the Android app, at the minimum version. */
   const trustedClient = (header: string | undefined) => {
@@ -129,7 +131,7 @@ export function fieldRoutes(app: FastifyInstance, ctx: AppContext) {
     const q = z.object({ macs: z.string().max(200) }).parse(req.query);
     const macs = [...new Set(q.macs.split(',').map((m) => parseMac(m)).filter((m): m is string => !!m))].slice(0, 8);
     if (!macs.length) throw new HttpError(400, 'invalid_mac');
-    const admin = isStaff(req.user!.role);
+    const admin = seesAll(req.user!);
     // the user's own installations (or the CPEs assigned to them) on these MACs, newest first
     const find = (list: string[]) =>
       list.length
@@ -187,7 +189,7 @@ export function fieldRoutes(app: FastifyInstance, ctx: AppContext) {
     if (!job) return { job: null };
     const { userId, ...view } = job;
     const me = req.user!;
-    if (userId !== me.id && !isStaff(me.role)) {
+    if (userId !== me.id && !seesAll(me)) {
       // on site only: the installation's position (or its work order's) against the phone's GPS
       const at = ctx.db
         .prepare('SELECT COALESCE(j.latitude, w.lat) lat, COALESCE(j.longitude, w.lon) lon FROM provisioning_jobs j LEFT JOIN work_orders w ON w.id = j.work_order_id WHERE j.id = ?')

@@ -39,14 +39,89 @@ async function setup() {
 }
 
 describe('Specialist', () => {
-  it('sees everything like an admin, the management stays with the admins', async () => {
+  it('his own work and the technical tools; CDA Net data only with «visibilità piena» (issue #275)', async () => {
     const { app, call, A, S, I, spec, db } = await setup();
     assert.equal(spec.user.role, 'specialist');
-    // what he sees and the tools he uses
-    for (const url of ['/api/admin/status', '/api/admin/events', '/api/admin/profiles', '/api/admin/template-form', '/api/admin/stats', '/api/admin/work-orders', '/api/admin/uisp/status', '/api/admin/uisp/sites', '/api/admin/platform/health']) {
+    assert.equal((spec.user as { fullView?: boolean }).fullView, undefined, 'never implicit');
+    // the technical tools that show no data of others
+    for (const url of ['/api/admin/template-form', '/api/admin/placeholders', '/api/admin/terrain']) {
       const r = await call('GET', url, S);
       assert.equal(r.statusCode, 200, `${url}: ${r.body}`);
     }
+    // CDA Net's data of everyone: not for a specialist who may be outside the company
+    const others = ['/api/admin/status', '/api/admin/events', '/api/admin/profiles', '/api/admin/stats', '/api/admin/work-orders', '/api/admin/uisp/status', '/api/admin/uisp/sites', '/api/admin/platform/health', '/api/admin/crm/radius/status', '/api/admin/coverage/accuracy'];
+    for (const url of others) {
+      const r = await call('GET', url, S);
+      assert.equal(r.statusCode, 403, `${url}: ${r.statusCode} ${r.body}`);
+    }
+    // the calendar: his own orders only, no list of installers
+    const inst = (db.prepare('SELECT id FROM users WHERE username = ?').get(INST.username) as { id: number }).id;
+    db.prepare("INSERT INTO work_orders(created_at, updated_at, day, slot, kind, status, assigned_to, customer) VALUES(?,?,?,?,?,?,?,?)").run('2026-10-17T08:00:00Z', '2026-10-17T08:00:00Z', '2026-10-20', '', 'new', 'open', inst, 'Cliente di CDA Net');
+    const cal = (await call('GET', '/api/work-orders/calendar?from=2026-10-19&to=2026-10-25', S)).json();
+    assert.deepEqual([cal.items.length, cal.installers], [0, undefined], 'nothing of the team');
+    assert.equal((await call('GET', `/api/work-orders/calendar?from=2026-10-19&to=2026-10-25&user=${inst}`, S)).json().items.length, 0, 'not even asking for someone');
+    // CDA Net's field work and its keys (Wi-Fi keys of its networks, the password of its CPEs, its
+    // templates), its APs and the operators' names on CDA Net's account: never without full view
+    const cdaWork = [
+      ['POST', '/api/field/access', {}],
+      ['POST', '/api/field/relink', { ssid: 'CDA-Net-AP-1' }],
+      ['GET', '/api/field/cpe?macs=AA:BB:CC:00:00:09', undefined],
+      ['POST', '/api/field/cpe/claim', { macs: ['AA:BB:CC:00:00:09'] }],
+      ['GET', '/api/wireless-networks', undefined],
+      ['GET', '/api/provisioning/templates', undefined],
+      ['POST', '/api/provisioning/plan', { model: 'LiteBeam 5AC', ssid: 'CDA-Net-AP-1' }],
+      ['POST', '/api/provisioning/jobs', { model: 'LiteBeam 5AC', ssid: 'CDA-Net-AP-1', alternativeSsids: ['CDA-Net-AP-2'] }],
+      ['GET', '/api/admin/antennas', undefined],
+      ['POST', '/api/admin/antennas/import', {}],
+      ['GET', '/api/admin/coverage/operators?lat=37.5&lon=14.2', undefined],
+      ['GET', '/api/field/coverage/operators?lat=37.5&lon=14.2', undefined],
+      // the tools that work from CDA Net's server, that is from inside its network
+      ['GET', '/api/tools/interfaces', undefined],
+      ['GET', '/api/tools/neighbors', undefined],
+      ['POST', '/api/tools/ping', { host: '192.0.2.1' }],
+      ['POST', '/api/tools/discover', { cidr: '192.0.2.0/30' }],
+      ['POST', '/api/tools/snmp', { host: '192.0.2.1', community: 'public' }],
+      ['POST', '/api/routeros/action', {}],
+    ] as const;
+    for (const [method, url, body] of cdaWork) {
+      const r = await call(method, url, { ...S, ...APP }, body);
+      assert.equal(r.statusCode, 403, `${method} ${url}: ${r.statusCode} ${r.body}`);
+    }
+    // what needs no network of CDA Net's stays his (the app runs its own tools on the phone)
+    assert.equal((await call('POST', '/api/tools/mac-vendors', { ...S, ...APP }, { macs: [] })).statusCode, 200, 'the MAC vendors');
+    assert.equal((await call('GET', '/api/routeros/catalog', { ...S, ...APP })).statusCode, 200, 'the RouterOS catalog');
+    assert.equal((await call('GET', '/api/wireless-networks', I)).statusCode, 200, 'the installers keep them');
+    assert.equal((await call('POST', '/api/field/access', { ...I, ...APP }, {})).statusCode, 200);
+    assert.equal((await call('GET', '/api/tools/interfaces', I)).statusCode, 200, 'and the tools of the server');
+    // the aerial imagery is paid by CDA Net, with its keys: not for him; the terrain of the 3D map stays
+    const sat = await call('GET', '/api/admin/map/satellite', S);
+    assert.equal(sat.statusCode, 200, sat.body);
+    assert.deepEqual(sat.json().layers, []);
+    const tile = '/api/admin/map/imagery/esri/satellite/13/4419/3174';
+    assert.equal((await call('GET', tile, S)).statusCode, 403);
+    assert.notEqual((await call('GET', tile, A)).statusCode, 403, 'the admins as before');
+    assert.equal((await call('GET', '/api/admin/map/satellite', I)).statusCode, 403, 'the installers as before');
+    // «visibilità piena», given by an admin: the views of the NOC (his sessions start again)
+    assert.equal((await call('PATCH', `/api/admin/users/${inst}`, A, { fullView: true })).json().error, 'full_view_specialist_only');
+    assert.equal((await call('PATCH', `/api/admin/users/${spec.user.id}`, S, { fullView: true })).statusCode, 403, 'not by himself');
+    assert.equal((await call('PATCH', `/api/admin/users/${spec.user.id}`, A, { fullView: true })).statusCode, 200);
+    assert.equal((await call('GET', '/api/admin/status', S)).statusCode, 401, 'the old session is closed');
+    const full = (await app.inject({ method: 'POST', url: '/api/auth/login', payload: SPEC })).json();
+    assert.equal(full.user.fullView, true);
+    const F = { authorization: `Bearer ${full.token}` };
+    for (const url of others) {
+      const r = await call('GET', url, F);
+      assert.equal(r.statusCode, 200, `with full view ${url}: ${r.body}`);
+    }
+    assert.equal((await call('GET', '/api/work-orders/calendar?from=2026-10-19&to=2026-10-25', F)).json().items.length, 1);
+    // an internal specialist with full view works for CDA Net too, like an installer
+    assert.equal((await call('GET', '/api/wireless-networks', F)).statusCode, 200);
+    assert.equal((await call('POST', '/api/field/access', { ...F, ...APP }, {})).statusCode, 200);
+    assert.equal((await call('GET', '/api/tools/interfaces', F)).statusCode, 200);
+    assert.notEqual((await call('GET', '/api/admin/map/imagery/esri/satellite/13/4419/3174', F)).statusCode, 403);
+    assert.equal((await call('POST', '/api/admin/platform/backup', F, { password: 'Password-Backup-123' })).statusCode, 403, 'the backup stays with the admins');
+    const users = (await call('GET', '/api/admin/users', A)).json() as Array<{ username: string; fullView: boolean }>;
+    assert.equal(users.find((u) => u.username === SPEC.username)?.fullView, true);
     // the platform and CDA Net's decisions: admins only
     for (const [method, url, body] of [
       ['GET', '/api/admin/users', undefined],
@@ -62,11 +137,11 @@ describe('Specialist', () => {
       ['POST', '/api/admin/work-orders', { day: '2026-10-20', customer: 'Prova' }],
       ['POST', '/api/admin/profiles/LiteBeam%205AC/templates', { name: 'X', template: SAMPLE_TEMPLATE, boardMatch: 'board\\.name=LiteBeam' }],
     ] as const) {
-      const r = await call(method, url, S, body);
+      const r = await call(method, url, F, body);
       assert.equal(r.statusCode, 403, `${method} ${url}: ${r.statusCode} ${r.body}`);
     }
     // his section: his own, nobody else's
-    assert.equal((await call('GET', '/api/specialist/templates', S)).statusCode, 200);
+    assert.equal((await call('GET', '/api/specialist/templates', F)).statusCode, 200);
     assert.equal((await call('GET', '/api/specialist/templates', A)).statusCode, 403);
     assert.equal((await call('GET', '/api/specialist/templates', I)).statusCode, 403);
     // an admin cannot make himself a specialist (he would lose the admin pages)
@@ -102,13 +177,19 @@ describe('Specialist', () => {
     // the same template text refused by CDA Net's archive (VLAN): his archive is apart
     assert.equal((await call('POST', '/api/admin/profiles/LiteBeam%205AC/templates', A, { name: 'Con VLAN', template: text, boardMatch: 'board\\.name=LiteBeam' })).json().error, 'profile_contains_vlan');
 
-    // a CDA Net template as a start: the copy is his, without CDA Net's secrets
+    // a CDA Net template as a start: CDA Net's work, so only with «visibilità piena», not even one
+    // for everyone (issue #275); the copy is his, without CDA Net's secrets
     const cda = await call('POST', '/api/admin/profiles/LiteBeam%205AC/templates', A, { name: 'Standard', template: SAMPLE_TEMPLATE, boardMatch: 'board\\.name=LiteBeam', secrets: { snmpCommunity: 'community-cda-net' } });
     assert.equal(cda.statusCode, 201, cda.body);
-    const copy = await call('POST', '/api/specialist/templates/copy', S, { fromId: cda.json().id, name: 'Da CDA Net' });
+    assert.equal((await call('POST', '/api/specialist/templates/copy', S, { fromId: cda.json().id, name: 'Da CDA Net' })).statusCode, 404, 'not without full view');
+    const director = { username: 'direttore.tecnico', password: 'Direttore-Password-123' };
+    const d = await call('POST', '/api/admin/users', A, { ...director, role: 'specialist' });
+    assert.equal((await call('PATCH', `/api/admin/users/${d.json().id}`, A, { fullView: true })).statusCode, 200);
+    const D = { authorization: `Bearer ${(await app.inject({ method: 'POST', url: '/api/auth/login', payload: director })).json().token}` };
+    const copy = await call('POST', '/api/specialist/templates/copy', D, { fromId: cda.json().id, name: 'Da CDA Net' });
     assert.equal(copy.statusCode, 201, copy.body);
     assert.equal(copy.json().secretsSet.snmpCommunity, false);
-    const copied = (await call('GET', `/api/specialist/templates/${copy.json().id}`, S)).json();
+    const copied = (await call('GET', `/api/specialist/templates/${copy.json().id}`, D)).json();
     assert.equal(parseKeys(copied.template).get('pwdog.status'), 'enabled', 'what CDA Net forces becomes the text');
     assert.ok(!JSON.stringify(copied).includes('community-cda-net'));
     assert.equal((await call('GET', `/api/admin/templates/${cda.json().id}`, A)).json().name, 'Standard', 'the original stays');
@@ -131,6 +212,18 @@ describe('Specialist', () => {
     assert.equal((await call('POST', '/api/specialist/connectors/test', S, { url: 'https://uisp.azienda-x.test', token: 'sbagliato' })).json().error, 'uisp_auth_failed');
     const sites = (await call('GET', `/api/specialist/connectors/${c.id}/sites`, S)).json() as Array<{ id: string; name: string }>;
     assert.ok(sites.some((x) => x.id === 'site-n2'));
+    // never towards CDA Net's own network through the server (issue #275): private, CGNAT and local
+    // addresses refused, and nothing is asked to them
+    const asked0 = fake.calls.length;
+    for (const [i, u] of ['http://10.0.0.1:8080', 'https://100.64.0.1', 'https://127.0.0.1', 'https://[::1]', 'http://localhost:3000', 'https://[::ffff:192.168.1.1]'].entries()) {
+      assert.equal((await call('POST', '/api/specialist/connectors', S, { name: `Interno ${i}`, url: u, token: 'tok-secret' })).json().error, 'connector_target_not_public', u);
+      assert.equal((await call('POST', '/api/specialist/connectors/test', S, { url: u, token: 'tok-secret' })).json().error, 'connector_target_not_public', u);
+    }
+    assert.equal((await call('PATCH', `/api/specialist/connectors/${c.id}`, S, { url: 'https://192.168.1.10' })).json().error, 'connector_target_not_public');
+    assert.equal((await call('POST', '/api/specialist/connectors/test', S, { url: 'http://uisp.azienda-x.test/status?', token: 'tok-secret' })).statusCode, 400, 'no query to steer the path');
+    assert.equal((await call('POST', '/api/specialist/connectors/test', S, { url: 'https://user@uisp.azienda-x.test', token: 'tok-secret' })).statusCode, 400, 'no user in the address');
+    assert.equal(fake.calls.length, asked0, 'nothing asked to them');
+    assert.equal((await call('GET', '/api/specialist/connectors', S)).json().items.length, 1);
 
     // ---- what is typed for this template (the key of the devices comes from the connector)
     const asked = (await call('GET', `/api/specialist/templates/${tpl.id}/values?connectorId=${c.id}`, S)).json();
@@ -190,7 +283,8 @@ describe('Specialist', () => {
     assert.equal(hist.total, 1);
     assert.equal(hist.items[0].company, 'Azienda X');
     assert.equal((await call('GET', '/api/specialist/jobs?status=to_authorize', S)).json().total, 1);
-    assert.deepEqual((await call('GET', '/api/specialist/summary', S)).json(), { templates: 2, connectors: 1, jobs30d: 1, success30d: 1, toAuthorize: 1, failed30d: 0 });
+    // his one template (the copy of CDA Net's is the director's)
+    assert.deepEqual((await call('GET', '/api/specialist/summary', S)).json(), { templates: 1, connectors: 1, jobs30d: 1, success30d: 1, toAuthorize: 1, failed30d: 0 });
 
     // ---- the CPE in the company's UISP: found by MAC, authorized in the site of its AP
     const state = (await call('GET', `/api/specialist/jobs/${pkg.jobId}/uisp`, S)).json();
@@ -226,6 +320,200 @@ describe('Specialist', () => {
     const events = JSON.stringify(db.prepare("SELECT action, target, detail FROM events WHERE action LIKE 'specialist.%'").all());
     assert.ok(events.includes('specialist.uisp_authorize'));
     for (const secret of [WIFI, PPPOE_PASSWORD, CPE_PASSWORD, 'tok-secret']) assert.ok(!events.includes(secret));
+    await app.close();
+  });
+
+  // first the configuration, then the CPE (titolare, 17/10/2026): no management Wi-Fi to prepare it
+  it('a configuration prepared before connecting to the CPE: MAC and serial come with the write', async () => {
+    const { app, db, call, A, S } = await setup();
+    const draft = (await call('POST', '/api/specialist/form/LiteBeam%205AC/read', S, {})).json();
+    const created = await call('POST', '/api/specialist/templates', S, { model: 'LiteBeam 5AC', name: 'Prima la configurazione', template: draft.template });
+    assert.equal(created.statusCode, 201, created.body);
+    const tpl = created.json();
+    const conn = await call('POST', '/api/specialist/connectors', S, { name: 'Azienda Y', url: 'https://uisp.azienda-x.test', token: 'tok-secret', uispKey: 'wss://uisp.azienda-x.test:443+chiave-y+allowSelfSignedCertificate' });
+    assert.equal(conn.statusCode, 201, conn.body);
+    const connectorId = conn.json().id as number;
+    const asked = (await call('GET', `/api/specialist/templates/${tpl.id}/values?connectorId=${connectorId}`, S)).json().asked as Array<{ name: string }>;
+    const values = Object.fromEntries(asked.map((a) => [a.name, a.name === 'WPA2_PSK' ? WIFI : a.name === 'SSID' ? 'AZIENDA-Y-AP1' : `${a.name.toLowerCase()}-1`]));
+    const body = { templateId: tpl.id, connectorId, model: 'LiteBeam 5AC', cpe: { username: 'admin-y', password: CPE_PASSWORD }, values, customer: 'Bianchi Anna' };
+
+    // no MAC, serial, firmware or address: the app reads them from the CPE at the write
+    const prep = await call('POST', '/api/specialist/jobs', { ...S, ...APP }, body);
+    assert.equal(prep.statusCode, 201, prep.body);
+    const pkg = prep.json();
+    assert.equal(pkg.checks.mac, '');
+    assert.equal(pkg.summary.mac, '');
+    assert.equal(pkg.target.sshPort, 22);
+    // valid for a day by default: prepared at the office, written on the roof
+    const hours = (iso: string) => (Date.parse(iso) - Date.now()) / 3_600_000;
+    assert.ok(hours(pkg.expiresAt) > 23.9 && hours(pkg.expiresAt) <= 24.01, pkg.expiresAt);
+    const job = (id: string) => call('GET', `/api/specialist/jobs/${id}`, S).then((r) => r.json());
+    const prepared = await job(pkg.jobId);
+    assert.deepEqual([prepared.mac, prepared.cpeAtWrite, prepared.status], ['', true, 'prepared']);
+    assert.equal((await call('GET', `/api/specialist/jobs/${pkg.jobId}/uisp`, S)).json().error, 'job_not_completed', 'no MAC yet to look for in UISP');
+
+    // the outcome says which CPE was written: a failed write on one, then a success on another
+    const url = `/api/specialist/jobs/${pkg.jobId}/result`;
+    assert.equal((await call('POST', url, S, { result: 'success', stages: [] })).json().error, 'cpe_mac_required');
+    assert.equal((await call('POST', url, S, { result: 'success', cpe: { mac: '81:78:00:00:00:01' } })).statusCode, 400, 'not a device MAC');
+    const failed = await call('POST', url, S, { result: 'failed', error: 'Board non corrispondente', cpe: { mac: 'aabbcc000001', serial: 'SER-A' }, completedAt: '2026-10-17T18:00:00.000Z' });
+    assert.equal(failed.statusCode, 200, failed.body);
+    assert.equal((await job(pkg.jobId)).mac, 'AA:BB:CC:00:00:01');
+    const ok = await call('POST', url, S, { result: 'success', stages: ['Configurazione salvata in flash (cfgmtd)'], cpe: { mac: 'AA:BB:CC:00:00:02', serial: 'SER-B' }, completedAt: '2026-10-17T18:05:00.000Z' });
+    assert.equal(ok.statusCode, 200, ok.body);
+    const written = await job(pkg.jobId);
+    assert.deepEqual([written.mac, written.serial, written.status, written.attempts], ['AA:BB:CC:00:00:02', 'SER-B', 'success', 2]);
+    assert.equal((await call('POST', url, S, { result: 'success', cpe: { mac: 'AA:BB:CC:00:00:03' } })).json().duplicate, true);
+    assert.equal((await job(pkg.jobId)).mac, 'AA:BB:CC:00:00:02', 'a success is final');
+    const row = JSON.stringify(db.prepare('SELECT * FROM specialist_jobs WHERE id = ?').get(pkg.jobId));
+    for (const secret of [WIFI, CPE_PASSWORD, 'chiave-y']) assert.ok(!row.includes(secret), `${secret} not stored`);
+
+    // the hours of Impostazioni server, for the next configurations
+    assert.equal((await call('PUT', '/api/admin/server-settings', A, { values: { specialistJobTtlHours: 2 } })).statusCode, 200);
+
+    // a template with the serial of the CPE in it: the CPE is read first
+    const text = draft.template.replace('resolv.host.1.name=${DEVICE_NAME}', 'resolv.host.1.name=CPE-${EXPECTED_SERIAL}');
+    assert.notEqual(text, draft.template);
+    const withSerial = await call('POST', '/api/specialist/templates', S, { model: 'LiteBeam 5AC', name: 'Nome dal seriale', template: text });
+    assert.equal(withSerial.statusCode, 201, withSerial.body);
+    const again = { ...body, templateId: withSerial.json().id };
+    assert.equal((await call('POST', '/api/specialist/jobs', { ...S, ...APP }, again)).json().error, 'template_needs_cpe');
+    const read = await call('POST', '/api/specialist/jobs', { ...S, ...APP }, { ...again, mac: 'AA:BB:CC:00:00:04', serial: 'SER-C', host: '192.168.1.20' });
+    assert.equal(read.statusCode, 201, read.body);
+    assert.match(read.json().config.text, /^resolv\.host\.1\.name=CPE-SER-C$/m);
+    assert.ok(hours(read.json().expiresAt) > 1.9 && hours(read.json().expiresAt) <= 2.01, read.json().expiresAt);
+    assert.equal((await job(read.json().jobId)).cpeAtWrite, false);
+    // prepared with the CPE read: the outcome needs nothing more
+    assert.equal((await call('POST', `/api/specialist/jobs/${read.json().jobId}/result`, S, { result: 'success' })).statusCode, 200);
+    await app.close();
+  });
+
+  // SSID and Wi-Fi key in his templates (titolare, 17/10/2026): the company's AP may be always the
+  // same; the key is sealed like the community, never returned, and only his installations use it
+  it('a template with the SSID of the company and its Wi-Fi key sealed, or both typed for each CPE', async () => {
+    const { app, db, call, S } = await setup();
+    const form = (await call('GET', '/api/specialist/template-form', S)).json();
+    assert.ok(form.fields.some((f: { id: string; section: string }) => f.id === 'ssid' && f.section === 'wireless'), 'in the Wireless section');
+    const draft = (await call('POST', '/api/specialist/form/LiteBeam%205AC/read', S, {})).json();
+    assert.equal(draft.values.ssid, '', 'typed for each CPE by default');
+    const apply = (template: string, changes: object) => call('POST', '/api/specialist/form/LiteBeam%205AC/apply', S, { template, changes });
+    assert.equal((await apply(draft.template, { ssid: 'x'.repeat(33) })).json().error, 'form_invalid_ssid');
+    const fixed = (await apply(draft.template, { ssid: 'AZIENDA-X-AP1' })).json();
+    const k = parseKeys(fixed.template);
+    assert.equal(k.get('wireless.1.ssid'), 'AZIENDA-X-AP1');
+    assert.equal(k.get('wpasupplicant.profile.1.network.1.ssid'), 'AZIENDA-X-AP1');
+    assert.equal(fixed.values.ssid, 'AZIENDA-X-AP1');
+    assert.ok(!fixed.report.placeholders.includes('SSID'));
+    // as an Access Point the SSID it transmits stays the one chosen
+    const ap = parseKeys((await apply(fixed.template, { wirelessMode: 'ap' })).json().template);
+    assert.equal(ap.get('aaa.1.ssid'), 'AZIENDA-X-AP1');
+    // emptied: typed for each CPE again
+    assert.equal(parseKeys((await apply(fixed.template, { ssid: '' })).json().template).get('wireless.1.ssid'), '${SSID}');
+
+    // the key: sealed apart, never in the text nor returned
+    const create = (name: string, wpa2Psk: string | undefined) => call('POST', '/api/specialist/templates', S, { model: 'LiteBeam 5AC', name, template: fixed.template, ...(wpa2Psk ? { wpa2Psk } : {}) });
+    assert.equal((await create('Corta', 'corta')).json().error, 'template_secret_invalid_wpa2Psk');
+    const t = await create('Azienda X · AP1', WIFI);
+    assert.equal(t.statusCode, 201, t.body);
+    const id = t.json().id as number;
+    assert.deepEqual(t.json().secretsSet, { snmpCommunity: false, wpa2Psk: true });
+    const got = await call('GET', `/api/specialist/templates/${id}`, S);
+    assert.ok(!got.body.includes(WIFI), 'never returned');
+    assert.match(got.json().template, /^wpasupplicant\.profile\.1\.network\.1\.psk=\$\{WPA2_PSK\}$/m, 'the text keeps the placeholder');
+
+    // the flow asks neither the SSID nor the key: both from the template
+    const askedOf = async () => ((await call('GET', `/api/specialist/templates/${id}/values`, S)).json().asked as Array<{ name: string }>).map((a) => a.name);
+    const asked = await askedOf();
+    assert.ok(!asked.includes('SSID') && !asked.includes('WPA2_PSK'), asked.join(','));
+    const values = Object.fromEntries(asked.map((n) => [n, n === 'UISP_ENROLLMENT' ? 'wss://uisp.azienda-x.test:443+chiave-x+allowSelfSignedCertificate' : `${n.toLowerCase()}-1`]));
+    const job = (extra: Record<string, string> = {}) =>
+      call('POST', '/api/specialist/jobs', { ...S, ...APP }, { templateId: id, model: 'LiteBeam 5AC', cpe: { username: 'admin-x', password: CPE_PASSWORD }, values: { ...values, ...extra } });
+    const prep = await job();
+    assert.equal(prep.statusCode, 201, prep.body);
+    const cfg = parseKeys(prep.json().config.text);
+    assert.equal(cfg.get('wpasupplicant.profile.1.network.1.psk'), WIFI, 'to the CPE, from the phone of its author');
+    assert.equal(cfg.get('wpasupplicant.profile.1.network.1.ssid'), 'AZIENDA-X-AP1');
+    assert.equal(prep.json().summary.ssid, 'AZIENDA-X-AP1');
+    assert.equal((await call('GET', `/api/specialist/jobs/${prep.json().jobId}`, S)).json().ssid, 'AZIENDA-X-AP1', 'the history says which AP');
+    // a key typed for this CPE wins over the template's
+    assert.equal(parseKeys((await job({ WPA2_PSK: 'Altra-Chiave-WiFi-9' })).json().config.text).get('wpasupplicant.profile.1.network.1.psk'), 'Altra-Chiave-WiFi-9');
+    // nothing of the key in the history nor in the log
+    for (const table of ['specialist_jobs', 'specialist_templates', 'events']) {
+      assert.ok(!JSON.stringify(db.prepare(`SELECT * FROM ${table}`).all()).includes(WIFI), table);
+    }
+    // removed: typed in the flow again
+    assert.deepEqual((await call('PATCH', `/api/specialist/templates/${id}`, S, { wpa2Psk: null })).json().secretsSet, { snmpCommunity: false, wpa2Psk: false });
+    assert.ok((await askedOf()).includes('WPA2_PSK'));
+    assert.equal((await job()).json().error, 'missing_value_WPA2_PSK');
+    await app.close();
+  });
+
+  // a CPE in bridge cannot use PPPoE, the company's UISP key is optional (titolare, 18/10/2026)
+  it('a CPE in bridge is asked no PPPoE; without the UISP key of the company it is written with UISP off', async () => {
+    const { app, db, call, S } = await setup();
+    const draft = (await call('POST', '/api/specialist/form/LiteBeam%205AC/read', S, {})).json();
+    const bridge = (await call('POST', '/api/specialist/form/LiteBeam%205AC/apply', S, { template: draft.template, changes: { netMode: 'bridge' } })).json();
+    assert.equal(parseKeys(bridge.template).get('netmode'), 'bridge');
+    assert.ok(bridge.report.placeholders.includes('PPPOE_USER'), 'the lines of PPPoE stay in the text, switched off');
+    assert.deepEqual(bridge.report.unused, ['PPPOE_PASSWORD', 'PPPOE_USER'], 'the editors say they are not asked');
+    const t = await call('POST', '/api/specialist/templates', S, { model: 'LiteBeam 5AC', name: 'Azienda Z · bridge', template: bridge.template });
+    assert.equal(t.statusCode, 201, t.body);
+    const id = t.json().id as number;
+    // a company whose connector has no key for the devices: the flow asks it, it may stay empty
+    const conn = await call('POST', '/api/specialist/connectors', S, { name: 'Azienda Z', url: 'https://uisp.azienda-x.test', token: 'tok-secret' });
+    assert.equal(conn.statusCode, 201, conn.body);
+    const connectorId = conn.json().id as number;
+    const asked = (await call('GET', `/api/specialist/templates/${id}/values?connectorId=${connectorId}`, S)).json().asked as Array<{ name: string; optional?: boolean }>;
+    const names = asked.map((a) => a.name);
+    assert.ok(!names.includes('PPPOE_USER') && !names.includes('PPPOE_PASSWORD'), `no PPPoE in bridge: ${names}`);
+    assert.equal(asked.find((a) => a.name === 'UISP_ENROLLMENT')?.optional, true);
+    assert.ok(asked.every((a) => a.name === 'UISP_ENROLLMENT' || !a.optional), 'the rest is needed');
+    // a bridge with a fixed address: its gateway is typed for each CPE (Carmelo, 21/10/2026)
+    assert.equal(asked.find((a) => a.name === 'GATEWAY')?.optional, undefined, 'the gateway is asked');
+    const values = Object.fromEntries(
+      asked.filter((a) => !a.optional).map((a) => [a.name, a.name === 'WPA2_PSK' ? WIFI : a.name === 'SSID' ? 'AZIENDA-Z-AP1' : a.name === 'GATEWAY' ? '192.168.50.1' : `${a.name.toLowerCase()}-1`]),
+    );
+    const job = (extra: Record<string, string> = {}) =>
+      call('POST', '/api/specialist/jobs', { ...S, ...APP }, { templateId: id, connectorId, model: 'LiteBeam 5AC', cpe: { username: 'admin-z', password: CPE_PASSWORD }, values: { ...values, ...extra } });
+
+    // no key: the CPE is written with UISP off, and there is nothing to authorize
+    const off = await job();
+    assert.equal(off.statusCode, 201, off.body);
+    const k = parseKeys(off.json().config.text);
+    assert.deepEqual([k.get('ppp.status'), k.get('ppp.1.name'), k.get('ppp.1.password')], ['disabled', '', '']);
+    assert.deepEqual([k.get('route.status'), k.get('route.1.gateway'), k.get('resolv.nameserver.1.ip')], ['enabled', '192.168.50.1', '1.1.1.1']);
+    assert.equal((await job({ GATEWAY: '192.168.50' })).json().error, 'invalid_value_GATEWAY');
+    assert.deepEqual([k.get('unms.status'), k.get('unms.uri')], ['disabled', '']);
+    assert.ok(!off.json().config.text.includes('${'), 'no placeholder left');
+    assert.equal(off.json().summary.pppoeUser, '');
+    const result = (jobId: string) => call('POST', `/api/specialist/jobs/${jobId}/result`, S, { result: 'success', stages: [], cpe: { mac: 'AA:BB:CC:00:00:21', serial: 'SER-Z' } });
+    assert.equal((await result(off.json().jobId)).statusCode, 200);
+    const written = (await call('GET', `/api/specialist/jobs/${off.json().jobId}`, S)).json();
+    assert.deepEqual([written.status, written.uisp.off, written.pppoeUser], ['success', true, '']);
+    assert.equal((await call('GET', '/api/specialist/summary', S)).json().toAuthorize, 0, 'never «da autorizzare»');
+    assert.equal((await call('GET', '/api/specialist/jobs?status=to_authorize', S)).json().total, 0);
+
+    // PPPoE typed all the same (an app of before): never in the file of a CPE in bridge
+    const typed = await job({ PPPOE_USER: 'rossi@azienda-z.it', PPPOE_PASSWORD });
+    assert.equal(typed.statusCode, 201, typed.body);
+    assert.ok(!typed.body.includes(PPPOE_PASSWORD) && !typed.body.includes('rossi@azienda-z.it'));
+
+    // with the key: UISP on, as before (a key of UISP starts with wss://)
+    assert.equal((await job({ UISP_ENROLLMENT: 'chiave-senza-indirizzo' })).json().error, 'invalid_value_UISP_ENROLLMENT');
+    const KEY = 'wss://uisp.azienda-x.test:443+chiave-z+allowSelfSignedCertificate';
+    const on = await job({ UISP_ENROLLMENT: KEY });
+    assert.equal(on.statusCode, 201, on.body);
+    const kOn = parseKeys(on.json().config.text);
+    assert.deepEqual([kOn.get('unms.status'), kOn.get('unms.uri')], ['enabled', KEY]);
+    assert.equal((await result(on.json().jobId)).statusCode, 200);
+    assert.equal((await call('GET', `/api/specialist/jobs/${on.json().jobId}`, S)).json().uisp.off, false);
+    assert.equal((await call('GET', '/api/specialist/summary', S)).json().toAuthorize, 1);
+    assert.ok(!JSON.stringify(db.prepare('SELECT * FROM specialist_jobs').all()).includes('chiave-z'), 'the key typed is never stored');
+
+    // a router with PPPoE: user and password asked as before
+    const router = await call('POST', '/api/specialist/templates', S, { model: 'LiteBeam 5AC', name: 'Azienda Z · router', template: draft.template });
+    const askedRouter = (await call('GET', `/api/specialist/templates/${router.json().id}/values?connectorId=${connectorId}`, S)).json().asked as Array<{ name: string; optional?: boolean }>;
+    assert.ok(askedRouter.some((a) => a.name === 'PPPOE_USER' && !a.optional) && askedRouter.some((a) => a.name === 'PPPOE_PASSWORD' && !a.optional));
     await app.close();
   });
 });

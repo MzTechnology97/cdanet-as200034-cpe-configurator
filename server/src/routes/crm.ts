@@ -14,7 +14,7 @@ import { radiusView } from '../domain/health.ts';
  */
 export function crmRoutes(app: FastifyInstance, ctx: AppContext) {
   // admins and specialists (read only, and a refresh of the RADIUS copy)
-  const admin = { preHandler: [ctx.auth.requireStaff] };
+  const admin = { preHandler: [ctx.auth.requireSeesAll] };
 
   app.get('/api/admin/crm/radius/status', admin, async () => ({ configured: ctx.crm.client() !== null, ...ctx.crmSync.state() }));
 

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { HttpError, isStaff } from '../auth.ts';
+import { HttpError, seesAll } from '../auth.ts';
 import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
 import { TARGET_FIRMWARE, parseClientHeader, parseMac, versionAtLeast, type CpeModel } from '../domain/policy.ts';
@@ -45,7 +45,8 @@ export function cfgValue(cfg: string, key: string): string | null {
  * reaches the app except inside the rendered system.cfg, exactly as in a normal job.
  */
 export function replaceRoutes(app: FastifyInstance, ctx: AppContext) {
-  const user = { preHandler: [ctx.auth.requireUser, ctx.modules.require('replacement')] };
+  // a new CPE with CDA Net's keys: not for a specialist without «visibilità piena» (issue #275)
+  const user = { preHandler: [ctx.auth.requireCdaWork, ctx.modules.require('replacement')] };
   const { db } = ctx;
 
   async function passwordFromUisp(old: OldJob, key: string): Promise<string> {
@@ -72,7 +73,7 @@ export function replaceRoutes(app: FastifyInstance, ctx: AppContext) {
     const id = z.string().min(1).max(80).parse((req.params as { id: string }).id);
     const old = db.prepare('SELECT * FROM provisioning_jobs WHERE id = ?').get(id) as OldJob | undefined;
     if (!old) throw new HttpError(404, 'job_not_found');
-    if (old.user_id !== req.user!.id && !isStaff(req.user!.role)) throw new HttpError(403, 'forbidden');
+    if (old.user_id !== req.user!.id && !seesAll(req.user!)) throw new HttpError(403, 'forbidden');
     if (old.status !== 'success') throw new HttpError(409, 'job_not_completed');
 
     const b = z

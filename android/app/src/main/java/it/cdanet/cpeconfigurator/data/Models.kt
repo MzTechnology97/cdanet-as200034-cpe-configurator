@@ -3,8 +3,9 @@ package it.cdanet.cpeconfigurator.data
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.JsonElement
 
+/** [fullView]: a specialist an admin gave «visibilità piena» (issue #275): sees and works like CDA Net's staff. */
 @Serializable
-data class UserDto(val id: Int, val username: String, val role: String)
+data class UserDto(val id: Int, val username: String, val role: String, val fullView: Boolean = false)
 
 @Serializable
 data class LoginRequest(val username: String, val password: String)
@@ -192,8 +193,9 @@ data class SignalEstimateDto(
     val nearby: Int? = null,
     /** The AP has no customers yet: free-space estimate (less accurate). */
     val theoretical: Boolean = false,
-    /** Beyond the farthest realistic link (20 km). */
+    /** Beyond the farthest realistic link ([tooFarKm], 20 km on the server). */
     val tooFar: Boolean = false,
+    val tooFarKm: Int = 20,
     /** Hills between the point and the AP (null: elevation model not available). */
     val terrain: TerrainEffectDto? = null,
     /** Downlink capacity of the new link from the curve of the real CPEs, Mbit/s. */
@@ -211,7 +213,7 @@ data class SignalEstimateDto(
             "affidabilità $confidence",
             if (inSector == false) "fuori dal settore servito" else null,
             if (beyondServed) "più lontano dei clienti attuali" else null,
-            if (tooFar) "oltre 20 km: troppo lontano" else null,
+            if (tooFar) "oltre $tooFarKm km: troppo lontano" else null,
             terrain?.describe(),
             capacityMbps?.let { "capacità ~$it Mbit/s" + (eveningMbps?.let { e -> ", la sera ~$e" } ?: "") },
             mcs?.takeIf { it >= 0 }?.let { m -> "modulazione attesa ${listOf("1x", "2x", "3x", "4x", "6x", "8x", "9x", "10x", "12x", "13x").getOrElse(m) { "" }}" + (snrDb?.let { " (SNR $it dB)" } ?: "") },
@@ -1028,6 +1030,70 @@ data class LosPointDto(
 /** Skyline of the terrain around a point (augmented reality): elevation every [stepDeg] from north. */
 @Serializable
 data class HorizonDto(val stepDeg: Double = 0.5, val el: List<Double> = emptyList(), val dist: List<Int> = emptyList(), val ground: Double? = null, val eye: Double? = null)
+
+/** An end of the simulation A → B: where its antenna is (raised over the roofs and trees around it). */
+@Serializable
+data class LinkEndDto(
+    val lat: Double = 0.0,
+    val lon: Double = 0.0,
+    val ground: Int = 0,
+    val heightM: Double = 0.0,
+    val mountedM: Double? = null,
+    val roofM: Int? = null,
+)
+
+@Serializable
+data class LinkRadioDto(val eirpDbm: Double = 0.0, val gainDbi: Double = 0.0, val noiseDbm: Double = -92.0)
+
+@Serializable
+data class LinkEstimateDto(val signalDbm: Int? = null, val snrDb: Int? = null, val mcs: Int? = null, val label: String? = null)
+
+/**
+ * Simulazione A → B (GET /api/coverage/link, admins and specialists): two points chosen by hand,
+ * the profile of Visibilità between them (A in the place of the CPE, B of the AP) and the expected
+ * signal and modulation with the radio given.
+ */
+@Serializable
+data class LinkSimDto(
+    val a: LinkEndDto = LinkEndDto(),
+    val b: LinkEndDto = LinkEndDto(),
+    val distanceM: Int = 0,
+    val frequencyMhz: Int = 5600,
+    val terrainSource: String = "srtm",
+    val lossDb: Double = 0.0,
+    val foliageM: Int = 0,
+    val buildings: Boolean = false,
+    val radio: LinkRadioDto = LinkRadioDto(),
+    /** As in Copertura: the obstruction penalty of UISP Design, calibrated on the connected customers. */
+    val estimate: LinkEstimateDto = LinkEstimateDto(),
+    /** The physics of the obstacles (Deygout and foliage, at most 60 dB) and the signal with it. */
+    val diffractionDb: Double? = null,
+    val physical: LinkEstimateDto? = null,
+    /** Beyond the farthest realistic link (20 km): drawn, never promised. */
+    val tooFar: Boolean = false,
+    val verdict: String = "clear",
+    val worst: LosWorstDto? = null,
+    /** How much A has to go up to free the line. */
+    val raiseCpeM: Double = 0.0,
+    val chart: List<LosPointDto> = emptyList(),
+) {
+    /** As the profile of Visibilità, for its chart. */
+    fun los() = LosDto(
+        distanceM = distanceM,
+        cpeHeightM = a.heightM,
+        mountedM = a.mountedM,
+        roofM = a.roofM,
+        frequencyMhz = frequencyMhz,
+        verdict = verdict,
+        worst = worst,
+        raiseCpeM = raiseCpeM,
+        chart = chart,
+        terrainSource = terrainSource,
+        lossDb = lossDb,
+        foliageM = foliageM,
+        buildings = buildings,
+    )
+}
 
 @Serializable
 data class LosWorstDto(val d: Int = 0, val clearanceM: Double = 0.0, val fresnel60M: Double = 0.0)

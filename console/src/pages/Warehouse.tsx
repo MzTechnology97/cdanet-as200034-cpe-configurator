@@ -5,7 +5,7 @@ import { api } from '../lib/api';
 import { toast } from '../lib/toast';
 import type { PageContext } from '../shell/routes';
 import { AsyncButton, Badge, Card, EmptyState, Field, Notice, PageHeader, Skeleton, Stat, Table } from '../ui';
-import { canManage, isStaff } from '../lib/roles';
+import { canManage, seesAll } from '../lib/roles';
 
 /**
  * Magazzino. The NOC: the CPEs of every warehouse of ISP Billing by model, who is short of CPEs,
@@ -29,7 +29,7 @@ const syncError = (code: string) => SYNC_ERRORS[code] ?? code;
 
 export function Warehouse({ user }: PageContext) {
   // the specialist sees the office's view (his own CPEs come from other companies, never from here)
-  return isStaff(user) ? <Office /> : <Mine />;
+  return seesAll(user) ? <Office /> : <Mine />;
 }
 
 interface Overview {

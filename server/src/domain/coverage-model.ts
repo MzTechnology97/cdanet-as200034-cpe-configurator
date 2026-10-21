@@ -18,6 +18,12 @@ import { bearingDeg, distanceM, type LatLon } from './geo.ts';
 
 /** Farthest link worth considering: CPEs hooked beyond 15 km are rare, beyond 20 km unrealistic. */
 export const MAX_LINK_M = 20_000;
+/**
+ * How far the admins (and a specialist with «visibilità piena») look for APs in Copertura and in
+ * the augmented reality (Carmelo, 21/10/2026: his POPs beyond 20 km too). Beyond MAX_LINK_M an AP
+ * is shown as too far, never as a link to promise.
+ */
+export const VIEW_MAX_KM = 100;
 /** Closer than this to the AP the CPE position is the AP's or the site's, not the customer's. */
 const MIN_SAMPLE_M = 50;
 
@@ -101,6 +107,8 @@ export interface SignalEstimate {
   beyondServed: boolean;
   /** Beyond the farthest realistic link (MAX_LINK_M). */
   tooFar: boolean;
+  /** That link, in km (the apps say «oltre N km»). */
+  tooFarKm?: number;
   confidence: 'alta' | 'media' | 'bassa';
   /** Customers the estimate is based on (hidden from installers unless allowed). */
   basis: number | null;
@@ -139,6 +147,14 @@ const angleDiff = (a: number, b: number) => {
 };
 
 /** Free-space path loss, dB (distance in metres, frequency in MHz). */
+/**
+ * The signal of a link between two antennas chosen by hand (Simulazione A → B): transmitted EIRP,
+ * receiving antenna gain, the real-world losses of the model, free space and the terrain/obstacles.
+ */
+export function linkSignalDbm(d: number, freqMHz: number, eirpDbm: number, rxGainDbi: number, terrainLossDb: number): number {
+  return Math.round(eirpDbm + rxGainDbi - REAL_LOSS_DB - freeSpaceLossDb(d, freqMHz) - terrainLossDb);
+}
+
 export function freeSpaceLossDb(d: number, freqMHz: number | null): number {
   const f = freqMHz && freqMHz > 1000 ? freqMHz : 5600;
   return 20 * Math.log10(Math.max(30, d) / 1000) + 20 * Math.log10(f) + 32.44;
@@ -345,6 +361,7 @@ export function estimateAt(m: ApModel, d: number, b: number, freqMHz: number | n
     inSector: dir.inSector,
     beyondServed,
     tooFar,
+    tooFarKm: MAX_LINK_M / 1000,
     confidence,
     basis: m.samples.length,
     nearby,

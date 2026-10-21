@@ -1,5 +1,5 @@
 import { HttpError } from '../auth.ts';
-import { isStaff } from '../domain/roles.ts';
+import { doesCdaWork, seesAll } from '../domain/roles.ts';
 import { sha256Hex, type Sealer } from '../crypto.ts';
 import { nowIso, type Db } from '../db.ts';
 import { templateFacts, type TemplateParams } from '../domain/airos-form.ts';
@@ -37,6 +37,8 @@ export interface LegacyValues {
 export interface Viewer {
   id: number;
   role: string;
+  /** A specialist with «visibilità piena» (issue #275): every template, like an admin. */
+  fullView?: boolean;
 }
 
 export interface TemplateMeta {
@@ -223,8 +225,10 @@ export function createTemplates(db: Db, sealer: Sealer) {
     const defaultForAssigned = audience === 'users' && (input.defaultForAssigned ?? !!cur?.default_for_assigned);
     return { audience, userIds, defaultForAssigned };
   };
+  // a specialist without «visibilità piena» works for his companies only: none of CDA Net's
+  // templates, not even those for everyone (issue #275)
   const canUse = (r: Row, viewer: Viewer) =>
-    isStaff(viewer.role) || r.audience === 'all' || !!db.prepare('SELECT 1 FROM template_users WHERE template_id = ? AND user_id = ?').get(r.id, viewer.id);
+    doesCdaWork(viewer) && (seesAll(viewer) || r.audience === 'all' || !!db.prepare('SELECT 1 FROM template_users WHERE template_id = ? AND user_id = ?').get(r.id, viewer.id));
   const personalDefault = (model: string, viewer: Viewer) =>
     db
       .prepare(
@@ -348,7 +352,7 @@ export function createTemplates(db: Db, sealer: Sealer) {
       if (templateId) {
         r = db.prepare(`${SELECT} WHERE t.id = ? AND t.model = ? AND t.firmware = ?`).get(templateId, model, TARGET_FIRMWARE) as Row | undefined;
         if (r && !canUse(r, viewer)) throw new HttpError(403, 'template_not_allowed');
-      } else {
+      } else if (doesCdaWork(viewer)) {
         r = effectiveDefault(model, viewer);
       }
       if (!r) return null;

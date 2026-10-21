@@ -16,7 +16,7 @@ const SUGGEST_M = 1000;
 export function victronRoutes(app: FastifyInstance, ctx: AppContext) {
   const admin = { preHandler: ctx.auth.requireAdmin };
   // the specialist sees the systems and reads them again; linking them to the POPs stays with the admins
-  const staff = { preHandler: ctx.auth.requireStaff };
+  const staff = { preHandler: ctx.auth.requireSeesAll };
 
   const pops = async () =>
     ctx.uisp

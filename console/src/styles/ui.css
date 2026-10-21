@@ -393,6 +393,7 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .us-head .hl-search { flex: 1 1 240px; }
 .us-sec { display: grid; gap: var(--sp-2); }
 .us-sec h3 { margin: 0; font-size: 1rem; }
+.us-full { display: grid; gap: var(--sp-1); padding: var(--sp-2) var(--sp-3); border: 1px solid var(--line); border-radius: var(--radius); }
 .us-inline, .ac-inline { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: flex-end; }
 .us-inline .ui-field, .ac-inline .ui-field { flex: 1 1 220px; }
 .us-link { justify-self: start; text-decoration: none; }
@@ -545,6 +546,18 @@ button.ui-stat:hover { border-color: var(--line-strong); }
 .cn-provider { display: grid; gap: var(--sp-2); padding: var(--sp-3) 0; border-top: 1px solid var(--line); }
 .jb-sub { display: grid; gap: var(--sp-2); padding: var(--sp-3); border: 1px solid var(--line); border-radius: var(--radius); }
 .jb-sub h4 { margin: 0; }
+.wg-members { display: grid; gap: var(--sp-1); }
+.ab-pin { background: none; border: 0; }
+.ab-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: var(--sp-3); }
+.ab-side { display: grid; gap: var(--sp-2); }
+.ab-row { display: flex; gap: var(--sp-2); align-items: center; }
+.ab-row input { flex: 1 1 auto; min-width: 0; }
+.ab-pin span { display: grid; place-items: center; width: 26px; height: 26px; border-radius: 50%; background: #1d4ed8; color: #fff; font: 700 13px/1 system-ui, sans-serif; border: 2px solid #fff; box-shadow: 0 1px 4px #0006; }
+.wg-tree, .wg-tree ul { list-style: none; margin: 0; padding: 0; }
+.wg-tree ul { margin-left: var(--sp-3); padding-left: var(--sp-4); border-left: 2px solid var(--line); }
+.wg-tree li { position: relative; padding: var(--sp-2) 0 0; }
+.wg-tree ul > li::before { content: ''; position: absolute; left: calc(-1 * var(--sp-4)); top: calc(var(--sp-2) + 0.7em); width: calc(var(--sp-4) - 4px); border-top: 2px solid var(--line); }
+.wg-who { margin-top: 4px; }
 .bn-rules { margin: var(--sp-2) 0 0; padding-left: 1.2em; display: grid; gap: 4px; }
 .bn-filter { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; margin-bottom: var(--sp-2); }
 .bn-filter input { flex: 1 1 180px; min-width: 0; }
