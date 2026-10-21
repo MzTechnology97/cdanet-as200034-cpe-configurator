@@ -8,7 +8,7 @@ import { nowIso, recordEvent } from '../db.ts';
 import { approxPoint, roughDistance } from '../domain/approx.ts';
 import { distanceM, isValidLatLon } from '../domain/geo.ts';
 import { lineOfSight, pathPoints, resolveApAltitude } from '../domain/los.ts';
-import { MAX_LINK_M, rankCoverage, type ApModel } from '../domain/coverage-model.ts';
+import { MAX_LINK_M, rankCoverage, VIEW_MAX_KM, type ApModel } from '../domain/coverage-model.ts';
 import { failuresNear, fieldFailures } from '../services/field-samples.ts';
 import { buildProfile, estimateForAp, obstacles, pointingConfig, profileEffect, terrainSampler } from '../services/terrain.ts';
 import { elevationAngle } from '../services/dem.ts';
@@ -52,6 +52,8 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
         lon: z.coerce.number(),
         height: z.coerce.number().min(0).max(100).optional(),
         limit: z.coerce.number().int().min(1).max(15).default(8),
+        /** Admins and specialists with «visibilità piena»: how far to look (default VIEW_MAX_KM). */
+        km: z.coerce.number().min(1).max(VIEW_MAX_KM).optional(),
       })
       .parse(req.query);
     if (!isValidLatLon(q.lat, q.lon)) throw new HttpError(400, 'invalid_position');
@@ -60,7 +62,8 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
     const allow = keys ? (a: { id: string; siteId: string | null }) => keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`)) : undefined;
     // same choice as Copertura: every AP within range rated by estimated signal, the limit last
     // (installers: the number set in Impostazioni server, no inactive or hopeless APs)
-    const maxKm = Math.min(ctx.uispSettings.coverageMaxKm, MAX_LINK_M / 1000);
+    // admins (and «visibilità piena»): their POPs beyond 20 km too, shown as too far (Carmelo, 21/10/2026)
+    const maxKm = keys ? Math.min(ctx.uispSettings.coverageMaxKm, MAX_LINK_M / 1000) : (q.km ?? VIEW_MAX_KM);
     const inRange = await ctx.uisp.nearestAps({ lat: q.lat, lon: q.lon }, 500, maxKm, allow);
     const radio = { eirpDbm: ctx.cfg.coverageEirpDbm, cpeGainDbi: ctx.cfg.coverageCpeGainDbi };
     const models = await apModels(ctx, inRange.map((a) => a.id), radio).catch(() => new Map<string, ApModel>());
@@ -130,7 +133,7 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
     const keys = seesAll(req.user!) ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
     const allow = keys ? (a: { id: string; siteId: string | null }) => keys.has(`ap:${a.id}`) || (a.siteId !== null && keys.has(`pop:${a.siteId}`)) : undefined;
     // any AP within range: the list may have ranked a farther one first (admins: as far as Copertura goes)
-    const aps = await ctx.uisp.nearestAps({ lat: q.lat, lon: q.lon }, 500, keys ? ctx.uispSettings.coverageMaxKm : 200, allow);
+    const aps = await ctx.uisp.nearestAps({ lat: q.lat, lon: q.lon }, 500, keys ? Math.min(ctx.uispSettings.coverageMaxKm, MAX_LINK_M / 1000) : 200, allow);
     const ap = aps.find((a) => a.id === q.apId);
     if (!ap) throw new HttpError(404, 'ap_not_found');
     const height = q.height ?? c.cpeHeightM;

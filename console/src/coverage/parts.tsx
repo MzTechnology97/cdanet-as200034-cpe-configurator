@@ -26,6 +26,8 @@ export interface Estimate {
   inSector?: boolean;
   beyondServed?: boolean;
   tooFar?: boolean;
+  /** The farthest realistic link, km (20). */
+  tooFarKm?: number;
   terrain?: Terrain;
   capacityMbps?: number | null;
   eveningMbps?: number | null;
@@ -113,7 +115,7 @@ export function EstimateCell({ e }: { e?: Estimate | null }) {
       </div>
       {e.inSector === false && line('fuori dal settore già servito')}
       {e.beyondServed && line('più lontano dei clienti attuali')}
-      {e.tooFar && line('oltre 20 km: troppo lontano per un aggancio')}
+      {e.tooFar && line(`oltre ${e.tooFarKm ?? 20} km: troppo lontano per un aggancio`)}
       {e.terrain && line(terrainText(e.terrain))}
       {!!e.capacityMbps && line(`capacità del collegamento ~${e.capacityMbps} Mbit/s${e.eveningMbps != null ? `, la sera ~${e.eveningMbps}` : ''}`)}
       {e.theoretical ? (
