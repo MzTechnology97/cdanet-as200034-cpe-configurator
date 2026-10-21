@@ -1,4 +1,4 @@
-import { type ReactNode, useId } from 'react';
+import { type PointerEvent, type ReactNode, useId, useState } from 'react';
 import type { Estimate } from './parts';
 
 /**
@@ -66,6 +66,8 @@ const THIN_FRESNEL = 14;
  */
 export function ProfileChart({ p, view = 'full', height = 300, ends = ['CPE', 'AP'] }: { p: LinkProfile; view?: 'full' | 'fresnel' | 'auto'; height?: number; ends?: [string, string] }) {
   const clip = `link-clip-${useId().replace(/:/g, '')}`;
+  // the point of the link under the mouse (or the finger): its heights in a tooltip
+  const [hover, setHover] = useState<number | null>(null);
   const W = 980;
   const H = height;
   const pad = { l: 52, r: 16, t: 18, b: 34 };
@@ -98,9 +100,46 @@ export function ProfileChart({ p, view = 'full', height = 300, ends = ['CPE', 'A
   const last = pts[pts.length - 1]!;
   const critical = p.worst ? pts.reduce((a, b) => (Math.abs(b.d - p.worst!.d) < Math.abs(a.d - p.worst!.d) ? b : a)) : null;
   const yCritical = critical ? Math.max(pad.t, Math.min(H - pad.b, y(critical, Math.max(critical.ground, critical.top ?? critical.ground)))) : 0;
+  const onMove = (e: PointerEvent<SVGSVGElement>) => {
+    const r = e.currentTarget.getBoundingClientRect();
+    const d = (((e.clientX - r.left) * W) / r.width - pad.l) / ((W - pad.l - pad.r) / D);
+    if (d < 0 || d > D) return setHover(null);
+    let best = 0;
+    for (let i = 1; i < pts.length; i++) if (Math.abs(pts[i]!.d - d) < Math.abs(pts[best]!.d - d)) best = i;
+    setHover(best);
+  };
+  const h = hover !== null ? pts[hover] : undefined;
+  const tip = (() => {
+    if (!h) return null;
+    const top = Math.max(h.ground, h.top ?? h.ground);
+    const clear = h.los - top;
+    const free = h.r > 0 ? Math.max(0, Math.min(100, Math.round((clear / h.r) * 100))) : 100;
+    const lines = [
+      `${km(h.d)} da ${ends[0]} · ${km(Math.max(0, D - h.d))} da ${ends[1]}`,
+      `Linea di vista a ${dec(h.los - h.ground)} m dal suolo`,
+      h.obstacle && h.top != null && h.top > h.ground
+        ? `${h.obstacle === 'edificio' ? 'Edificio' : 'Alberi'} di ${dec(h.top - h.ground)} m: linea ${clear >= 0 ? `${dec(clear)} m sopra` : `${dec(-clear)} m dentro`}`
+        : clear >= 0
+          ? null
+          : `Terreno ${dec(-clear)} m sopra la linea`,
+      `Fresnel: raggio ${dec(h.r)} m · libera ${free}%${clear < 0.6 * h.r ? (clear < 0 ? ' · ostruita' : ' · invasa') : ''}`,
+      `Suolo ${Math.round(h.ground)} m s.l.m.`,
+    ].filter((l): l is string => !!l);
+    const tone = clear < 0 ? 'bad' : clear < 0.6 * h.r ? 'warn' : 'good';
+    const hx = x(h.d);
+    return { lines, tone, hx, top, right: hx > W * 0.55 };
+  })();
   return (
     <div className="link-chart-wrap">
-      <svg viewBox={`0 0 ${W} ${H}`} className="los-chart link-chart" role="img" aria-label={zoom ? 'Profilo del collegamento: zona di Fresnel, altezze dalla linea di vista' : 'Profilo del collegamento'}>
+      <svg
+        viewBox={`0 0 ${W} ${H}`}
+        className="los-chart link-chart"
+        role="img"
+        aria-label={zoom ? 'Profilo del collegamento: zona di Fresnel, altezze dalla linea di vista' : 'Profilo del collegamento'}
+        onPointerMove={onMove}
+        onPointerDown={onMove}
+        onPointerLeave={() => setHover(null)}
+      >
         {/* what falls outside the window (zoom) is cut at the edges of the drawing */}
         <defs>
           <clipPath id={clip}>
@@ -155,6 +194,15 @@ export function ProfileChart({ p, view = 'full', height = 300, ends = ['CPE', 'A
             <circle cx={x(critical.d)} cy={yCritical} r={5} className="los-worst" />
           </>
         )}
+        {/* the point under the mouse: from the line of sight down to the ground or the obstacle */}
+        {h && tip && (
+          <g className="link-hover" pointerEvents="none">
+            <line x1={tip.hx} x2={tip.hx} y1={pad.t} y2={H - pad.b} className="link-hover-line" />
+            <line x1={tip.hx} x2={tip.hx} y1={Math.max(pad.t, Math.min(H - pad.b, y(h, tip.top)))} y2={Math.max(pad.t, Math.min(H - pad.b, y(h, h.los)))} className={`link-hover-gap ${tip.tone}`} />
+            <circle cx={tip.hx} cy={Math.max(pad.t, Math.min(H - pad.b, y(h, h.los)))} r={4} className="link-hover-dot" />
+            <circle cx={tip.hx} cy={Math.max(pad.t, Math.min(H - pad.b, y(h, tip.top)))} r={4} className={`link-hover-dot ${tip.tone}`} />
+          </g>
+        )}
         {/* zoom: the ground cut at the top is said, with how far above the line it goes */}
         {zoom && above > hi && (
           <text x={W - pad.r - 4} y={pad.t + 14} className="link-label" textAnchor="end">
@@ -162,6 +210,16 @@ export function ProfileChart({ p, view = 'full', height = 300, ends = ['CPE', 'A
           </text>
         )}
       </svg>
+      {/* the figures of the point in HTML: the same size in a small chart (the dock) as in a big one */}
+      {tip && (
+        <div className={`link-tip-box${tip.right ? ' right' : ''}`} style={tip.right ? { right: `${(1 - tip.hx / W) * 100}%` } : { left: `${(tip.hx / W) * 100}%` }}>
+          {tip.lines.map((l, i) => (
+            <div key={i} className={`${i === 0 ? 'strong' : ''}${/^Fresnel|^Edificio|^Alberi|^Terreno/.test(l) ? ` ${tip.tone}` : ''}`}>
+              {l}
+            </div>
+          ))}
+        </div>
+      )}
     </div>
   );
 }

@@ -454,7 +454,22 @@ function addSimulation(map: GLMap, image: HTMLCanvasElement, bounds: [LatLon, La
  * Opens the 3D view of the link from [from] ([lat, lon], [label]) to the AP of the profile [p]
  * (admins: the profile carries the AP position). [others]: APs around ({ name, lat, lon }).
  */
-export async function openLink3d({ from, label, p, apName, others = [] }: { from: LatLon; label?: string; p: Profile3d; apName: string; others?: Array<{ name: string; lat?: number | null; lon?: number | null }> }) {
+export async function openLink3d({
+  from,
+  label,
+  p,
+  apName,
+  others = [],
+  ends,
+}: {
+  from: LatLon;
+  label?: string;
+  p: Profile3d;
+  apName: string;
+  others?: Array<{ name: string; lat?: number | null; lon?: number | null }>;
+  /** Simulazione A → B: the names of the two ends instead of CPE and AP. */
+  ends?: [string, string];
+}) {
   if (p.ap?.lat == null || p.ap.lon == null || !p.chart?.length) return;
   const to: LatLon = [p.ap.lat, p.ap.lon];
   const geo = linkGeometry(from, to, p.chart);
@@ -462,23 +477,26 @@ export async function openLink3d({ from, label, p, apName, others = [] }: { from
   openScene({
     title: `3D · ${label ?? 'Punto'} → ${apName}`,
     ariaLabel: `Collegamento 3D con ${apName}`,
-    legendItems: [...LINK_LEGEND, ['bld', 'edifici'], ['tree', 'alberi'], ['ap', 'AP'], ['cpe', 'CPE']],
+    legendItems: [...LINK_LEGEND, ['bld', 'edifici'], ['tree', 'alberi'], ['ap', ends?.[1] ?? 'AP'], ['cpe', ends?.[0] ?? 'CPE']],
     center: [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2],
     bearing: linkBearing - 90,
     onLoad: ({ map, tag, fit, preset }) => {
       addLink(map, geo);
-      tag(from[0], from[1], `CPE ${Math.round(p.mountedM ?? p.cpeHeightM ?? 0)} m`, 'cpe');
+      tag(from[0], from[1], `${ends?.[0] ?? 'CPE'} ${Math.round(p.mountedM ?? p.cpeHeightM ?? 0)} m`, 'cpe');
       tag(to[0], to[1], `${apName}${p.apAntenna ? ` · ${p.apAntenna.aboveGroundM} m` : ''}`, 'ap');
       const span = Math.max(Math.abs(to[0] - from[0]), Math.abs(to[1] - from[1])) * 1.5 + 0.02;
       const mid = [(from[0] + to[0]) / 2, (from[1] + to[1]) / 2] as const;
       others
-        .filter((a): a is { name: string; lat: number; lon: number } => a.lat != null && a.lon != null && Math.abs(a.lat - to[0]) + Math.abs(a.lon - to[1]) > 2e-3 && Math.abs(a.lat - mid[0]) < span && Math.abs(a.lon - mid[1]) < span)
+        .filter(
+          (a): a is { name: string; lat: number; lon: number } =>
+            a.lat != null && a.lon != null && Math.abs(a.lat - to[0]) + Math.abs(a.lon - to[1]) > 2e-3 && Math.abs(a.lat - from[0]) + Math.abs(a.lon - from[1]) > 2e-3 && Math.abs(a.lat - mid[0]) < span && Math.abs(a.lon - mid[1]) < span,
+        )
         .slice(0, 40)
         .forEach((a) => tag(a.lat, a.lon, a.name, 'other'));
       const towardsAp = (pt: LatLon, other: LatLon): LatLon[] => [pt, [pt[0] + (other[0] - pt[0]) * 0.35, pt[1] + (other[1] - pt[1]) * 0.35]];
       preset('Di lato', () => fit([from, to], linkBearing - 90, 62));
-      preset('Dalla CPE', () => fit(towardsAp(from, to), linkBearing, 72, 0.3));
-      preset('Dall’AP', () => fit(towardsAp(to, from), (linkBearing + 180) % 360, 72, 0.3));
+      preset(ends ? `Da ${ends[0]}` : 'Dalla CPE', () => fit(towardsAp(from, to), linkBearing, 72, 0.3));
+      preset(ends ? `Da ${ends[1]}` : 'Dall’AP', () => fit(towardsAp(to, from), (linkBearing + 180) % 360, 72, 0.3));
       preset('Dall’alto', () => fit([from, to], linkBearing - 90, 0));
       fit([from, to], linkBearing - 90, 62);
     },
@@ -526,7 +544,7 @@ export async function openSimulation3d({ d, image, bounds, legendItems, title }:
 export interface Area3dExtras {
   aps?: Array<{ id?: string; name: string; lat?: number | null; lon?: number | null }>;
   sim?: { d: Simulation; image: HTMLCanvasElement; bounds: [LatLon, LatLon]; legendItems: LegendItem[]; title: string } | null;
-  link?: { from: LatLon; label?: string; p: Profile3d; apName: string } | null;
+  link?: { from: LatLon; label?: string; p: Profile3d; apName: string; ends?: [string, string] } | null;
 }
 
 /**
@@ -549,7 +567,8 @@ export async function openArea3d({ map: m2d, extras = {} }: { map: LMap; extras?
       if (sim) addSimulation(map, sim.image, sim.bounds, range);
       if (link?.p?.ap?.lat != null && link.p.ap.lon != null && link.p.chart?.length) {
         addLink(map, linkGeometry(link.from, [link.p.ap.lat, link.p.ap.lon], link.p.chart));
-        tag(link.from[0], link.from[1], `CPE ${Math.round(link.p.mountedM ?? link.p.cpeHeightM ?? 0)} m`, 'cpe');
+        tag(link.from[0], link.from[1], `${link.ends?.[0] ?? 'CPE'} ${Math.round(link.p.mountedM ?? link.p.cpeHeightM ?? 0)} m`, 'cpe');
+        if (link.ends) tag(link.p.ap.lat, link.p.ap.lon, `${link.apName}${link.p.apAntenna ? ` · ${link.p.apAntenna.aboveGroundM} m` : ''}`, 'ap');
       }
       // the APs inside the view (at most 80, the link's AP first)
       const inView = aps.filter((a): a is typeof a & { lat: number; lon: number } => a.lat != null && a.lon != null && b.contains([a.lat, a.lon])).slice(0, 80);

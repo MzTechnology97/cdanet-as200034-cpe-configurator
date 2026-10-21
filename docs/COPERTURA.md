@@ -54,7 +54,18 @@ Il modello unisce la teoria radio, il terreno e i clienti reali:
 
 ## Simulazione A → B
 
-Un collegamento tra due punti qualsiasi: un nuovo AP, un ponte radio, una CPE lontana dagli AP esistenti. Il server la consente ad amministratori e Specialist. Nella console è la scheda «Simulazione A → B» della Copertura completa (amministratori e direttore tecnico); nell'app è la scheda sotto la mappa della verifica di copertura, per amministratori e Specialist.
+Un collegamento tra due punti qualsiasi: un nuovo AP, un ponte radio, una CPE lontana dagli AP esistenti. Il server la consente ad amministratori e Specialist. Nell'app è la scheda sotto la mappa della verifica di copertura, per amministratori e Specialist.
+
+Nella console (Copertura completa, amministratori e direttore tecnico) è il **collegamento PTP**, dalla v1.36.14: il pulsante «Collegamento PTP (A → B)» sotto la mappa apre sopra la mappa lo stesso pannello del collegamento AP–cliente.
+- **A** a sinistra e **B** a destra: un AP della rete, «Sulla mappa» (dopo A la mappa chiede B), il punto verificato per A; altezza con − e +, quota, puntamento (anche magnetico) e inclinazione.
+- **Al centro**: esito, distanza, Fresnel libera, capacità stimata (modulazione attesa su airMAX ac 2×2 nel canale scelto, circa il 60% della velocità radio), modulazione, zona di Fresnel e Vista 3D. «⇄» scambia A e B.
+- **Sulla mappa**: A (arancione, come la CPE) e B (blu, come l'AP) si trascinano; il collegamento ha la sua zona di Fresnel colorata dove è libera, invasa od ostruita. Il pulsante 3D della mappa lo mostra con terreno, edifici e alberi.
+- **Sotto la mappa**: coordinate, frequenza, canale, EIRP di A, guadagno di B, «Antenne sopra tetti e alberi», i dati e il profilo completo. Ogni cambio rifà la simulazione da sola.
+
+![Il collegamento PTP sopra la mappa](img/ptp-dock.png)
+
+I **profili** (questo e quello AP–cliente) sono interattivi: passando il mouse, o il dito, dicono a che distanza da A e da B si è, a quanti metri dal suolo passa la linea di vista, edifici o alberi sotto la linea, il raggio di Fresnel in quel punto e quanto è libero, la quota del suolo.
+
 - **Punti A e B** sulla mappa (un tocco, poi si trascinano), con il GPS (app) o con le coordinate. Mentre si sceglie un punto, il tocco non avvia la verifica di copertura.
 - **Parametri**: altezze di A e B (predefinite quelle di Puntamento), frequenza, EIRP di A, guadagno di B, rumore; vuoti valgono quelli delle Impostazioni server. «Antenne sopra tetti e alberi intorno» le monta come un installatore.
 - **Risultato**: esito (libera, Fresnel invasa, ostruita) con il rialzo di A che serve o «non basta un palo» oltre 12 m; distanza, puntamento e inclinazione nei due sensi, antenne, perdite, segnale e modulazione attesi, profilo con la zona di Fresnel; il collegamento colorato sulla mappa. Oltre 20 km è «poco realistico».
