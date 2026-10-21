@@ -38,6 +38,8 @@ object DataColors {
     val LineOfSight = Color(0xFF2563EB)
     val Fresnel = Color(0xFF38BDF8)
     val CpeEnd = Poor
+    /** The AP end of a link (B of the simulation A → B), blue as on the console's map. */
+    val ApEnd = Color(0xFF2563EB)
     val Vegetation = Color(0xFF2E7D32)
 
     /** Distinct colours for series with no meaning of their own (Wi-Fi networks of a chart). */
