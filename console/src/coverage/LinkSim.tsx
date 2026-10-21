@@ -18,10 +18,13 @@ interface LinkSim extends LinkProfile {
   b: End;
   terrainSource: 'tinitaly' | 'srtm';
   lossDb: number;
+  /** The physics of the obstacles (Deygout and foliage): the worst case of a new link. */
+  diffractionDb?: number;
   foliageM: number;
   buildings: boolean;
   radio: { eirpDbm: number; gainDbi: number; noiseDbm: number };
   estimate: { signalDbm: number; snrDb: number | null; mcs: number | null; label: string | null };
+  physical?: { signalDbm: number; snrDb: number | null; mcs: number | null; label: string | null };
   tooFar: boolean;
 }
 interface End {
@@ -158,6 +161,8 @@ export function LinkSimCard({ map, L, onPicking }: { map: LMap | null; L: Leafle
     : null;
   const tilt = d ? (Math.atan2(d.chart[d.chart.length - 1]!.los - d.chart[0]!.los, d.distanceM) * 180) / Math.PI : 0;
   const az = d ? bearing([d.a.lat, d.a.lon], [d.b.lat, d.b.lon]) : 0;
+  // a line of sight cut by the terrain: the physics decides (a design, not a connected customer)
+  const shown = d && d.verdict === 'blocked' && d.physical ? d.physical : d?.estimate;
   const clearPct = d?.worst ? Math.round((100 * d.worst.clearanceM) / (d.worst.fresnel60M / 0.6 || 1)) : null;
 
   return (
@@ -210,6 +215,9 @@ export function LinkSimCard({ map, L, onPicking }: { map: LMap | null; L: Leafle
                 : ` · servirebbe alzare A di ${dec(d.raiseCpeM)} m: non basta un palo, serve un punto più alto o un ripetitore`
               : ''}
             {d.tooFar ? ' · oltre 20 km: collegamento poco realistico per l’airMAX' : ''}
+            {d.physical && d.verdict !== 'clear' && d.physical.signalDbm < d.estimate.signalDbm - 6
+              ? ` · con la diffrazione pura ${d.physical.signalDbm} dBm${d.physical.signalDbm < -80 ? ': da non progettare così' : ''}`
+              : ''}
           </Notice>
           <div className="link-facts">
             {fact('Distanza', km(d.distanceM))}
@@ -218,15 +226,20 @@ export function LinkSimCard({ map, L, onPicking }: { map: LMap | null; L: Leafle
             {fact('Puntamento B → A', dir((az + 180) % 360), `inclinazione ${-tilt >= 0 ? '+' : ''}${dec(-tilt)}°`)}
             {fact('Antenna A', `${dec(d.a.mountedM)} m dal suolo`, `${d.a.ground + Math.round(d.a.mountedM)} m s.l.m.${d.a.roofM ? ` · edificio ${dec(d.a.roofM)} m` : ''}`)}
             {fact('Antenna B', `${dec(d.b.mountedM)} m dal suolo`, `${d.b.ground + Math.round(d.b.mountedM)} m s.l.m.${d.b.roofM ? ` · edificio ${dec(d.b.roofM)} m` : ''}`)}
-            {fact('Perdite per ostacoli', `${dec(d.lossDb)} dB`, [d.buildings ? 'edifici' : null, d.foliageM > 0 ? `${Math.round(d.foliageM)} m di alberi` : null].filter(Boolean).join(' · ') || (d.lossDb > 0 ? 'il terreno' : 'nessun ostacolo'))}
-            {fact('Segnale atteso in B', `${d.estimate.signalDbm} dBm`, `EIRP ${d.radio.eirpDbm} dBm · antenna ${d.radio.gainDbi} dBi`)}
+            {d.diffractionDb != null && d.verdict !== 'clear' && fact('Diffrazione pura', `${dec(d.diffractionDb)} dB`, d.physical ? `segnale ${d.physical.signalDbm} dBm${d.physical.label ? ` · ${d.physical.label}` : ''}` : 'fisica degli ostacoli')}
+            {fact('Perdita stimata (come Copertura)', `${dec(d.lossDb)} dB`, [d.buildings ? 'edifici' : null, d.foliageM > 0 ? `${Math.round(d.foliageM)} m di alberi` : null].filter(Boolean).join(' · ') || (d.lossDb > 0 ? 'il terreno' : 'nessun ostacolo'))}
+            {fact(
+              'Segnale atteso in B',
+              `${shown!.signalDbm} dBm`,
+              shown === d.estimate ? `EIRP ${d.radio.eirpDbm} dBm · antenna ${d.radio.gainDbi} dBi` : `con la diffrazione pura · come Copertura ${d.estimate.signalDbm} dBm`,
+            )}
             {clearPct !== null ? fact('Fresnel libera', `${Math.max(0, clearPct)}%`, `nel punto critico, a ${km(d.worst!.d)}`) : fact('Fresnel libera', '100%', 'su tutto il collegamento')}
           </div>
-          <SignalBar e={d.estimate} />
+          <SignalBar e={shown} />
           <ProfileChart p={d} view="full" height={260} ends={['A', 'B']} />
           <ProfileChart p={d} view="fresnel" height={200} ends={['A', 'B']} />
           <p className="ui-muted ui-small cn-p">
-            Terreno {d.terrainSource === 'tinitaly' ? 'TINITALY 10 m' : 'SRTM 30 m'}, edifici 3D e alberi dove importati (altrimenti la copertura del suolo). Segnale stimato con lo stesso modello della Copertura, rumore {d.radio.noiseDbm} dBm: una stima, non una misura.
+            Terreno {d.terrainSource === 'tinitaly' ? 'TINITALY 10 m' : 'SRTM 30 m'}, edifici 3D e alberi dove importati (altrimenti la copertura del suolo). Il segnale atteso usa la perdita empirica della Copertura (come UISP Design, tarata sui clienti collegati); con un ostacolo grande la diffrazione pura dice il caso peggiore, quello da usare per progettare un collegamento nuovo. Rumore {d.radio.noiseDbm} dBm: una stima, non una misura.
           </p>
         </>
       )}

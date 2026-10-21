@@ -223,6 +223,11 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
     const gain = q.gain ?? ctx.cfg.coverageCpeGainDbi;
     const signalDbm = linkSignalDbm(p.D, p.freq, eirp, gain, effect.lossDb);
     const mod = expectedModulation(signalDbm, q.noise);
+    // the physics of the obstacle (Deygout knife edges and the foliage crossed): the empirical loss of
+    // UISP Design matches connected customers, a planned link over a big hill is worse (fork, 21/10/2026)
+    const diffractionDb = effect.diffractionDb ?? effect.lossDb;
+    const physicalDbm = linkSignalDbm(p.D, p.freq, eirp, gain, diffractionDb);
+    const physical = expectedModulation(physicalDbm, q.noise);
     const end = (pt: { lat: number; lon: number }, h: number, alt: number, ground: number) => ({
       lat: pt.lat,
       lon: pt.lon,
@@ -241,10 +246,13 @@ export function pointingRoutes(app: FastifyInstance, ctx: AppContext) {
       frequencyMhz: p.freq,
       terrainSource: at.fine ? 'tinitaly' : 'srtm',
       lossDb: effect.lossDb,
+      diffractionDb,
       foliageM: effect.foliageM ?? 0,
       buildings: effect.buildings ?? false,
       radio: { eirpDbm: eirp, gainDbi: gain, noiseDbm: q.noise },
+      // as Copertura (the empirical loss), and with the pure diffraction: the worst case of a new link
       estimate: { signalDbm, snrDb: mod?.snrDb ?? null, mcs: mod?.mcs ?? null, label: mod?.label ?? null },
+      physical: { signalDbm: physicalDbm, snrDb: physical?.snrDb ?? null, mcs: physical?.mcs ?? null, label: physical?.label ?? null },
       // beyond the farthest realistic link: drawn, never promised
       tooFar: p.D > MAX_LINK_M,
       ...los,

@@ -34,6 +34,8 @@ describe('Simulazione A → B (21/10/2026)', () => {
       assert.ok(['clear', 'fresnel', 'blocked'].includes(j.verdict), j.verdict);
       assert.equal(typeof j.estimate.signalDbm, 'number');
       assert.equal(j.estimate.signalDbm, linkSignalDbm(j.distanceM, 5500, 36, 23, j.lossDb), 'the budget of the profile');
+      assert.equal(typeof j.diffractionDb, 'number');
+      assert.equal(j.physical.signalDbm, linkSignalDbm(j.distanceM, 5500, 36, 23, j.diffractionDb), 'and with the pure diffraction');
       assert.deepEqual([j.a.heightM, j.b.heightM, j.radio.eirpDbm, j.tooFar], [6, 15, 36, false]);
       assert.deepEqual(j.ap, { lat: 37.6, lon: 14.1 });
     }
