@@ -157,6 +157,8 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
     var saving by remember { mutableStateOf(false) }
     var opened by remember { mutableStateOf<SavedCheckDto?>(null) }
     val savedPos = remember { androidx.compose.foundation.relocation.BringIntoViewRequester() }
+    // admins and specialists: the simulation A → B, its points chosen on the map too
+    val linkSim = remember { LinkSimState() }
 
     // admins: every AP on the map (and for the search by name), the default CPE height
     LaunchedEffect(admin) {
@@ -250,8 +252,13 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
     }
 
     val onTap by rememberUpdatedState { la: Double, lo: Double ->
-        opened = null
-        check(la, lo, null)
+        // choosing A or B of the simulation: the tap is that point, no coverage check
+        if (linkSim.picking != null) {
+            linkSim.place(la, lo)
+        } else {
+            opened = null
+            check(la, lo, null)
+        }
     }
     val onSim by rememberUpdatedState { id: String -> simulate(id) }
     var map3d by remember { mutableStateOf(false) }
@@ -367,6 +374,14 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                 Text("Trascina il punto per spostarlo.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                 TextButton(onClick = { page?.evaluateJavascript("window.cdaPickPoint()", null) }) { Text("Nuovo punto sulla mappa") }
             }
+        }
+        if (c.session.isStaff) {
+            LinkSimCard(
+                c,
+                linkSim,
+                onArm = { page?.evaluateJavascript("window.cdaPickPoint()", null) },
+                onDraw = { json, a -> page?.evaluateJavascript(if (json != null && a != null) "window.cdaLink($json, ${a.first}, ${a.second})" else "window.cdaClearLink()", null) },
+            )
         }
         if (busy == "check" || busy == "sim") Text(if (busy == "sim") "Simulazione in corso…" else "Valutazione degli AP…", style = MaterialTheme.typography.bodySmall)
 
