@@ -17,7 +17,7 @@ import { parseMac, SSID_PARTS, TARGET_FIRMWARE } from '../domain/policy.ts';
 import type { ModuleKey } from '../services/modules.ts';
 import { isAp, isPtp, type UispDevice } from '../services/uisp.ts';
 import { approxPoint, roughDistance } from '../domain/approx.ts';
-import { estimateAt, MAX_LINK_M, rankCoverage, type ApModel } from '../domain/coverage-model.ts';
+import { estimateAt, MAX_LINK_M, rankCoverage, VIEW_MAX_KM, type ApModel } from '../domain/coverage-model.ts';
 import { estimateForAp, obstacles, pointingConfig, terrainBetween, terrainSampler } from '../services/terrain.ts';
 import { failuresNear, fieldFailures } from '../services/field-samples.ts';
 
@@ -115,12 +115,12 @@ export function uispRoutes(app: FastifyInstance, ctx: AppContext) {
       .parse(req.query);
     const chosenCpe = q.cpe === 'auto' ? null : cpeModelById(q.cpe);
     if (q.cpe !== 'auto' && !chosenCpe) throw new HttpError(400, 'unknown_cpe_model');
-    // admins: no limits (up to 50 APs, the distance they ask up to 200 km); installers, from the
-    // web or the app alike: the number set in Impostazioni server, within the configured radius
+    // admins (and specialists with «visibilità piena»): up to 50 APs, as far as they ask up to
+    // VIEW_MAX_KM, beyond 20 km rated as too far (Carmelo, 21/10/2026); installers, from the web or
+    // the app alike: the number set in Impostazioni server, within the configured radius and 20 km
     const isAdmin = seesAll(req.user!);
     const limit = isAdmin ? q.limit : ctx.cfg.installerCoverageAps;
-    // never beyond the farthest realistic link (20 km), whatever is asked or configured
-    const maxKm = Math.min(MAX_LINK_M / 1000, isAdmin ? (q.km ?? ctx.uispSettings.coverageMaxKm) : ctx.uispSettings.coverageMaxKm);
+    const maxKm = isAdmin ? Math.min(VIEW_MAX_KM, q.km ?? ctx.uispSettings.coverageMaxKm) : Math.min(MAX_LINK_M / 1000, ctx.uispSettings.coverageMaxKm);
     if (!isValidLatLon(q.lat, q.lon)) throw new HttpError(400, 'invalid_position');
     // Installers check coverage only on the POPs/APs assigned to them by the admin.
     const keys = seesAll(req.user!) ? null : new Set(ctx.outages.assignments(req.user!.id).map((i) => i.key));
