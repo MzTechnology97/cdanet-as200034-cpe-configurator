@@ -193,8 +193,9 @@ data class SignalEstimateDto(
     val nearby: Int? = null,
     /** The AP has no customers yet: free-space estimate (less accurate). */
     val theoretical: Boolean = false,
-    /** Beyond the farthest realistic link (20 km). */
+    /** Beyond the farthest realistic link ([tooFarKm], 20 km on the server). */
     val tooFar: Boolean = false,
+    val tooFarKm: Int = 20,
     /** Hills between the point and the AP (null: elevation model not available). */
     val terrain: TerrainEffectDto? = null,
     /** Downlink capacity of the new link from the curve of the real CPEs, Mbit/s. */
@@ -212,7 +213,7 @@ data class SignalEstimateDto(
             "affidabilità $confidence",
             if (inSector == false) "fuori dal settore servito" else null,
             if (beyondServed) "più lontano dei clienti attuali" else null,
-            if (tooFar) "oltre 20 km: troppo lontano" else null,
+            if (tooFar) "oltre $tooFarKm km: troppo lontano" else null,
             terrain?.describe(),
             capacityMbps?.let { "capacità ~$it Mbit/s" + (eveningMbps?.let { e -> ", la sera ~$e" } ?: "") },
             mcs?.takeIf { it >= 0 }?.let { m -> "modulazione attesa ${listOf("1x", "2x", "3x", "4x", "6x", "8x", "9x", "10x", "12x", "13x").getOrElse(m) { "" }}" + (snrDb?.let { " (SNR $it dB)" } ?: "") },

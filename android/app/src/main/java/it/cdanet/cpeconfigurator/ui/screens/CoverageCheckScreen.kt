@@ -134,6 +134,8 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
     var height by remember { mutableStateOf("") }
     // the CPE to install: proposed for each AP ("auto") or one model for all
     var cpe by remember { mutableStateOf("auto") }
+    // admins: how far the APs are looked for (the server allows them up to 100 km; installers 20)
+    var radiusKm by remember { mutableStateOf<Int?>(null) }
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var suggestions by remember { mutableStateOf<List<GeocodeResult>>(emptyList()) }
@@ -183,7 +185,7 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
             busy = "check"
             try {
                 val h = height.replace(',', '.').toDoubleOrNull()?.takeIf { it in 0.5..100.0 }
-                val json = if (admin) c.api.coverageJson(lat, lon, 10, null, h, cpe) else c.api.coverageJson(lat, lon, h, cpe)
+                val json = if (admin) c.api.coverageJson(lat, lon, 10, radiusKm, h, cpe) else c.api.coverageJson(lat, lon, h, cpe)
                 result = AppJson.decodeFromString(CoverageDto.serializer(), json)
                 resultJson = json
                 point = CheckedPoint(lat, lon, label ?: runCatching { c.api.reverseGeocode(lat, lon)?.label }.getOrNull()?.takeIf { it.isNotBlank() } ?: String.format(java.util.Locale.US, "%.5f, %.5f", lat, lon))
@@ -327,6 +329,13 @@ fun CoverageCheckScreen(c: AppContainer, onCompass: ((CompassTarget) -> Unit)? =
                 placeholder = "es. 6",
                 supporting = if (height.isNotBlank() && heightM == null) "Da 0,5 a 100 m" else "Dal terreno all'antenna montata: conta per il segnale stimato e la visibilità.",
                 isError = height.isNotBlank() && heightM == null,
+            )
+            it.cdanet.cpeconfigurator.ui.Dropdown(
+                "Raggio di ricerca degli AP",
+                listOf(null, 10, 20, 30, 50, 100),
+                radiusKm,
+                { km -> km?.let { "$it km" } ?: "Predefinito del server" },
+                { radiusKm = it },
             )
             val models = result?.cpeModels.orEmpty()
             if (models.isNotEmpty()) {
