@@ -54,8 +54,8 @@ describe('Template airOS dal modulo', () => {
   it('reads and writes real keys; an unchanged form leaves the text as it is', () => {
     const base = skeletonFor('LiteBeam 5AC');
     const { values, missing } = readForm(base, DEFAULT_FORM_PARAMS, 'LiteBeam 5AC');
-    // not in an export until set (scan list, remote syslog): shown with their default
-    assert.deepEqual(missing, ['scanFrom', 'scanTo', 'syslogHost']);
+    // not in an export until set (scan list, remote syslog; gateway and DNS of a bridge): shown with their default
+    assert.deepEqual(missing, ['scanFrom', 'scanTo', 'gateway', 'dns1', 'dns2', 'syslogHost']);
     assert.equal(values.wirelessMode, 'station');
     assert.equal(values.antennaGain, 23);
     assert.equal(values.lanIp, '192.168.1.254');
@@ -152,5 +152,39 @@ describe('Template airOS dal modulo', () => {
     assert.match(text, /^netconf\.2\.ip=192\.168\.50\.1$/m);
     assert.equal(job.json().afterApply.lanIp, '192.168.50.1');
     await t.app.close();
+  });
+});
+
+describe('Template airOS: gateway e DNS in bridge (Carmelo, 21/10/2026)', () => {
+  it('a bridge with a fixed address gets its gateway and DNS, with the keys of airOS 8', async () => {
+    const { inspectFreeTemplate, askedFor, renderFreeCfg } = await import('../src/domain/specialist-cfg.ts');
+    const params = { ...DEFAULT_FORM_PARAMS };
+    const base = skeletonFor('LiteBeam 5AC');
+    // CDA Net's template: values written in the text, empty = no gateway
+    const cda = applyForm(base, params, 'LiteBeam 5AC', { netMode: 'bridge', lanIp: '192.168.10.5', gateway: '192.168.10.1', dns1: '9.9.9.9', dns2: '' }).text;
+    const k = parseKeys(cda);
+    assert.deepEqual(
+      ['route.status', 'route.1.status', 'route.1.devname', 'route.1.ip', 'route.1.netmask', 'route.1.gateway'].map((x) => k.get(x)),
+      ['enabled', 'enabled', 'br0', '0.0.0.0', '0', '192.168.10.1'],
+    );
+    assert.deepEqual([k.get('resolv.nameserver.status'), k.get('resolv.nameserver.1.ip'), k.get('resolv.nameserver.2.status')], ['enabled', '9.9.9.9', 'disabled']);
+    const read = readForm(cda, params, 'LiteBeam 5AC').values;
+    assert.deepEqual([read.gateway, read.dns1, read.dns2], ['192.168.10.1', '9.9.9.9', '']);
+    const none = parseKeys(applyForm(cda, params, 'LiteBeam 5AC', { gateway: '' }).text);
+    assert.deepEqual([none.get('route.status'), none.get('route.1.status')], ['disabled', 'disabled']);
+    assert.throws(() => applyForm(base, params, 'LiteBeam 5AC', { netMode: 'bridge', gateway: '192.168.10' }), /form_invalid_gateway/);
+
+    // the specialist's template: empty = typed for each CPE in the flow (${GATEWAY})
+    const free = applyForm(base, params, 'LiteBeam 5AC', { netMode: 'bridge', gateway: '' }, { free: true }).text;
+    assert.equal(parseKeys(free).get('route.1.gateway'), '${GATEWAY}');
+    assert.equal(readForm(free, params, 'LiteBeam 5AC', { free: true }).values.gateway, '');
+    const report = inspectFreeTemplate(free);
+    assert.ok(report.placeholders.includes('GATEWAY'), JSON.stringify(report.placeholders));
+    const asked = askedFor(report.placeholders, { snmpCommunity: true, uispKey: true }).find((x) => x.name === 'GATEWAY');
+    assert.deepEqual([asked?.label, asked?.secret], ['Gateway della CPE (IP)', false], 'asked for each CPE, with its name');
+    const fixed = applyForm(free, params, 'LiteBeam 5AC', { gateway: '10.20.30.1' }, { free: true }).text;
+    assert.equal(parseKeys(fixed).get('route.1.gateway'), '10.20.30.1');
+    assert.ok(!inspectFreeTemplate(fixed).placeholders.includes('GATEWAY'), 'a fixed one is not asked');
+    assert.ok(renderFreeCfg.length >= 2);
   });
 });
