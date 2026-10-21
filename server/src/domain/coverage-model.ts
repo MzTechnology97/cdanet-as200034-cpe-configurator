@@ -18,6 +18,12 @@ import { bearingDeg, distanceM, type LatLon } from './geo.ts';
 
 /** Farthest link worth considering: CPEs hooked beyond 15 km are rare, beyond 20 km unrealistic. */
 export const MAX_LINK_M = 20_000;
+/**
+ * How far the admins (and a specialist with «visibilità piena») look for APs in Copertura and in
+ * the augmented reality (Carmelo, 21/10/2026: his POPs beyond 20 km too). Beyond MAX_LINK_M an AP
+ * is shown as too far, never as a link to promise.
+ */
+export const VIEW_MAX_KM = 100;
 /** Closer than this to the AP the CPE position is the AP's or the site's, not the customer's. */
 const MIN_SAMPLE_M = 50;
 
@@ -101,6 +107,8 @@ export interface SignalEstimate {
   beyondServed: boolean;
   /** Beyond the farthest realistic link (MAX_LINK_M). */
   tooFar: boolean;
+  /** That link, in km (the apps say «oltre N km»). */
+  tooFarKm?: number;
   confidence: 'alta' | 'media' | 'bassa';
   /** Customers the estimate is based on (hidden from installers unless allowed). */
   basis: number | null;
@@ -345,6 +353,7 @@ export function estimateAt(m: ApModel, d: number, b: number, freqMHz: number | n
     inSector: dir.inSector,
     beyondServed,
     tooFar,
+    tooFarKm: MAX_LINK_M / 1000,
     confidence,
     basis: m.samples.length,
     nearby,

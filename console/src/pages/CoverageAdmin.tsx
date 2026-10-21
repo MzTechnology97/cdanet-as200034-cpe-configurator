@@ -446,9 +446,10 @@ export function CoverageAdmin() {
                 recheck({ radius: Number(e.target.value) });
               }}
             >
-              {[5, 10, 15, 20].map((n) => (
+              {/* beyond 20 km the APs are shown as too far, never as a link (Carmelo, 21/10/2026) */}
+              {[5, 10, 15, 20, 30, 50, 100].map((n) => (
                 <option key={n} value={n}>
-                  entro {n} km
+                  entro {n} km{n > 20 ? ' (oltre 20 km: solo per vederli)' : ''}
                 </option>
               ))}
             </select>
