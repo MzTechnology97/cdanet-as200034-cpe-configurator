@@ -1031,6 +1031,66 @@ data class LosPointDto(
 @Serializable
 data class HorizonDto(val stepDeg: Double = 0.5, val el: List<Double> = emptyList(), val dist: List<Int> = emptyList(), val ground: Double? = null, val eye: Double? = null)
 
+/** An end of the simulation A → B: where its antenna is (raised over the roofs and trees around it). */
+@Serializable
+data class LinkEndDto(
+    val lat: Double = 0.0,
+    val lon: Double = 0.0,
+    val ground: Int = 0,
+    val heightM: Double = 0.0,
+    val mountedM: Double? = null,
+    val roofM: Int? = null,
+)
+
+@Serializable
+data class LinkRadioDto(val eirpDbm: Double = 0.0, val gainDbi: Double = 0.0, val noiseDbm: Double = -92.0)
+
+@Serializable
+data class LinkEstimateDto(val signalDbm: Int? = null, val snrDb: Int? = null, val mcs: Int? = null, val label: String? = null)
+
+/**
+ * Simulazione A → B (GET /api/coverage/link, admins and specialists): two points chosen by hand,
+ * the profile of Visibilità between them (A in the place of the CPE, B of the AP) and the expected
+ * signal and modulation with the radio given.
+ */
+@Serializable
+data class LinkSimDto(
+    val a: LinkEndDto = LinkEndDto(),
+    val b: LinkEndDto = LinkEndDto(),
+    val distanceM: Int = 0,
+    val frequencyMhz: Int = 5600,
+    val terrainSource: String = "srtm",
+    val lossDb: Double = 0.0,
+    val foliageM: Int = 0,
+    val buildings: Boolean = false,
+    val radio: LinkRadioDto = LinkRadioDto(),
+    val estimate: LinkEstimateDto = LinkEstimateDto(),
+    /** Beyond the farthest realistic link (20 km): drawn, never promised. */
+    val tooFar: Boolean = false,
+    val verdict: String = "clear",
+    val worst: LosWorstDto? = null,
+    /** How much A has to go up to free the line. */
+    val raiseCpeM: Double = 0.0,
+    val chart: List<LosPointDto> = emptyList(),
+) {
+    /** As the profile of Visibilità, for its chart. */
+    fun los() = LosDto(
+        distanceM = distanceM,
+        cpeHeightM = a.heightM,
+        mountedM = a.mountedM,
+        roofM = a.roofM,
+        frequencyMhz = frequencyMhz,
+        verdict = verdict,
+        worst = worst,
+        raiseCpeM = raiseCpeM,
+        chart = chart,
+        terrainSource = terrainSource,
+        lossDb = lossDb,
+        foliageM = foliageM,
+        buildings = buildings,
+    )
+}
+
 @Serializable
 data class LosWorstDto(val d: Int = 0, val clearanceM: Double = 0.0, val fresnel60M: Double = 0.0)
 

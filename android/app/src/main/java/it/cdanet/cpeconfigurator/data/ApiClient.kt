@@ -68,6 +68,8 @@ private val ERRORS = mapOf(
     "template_needs_mac" to "Questo template ha bisogno del MAC già in preparazione: prepara la configurazione sul posto",
     "user_not_found" to "Installatore non trovato o disattivato",
     "invalid_position" to "Posizione non valida",
+    "link_too_short" to "A e B sono troppo vicini: almeno 30 m",
+    "link_too_long" to "A e B sono troppo lontani: al massimo 100 km",
     "saved_check_not_found" to "Verifica salvata non trovata: forse è stata eliminata",
     "customer_not_found" to "Cliente non trovato tra quelli di ISP Billing",
     "acceptance_already_passed" to "Il collaudo risulta già superato",
@@ -537,6 +539,31 @@ class ApiClient(
 
     suspend fun lineOfSight(lat: Double, lon: Double, apId: String, height: Double?): LosDto =
         AppJson.decodeFromString(LosDto.serializer(), request("GET", "/api/pointing/profile?lat=$lat&lon=$lon&apId=${java.net.URLEncoder.encode(apId, "UTF-8")}" + (height?.let { "&height=$it" } ?: "")))
+
+    /** Simulazione A → B: the raw answer too, for the map (it draws the link from A to B as to an AP). */
+    suspend fun coverageLinkJson(
+        a: Pair<Double, Double>,
+        b: Pair<Double, Double>,
+        aH: Double?,
+        bH: Double?,
+        freq: Int?,
+        eirp: Double?,
+        gain: Double?,
+        noise: Double?,
+        raise: Boolean,
+    ): String {
+        val q = buildList {
+            add("aLat=${a.first}"); add("aLon=${a.second}"); add("bLat=${b.first}"); add("bLon=${b.second}")
+            aH?.let { add("aH=$it") }
+            bH?.let { add("bH=$it") }
+            freq?.let { add("freq=$it") }
+            eirp?.let { add("eirp=$it") }
+            gain?.let { add("gain=$it") }
+            noise?.let { add("noise=$it") }
+            add("raise=${if (raise) 1 else 0}")
+        }
+        return request("GET", "/api/coverage/link?" + q.joinToString("&"))
+    }
 
     suspend fun horizon(lat: Double, lon: Double, height: Double?): HorizonDto =
         AppJson.decodeFromString(HorizonDto.serializer(), request("GET", "/api/pointing/horizon?lat=$lat&lon=$lon" + (height?.let { "&height=$it" } ?: "")))
