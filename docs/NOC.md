@@ -212,14 +212,14 @@ Amministrazione → **Salute piattaforma** mostra:
 Ogni 5 minuti, solo quando lo stato cambia, arriva un avviso al NOC e su Telegram (evento «Servizi giù / di nuovo su»), anche per il disco quasi pieno.
 
 **Backup del database**:
-- **Scarica backup**: una copia del database (`VACUUM INTO`) cifrata AES-256-GCM con una password scelta dall'amministratore, con dentro la chiave principale se richiesta. **Verifica** apre una copia e ne controlla l'integrità, senza sostituire nulla.
+- **Scarica backup cifrato**: una copia del database (`VACUUM INTO`) cifrata AES-256-GCM con una password scelta dall'amministratore, con dentro la chiave principale se richiesta. **Verifica un backup** apre una copia e ne controlla l'integrità, senza sostituire nulla.
 - **Backup sul NAS** (Connettori → NAS):
   - il percorso di rete si scrive in ogni forma (`\\NAS\cartella`, `//NAS/cartella`, `smb://`, IP) e il server lo riconosce: nome, porta SMB, condivisione e cartelle con i nomi veri;
-  - «Sfoglia il NAS» sceglie la cartella, anche nuova;
+  - «Riconosci» trova il NAS e la condivisione, «Sfoglia il NAS» sceglie la cartella, anche nuova;
   - il test scrive e cancella un file di prova e mostra lo spazio libero;
   - il backup parte ogni notte all'ora scelta, o appena il server riparte se era spento. La copia è cifrata con la password del backup, scritta con un nome temporaneo e rinominata, poi riaperta come prova di ripristino;
   - restano solo le ultime N copie create da qui;
-  - «Esegui ora», «Copie sul NAS» e la verifica di una copia sono nella stessa card;
+  - «Esegui backup ora», «Copie sul NAS» e la verifica di una copia sono nella stessa card;
   - la password del NAS non torna mai alla console.
 
 Il backup completo del server (database, chiave principale, configurazione) è in [DEPLOY.md](DEPLOY.md).
