@@ -558,6 +558,7 @@ export function createSpecialist(
     }
     if (typed.WPA2_PSK && !isWpa2Key(typed.WPA2_PSK)) throw new HttpError(400, 'invalid_value_WPA2_PSK');
     if (typed.SSID && !isSsid(typed.SSID)) throw new HttpError(400, 'invalid_value_SSID');
+    if (typed.GATEWAY && !/^(?:(?:25[0-5]|2[0-4]\d|1?\d?\d)\.){3}(?:25[0-5]|2[0-4]\d|1?\d?\d)$/.test(typed.GATEWAY.trim())) throw new HttpError(400, 'invalid_value_GATEWAY');
     if (typed.UISP_ENROLLMENT && !isUispKey(typed.UISP_ENROLLMENT)) throw new HttpError(400, 'invalid_value_UISP_ENROLLMENT');
     const secrets = mine ? templateSecrets(tpl) : {};
     const name = (typed.DEVICE_NAME ?? '').trim();

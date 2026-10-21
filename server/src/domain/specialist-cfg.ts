@@ -88,6 +88,12 @@ export const SPECIALIST_PLACEHOLDERS: Record<PlaceholderName, { label: string; s
 };
 
 /**
+ * Placeholders of the specialist's own that the form writes (not CDA Net's): a name in the flow.
+ * ${GATEWAY}: a bridge with a fixed address whose gateway is typed for each CPE (21/10/2026).
+ */
+export const FORM_PLACEHOLDER_LABELS: Record<string, string> = { GATEWAY: 'Gateway della CPE (IP)' };
+
+/**
  * The placeholders of a template the specialist types for each CPE (and whether to hide them).
  * [unused]: the ones this template does not need (PPPoE in bridge). [optional]: may stay empty.
  */
@@ -109,7 +115,7 @@ export function askedFor(placeholders: string[], filled: { snmpCommunity: boolea
       const known = SPECIALIST_PLACEHOLDERS[p as PlaceholderName];
       return {
         name: p,
-        label: known?.label ?? p,
+        label: known?.label ?? FORM_PLACEHOLDER_LABELS[p] ?? p,
         secret: !!known?.secret || /PASS|PSK|SECRET|KEY|COMMUNITY/.test(p),
         own: !known,
         ...(OPTIONAL_PLACEHOLDERS.has(p) ? { optional: true } : {}),

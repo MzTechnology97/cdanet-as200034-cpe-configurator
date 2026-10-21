@@ -468,7 +468,11 @@ describe('Specialist', () => {
     assert.ok(!names.includes('PPPOE_USER') && !names.includes('PPPOE_PASSWORD'), `no PPPoE in bridge: ${names}`);
     assert.equal(asked.find((a) => a.name === 'UISP_ENROLLMENT')?.optional, true);
     assert.ok(asked.every((a) => a.name === 'UISP_ENROLLMENT' || !a.optional), 'the rest is needed');
-    const values = Object.fromEntries(asked.filter((a) => !a.optional).map((a) => [a.name, a.name === 'WPA2_PSK' ? WIFI : a.name === 'SSID' ? 'AZIENDA-Z-AP1' : `${a.name.toLowerCase()}-1`]));
+    // a bridge with a fixed address: its gateway is typed for each CPE (Carmelo, 21/10/2026)
+    assert.equal(asked.find((a) => a.name === 'GATEWAY')?.optional, undefined, 'the gateway is asked');
+    const values = Object.fromEntries(
+      asked.filter((a) => !a.optional).map((a) => [a.name, a.name === 'WPA2_PSK' ? WIFI : a.name === 'SSID' ? 'AZIENDA-Z-AP1' : a.name === 'GATEWAY' ? '192.168.50.1' : `${a.name.toLowerCase()}-1`]),
+    );
     const job = (extra: Record<string, string> = {}) =>
       call('POST', '/api/specialist/jobs', { ...S, ...APP }, { templateId: id, connectorId, model: 'LiteBeam 5AC', cpe: { username: 'admin-z', password: CPE_PASSWORD }, values: { ...values, ...extra } });
 
@@ -477,6 +481,8 @@ describe('Specialist', () => {
     assert.equal(off.statusCode, 201, off.body);
     const k = parseKeys(off.json().config.text);
     assert.deepEqual([k.get('ppp.status'), k.get('ppp.1.name'), k.get('ppp.1.password')], ['disabled', '', '']);
+    assert.deepEqual([k.get('route.status'), k.get('route.1.gateway'), k.get('resolv.nameserver.1.ip')], ['enabled', '192.168.50.1', '1.1.1.1']);
+    assert.equal((await job({ GATEWAY: '192.168.50' })).json().error, 'invalid_value_GATEWAY');
     assert.deepEqual([k.get('unms.status'), k.get('unms.uri')], ['disabled', '']);
     assert.ok(!off.json().config.text.includes('${'), 'no placeholder left');
     assert.equal(off.json().summary.pppoeUser, '');
