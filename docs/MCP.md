@@ -1,6 +1,6 @@
 # Connetti il tuo Claude (MCP)
 
-Gli account admin possono collegare il proprio Claude alla piattaforma per il **monitoraggio**. Claude può leggere lo stato della rete, le interruzioni, le batterie dei POP, la salute della piattaforma, gli avvisi del NOC, gli interventi, il magazzino, le statistiche e la diagnosi di un cliente. Non può modificare nulla né inviare comandi alle CPE.
+Gli account admin possono collegare il proprio Claude alla piattaforma. Di serie Claude legge soltanto: stato della rete, interruzioni, batterie dei POP, salute della piattaforma, avvisi del NOC, interventi, magazzino, statistiche, copertura e la diagnosi di un cliente. Con un consenso esplicito («Consenti anche le modifiche», vedi sotto) può anche fare alcune modifiche, sempre dopo una conferma dell'utente e una CPE alla volta. La pagina della console è Amministrazione → **Connetti il tuo Claude**, con gli strumenti divisi tra lettura e scrittura e le connessioni attive.
 
 ## Cosa legge
 
@@ -11,6 +11,7 @@ In sola lettura Claude ha a disposizione tutti i moduli:
   - copertura CDA Net;
   - **altri operatori (WIC)**, per punto o per indirizzo esatto con la ricerca guidata, e fattibilità;
   - ricerca di indirizzi e coordinate, puntamento, profilo del terreno e orizzonte, simulazione di un AP, precisione delle stime;
+  - verifiche salvate e i clienti di ISP Billing da collegare a una verifica;
 - **clienti:** clienti e account PPPoE del CRM, ricerca del cliente per un intervento;
 - **installazioni:** installazioni, collaudi e storico, stato in UISP, KO, speedtest, diagnosi;
 - **interventi:** interventi e loro cronologia;
@@ -29,6 +30,7 @@ Gli strumenti di scrittura:
 - **interventi:** crea, modifica o sposta (anche rimandare o annullare), elimina;
 - **NOC:** approva o rifiuta un collaudo, dichiara superato un collaudo con il motivo;
 - **magazzino:** aggiorna lo stato di una CPE smontata (RMA);
+- **copertura:** salva una verifica con il nome del cliente, rinominala;
 - **rete:**
   - riavvia, rileggi e aggiorna il firmware di una CPE;
   - fai un backup o ripristinalo;
