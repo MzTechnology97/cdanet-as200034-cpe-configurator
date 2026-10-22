@@ -46,6 +46,6 @@ class RouterOsClient(private val api: ApiClient, private val network: NetworkHel
                     RosResult(ip, summary, outputs)
                 }
             }
-            if (viaWifi) network.onWifi(block) else block()
+            if (viaWifi) network.onLocal(block) else block()
         }
 }

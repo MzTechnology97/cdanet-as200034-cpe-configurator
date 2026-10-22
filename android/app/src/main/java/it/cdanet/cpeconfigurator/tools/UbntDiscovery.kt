@@ -256,7 +256,7 @@ object UbntDiscovery {
      * network. [onFound]: the list so far, at each new or completed device.
      */
     suspend fun discover(network: NetworkHelper, timeoutMs: Int = 3_000, onFound: ((List<UbntDevice>) -> Unit)? = null): List<UbntDevice> = withContext(Dispatchers.IO) {
-        val wifi = network.wifiNetwork() ?: throw IllegalStateException("Collegati alla Wi-Fi della LAN da scansionare")
+        val wifi = network.localNetwork() ?: throw IllegalStateException("Collegati alla Wi-Fi della LAN da scansionare o con il cavo (adattatore USB-C Ethernet)")
         val lock = network.multicastLock().apply { acquire() }
         try {
             val found = linkedMapOf<String, UbntDevice>()
@@ -294,7 +294,7 @@ object UbntDiscovery {
                         wifi.bindSocket(s)
                         val targets = buildList {
                             add("255.255.255.255")
-                            network.wifiLink()?.cidr?.let { c -> add(Ip.format(Ip.parseCidr(c).broadcast)) }
+                            network.localLink()?.cidr?.let { c -> add(Ip.format(Ip.parseCidr(c).broadcast)) }
                             add(MULTICAST)
                         }.distinct().mapNotNull { runCatching { InetAddress.getByName(it) }.getOrNull() }
                         // like the original tool: a query every 500 ms for the whole scan
@@ -356,7 +356,7 @@ object UbntDiscovery {
      * the answer; nothing says whether it accepted it, except that it disappears and comes back.
      */
     suspend fun reboot(network: NetworkHelper, mac: String, username: String, password: String) = withContext(Dispatchers.IO) {
-        val wifi = network.wifiNetwork() ?: throw RebootException("Collegati alla Wi-Fi della LAN dell'apparato")
+        val wifi = network.localNetwork() ?: throw RebootException("Collegati alla Wi-Fi della LAN dell'apparato o con il cavo (adattatore USB-C Ethernet)")
         val macBytes = mac.split(':').map { it.toInt(16).toByte() }.toByteArray()
         val user = username.toByteArray(Charsets.ISO_8859_1)
         DatagramSocket(null).use { s ->

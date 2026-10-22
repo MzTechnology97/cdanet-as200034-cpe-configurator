@@ -81,13 +81,13 @@ private fun ToolButton(r: Runner, label: String, primary: Boolean = false, modif
     }
 }
 
-/** "Use Wi-Fi" switch: route LAN tools over Wi-Fi even when it has no Internet. */
+/** "Use the local network" switch: route LAN tools over Wi-Fi or the cable even when it has no Internet. */
 @Composable
 private fun WifiSwitch(value: Boolean, onChange: (Boolean) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.weight(1f)) {
-            Text("Usa la rete Wi-Fi", style = MaterialTheme.typography.bodyMedium)
-            Text("Necessario se la Wi-Fi non ha Internet e i dati mobili sono attivi", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text("Usa la rete locale (Wi-Fi o cavo)", style = MaterialTheme.typography.bodyMedium)
+            Text("Necessario se la Wi-Fi o il cavo non hanno Internet e i dati mobili sono attivi", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         Switch(checked = value, onCheckedChange = onChange)
     }
@@ -145,7 +145,7 @@ fun DiscoveryScreen(c: AppContainer) {
     var cidr by remember { mutableStateOf(c.tools.suggestedCidr() ?: "192.168.1.0/24") }
     var host by remember { mutableStateOf("") }
     var ports by remember { mutableStateOf("22,80,443,554,8000,8080,8291,20080,20443") }
-    var viaWifi by remember { mutableStateOf(c.network.wifiNetwork() != null) }
+    var viaWifi by remember { mutableStateOf(c.network.localNetwork() != null) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SectionCard("Subnet") {
             Field("Subnet (max /24)", cidr, { cidr = it.trim() })
@@ -178,7 +178,7 @@ fun SnmpScreen(c: AppContainer) {
     val r = rememberRunner()
     var host by remember { mutableStateOf("") }
     var community by remember { mutableStateOf("") }
-    var viaWifi by remember { mutableStateOf(c.network.wifiNetwork() != null) }
+    var viaWifi by remember { mutableStateOf(c.network.localNetwork() != null) }
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         SectionCard("SNMP v2c") {
             Field("Host", host, { host = it.trim() })
@@ -200,7 +200,7 @@ fun SnmpScreen(c: AppContainer) {
 fun CameraScreen(c: AppContainer) {
     val r = rememberRunner()
     val context = LocalContext.current
-    var viaWifi by remember { mutableStateOf(c.network.wifiNetwork() != null) }
+    var viaWifi by remember { mutableStateOf(c.network.localNetwork() != null) }
     var host by remember { mutableStateOf("") }
     var port by remember { mutableStateOf("554") }
     var path by remember { mutableStateOf("/Streaming/Channels/101") }
@@ -285,7 +285,7 @@ fun CameraScreen(c: AppContainer) {
             BusyButton("Apri stream RTSP", false, Modifier.fillMaxWidth()) {
                 runCatching {
                     val ip = Ip.parse(host)?.let { host } ?: throw IllegalArgumentException("IP non valido")
-                    if (viaWifi) c.network.bindToWifi()
+                    if (viaWifi) c.network.bindToLocal()
                     context.startActivity(RtspPlayerActivity.intent(context, ip, port.toIntOrNull() ?: 554, path, user, pass))
                     pass = ""
                 }.onFailure { r.error = it.message }

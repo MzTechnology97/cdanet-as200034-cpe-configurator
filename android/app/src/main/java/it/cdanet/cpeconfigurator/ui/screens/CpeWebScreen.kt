@@ -46,7 +46,7 @@ fun CpeWebScreen(c: AppContainer) {
     // a device of the Ubiquiti discovery (private addresses only), else the CPE of the installation
     val chosen = remember { c.cpeWebUrl.value?.takeIf { u -> android.net.Uri.parse(u).host?.let { h -> Ip.isPrivate(h) } == true } }
     val host = chosen?.let { android.net.Uri.parse(it).host } ?: state.pkg?.target?.host ?: "192.168.172.1"
-    val bound = remember { c.network.bindToWifi() }
+    val bound = remember { c.network.bindToLocal() }
     // a file field of the page (System → Upload firmware): the firmware already on the phone, or
     // any file through Android's picker. The callback must be answered once, even with nothing.
     var chooseFirmware by remember { mutableStateOf(false) }

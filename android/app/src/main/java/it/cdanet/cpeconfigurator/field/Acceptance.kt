@@ -78,6 +78,8 @@ data class AcceptanceWifi(
     val congested: Boolean? = null,
     val suggestedChannel: Int? = null,
     val changed: String? = null,
+    /** The speed test ran on a cable to the router's LAN (USB-C Ethernet adapter), not on its Wi-Fi. */
+    val cable: Boolean? = null,
 )
 
 /** Body of PUT /api/provisioning/jobs/{id}/acceptance. */

@@ -72,9 +72,12 @@ API: `POST /api/admin/provisioning/jobs/{id}/review` con `{ decision: approved|r
 
 ## Come il telefono raggiunge la CPE
 
-Il telefono si collega alla CPE in due modi:
+Il telefono si collega alla CPE in tre modi:
 - **Wi-Fi di management della CPE** (radio 2,4 GHz dei modelli airMAX AC Gen2): «Collegati alla Wi-Fi della CPE» (Android 10+) mostra le reti di management delle CPE vicine (es. «LBE-5AC-Gen2:…»). Il tecnico ne tocca una e l'app la usa per la CPE, mentre il telefono resta su Internet con la rete mobile: niente impostazioni Wi-Fi né avvisi «rete senza Internet». «Altre reti Wi-Fi» resta per il router del cliente e per i telefoni più vecchi.
 - **Wi-Fi del router del cliente**, dietro la CPE.
+- **Cavo**, con un **adattatore USB-C Ethernet** (v1.36.16): alla porta LAN dell'alimentatore PoE della CPE, a una porta del router del cliente o a uno switch. Android lo vede come rete Ethernet; l'app la usa per la CPE e per gli strumenti come la Wi-Fi, anche senza Internet, mentre il server resta raggiungibile dalla rete mobile. Il cavo, collegato apposta, ha la precedenza sulla Wi-Fi del telefono (non su quella della CPE collegata dall'app).
+
+**Limite del cavo**: Android non permette a un'app di dare un indirizzo fisso all'Ethernet, quindi il telefono deve ricevere un indirizzo con il DHCP. Una CPE configurata da CDA Net (router con DHCP sulla LAN), il router del cliente o uno switch della LAN lo danno; una **CPE ancora di fabbrica no** (192.168.1.20, nessun DHCP). In quel caso l'app lo dice («Cavo collegato ma il telefono non ha ricevuto un indirizzo…») e la prima scrittura si fa dalla Wi-Fi della CPE.
 
 Poi l'app cerca la CPE da sola, in quest'ordine:
 1. la **discovery Ubiquiti**, qualunque IP abbia la CPE. Se ne rispondono più di una, il tecnico sceglie quella da sistemare; la scelta vale per tutti gli strumenti (barra della CPE in «CPE collegata»);
@@ -82,6 +85,8 @@ Poi l'app cerca la CPE da sola, in quest'ordine:
 3. il **gateway IPv4 della Wi-Fi**, anche quando la rete annuncia pure un router IPv6;
 4. gli indirizzi abituali: `192.168.1.254` (LAN dei template) e `192.168.172.1` (management, `CPE_FACTORY_IP`);
 5. l'**IP manuale**, sempre disponibile.
+
+Nella **scrittura della configurazione** il pacchetto del server punta all'IP della Wi-Fi di management (192.168.172.1): se lì la CPE non risponde (telefono sul cavo), l'app la cerca con la discovery sulla rete locale (la CPE del pacchetto per MAC, o l'unica presente) e scrive su quell'indirizzo, con gli stessi controlli di modello, firmware e MAC.
 
 Su ogni indirizzo l'app prova l'interfaccia web di airOS: `https` sulle porte 443 e 20443, poi `http` sulle porte 80 e 20080 (o le porte annunciate dalla discovery).
 
@@ -182,7 +187,8 @@ Sul server: `PUT /api/provisioning/jobs/{id}/acceptance` e `POST /api/provisioni
 ## Speedtest e Wi-Fi del cliente
 
 Il passo **Router e velocità** dell'installazione (e degli interventi):
-- il telefono va sulla Wi-Fi del router del cliente, mai sui dati mobili. Sotto la soglia di segnale del telefono il test è bloccato con «Avvicinati al router»; tra avviso e blocco compare un avviso (Impostazioni server → Collaudo: speedtest e Wi-Fi);
+- il telefono va sulla Wi-Fi del router del cliente, oppure **con il cavo** (adattatore USB-C Ethernet) a una porta LAN del router, mai sui dati mobili. Il cavo ha la precedenza ed è la misura più fedele della linea: non c'è il Wi-Fi del telefono in mezzo. Sulla Wi-Fi, sotto la soglia di segnale del telefono il test è bloccato con «Avvicinati al router»; tra avviso e blocco compare un avviso (Impostazioni server → Collaudo: speedtest e Wi-Fi);
+- sul cavo il controllo del canale del router non si fa (il telefono non vede la sua Wi-Fi): la prova si salva con `wifi.cable = true` e il rapporto di collaudo dice «cavo Ethernet»;
 - l'app legge canale e larghezza della rete del router, conta le reti sullo stesso canale e quelle sovrapposte e consiglia cosa cambiare;
 - poi lo **speedtest Ookla** verso il server di speedtest di CDA Net (download, upload, ping e jitter, 4 connessioni) confrontato con il profilo del cliente al minimo impostato (80%). L'upload conta solo i dati che il server conferma, con richieste da 64 KB a 4 MB secondo la velocità della linea;
 - sotto il minimo: la lista delle cose da controllare e «Ripeti il test» senza limiti. Se il tecnico prosegue lo stesso, il collaudo va con riserva.

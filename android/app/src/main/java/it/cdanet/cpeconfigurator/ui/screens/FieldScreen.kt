@@ -157,7 +157,7 @@ fun FieldConnection(c: AppContainer, mode: FieldMode) {
         st.error?.let { Banner(it, BadRed) }
         if (st.status == null) {
             Text(
-                "Collega il telefono alla Wi-Fi di management della CPE oppure alla Wi-Fi del router del cliente: l'app cerca la CPE con la discovery Ubiquiti (qualunque IP abbia), poi prova il gateway, l'IP LAN e l'IP di management. Con più CPE in rete scegli quella da sistemare.",
+                "Collega il telefono alla Wi-Fi di management della CPE oppure alla Wi-Fi del router del cliente, o con il cavo (adattatore USB-C Ethernet) alla LAN: l'app cerca la CPE con la discovery Ubiquiti (qualunque IP abbia), poi prova il gateway, l'IP LAN e l'IP di management. Con più CPE in rete scegli quella da sistemare.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

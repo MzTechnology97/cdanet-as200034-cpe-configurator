@@ -173,10 +173,11 @@ class ProvisioningController(
         val pkg = _state.value.pkg ?: return
         busy {
             withContext(Dispatchers.IO) {
-                network.onWifi {
-                    val open = CpeProvisioner {}.probe(pkg.target.host)
-                    if (open.isEmpty()) "Nessuna porta raggiungibile su ${pkg.target.host}: verifica di essere collegato alla Wi-Fi della CPE"
-                    else "CPE raggiungibile su ${pkg.target.host} · porte aperte ${open.joinToString()}" +
+                network.onLocal {
+                    val host = reachable(pkg).target.host
+                    val open = CpeProvisioner {}.probe(host)
+                    if (open.isEmpty()) "Nessuna porta raggiungibile su $host: verifica di essere collegato alla Wi-Fi della CPE (o con il cavo alla sua LAN)"
+                    else "CPE raggiungibile su $host · porte aperte ${open.joinToString()}" +
                         if (22 !in open) " · SSH non ancora attivo: completa il primo avvio" else ""
                 }
             }
@@ -259,11 +260,11 @@ class ProvisioningController(
         val stages = prior.toMutableList()
         val result = withContext(Dispatchers.IO) {
             try {
-                val detected = network.onWifi {
+                val detected = network.onLocal {
                     CpeProvisioner { s ->
                         stages += s
                         _state.update { it.copy(stages = stages.toList()) }
-                    }.provision(pkg, _state.value.allowedFirmware)
+                    }.provision(reachable(pkg), _state.value.allowedFirmware)
                 }
                 ProvisionResult("success", stages.toList(), detected = detected, completedAt = Instant.now().toString())
             } catch (e: ProvisioningFailure) {
@@ -385,8 +386,22 @@ class ProvisioningController(
         apply(stages.toList())
     }
 
+    /**
+     * The package with the address the CPE answers on. Its own is the management Wi-Fi's
+     * (192.168.172.1): on a cable to the CPE's LAN (USB-C Ethernet adapter) the CPE has another one,
+     * found with the discovery Ubiquiti (the CPE of the package by its MAC, or the only one there).
+     * Must run bound to the local network ([NetworkHelper.onLocal]).
+     */
+    private suspend fun reachable(pkg: ProvisionPackage): ProvisionPackage {
+        if (CpeProvisioner {}.probe(pkg.target.host, listOf(pkg.target.sshPort)).isNotEmpty()) return pkg
+        val found = runCatching { it.cdanet.cpeconfigurator.tools.UbntDiscovery.discover(network, 4_000) }.getOrDefault(emptyList())
+        val d = found.firstOrNull { DiscoveryCheck.sameDevice(it, pkg.checks.mac) } ?: found.singleOrNull() ?: return pkg
+        val ip = d.ip?.takeIf { it.isNotBlank() && it != pkg.target.host } ?: return pkg
+        return pkg.copy(target = pkg.target.copy(host = ip, sshPort = d.sshPort ?: pkg.target.sshPort))
+    }
+
     private fun opener(pkg: ProvisionPackage, onStage: (String) -> Unit): suspend () -> SshConnection = {
-        network.onWifi { CpeProvisioner.connect(pkg, onStage) }
+        network.onLocal { CpeProvisioner.connect(reachable(pkg), onStage) }
     }
 
     /** Flashes the image of [before]'s platform and waits for the CPE to come back with it. */
