@@ -146,7 +146,7 @@ fun UbntDiscoveryScreen(c: AppContainer, onOpenWeb: (String) -> Unit) {
             }
         }
         if (scanned && !scanning && devices.isEmpty() && error == null) {
-            EmptyState(R.drawable.ic_radar, "Nessun apparato Ubiquiti", "La discovery non attraversa i router: collegati alla Wi-Fi della CPE o della LAN dove sono gli apparati.")
+            EmptyState(R.drawable.ic_radar, "Nessun apparato Ubiquiti", "La discovery non attraversa i router: collegati alla Wi-Fi della CPE o della LAN dove sono gli apparati, oppure con il cavo (adattatore USB-C Ethernet).")
         }
         LazyColumn(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             items(shown, key = { it.mac ?: it.ip ?: it.hashCode().toString() }) { d ->

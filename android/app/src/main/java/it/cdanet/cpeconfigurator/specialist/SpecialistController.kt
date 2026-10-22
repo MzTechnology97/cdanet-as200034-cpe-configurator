@@ -528,11 +528,11 @@ class SpecialistController(
     }
 
     /** SSH on the CPE with the first of [logins] it accepts (the process bound to the Wi-Fi while connecting). */
-    private suspend fun open(host: String, port: Int, logins: List<CredentialsDto>): Pair<SshConnection, CredentialsDto> = network.onWifi {
+    private suspend fun open(host: String, port: Int, logins: List<CredentialsDto>): Pair<SshConnection, CredentialsDto> = network.onLocal {
         var refused: IOException? = null
         for (cr in logins) {
             try {
-                return@onWifi SshConnection.connect(host, port, cr.username, cr.password) to cr
+                return@onLocal SshConnection.connect(host, port, cr.username, cr.password) to cr
             } catch (e: IOException) {
                 if (!e.message.orEmpty().startsWith("Autenticazione")) throw e
                 refused = e
@@ -660,7 +660,7 @@ class SpecialistController(
         val extra = listOfNotNull(cpe?.login, f.current).distinct()
         val result = withContext(Dispatchers.IO) {
             try {
-                val detected = network.onWifi {
+                val detected = network.onLocal {
                     CpeProvisioner { st ->
                         stages += st
                         _state.update { it.copy(stages = stages.toList()) }
@@ -695,11 +695,11 @@ class SpecialistController(
         val d = _state.value.done ?: return
         val status = work("verify") {
             withContext(Dispatchers.IO) {
-                val wifi = network.wifiNetwork() ?: throw IllegalStateException("Collegati alla Wi-Fi della CPE o del router del cliente")
+                val wifi = network.localNetwork() ?: throw IllegalStateException(if (network.ethernetWithoutAddress()) it.cdanet.cpeconfigurator.network.NetworkHelper.NO_CABLE_ADDRESS else "Collegati alla Wi-Fi della CPE o del router del cliente, o con il cavo (adattatore USB-C Ethernet)")
                 val found = runCatching { UbntDiscovery.discover(network, 2_500) }.getOrDefault(emptyList())
                     .filter { x -> !x.unifi && x.ip?.let { Ip.isPrivate(it) } == true }
                 val dev = found.firstOrNull { x -> DiscoveryCheck.sameDevice(x, d.summary.mac) } ?: found.singleOrNull()
-                val hosts = listOfNotNull(dev?.ip, d.lanIp, network.wifiLink()?.gateway).distinct().filter { Ip.isPrivate(it) }
+                val hosts = listOfNotNull(dev?.ip, d.lanIp, network.localLink()?.gateway).distinct().filter { Ip.isPrivate(it) }
                 var last: Exception? = null
                 for (host in hosts) {
                     for (url in AirosClient.candidates(host)) {
@@ -718,7 +718,7 @@ class SpecialistController(
                         }
                     }
                 }
-                throw last ?: IOException("CPE non trovata: dopo il riavvio (circa un minuto) collegati alla sua Wi-Fi o a quella del router del cliente e riprova")
+                throw last ?: IOException("CPE non trovata: dopo il riavvio (circa un minuto) collegati alla sua Wi-Fi o a quella del router del cliente (o con il cavo) e riprova")
             }
         } ?: return
         _state.update { it.copy(verify = status) }
@@ -788,7 +788,7 @@ class SpecialistController(
         } else {
             val found = UbntDiscovery.discover(network, 2_500).filter { d -> !d.unifi && d.ip?.let { Ip.isPrivate(it) } == true }
             val d = found.singleOrNull()
-                ?: throw IOException(if (found.isEmpty()) "Nessuna CPE Ubiquiti risponde su questa Wi-Fi" else "Rispondono ${found.size} apparati: leggi prima la CPE in «Nuova CPE»")
+                ?: throw IOException(if (found.isEmpty()) "Nessuna CPE Ubiquiti risponde su questa rete" else "Rispondono ${found.size} apparati: leggi prima la CPE in «Nuova CPE»")
             host = d.ip ?: throw IOException("La CPE non ha un indirizzo IPv4")
             port = d.sshPort?.takeIf { it in 1..65535 } ?: 22
             logins = typed

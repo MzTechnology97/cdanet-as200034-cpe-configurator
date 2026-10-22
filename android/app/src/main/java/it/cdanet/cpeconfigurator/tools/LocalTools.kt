@@ -46,7 +46,7 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
 
     fun connection(): ToolResult {
         val active = network.activeLink()
-        val wifi = network.wifiLink()
+        val wifi = network.localLink()
         val rows = mutableListOf<Pair<String, String>>()
         active?.let {
             rows += "Rete attiva" to it.transport + if (it.validated) " · Internet OK" else " · senza Internet"
@@ -61,12 +61,12 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
             rows += "Segnale" to (it.wifiRssi?.let { r -> "$r dBm" } ?: "—")
             rows += "Frequenza" to (it.wifiFrequency?.let { f -> "$f MHz · canale ${channel(f)}" } ?: "—")
             rows += "Velocità link" to (it.linkSpeedMbps?.let { s -> "$s Mbps" } ?: "—")
-            rows += "Subnet Wi-Fi" to (it.cidr ?: "—")
+            rows += (if (it.isCable) "Subnet del cavo" else "Subnet Wi-Fi") to (it.cidr ?: "—")
         }
         return ToolResult(rows, note = if (active == null) "Nessuna rete attiva" else null)
     }
 
-    fun suggestedCidr(): String? = (network.wifiLink() ?: network.activeLink())?.cidr
+    fun suggestedCidr(): String? = (network.localLink() ?: network.activeLink())?.cidr
 
     @SuppressLint("MissingPermission")
     @Suppress("DEPRECATION")
@@ -247,10 +247,10 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
             }
             alive.map { ip -> ip to (runCatching { InetAddress.getByName(ip).canonicalHostName }.getOrNull()?.takeIf { it != ip }.orEmpty()) } to arpTable()
         }
-        val (hosts, macs) = withContext(Dispatchers.IO) { if (viaWifi) network.onWifi(block) else block() }
+        val (hosts, macs) = withContext(Dispatchers.IO) { if (viaWifi) network.onLocal(block) else block() }
         // Vendor lookup after leaving the Wi-Fi binding: the server is reached over mobile data if needed.
         val vendors = vendorsOf(hosts.mapNotNull { macs[it.first] })
-        val gateway = network.wifiLink()?.gateway
+        val gateway = network.localLink()?.gateway
         return ToolResult(
             rows = listOf("Rete" to cidr.toString(), "Host attivi" to hosts.size.toString(), "Con MAC" to hosts.count { macs[it.first] != null }.toString()),
             items = hosts.map { (ip, name) ->
@@ -282,7 +282,7 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
             }
             ToolResult(rows = listOf("Host" to ip, "Porte aperte" to open.sorted().joinToString(", ").ifBlank { "nessuna" }, "Verificate" to ports.joinToString(", ")))
         }
-        return withContext(Dispatchers.IO) { if (viaWifi) network.onWifi(block) else block() }
+        return withContext(Dispatchers.IO) { if (viaWifi) network.onLocal(block) else block() }
     }
 
     suspend fun snmp(host: String, community: String, viaWifi: Boolean): ToolResult {
@@ -302,7 +302,7 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
             }
             ToolResult(rows = listOf("Host" to ip) + oids.map { (k, oid) -> k to (v[oid] ?: "—") })
         }
-        return withContext(Dispatchers.IO) { if (viaWifi) network.onWifi(block) else block() }
+        return withContext(Dispatchers.IO) { if (viaWifi) network.onLocal(block) else block() }
     }
 
     suspend fun netbios(host: String, viaWifi: Boolean): ToolResult {
@@ -335,7 +335,7 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
                 }
             }
         }
-        return withContext(Dispatchers.IO) { if (viaWifi) network.onWifi(block) else block() }
+        return withContext(Dispatchers.IO) { if (viaWifi) network.onLocal(block) else block() }
     }
 
     /** Hikvision SADP on the local segment (multicast + broadcast, answers in unicast and multicast). */
@@ -344,13 +344,13 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
             val lock = network.multicastLock()
             lock.acquire()
             try {
-                val local = network.wifiLink()?.addresses?.map { it.substringBefore('/') }?.firstOrNull { Ip.parse(it) != null }
+                val local = network.localLink()?.addresses?.map { it.substringBefore('/') }?.firstOrNull { Ip.parse(it) != null }
                 Sadp.discover(local)
             } finally {
                 lock.release()
             }
         }
-        return withContext(Dispatchers.IO) { if (viaWifi) network.onWifi(block) else block() }
+        return withContext(Dispatchers.IO) { if (viaWifi) network.onLocal(block) else block() }
     }
 
     /** ONVIF WS-Discovery and Hikvision SADP probes on the local segment. */
@@ -400,6 +400,6 @@ class LocalTools(private val network: NetworkHelper, private val api: ApiClient,
                 lock.release()
             }
         }
-        return withContext(Dispatchers.IO) { if (viaWifi) network.onWifi(block) else block() }
+        return withContext(Dispatchers.IO) { if (viaWifi) network.onLocal(block) else block() }
     }
 }

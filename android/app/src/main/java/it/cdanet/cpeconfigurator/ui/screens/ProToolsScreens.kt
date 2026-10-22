@@ -119,7 +119,7 @@ private fun SwitchRow(label: String, value: Boolean, onChange: (Boolean) -> Unit
 fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    val link = remember { c.network.wifiLink() }
+    val link = remember { c.network.localLink() }
     var cidr by remember { mutableStateOf(link?.cidr ?: "192.168.1.0/24") }
     var icmp by remember { mutableStateOf(true) }
     var ubnt by remember { mutableStateOf(true) }
@@ -152,7 +152,7 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
 
     /** Scans [targets] one after the other and adds what it finds (several subnets: wide sweep, routers' subnets). */
     suspend fun scanAll(net: android.net.Network, targets: List<Ip.Cidr>) {
-        val wl = c.network.wifiLink()
+        val wl = c.network.localLink()
         val selfIps = wl?.addresses.orEmpty().map { it.substringBefore('/') }.toSet()
         val ubntJob: kotlinx.coroutines.Deferred<List<it.cdanet.cpeconfigurator.tools.UbntDevice>>? =
             if (ubnt) scope.async { runCatching { UbntDiscovery.discover(c.network, 3_000) }.getOrDefault(emptyList()) } else null
@@ -224,7 +224,7 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
         elapsed = 0
         job = scope.launch {
             try {
-                val net = c.network.wifiNetwork() ?: throw IllegalStateException("Collegati alla Wi-Fi della LAN da scansionare")
+                val net = c.network.localNetwork() ?: throw IllegalStateException("Collegati alla Wi-Fi della LAN da scansionare o con il cavo (adattatore USB-C Ethernet)")
                 val parsed = Ip.parseScanCidr(cidr, minPrefix = 22)
                 // wide: the /24 of the range that answer, after the subnet of the field (16 at most)
                 val extra = if (!wide) emptyList() else {
@@ -443,7 +443,7 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
                         SecondaryButton(onClick = {
                             job = scope.launch {
                                 try {
-                                    val net = c.network.wifiNetwork() ?: throw IllegalStateException("Collegati alla Wi-Fi della LAN da scansionare")
+                                    val net = c.network.localNetwork() ?: throw IllegalStateException("Collegati alla Wi-Fi della LAN da scansionare o con il cavo (adattatore USB-C Ethernet)")
                                     scanAll(net, more.flatMap { if (it.prefix >= 22) listOf(it) else Ip.slash24s(it) }.take(16))
                                 } catch (e: kotlinx.coroutines.CancellationException) {
                                     throw e
@@ -583,7 +583,7 @@ fun IpScannerScreen(c: AppContainer, onPortScan: (String) -> Unit) {
 fun PortScannerScreen(c: AppContainer) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    var host by remember { mutableStateOf(c.portScanTarget.value ?: c.network.wifiLink()?.gateway ?: "") }
+    var host by remember { mutableStateOf(c.portScanTarget.value ?: c.network.localLink()?.gateway ?: "") }
     var preset by remember { mutableStateOf(Ports.PRESETS.keys.first()) }
     var custom by remember { mutableStateOf("") }
     var timeout by remember { mutableStateOf("600") }
@@ -605,7 +605,7 @@ fun PortScannerScreen(c: AppContainer) {
             try {
                 val ip = Ip.resolvePrivate(host.trim())
                 val ports = Ports.parse(custom.ifBlank { preset })
-                val net = c.network.wifiNetwork()
+                val net = c.network.localNetwork()
                 done = 0 to ports.size
                 results = PortScanner(net?.socketFactory ?: javax.net.SocketFactory.getDefault()).scan(ip, ports, timeout.toIntOrNull()?.coerceIn(100, 5000) ?: 600, 128, grab) { d, t, open ->
                     done = d to t
@@ -771,7 +771,7 @@ private fun PortMap(results: List<PortResult>) {
 @Composable
 fun NetDiagScreen(c: AppContainer) {
     val scope = rememberCoroutineScope()
-    val link = remember { c.network.wifiLink() }
+    val link = remember { c.network.localLink() }
     var error by remember { mutableStateOf<String?>(null) }
 
     var pingHost by remember { mutableStateOf(link?.gateway ?: "1.1.1.1") }
@@ -840,14 +840,14 @@ fun NetDiagScreen(c: AppContainer) {
         }
 
         SectionCard("DNS") {
-            Field("Server DNS", dnsServer, { dnsServer = it.trim() }, keyboardType = KeyboardType.Uri, supporting = "Default: il DNS della Wi-Fi. Prova anche 1.1.1.1, 8.8.8.8 o il DNS CDA Net")
+            Field("Server DNS", dnsServer, { dnsServer = it.trim() }, keyboardType = KeyboardType.Uri, supporting = "Default: il DNS della rete locale. Prova anche 1.1.1.1, 8.8.8.8 o il DNS CDA Net")
             Field("Nome (o IP per PTR)", dnsName, { dnsName = it.trim() }, keyboardType = KeyboardType.Uri)
             Dropdown("Tipo", DnsWire.TYPES.keys.toList(), dnsType, { it }, { dnsType = it }, Modifier.fillMaxWidth())
             BusyButton("Interroga", dnsBusy, Modifier.fillMaxWidth()) {
                 scope.launch {
                     dnsBusy = true
                     dnsOut = runCatching {
-                        val (a, ms) = NetDiag.dns(dnsServer, dnsName, dnsType, c.network.wifiNetwork())
+                        val (a, ms) = NetDiag.dns(dnsServer, dnsName, dnsType, c.network.localNetwork())
                         buildString {
                             append("${a.rcodeText} · $ms ms").append(if (a.authoritative) " · autoritativa" else "").append(if (a.truncated) " · troncata" else "")
                             a.answers.forEach { append("\n${it.type}  ${it.data}  (TTL ${it.ttl})") }
@@ -879,13 +879,13 @@ fun NetDiagScreen(c: AppContainer) {
         }
 
         SectionCard("Wake-on-LAN") {
-            val onWifi by c.network.wifiConnected.collectAsState()
-            if (!onWifi) Text("Serve la Wi-Fi della rete del PC da accendere: il magic packet viaggia in broadcast sulla LAN.", color = WarnAmber)
+            val onWifi by c.network.localConnected.collectAsState()
+            if (!onWifi) Text("Serve la rete del PC da accendere (Wi-Fi o cavo): il magic packet viaggia in broadcast sulla LAN.", color = WarnAmber)
             Field("MAC del PC da accendere", wolMac, { wolMac = it.trim() }, placeholder = "AA:BB:CC:DD:EE:FF")
             Field("Broadcast", wolBcast, { wolBcast = it.trim() }, keyboardType = KeyboardType.Uri)
             BusyButton("Invia magic packet", false, Modifier.fillMaxWidth(), primary = false, enabled = onWifi) {
                 scope.launch {
-                    error = runCatching { NetDiag.wakeOnLan(wolMac, wolBcast, c.network.wifiNetwork()); null }.getOrElse { it.message }
+                    error = runCatching { NetDiag.wakeOnLan(wolMac, wolBcast, c.network.localNetwork()); null }.getOrElse { it.message }
                     if (error == null) error = "Magic packet inviato a $wolBcast (UDP 9 e 7)"
                 }
             }

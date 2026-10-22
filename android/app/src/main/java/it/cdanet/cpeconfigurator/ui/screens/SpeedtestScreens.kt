@@ -49,13 +49,13 @@ import java.util.Locale
 
 private fun mbit(v: Double?) = v?.let { "%.1f".format(Locale.ITALY, it) } ?: "—"
 
-/** The router Wi-Fi the phone is on now (never the CPE's, never mobile data), re-read every 2 s. */
+/** The customer's router as the phone reaches it now: a cable to its LAN, or its Wi-Fi (never the CPE's, never mobile data), re-read every 2 s. */
 @Composable
 private fun rememberRouterLink(c: AppContainer): it.cdanet.cpeconfigurator.network.LinkInfo? {
-    var link by remember { mutableStateOf(c.network.routerWifi()?.second) }
+    var link by remember { mutableStateOf(c.network.routerLink()?.second) }
     LaunchedEffect(Unit) {
         while (true) {
-            link = c.network.routerWifi()?.second
+            link = c.network.routerLink()?.second
             delay(2000)
         }
     }
@@ -91,7 +91,8 @@ fun SpeedtestRunner(c: AppContainer, subject: SpeedtestSubject, attempts: Int, o
         }
     }
     val link = rememberRouterLink(c)
-    val signal = SpeedtestMath.signal(link?.wifiRssi, cfg)
+    // on the cable there is no radio of the phone to check
+    val signal = SpeedtestMath.signal(link?.takeUnless { it.isCable }?.wifiRssi, cfg)
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         target?.let { t ->
@@ -103,7 +104,8 @@ fun SpeedtestRunner(c: AppContainer, subject: SpeedtestSubject, attempts: Int, o
             else -> Text("Profilo del cliente non noto: la prova vale, senza confronto.", style = MaterialTheme.typography.bodySmall)
         }
         when {
-            link == null -> Notice("Il telefono non è sulla Wi-Fi del router: lo speedtest si fa solo sulla Wi-Fi, mai con i dati mobili.", NoticeKind.Warn)
+            link == null -> Notice("Il telefono non è sulla Wi-Fi del router né sul cavo: lo speedtest si fa dalla rete del cliente (Wi-Fi o cavo con l'adattatore USB-C Ethernet), mai con i dati mobili.", NoticeKind.Warn)
+            link.isCable -> Text("Cavo Ethernet alla LAN del router: la misura non dipende dal Wi-Fi del telefono.", style = MaterialTheme.typography.bodySmall)
             signal == SpeedtestMath.Signal.TooWeak -> Notice("Avvicinati al router: segnale ${link.wifiRssi} dBm, serve almeno ${cfg.wifiBlockDbm} dBm.", NoticeKind.Bad)
             signal == SpeedtestMath.Signal.Weak -> Notice("Segnale Wi-Fi debole (${link.wifiRssi} dBm): avvicinati al router per una misura affidabile.", NoticeKind.Warn)
             else -> Text("Wi-Fi: ${link.wifiSsid ?: "rete collegata"} · ${link.wifiRssi ?: "—"} dBm" + (link.linkSpeedMbps?.let { " · collegamento $it Mbit/s" } ?: ""), style = MaterialTheme.typography.bodySmall)
@@ -133,7 +135,7 @@ fun SpeedtestRunner(c: AppContainer, subject: SpeedtestSubject, attempts: Int, o
             Modifier.fillMaxWidth(),
             enabled = link != null && signal != SpeedtestMath.Signal.TooWeak,
         ) {
-            val net = c.network.routerWifi()?.first ?: return@BusyButton
+            val net = c.network.routerLink()?.first ?: return@BusyButton
             error = null
             scope.launch {
                 runCatching {
@@ -149,7 +151,7 @@ fun SpeedtestRunner(c: AppContainer, subject: SpeedtestSubject, attempts: Int, o
                     result = r
                     passed = saved?.passed ?: local
                     onResult(r, target, passed)
-                }.onFailure { error = "Speedtest non riuscito: ${it.message ?: it.javaClass.simpleName}. Controlla che la Wi-Fi del router abbia Internet." }
+                }.onFailure { error = "Speedtest non riuscito: ${it.message ?: it.javaClass.simpleName}. Controlla che la rete del router (Wi-Fi o cavo) abbia Internet." }
                 progress = null
             }
         }
@@ -160,7 +162,9 @@ fun SpeedtestRunner(c: AppContainer, subject: SpeedtestSubject, attempts: Int, o
 @SuppressLint("MissingPermission")
 @Suppress("DEPRECATION")
 private fun routerSnapshot(c: AppContainer, aps: List<WifiAp> = readWifiScan(c.network.wifiManager)): RouterWifi? {
-    val link = c.network.routerWifi()?.second ?: return null
+    val link = c.network.routerLink()?.second ?: return null
+    // on the cable: no Wi-Fi to describe, the test says it ran on the cable
+    if (link.isCable) return RouterWifi(cable = true)
     return SpeedtestMath.routerWifi(aps, link.wifiBssid, link.wifiSsid, link.linkSpeedMbps, link.wifiRssi)
 }
 
@@ -190,21 +194,32 @@ fun RouterSpeedStep(c: AppContainer, onNext: () -> Unit) {
     if (!r.ready) return
 
     val online = link != null && link.validated
-    SectionCard("2 · Wi-Fi del router del cliente") {
-        Text("Collega il telefono alla Wi-Fi del router del cliente: serve Internet su quella rete, non la Wi-Fi della CPE.", style = MaterialTheme.typography.bodySmall)
+    SectionCard("2 · Rete del router del cliente") {
+        Text("Collega il telefono alla Wi-Fi del router del cliente, oppure con il cavo (adattatore USB-C Ethernet) a una porta LAN del router: serve Internet su quella rete, non la Wi-Fi della CPE.", style = MaterialTheme.typography.bodySmall)
         if (cpeWifi == CpeWifi.Connected) TextButton(onClick = { c.network.leaveCpeWifi() }) { Text("Scollega dalla Wi-Fi della CPE") }
         when {
             link == null && c.network.onCpeSsid() -> Notice("Il telefono è sulla Wi-Fi della CPE: passa a quella del router del cliente.", NoticeKind.Warn)
-            link == null -> Notice("Il telefono non è collegato a una Wi-Fi.", NoticeKind.Warn)
-            !link.validated -> Notice("${link.wifiSsid ?: "Questa Wi-Fi"}: nessun accesso a Internet. Controlla il router.", NoticeKind.Warn)
+            link == null && c.network.ethernetWithoutAddress() -> Notice("Cavo collegato ma senza indirizzo: il router del cliente non assegna indirizzi su quella porta (DHCP spento?).", NoticeKind.Warn)
+            link == null -> Notice("Il telefono non è collegato a una Wi-Fi né a un cavo.", NoticeKind.Warn)
+            !link.validated -> Notice("${if (link.isCable) "Il cavo" else link.wifiSsid ?: "Questa Wi-Fi"}: nessun accesso a Internet. Controlla il router.", NoticeKind.Warn)
+            link.isCable -> KeyValue("Cavo", "${link.addresses.firstOrNull { it.contains('.') }?.substringBefore('/') ?: "collegato"} · Internet ok")
             else -> KeyValue("Wi-Fi", "${link.wifiSsid ?: "rete collegata"} · ${link.wifiRssi ?: "—"} dBm · Internet ok")
         }
         SecondaryButton(onClick = { runCatching { context.startActivity(wifiPanelIntent()) } }, modifier = Modifier.fillMaxWidth()) { Text("Apri le impostazioni Wi-Fi") }
     }
     if (!online) return
 
-    RouterChannelCard(c, r)
-    if (r.wifi == null) return
+    if (link?.isCable == true) {
+        // the acceptance test says the speed was measured on the cable
+        LaunchedEffect(Unit) { if (r.wifi?.cable != true) c.install.router { it.copy(wifi = RouterWifi(cable = true)) } }
+        // on the cable the phone does not see the router's Wi-Fi: its channel is checked from the Wi-Fi
+        SectionCard("3 · Canale e ampiezza") {
+            Text("Il telefono è sul cavo: il canale della Wi-Fi del router si controlla collegandosi alla sua Wi-Fi. Lo speedtest via cavo misura la linea senza il Wi-Fi in mezzo.", style = MaterialTheme.typography.bodySmall)
+        }
+    } else {
+        RouterChannelCard(c, r)
+        if (r.wifi == null) return
+    }
 
     SectionCard("4 · Speedtest") {
         val subject = SpeedtestSubject(

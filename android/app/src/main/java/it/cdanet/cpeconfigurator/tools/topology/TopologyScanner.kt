@@ -83,11 +83,11 @@ class TopologyScanner(private val network: NetworkHelper) {
             }.also { onDone("Ubiquiti", it.size) }
         }
         val rest = withContext(Dispatchers.IO) {
-            network.onWifi {
+            network.onLocal {
                 val lock = network.multicastLock()
                 lock.acquire()
                 try {
-                    vendorDiscovery(network.wifiLink()?.addresses?.map { it.substringBefore('/') }?.firstOrNull { Ip.parse(it) != null }, onDone)
+                    vendorDiscovery(network.localLink()?.addresses?.map { it.substringBefore('/') }?.firstOrNull { Ip.parse(it) != null }, onDone)
                 } finally {
                     lock.release()
                 }
@@ -130,11 +130,11 @@ class TopologyScanner(private val network: NetworkHelper) {
         progress: (String) -> Unit,
     ): TopologyRun {
         val (found, merged, devices, prints) = withContext(Dispatchers.IO) {
-            network.onWifi {
+            network.onLocal {
                 val lock = network.multicastLock()
                 lock.acquire()
                 try {
-                    val local = network.wifiLink()?.addresses?.map { it.substringBefore('/') }?.firstOrNull { Ip.parse(it) != null }
+                    val local = network.localLink()?.addresses?.map { it.substringBefore('/') }?.firstOrNull { Ip.parse(it) != null }
                     val found = if (!discovery) emptyList() else {
                         progress("Discovery multi-vendor (MikroTik, Ubiquiti, Hikvision, Dahua, ONVIF, WS-Discovery, UPnP, mDNS, Netgear)…")
                         vendorDiscovery(local)

@@ -14,7 +14,7 @@ class ProvisioningFailure(message: String, val detected: DetectedDto?, cause: Th
 
 /**
  * Applies a server-rendered system.cfg to a factory CPE over SSH.
- * Must run with the process bound to the CPE Wi-Fi (see NetworkHelper.onWifi).
+ * Must run with the process bound to the CPE Wi-Fi (see NetworkHelper.onLocal).
  */
 class CpeProvisioner(private val onStage: (String) -> Unit) {
 

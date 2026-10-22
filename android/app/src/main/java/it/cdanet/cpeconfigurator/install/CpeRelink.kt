@@ -39,7 +39,7 @@ object SystemCfgRelink {
 /**
  * Writes the new link into the CPE over SSH: new file next to the running one, size and checksum
  * verified, then swapped, saved in flash (cfgmtd) and the CPE rebooted. Must run with the process
- * bound to the Wi-Fi network (NetworkHelper.onWifi).
+ * bound to the Wi-Fi network (NetworkHelper.onLocal).
  */
 class CpeRelinker(private val onStage: (String) -> Unit) {
     fun relink(host: String, ports: List<Int>, username: String, password: String, ssid: String, psk: String, lockMac: String?) {

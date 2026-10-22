@@ -105,6 +105,8 @@ export const acceptanceSchema = z
         congested: z.boolean().optional(),
         suggestedChannel: num,
         changed: z.string().max(200).optional(),
+        // the speed test ran on a cable to the router's LAN (USB-C Ethernet adapter of the phone)
+        cable: z.boolean().optional(),
       })
       .strict()
       .optional(),

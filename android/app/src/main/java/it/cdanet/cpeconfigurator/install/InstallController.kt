@@ -90,6 +90,7 @@ data class RouterCheck(
             ssid = w.ssid, rssi = w.rssi, band = w.band, channel = w.channel, widthMhz = w.widthMhz, linkMbps = w.linkMbps,
             neighborsSameChannel = w.neighborsSameChannel, neighborsOverlapping = w.neighborsOverlapping,
             congested = w.neighborsSameChannel?.let { it >= 3 }, suggestedChannel = w.suggestedChannel, changed = changed,
+            cable = w.cable,
         )
     }
 }
