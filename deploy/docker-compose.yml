@@ -4,7 +4,7 @@
 #   updater  pulls new app images, backs up the DB, rolls back if unhealthy
 #   nominatim (optional, COMPOSE_PROFILES=geocoder) local OpenStreetMap address search
 #   maptiles  (one-shot, "sudo cdanet-cpe map update") Protomaps basemap for the console maps
-#   crowdsec  (optional, CROWDSEC=1 → COMPOSE_PROFILES=crowdsec) attacks seen in Caddy's log and
+#   crowdsec  (on by default, CROWDSEC=0 turns it off; COMPOSE_PROFILES=crowdsec) attacks seen in Caddy's log and
 #             the community blocklist; the app blocks the addresses it decides (its bouncer)
 name: cdanet-cpe-configurator
 

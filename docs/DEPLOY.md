@@ -94,7 +94,7 @@ L'HTTPS serve anche per il GPS del browser (zone dei guasti da "Usa GPS di quest
 
 ### CrowdSec
 
-Alla prima installazione con un terminale l'installer chiede se attivare **CrowdSec** (riconosce gli attacchi nel log del web server e blocca anche gli indirizzi della lista della comunità); senza terminale resta spento. `CDANET_CROWDSEC=1` (o `0`) lo sceglie senza domande. Si accende e si spegne anche dalla console, scheda Infrastruttura. Comandi: `sudo cdanet-cpe crowdsec [decisions|alerts|logs|cscli …]`. Dettagli in [ACCESSI-BLOCCATI.md](ACCESSI-BLOCCATI.md#crowdsec-v13617).
+**CrowdSec** è acceso di serie: riconosce gli attacchi nel log del web server e blocca anche gli indirizzi della lista della comunità. Alla prima installazione con un terminale l'installer chiede conferma (invio = sì); senza terminale lo accende. `CDANET_CROWDSEC=0` lo spegne senza domande. I server installati prima della v1.36.18 lo ricevono acceso al primo avvio del nuovo agente di aggiornamento, se non era già stato scelto. Si accende e si spegne anche dalla console, scheda Infrastruttura. Comandi: `sudo cdanet-cpe crowdsec [decisions|alerts|logs|cscli …]`. Dettagli in [ACCESSI-BLOCCATI.md](ACCESSI-BLOCCATI.md#crowdsec-v13617).
 
 ### Mappe (Protomaps)
 
@@ -146,7 +146,7 @@ Nella stessa pagina, la scheda **Infrastruttura** cambia i parametri che riguard
 - **Indirizzo e HTTPS**: `APP_LISTEN` (`:80` oppure un nome per HTTPS con certificato pubblico) e gli indirizzi HTTPS autofirmati `HTTPS_SITES` (il certificato senza nome viene emesso per il primo indirizzo);
 - **Aggiornamenti automatici**: attivi/disattivi, intervallo di controllo, finestra oraria (es. `02-05`), canale (`stable` oppure una versione da bloccare, es. `1.26.0`);
 - **Mappe della console**: mappa locale Protomaps o mappe pubbliche OpenStreetMap, regione o area personalizzata, e **Aggiorna la mappa ora**.
-- **Protezione (CrowdSec)**: attiva o spegne CrowdSec. All'attivazione l'updater genera la chiave dell'app, aggiunge `crowdsec` a `COMPOSE_PROFILES` e avvia il container (al primo avvio scarica immagine e regole, un paio di minuti); allo spegnimento lo toglie, tenendo i suoi dati. Dettagli in [ACCESSI-BLOCCATI.md](ACCESSI-BLOCCATI.md#crowdsec-v13617).
+- **Protezione (CrowdSec)**, acceso di serie: attiva o spegne CrowdSec. All'attivazione l'updater genera la chiave dell'app, aggiunge `crowdsec` a `COMPOSE_PROFILES` e avvia il container (al primo avvio scarica immagine e regole, un paio di minuti); allo spegnimento lo toglie, tenendo i suoi dati. Dettagli in [ACCESSI-BLOCCATI.md](ACCESSI-BLOCCATI.md#crowdsec-v13617).
 - **OpenStreetMap locale (ricerca indirizzi)**, se installato: **regione** dei dati (Sicilia, isole, sud, centro, nord-est, nord-ovest, Italia) e **Reimporta da zero**. Cambiando regione i dati vengono cancellati e reimportati (da 20 minuti a qualche ora); nel frattempo la ricerca usa il servizio pubblico. L'installazione o la rimozione di OpenStreetMap locale resta all'installer, perché cambia RAM, disco e servizi del server.
 
 Come funziona: l'app non può riavviare gli altri container, quindi scrive la richiesta nel volume dati (`/data/infra/request.env`); il container **updater** la raccoglie entro 10 secondi, **la valida di nuovo** (solo queste chiavi, solo valori ammessi: niente può finire nel `.env` oltre a questi parametri), aggiorna il `.env`, ricrea Caddy, avvia o toglie CrowdSec o scarica la mappa se serve e scrive l'esito, che compare nella pagina. Una richiesta alla volta; ogni richiesta finisce nel Registro attività.
