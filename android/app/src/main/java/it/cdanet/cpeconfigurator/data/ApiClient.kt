@@ -32,6 +32,8 @@ private val ERRORS = mapOf(
     "device_revoked" to "Accesso rapido non più valido su questo telefono: accedi con la password",
     "too_many_attempts" to "Troppi tentativi: riprova tra qualche minuto",
     "banned" to "Troppi tentativi di accesso falliti: accesso bloccato per un po'. Se non eri tu, avvisa il NOC.",
+    // CrowdSec (v1.36.17): the address the phone goes out with is on a block list (also a mobile CGNAT one)
+    "blocked_ip" to "Questo indirizzo è bloccato dalla protezione del server: comunicalo al NOC, che può sbloccarlo da Accessi bloccati.",
     "unauthorized" to "Sessione scaduta: accedi di nuovo",
     "forbidden" to "Operazione non consentita",
     "invalid_request" to "Dati non validi",
@@ -137,6 +139,11 @@ private fun namedMessage(code: String): String? = when {
 /** Codes that name a data source (uisp_…, crm_…): never shown as they are. */
 private val SOURCE_CODE = Regex("^(uisp|crm|ispbilling|edistribuzione)_")
 
+/** `blocked_ip` (CrowdSec): the message with the address the server sees, for the NOC. */
+fun blockedIpMessage(ip: String?): String =
+    if (ip.isNullOrBlank()) apiMessage("blocked_ip")
+    else "Questo indirizzo (IP $ip) è bloccato dalla protezione del server: comunicalo al NOC, che può sbloccarlo da Accessi bloccati."
+
 fun apiMessage(code: String): String = ERRORS[code] ?: namedMessage(code) ?: if (SOURCE_CODE.containsMatchIn(code)) "Servizio di rete non disponibile in questo momento, riprova più tardi" else code
 
 /** Thin JSON client for the CDA Net server. */
@@ -218,6 +225,8 @@ class ApiClient(
                     if ((r.code == 401 || (r.code == 429 && code == "banned")) && auth) session.revoke()
                     if (r.code == 426) updateRequired.value = err?.minVersion ?: "nuova"
                     val detail = err?.minVersion?.let { " (minima $it)" } ?: ""
+                    // the blocked address in the message: what the NOC unblocks (no logout, no retry: it is not the session)
+                    if (code == "blocked_ip") throw ApiException(r.code, code, blockedIpMessage(err?.ip))
                     throw ApiException(r.code, code, apiMessage(code) + detail)
                 }
                 text
