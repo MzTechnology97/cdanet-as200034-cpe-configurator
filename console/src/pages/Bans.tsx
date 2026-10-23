@@ -278,7 +278,7 @@ function Crowdsec() {
       {!d && !q.error && <Skeleton lines={3} />}
       {d && !d.enabled && (
         <Notice tone="info" title="CrowdSec non è attivo su questo server">
-          Riconosce scanner e tentativi di attacco nel log del web server e blocca anche gli indirizzi segnalati dalla comunità CrowdSec. Si attiva da Impostazioni server → Infrastruttura.
+          Riconosce scanner e tentativi di attacco nel log del web server e blocca anche gli indirizzi segnalati dalla comunità CrowdSec. È acceso di serie: qui è stato spento, oppure si sta avviando. Si riaccende da Impostazioni server → Infrastruttura.
         </Notice>
       )}
       {d?.enabled && (

@@ -112,6 +112,7 @@ function SettingsGroup({ title, settings, onSaved }: { title: string; settings: 
         values[s.key] = String(now).trim();
       }
     }
+    if (values.CROWDSEC === '0' && !confirm('Spegnere CrowdSec? Il server smette di bloccare gli indirizzi che lo attaccano e quelli della lista della comunità CrowdSec.')) return;
     if (values.CROWDSEC === '1' && !confirm('Attivare CrowdSec? Il server scarica il suo container (circa 170 MB) e le regole; poi blocca gli indirizzi che attaccano il server e quelli della lista della comunità CrowdSec, alla quale invia indirizzo e tipo degli attacchi visti qui (mai il contenuto delle richieste). Blocchi ed eccezioni: pagina Accessi bloccati.')) return;
     if (!Object.keys(values).length) throw new Error('Nessuna modifica');
     const r = await api<Settings>('/api/admin/server-settings', { method: 'PUT', body: { values } });
@@ -324,7 +325,7 @@ function InfraCard() {
       MAP_REGION: v.MAP_REGION ?? REGIONS[0]![0],
       MAP_BBOX: v.MAP_BBOX ?? '',
       NOMINATIM_REGION: v.NOMINATIM_REGION ?? REGIONS[0]![0],
-      CROWDSEC: v.CROWDSEC === '1' ? '1' : '0',
+      CROWDSEC: v.CROWDSEC === '0' ? '0' : '1',
     });
   }, [d]);
 
@@ -362,7 +363,7 @@ function InfraCard() {
       for (const k of keys) {
         if (k === 'MAP_BBOX' && f.MAP_REGION !== 'custom') continue;
         const now = String(f[k] ?? '').trim().replace(/\s+/g, ' ');
-        if (now !== (d.values[k] ?? (k === 'AUTOUPDATE' ? '1' : k === 'CROWDSEC' ? '0' : ''))) values[k] = now;
+        if (now !== (d.values[k] ?? (k === 'AUTOUPDATE' ? '1' : k === 'CROWDSEC' ? '1' : ''))) values[k] = now;
       }
     // the self-signed certificate is issued for the first address when the browser sends no name
     if (values.HTTPS_SITES) values.HTTPS_DEFAULT_SNI = values.HTTPS_SITES.split(' ')[0]!.replace(/^https:\/\//, '');
@@ -387,7 +388,7 @@ function InfraCard() {
             <input type="checkbox" checked={f.CROWDSEC === '1'} disabled={locked} onChange={(e) => set(k, e.target.checked ? '1' : '0')} />
             CrowdSec attivo
           </label>
-          <p className="ui-muted ui-small">Riconosce scanner e tentativi di attacco nel log del web server e blocca anche gli indirizzi segnalati dalla comunità CrowdSec. Mai bloccati: le reti fidate, chi è entrato con successo negli ultimi 30 giorni e le eccezioni della pagina Accessi bloccati.</p>
+          <p className="ui-muted ui-small">Acceso di serie. Riconosce scanner e tentativi di attacco nel log del web server e blocca anche gli indirizzi segnalati dalla comunità CrowdSec. Mai bloccati: le reti fidate, chi è entrato con successo negli ultimi 30 giorni e le eccezioni della pagina Accessi bloccati.</p>
         </div>
       );
     if (k === 'MAP_BBOX' && f.MAP_REGION !== 'custom') return null;
