@@ -13,8 +13,8 @@
 #   regions: sicilia (default), isole (Sicilia+Sardegna), sud, centro, nord-est, nord-ovest,
 #            italia, custom (CDANET_GEOCODER_PBF_URL [+ CDANET_GEOCODER_REPLICATION_URL])
 #
-# CrowdSec (attacks recognised in the web server's log, community blocklist), asked on first run:
-#   sudo CDANET_CROWDSEC=1 ./deploy/install-debian.sh        (0 to turn it off; also from the console)
+# CrowdSec (attacks recognised in the web server's log, community blocklist): on by default,
+#   sudo CDANET_CROWDSEC=0 ./deploy/install-debian.sh        to turn it off (also from the console)
 #
 # Console maps (Protomaps basemap, OpenStreetMap data, downloaded once and refreshed monthly):
 #   CDANET_MAP=local (default) | off      CDANET_MAP_REGION=<region above> (default: the geocoder's)
@@ -323,7 +323,7 @@ setup_crowdsec() {
       read -rp "  Attivare CrowdSec? [S/n]: " a </dev/tty
       if [[ ${a:-S} =~ ^[sSyY] ]]; then mode=1; else mode=0; fi
     else
-      mode=0
+      mode=1
     fi
   fi
   [[ $mode =~ ^[01]$ ]] || fail "CDANET_CROWDSEC non valido: $mode (1 oppure 0)"
@@ -332,7 +332,7 @@ setup_crowdsec() {
     [[ -n $(get_env CROWDSEC_API_KEY) ]] || set_env CROWDSEC_API_KEY "$(openssl rand -hex 32)"
     echo "  CrowdSec: attivo (blocchi ed eccezioni nella console, Accessi bloccati)"
   else
-    echo "  CrowdSec: non attivo (si attiva anche dalla console: Impostazioni server → Infrastruttura)"
+    echo "  CrowdSec: spento (si riaccende dalla console: Impostazioni server → Infrastruttura)"
   fi
 }
 echo "[3e/5] CrowdSec"
