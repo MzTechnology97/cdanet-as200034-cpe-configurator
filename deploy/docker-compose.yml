@@ -4,6 +4,8 @@
 #   updater  pulls new app images, backs up the DB, rolls back if unhealthy
 #   nominatim (optional, COMPOSE_PROFILES=geocoder) local OpenStreetMap address search
 #   maptiles  (one-shot, "sudo cdanet-cpe map update") Protomaps basemap for the console maps
+#   crowdsec  (optional, CROWDSEC=1 → COMPOSE_PROFILES=crowdsec) attacks seen in Caddy's log and
+#             the community blocklist; the app blocks the addresses it decides (its bouncer)
 name: cdanet-cpe-configurator
 
 services:
@@ -50,6 +52,8 @@ services:
       - ./Caddyfile:/etc/caddy/Caddyfile:ro
       - caddy_data:/data
       - caddy_config:/config
+      # access log (JSON, rotated by Caddy) read by CrowdSec
+      - caddy_logs:/var/log/caddy
     depends_on:
       app:
         condition: service_healthy
@@ -96,6 +100,38 @@ services:
       driver: json-file
       options: {max-size: "10m", max-file: "3"}
 
+  # CrowdSec security engine (titolare, 23/10/2026): reads Caddy's access log, recognises scanners
+  # and exploit attempts, and receives the community blocklist in exchange for the attacks seen
+  # here (address, scenario, time: never the requests' content). The app reads its decisions as a
+  # bouncer (CROWDSEC_API_KEY, generated when enabled) and blocks those addresses, with the
+  # exceptions chosen in the console (Accessi bloccati). Never exposed outside the private network.
+  crowdsec:
+    image: crowdsecurity/crowdsec:${CROWDSEC_VERSION:-v1.8.1}
+    profiles: [crowdsec]
+    restart: unless-stopped
+    security_opt: ["no-new-privileges:true"]
+    environment:
+      COLLECTIONS: crowdsecurity/caddy crowdsecurity/whitelist-good-actors
+      # the private networks are never reported
+      PARSERS: crowdsecurity/whitelists
+      # a console that opens many map tiles and APIs is not a crawler
+      DISABLE_SCENARIOS: crowdsecurity/http-crawl-non_statics
+      BOUNCER_KEY_cdanet: ${CROWDSEC_API_KEY:-}
+      USE_WAL: "true"
+      TZ: ${TZ:-Europe/Rome}
+    configs:
+      - source: crowdsec_acquis
+        target: /etc/crowdsec/acquis.d/cdanet.yaml
+    volumes:
+      - crowdsec_data:/var/lib/crowdsec/data
+      - crowdsec_config:/etc/crowdsec
+      - caddy_logs:/var/log/caddy:ro
+    expose: ["8080"]
+    networks: [private]
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "2"}
+
   updater:
     image: docker:27-cli
     restart: unless-stopped
@@ -138,6 +174,15 @@ services:
     entrypoint: ["/bin/sh", "/fetch-basemap.sh"]
     networks: [private]
 
+configs:
+  # what CrowdSec reads: Caddy's access log (deploy/Caddyfile)
+  crowdsec_acquis:
+    content: |
+      filenames:
+        - /var/log/caddy/access.log
+      labels:
+        type: caddy
+
 networks:
   private:
     driver: bridge
@@ -146,5 +191,8 @@ volumes:
   appdata:
   caddy_data:
   caddy_config:
+  caddy_logs:
+  crowdsec_data:
+  crowdsec_config:
   updater_state:
   nominatim_data:

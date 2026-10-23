@@ -101,6 +101,8 @@ const LABELS: Record<string, string> = {
   'work_group.delete': 'Gruppo di lavoro eliminato',
   'auth.ban': 'Accesso bloccato dopo troppi tentativi',
   'auth.unban': 'Accesso sbloccato',
+  'security.crowdsec_allow': 'Eccezione CrowdSec aggiunta',
+  'security.crowdsec_allow_remove': 'Eccezione CrowdSec tolta',
   'mcp.authorize': 'Claude collegato alla piattaforma',
   'mcp.call': 'Claude ha letto la piattaforma',
   'mcp.revoke': 'Connessione di Claude revocata',

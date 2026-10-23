@@ -13,6 +13,9 @@
 #   regions: sicilia (default), isole (Sicilia+Sardegna), sud, centro, nord-est, nord-ovest,
 #            italia, custom (CDANET_GEOCODER_PBF_URL [+ CDANET_GEOCODER_REPLICATION_URL])
 #
+# CrowdSec (attacks recognised in the web server's log, community blocklist), asked on first run:
+#   sudo CDANET_CROWDSEC=1 ./deploy/install-debian.sh        (0 to turn it off; also from the console)
+#
 # Console maps (Protomaps basemap, OpenStreetMap data, downloaded once and refreshed monthly):
 #   CDANET_MAP=local (default) | off      CDANET_MAP_REGION=<region above> (default: the geocoder's)
 #   CDANET_MAP_BBOX=minLon,minLat,maxLon,maxLat for a custom area
@@ -157,7 +160,6 @@ setup_geocoder() {
   fi
   if [[ $mode != local ]]; then
     set_env GEOCODER_MODE public
-    set_env COMPOSE_PROFILES ""
     set_env GEOCODER_URL https://nominatim.openstreetmap.org
     set_env GEOCODER_FALLBACK_URL ""
     echo "  OpenStreetMap: servizio pubblico (nominatim.openstreetmap.org)"
@@ -210,7 +212,6 @@ setup_geocoder() {
   (( mw > 4096 )) && mw=4096
   (( mw < 256 )) && mw=256
   set_env GEOCODER_MODE local
-  set_env COMPOSE_PROFILES geocoder
   set_env GEOCODER_URL http://nominatim:8080
   set_env GEOCODER_FALLBACK_URL https://nominatim.openstreetmap.org
   set_env NOMINATIM_REGION "$region"
@@ -311,6 +312,36 @@ setup_https() {
 }
 echo "[3d/5] HTTPS"
 setup_https
+
+# --- CrowdSec: attacks recognised in Caddy's log and the community blocklist ----------------
+setup_crowdsec() {
+  local mode=${CDANET_CROWDSEC:-$(get_env CROWDSEC)} a
+  if [[ -z $mode ]]; then
+    if has_tty; then
+      echo "  CrowdSec: riconosce scanner e tentativi di attacco nel log del web server e blocca anche gli indirizzi"
+      echo "  segnalati dalla comunità CrowdSec (in cambio condivide indirizzo e tipo degli attacchi visti qui)."
+      read -rp "  Attivare CrowdSec? [S/n]: " a </dev/tty
+      if [[ ${a:-S} =~ ^[sSyY] ]]; then mode=1; else mode=0; fi
+    else
+      mode=0
+    fi
+  fi
+  [[ $mode =~ ^[01]$ ]] || fail "CDANET_CROWDSEC non valido: $mode (1 oppure 0)"
+  set_env CROWDSEC "$mode"
+  if [[ $mode == 1 ]]; then
+    [[ -n $(get_env CROWDSEC_API_KEY) ]] || set_env CROWDSEC_API_KEY "$(openssl rand -hex 32)"
+    echo "  CrowdSec: attivo (blocchi ed eccezioni nella console, Accessi bloccati)"
+  else
+    echo "  CrowdSec: non attivo (si attiva anche dalla console: Impostazioni server → Infrastruttura)"
+  fi
+}
+echo "[3e/5] CrowdSec"
+setup_crowdsec
+# optional services: the local geocoder, CrowdSec (the updater applies the same rule)
+profiles=""
+[[ $(get_env GEOCODER_MODE) == local ]] && profiles=geocoder
+[[ $(get_env CROWDSEC) == 1 ]] && profiles="${profiles:+$profiles,}crowdsec"
+set_env COMPOSE_PROFILES "$profiles"
 
 echo "[4/5] Stop eventuale stack v0.5.x"
 # Only once: the legacy stack uses the same compose project name, so a later "down"
