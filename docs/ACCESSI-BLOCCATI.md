@@ -1,4 +1,4 @@
-# Accessi bloccati (come fail2ban)
+# Accessi bloccati (come fail2ban) e CrowdSec
 
 La piattaforma registra ogni tentativo di accesso: dalla console web, dall'app e dal connettore Claude. Ogni tentativo vale, sia con la password, sia con il codice della verifica in due passaggi, sia con l'accesso rapido del telefono, sia con il consenso di Claude. Dopo **5 tentativi falliti in 15 minuti** blocca l'IP e il dispositivo da cui arrivano.
 
@@ -25,3 +25,44 @@ Amministrazione → **Accessi bloccati**: i blocchi in corso (o tutti) con il bl
 - `GET /api/admin/bans`: blocchi in corso e passati, con `lastAttemptAt`, gli utenti tentati e i flag `active` / `expired`.
 - `DELETE /api/admin/bans/:id`: sblocca subito.
 - `GET /api/admin/login-attempts?failed=1&ip=&username=&limit=`: il registro dei tentativi.
+
+## CrowdSec (v1.36.17)
+
+Il blocco qui sopra ferma chi sbaglia la password. **CrowdSec** (titolare, 23/10/2026) protegge il resto del server web: riconosce chi lo scansiona o lo attacca e riceve dalla comunità CrowdSec gli indirizzi già segnalati altrove. È **facoltativo**: si attiva da Impostazioni server → **Infrastruttura** → *Protezione (CrowdSec)*, oppure con l'installer (`CDANET_CROWDSEC=1`, o rispondendo sì alla domanda della prima installazione).
+
+![Impostazioni server, Infrastruttura: Protezione (CrowdSec)](img/crowdsec-infrastruttura.png)
+
+**Come funziona**
+
+1. Caddy scrive il log degli accessi (JSON, 3 file da 10 MB, 7 giorni) in un volume che legge solo CrowdSec. Gli header `Authorization` e `Cookie` non vengono mai scritti; gli header segreti dell'app (`X-Cda-Bridge-Token`, `X-Backup-Password`) vengono tolti.
+2. Il container **crowdsec** (`crowdsecurity/crowdsec:v1.8.1`, profilo `crowdsec` del compose, solo sulla rete interna) legge il log con le regole HTTP generiche e le CVE note: pagine inesistenti a raffica, file riservati (`.env`, `.git`), pannelli di amministrazione, WordPress, path traversal, SQL injection, XSS, backdoor, scanner noti dallo user agent. Chi viene riconosciuto è bloccato per 4 ore. È spenta solo la regola del *crawler*: la console apre molte API e tasselli di mappa diversi e verrebbe scambiata per un crawler. Le reti private non vengono mai segnalate.
+3. In cambio degli attacchi visti qui (indirizzo, tipo di attacco e ora, **mai il contenuto delle richieste**), CrowdSec riceve la **lista della comunità**: gli indirizzi segnalati da tutti gli utenti CrowdSec.
+4. **L'app è il bouncer**: ogni 10 secondi legge le decisioni dall'API locale di CrowdSec con la sua chiave (`CROWDSEC_API_KEY`, generata all'attivazione; l'app la legge da `/data/infra/crowdsec.key`, che c'è solo mentre CrowdSec è attivo). Un indirizzo bloccato riceve `403` su tutto: la console mostra una pagina con il suo indirizzo da comunicare al NOC, le API rispondono `{"error":"blocked_ip"}`.
+
+**Mai bloccati** (molti installatori escono con lo stesso IP del gestore mobile, e la lista della comunità può contenerne uno):
+
+- le reti mai bloccate per IP qui sopra: il server, le reti private, `LOGIN_BAN_IGNORE`;
+- gli indirizzi da cui qualcuno è **entrato con successo negli ultimi 30 giorni**;
+- le **eccezioni** scelte in console: un IP o una rete, per 7 giorni, 30 giorni, un anno o sempre;
+- le richieste con una **sessione valida**: chi è già collegato continua a lavorare anche da un indirizzo segnalato.
+
+![Accessi bloccati, scheda CrowdSec (dati fittizi)](img/crowdsec-accessi-bloccati.png)
+
+**Console**: Amministrazione → **Accessi bloccati** → scheda **CrowdSec**:
+
+- stato (attivo, non raggiungibile, non attivo), attacchi visti qui, indirizzi della comunità, richieste bloccate nelle ultime 24 ore, eccezioni;
+- **Controlla un indirizzo**: dice se l'IP di un tecnico che non riesce a entrare è bloccato, perché e fino a quando, e lo consente per 30 giorni con un clic;
+- le richieste bloccate nelle ultime 24 ore, con **Consenti**;
+- gli attacchi riconosciuti su questo server e fino a quando restano bloccati;
+- le eccezioni, con chi le ha messe, e il modulo per aggiungerne. Aggiungere o togliere un'eccezione finisce nel Registro: `security.crowdsec_allow`, `security.crowdsec_allow_remove`.
+
+API (solo admin):
+
+- `GET /api/admin/crowdsec`: stato, conteggi, attacchi visti qui, richieste bloccate nelle 24 ore, eccezioni;
+- `GET /api/admin/crowdsec/check?ip=`: se l'indirizzo è bloccato, da quale decisione o perché no;
+- `POST /api/admin/crowdsec/allow` `{"value":"203.0.113.0/24","note":"…","days":30}` (senza `days`: sempre);
+- `DELETE /api/admin/crowdsec/allow/:id`.
+
+Dal server: `sudo cdanet-cpe crowdsec` (metriche: log letti, attacchi riconosciuti, decisioni, bouncer), `sudo cdanet-cpe crowdsec decisions`, `alerts`, `logs`, `cscli …` (per esempio `sudo cdanet-cpe crowdsec cscli decisions delete --ip 203.0.113.9`).
+
+Spegnendo CrowdSec dalla console, il container viene tolto (i suoi dati restano per quando torna) e l'app smette subito di bloccare. Il blocco avviene nell'app, non nel firewall: vale per la console e per le API, che sono tutto ciò che il server espone a Internet.

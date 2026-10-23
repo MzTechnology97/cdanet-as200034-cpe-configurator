@@ -912,6 +912,18 @@ const MIGRATIONS: Array<string | CodeMigration> = [
   `
   ALTER TABLE specialist_jobs ADD COLUMN uisp_off INTEGER NOT NULL DEFAULT 0;
   `,
+  // 50 · v1.36.17: the addresses CrowdSec never blocks on this server, chosen by the admins
+  // (titolare, 23/10/2026): an IP or a network, for good or until [until]
+  `
+  CREATE TABLE crowdsec_allow(
+    id INTEGER PRIMARY KEY,
+    value TEXT NOT NULL,
+    note TEXT NOT NULL DEFAULT '',
+    created_at TEXT NOT NULL,
+    created_by INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    until TEXT
+  );
+  `,
 ];
 
 export function openDatabase(path: string): Db {

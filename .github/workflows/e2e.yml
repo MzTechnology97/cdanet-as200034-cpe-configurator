@@ -40,7 +40,7 @@ jobs:
           docker info --format '{{.RegistryConfig.Mirrors}}'
           # the daemon may still go to Docker Hub: the images of the test stack come from the
           # mirror by name and keep their usual tag (compose then finds them already present)
-          for i in debian:12 debian:12-slim caddy:2-alpine docker:27-cli mediagis/nominatim:5.3; do
+          for i in debian:12 debian:12-slim caddy:2-alpine docker:27-cli mediagis/nominatim:5.3 crowdsecurity/crowdsec:v1.8.1; do
             m=$i; case $i in */*) ;; *) m=library/$i ;; esac
             docker pull -q "mirror.gcr.io/$m" >/dev/null && docker tag "mirror.gcr.io/$m" "$i" && echo "from the mirror: $i" || echo "not in the mirror: $i"
           done
@@ -166,11 +166,50 @@ jobs:
           # invalid values are refused by the app and never reach the agent
           test "$(curl -s -o /dev/null -w '%{http_code}' -X PUT -H "$H" -H 'Content-Type: application/json' -d '{"values":{"APP_LISTEN":":80\nJWT_SECRET=x"}}' http://localhost/api/admin/infra)" = 400
 
+      - name: CrowdSec from the console (container, key, the app as its bouncer)
+        run: |
+          H="Authorization: Bearer $TOKEN"
+          curl -fsS -H "$H" http://localhost/api/admin/crowdsec | jq -e '.enabled == false' >/dev/null
+          for i in $(seq 1 10); do
+            code=$(curl -s -o /tmp/put.json -w '%{http_code}' -X PUT -H "$H" -H 'Content-Type: application/json' -d '{"values":{"CROWDSEC":"1"}}' http://localhost/api/admin/infra || true)
+            echo "PUT infra: $code"
+            [ "$code" = 202 ] && break
+            sleep 3
+          done
+          test "$code" = 202
+          for i in $(seq 1 60); do
+            s=$(curl -fsS -H "$H" http://localhost/api/admin/crowdsec || true)
+            echo "$s" | jq -e '.connected' >/dev/null 2>&1 && break
+            sleep 5
+          done
+          echo "$s" | jq '{enabled, connected, error, counts}'
+          echo "$s" | jq -e '.enabled and .connected' >/dev/null
+          curl -fsS -H "$H" http://localhost/api/admin/infra | jq -e '.status.result == "ok" and .values.CROWDSEC == "1"' >/dev/null
+          sudo grep -q '^COMPOSE_PROFILES=.*crowdsec' /opt/cdanet-cpe/.env
+          # Caddy writes the access log that CrowdSec reads
+          docker exec srv cdanet-cpe exec -T caddy test -s /var/log/caddy/access.log
+          docker exec srv cdanet-cpe crowdsec
+          # a decision taken by hand reaches the app within its 10 s round
+          docker exec srv cdanet-cpe crowdsec cscli decisions add --ip 203.0.113.99 --duration 1h --reason e2e
+          for i in $(seq 1 10); do
+            curl -fsS -H "$H" 'http://localhost/api/admin/crowdsec/check?ip=203.0.113.99' | jq -e '.blocked and .decision.origin == "manual"' >/dev/null && break
+            sleep 3
+          done
+          curl -fsS -H "$H" 'http://localhost/api/admin/crowdsec/check?ip=203.0.113.99' | tee /dev/stderr | jq -e '.blocked' >/dev/null
+          # turned off: the container goes, the app stops blocking
+          curl -fsS -X PUT -H "$H" -H 'Content-Type: application/json' -d '{"values":{"CROWDSEC":"0"}}' http://localhost/api/admin/infra >/dev/null
+          for i in $(seq 1 30); do
+            curl -fsS -H "$H" http://localhost/api/admin/crowdsec | jq -e '.enabled == false' >/dev/null && break
+            sleep 3
+          done
+          curl -fsS -H "$H" http://localhost/api/admin/crowdsec | jq -e '.enabled == false' >/dev/null
+          test -z "$(docker ps -qf "label=com.docker.compose.project=$PROJECT" -f label=com.docker.compose.service=crowdsec)"
+
       - name: Diagnostics
         if: always()
         run: |
           docker ps -a
-          for s in app caddy updater nominatim; do
+          for s in app caddy updater nominatim crowdsec; do
             c=$(docker ps -aqf "label=com.docker.compose.project=$PROJECT" -f label=com.docker.compose.service=$s | head -n1)
             [ -n "$c" ] || continue
             echo "::group::$s logs"; docker logs --tail 150 "$c" 2>&1; echo "::endgroup::"

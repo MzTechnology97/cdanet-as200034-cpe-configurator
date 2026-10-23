@@ -7,7 +7,7 @@ import type { AppContext } from '../context.ts';
 import { recordEvent } from '../db.ts';
 
 /**
- * Infrastructure settings (address/HTTPS, auto-update, maps): they belong to other containers,
+ * Infrastructure settings (address/HTTPS, auto-update, maps, CrowdSec): they belong to other containers,
  * so the app cannot apply them itself. It writes a request for the updater agent, which
  * validates it again, updates .env, restarts what is needed and reports the outcome
  * (deploy/updater/update.sh, exchange files in the data volume).
@@ -24,6 +24,8 @@ export const INFRA_KEYS = {
   MAP_REGION: /^(sicilia|isole|sud|centro|nord-est|nord-ovest|italia|custom)$/,
   /** Local OpenStreetMap (Nominatim) region: changing it imports the data again from scratch. */
   NOMINATIM_REGION: /^(sicilia|isole|sud|centro|nord-est|nord-ovest|italia)$/,
+  /** CrowdSec (titolare, 23/10/2026): the container that recognises attacks and the community blocklist. */
+  CROWDSEC: /^[01]$/,
   MAP_BBOX: /^-?[0-9]{1,3}(\.[0-9]+)?,-?[0-9]{1,2}(\.[0-9]+)?,-?[0-9]{1,3}(\.[0-9]+)?,-?[0-9]{1,2}(\.[0-9]+)?$/,
 } as const;
 type InfraKey = keyof typeof INFRA_KEYS;

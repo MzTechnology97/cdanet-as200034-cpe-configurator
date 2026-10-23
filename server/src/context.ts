@@ -6,6 +6,7 @@ import type { Provisioning } from './services/provisioning.ts';
 import type { Templates } from './services/templates.ts';
 import type { Geocoder } from './services/geocode.ts';
 import type { LoginGuard } from './services/login-guard.ts';
+import type { Crowdsec } from './services/crowdsec.ts';
 import type { Uisp } from './services/uisp.ts';
 import type { Connectors } from './services/connectors.ts';
 import type { CrmSettings } from './services/crm.ts';
@@ -94,6 +95,7 @@ export interface AppContext {
   notify: Notifier;
   /** Login attempts and bans (fail2ban-like). */
   loginGuard: LoginGuard;
+  crowdsec: Crowdsec;
   /** The specialist's own section: his templates, the connectors of his companies, his installations. */
   specialist: Specialist;
   version: string;
