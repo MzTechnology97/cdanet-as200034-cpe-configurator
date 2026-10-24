@@ -41,7 +41,7 @@ fun RouterOsScreen(c: AppContainer) {
     var user by remember { mutableStateOf("admin") }
     var pass by remember { mutableStateOf("") }
     var command by remember { mutableStateOf("") }
-    var viaWifi by remember { mutableStateOf(c.network.wifiNetwork() != null) }
+    var viaWifi by remember { mutableStateOf(c.network.localNetwork() != null) }
     var busy by remember { mutableStateOf<String?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
     var result by remember { mutableStateOf<RosResult?>(null) }
@@ -68,7 +68,7 @@ fun RouterOsScreen(c: AppContainer) {
             Field("Username", user, { user = it.trim() })
             Field("Password", pass, { pass = it }, password = true, supporting = "Solo in memoria, per questa schermata")
             Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.fillMaxWidth()) {
-                Text("Usa la rete Wi-Fi", modifier = Modifier.weight(1f))
+                Text("Usa la rete locale (Wi-Fi o cavo)", modifier = Modifier.weight(1f))
                 Switch(checked = viaWifi, onCheckedChange = { viaWifi = it })
             }
             BusyButton("Connetti / Dashboard", busy == "dashboard", Modifier.fillMaxWidth(), enabled = busy == null) { run("dashboard", "dashboard") }

@@ -211,6 +211,7 @@
   <li>Collegamento alla Wi-Fi della CPE e <b>Installa sulla CPE</b> come sempre.</li>
 </ol>
 <p>Esito, MAC, seriale e AP scelto partono da soli appena il telefono torna online.</p>
+<div class="tip"><b>Con il cavo.</b> Con un <b>adattatore USB-C Ethernet</b> il telefono si collega anche con il cavo, alla porta LAN dell'alimentatore PoE della CPE o del router del cliente: l'app usa il cavo come la Wi-Fi, per la CPE, gli strumenti e lo speedtest. Serve però che dall'altra parte qualcuno dia un indirizzo al telefono (DHCP): lo fanno le CPE già configurate da CDA Net e i router, <b>non una CPE nuova o resettata</b>. Per la prima scrittura su una CPE nuova si usa la sua Wi-Fi; se il cavo non riceve un indirizzo l'app lo dice.</div>
 <div class="shots">
   <figure><img src="img/app-pronto-offline.jpg" alt="Intervento pronto offline" loading="lazy"><figcaption>Sull'intervento: pronto offline.</figcaption></figure>
   <figure><img src="img/app-offline-scrittura.jpg" alt="Scelta dell'AP e della CPE senza rete" loading="lazy"><figcaption>Senza rete: AP verso cui puntare e CPE di questo intervento.</figcaption></figure>
@@ -260,7 +261,7 @@
 <p>Con l'antenna puntata, prima del collaudo l'installatore controlla che il cliente navighi alla velocità del suo abbonamento. Il passo ha quattro riquadri, da fare in ordine:</p>
 <ol class="steps">
   <li><b>Router del cliente</b>: il router va collegato alla porta LAN della CPE e configurato; poi <b>Router pronto, procedi</b>.</li>
-  <li><b>Wi-Fi del router del cliente</b>: il telefono va collegato alla Wi-Fi del router (con <b>Apri le impostazioni Wi-Fi</b>). Se è ancora sulla Wi-Fi della CPE, c'è <b>Scollega dalla Wi-Fi della CPE</b>. Il test si fa <b>solo sulla Wi-Fi, mai con i dati mobili</b>: l'app mostra la rete, il segnale e se c'è Internet.</li>
+  <li><b>Rete del router del cliente</b>: il telefono va collegato alla Wi-Fi del router (con <b>Apri le impostazioni Wi-Fi</b>) oppure, meglio ancora, con il <b>cavo</b> (adattatore USB-C Ethernet) a una porta LAN del router: così la misura non dipende dal Wi-Fi del telefono, e il controllo del canale si salta. Se è ancora sulla Wi-Fi della CPE, c'è <b>Scollega dalla Wi-Fi della CPE</b>. Il test si fa <b>solo sulla Wi-Fi, mai con i dati mobili</b>: l'app mostra la rete, il segnale e se c'è Internet.</li>
   <li><b>Canale e ampiezza del router</b>: l'app legge banda, canale e larghezza della rete del router e conta le reti dei vicini <b>sullo stesso canale</b> e <b>sovrapposte</b>. Se c'è da cambiare qualcosa lo indica (per esempio <i>Sposta la rete 2,4 GHz sul canale 11</i>, <i>collegalo alla rete 5 GHz</i>, <i>sulla 2,4 GHz usa 20 MHz</i>): l'installatore lo cambia sul router, scrive in <b>Cosa hai cambiato</b> cosa ha fatto e tocca <b>Rileggi</b>. Se va bene, <b>Va bene, procedi</b>.</li>
   <li><b>Speedtest</b>: <b>Avvia speedtest</b> misura download, upload, ping e jitter verso il server CDA Net, in circa 20 secondi. In alto ci sono il <b>profilo del cliente</b> (es. <i>30 / 6 Mbit/s</i>) e il <b>minimo</b> da raggiungere, di solito l'80% (<i>24 / 4,8</i>).</li>
 </ol>
@@ -412,7 +413,7 @@
 </div>
 
 <h2 id="rete">10. Strumenti di rete</h2>
-<p>In <b>Strumenti</b>, divisi per gruppi. Funzionano anche senza accesso al server (<i>Continua senza accesso</i>), sulla rete a cui è collegato il telefono; lo Speedtest invece richiede l'accesso:</p>
+<p>In <b>Strumenti</b>, divisi per gruppi. Funzionano anche senza accesso al server (<i>Continua senza accesso</i>), sulla rete a cui è collegato il telefono: la Wi-Fi oppure il cavo, con un adattatore USB-C Ethernet. Lo Speedtest invece richiede l'accesso:</p>
 <div class="table-wrap"><table>
   <tr><th>Strumento</th><th>A cosa serve</th></tr>
   <tr><td>Speedtest</td><td>Download, upload, ping e jitter verso il server CDA Net, sulla Wi-Fi a cui è collegato il telefono (si veda <a href="#speedtest">sotto</a>)</td></tr>
@@ -514,6 +515,7 @@
   <tr><td>«Questa CPE non risulta nel tuo magazzino»</td><td>Scegliere una CPE dal magazzino. Se è davvero in carico all'installatore, chiedere all'ufficio di caricarla o di permettere CPE fuori magazzino.</td></tr>
   <tr><td>«Nessuna CPE nel tuo magazzino»</td><td>Il magazzino è vuoto: chiedere all'ufficio di caricarne una.</td></tr>
   <tr><td>Collegati alla Wi-Fi della CPE: non compare la CPE</td><td>Avvicinarsi e controllare che sia alimentata; se ha già la configurazione CDA Net la sua Wi-Fi di gestione può essere spenta: usare la Wi-Fi del router del cliente.</td></tr>
+  <tr><td>«Cavo collegato ma il telefono non ha ricevuto un indirizzo»</td><td>Dall'altra parte del cavo nessuno dà indirizzi: succede con una CPE nuova o resettata. Usare la Wi-Fi della CPE, oppure collegare il cavo al router del cliente.</td></tr>
   <tr><td>«Nessuna CPE airOS trovata» o «Nessuna CPE Ubiquiti risponde»</td><td>Controllare che il telefono sia sulla Wi-Fi della CPE o del router del cliente e che la CPE sia accesa; <b>Cerca di nuovo</b>, poi IP manuale.</td></tr>
   <tr><td>La CPE risponde alla discovery ma non si apre</td><td>L'interfaccia web della CPE è bloccata: <b>Riavvia la CPE</b> dalla barra in cima a CPE collegata e riprovare dopo un minuto.</td></tr>
   <tr><td>«Scendi: router del cliente» non si attiva</td><td>Mancano foto del tetto: antenna, staffa o palo e cablaggio sono obbligatorie in una nuova installazione.</td></tr>

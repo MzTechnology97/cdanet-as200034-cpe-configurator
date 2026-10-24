@@ -3,7 +3,7 @@ import { MANAGEMENT_PORTS, parseClientHeader, versionAtLeast } from './domain/po
 import { loadLatestRelease } from './services/releases.ts';
 import { dirname, join } from 'node:path';
 import fastifyStatic from '@fastify/static';
-import Fastify, { type FastifyInstance, type FastifyReply } from 'fastify';
+import Fastify, { type FastifyInstance, type FastifyReply, type FastifyRequest } from 'fastify';
 import { ZodError } from 'zod';
 import { HttpError, createAuth, seesAll } from './auth.ts';
 import type { Config } from './config.ts';
@@ -38,6 +38,8 @@ import { createCrmSettings } from './services/crm.ts';
 import { createVrmSettings } from './services/victron.ts';
 import { createMyWicSettings } from './services/mywic.ts';
 import { createNas, type reachSmb, type SmbClient } from './services/nas.ts';
+import { createCrowdsec } from './services/crowdsec.ts';
+import { plainIp } from './services/login-guard.ts';
 import { createWorkGroups } from './services/work-groups.ts';
 import { workGroupRoutes } from './routes/work-groups.ts';
 import { createVictronSync, type VictronSync } from './services/victron-sync.ts';
@@ -99,6 +101,16 @@ const CSP = [
   "form-action 'self'",
   "frame-ancestors 'none'",
 ].join('; ');
+
+/** The page an address blocked by CrowdSec gets (no style: the CSP allows none inline). */
+function blockedPage(ip: string): string {
+  const safe = ip.replace(/[^0-9a-fA-F.:]/g, '');
+  return `<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Accesso bloccato</title></head><body>
+<h1>Accesso bloccato</h1>
+<p>L’indirizzo <b>${safe}</b> è bloccato dalla protezione del server (CrowdSec): è stato segnalato per attività sospette, qui o dalla comunità CrowdSec.</p>
+<p>Se sei un tecnico o un cliente CDA Net, comunica questo indirizzo al NOC: può sbloccarlo dalla console (Accessi bloccati).</p>
+</body></html>`;
+}
 
 export function ensureBootstrapAdmin(db: Db, cfg: Config): 'created' | 'exists' {
   const n = (db.prepare("SELECT count(*) n FROM users WHERE role = 'admin'").get() as { n: number }).n;
@@ -185,6 +197,7 @@ export async function buildApp(
     anncsu: createAnncsu({ dir: join(dirname(cfg.terrainDir), 'anncsu'), ...(opts.fetchImpl ? { fetchImpl: opts.fetchImpl } : {}) }),
     notify: undefined as unknown as Notifier,
     loginGuard: createLoginGuard(db, { ignore: cfg.loginBanIgnore, notify: (html) => ctx.notify.security(html) }),
+    crowdsec: createCrowdsec(db, { ...cfg.crowdsec, infraDir: cfg.infraDir, ignore: cfg.loginBanIgnore, version, fetchImpl: opts.fetchImpl, log: (m) => pushLog(m) }),
     specialist: createSpecialist(db, cfg, sealer, { fetchImpl: opts.fetchImpl, visibleIds: (u) => ctx.workGroups.visibleIds(u),
       canUseCda: (userId, templateId) => {
         const u = db.prepare('SELECT id, role, full_view fullView FROM users WHERE id = ?').get(userId) as { id: number; role: string; fullView: number } | undefined;
@@ -282,6 +295,19 @@ export async function buildApp(
   // fail2ban-like: a banned device is stopped everywhere; a banned IP only at the logins and
   // without a session (many installers share one public IP: those logged in keep working)
   const LOGINS = ['/api/auth/login', '/api/login', '/api/auth/device-login', '/oauth/authorize', '/oauth/token'];
+  // CrowdSec: an address it blocks gets nothing, neither pages nor API, unless logged in (services/crowdsec.ts)
+  const session = (req: FastifyRequest) => () =>
+    ctx.auth.authenticate(req).then(
+      () => true,
+      () => ctx.auth.verifyFeedToken(req).then(() => true, () => false),
+    );
+  app.addHook('onRequest', async (req, reply) => {
+    if (!(await ctx.crowdsec.blocked(req, session(req)))) return;
+    const path = req.url.split('?')[0]!;
+    const ip = plainIp(req.ip);
+    if (path.startsWith('/api/') || path.startsWith('/oauth/') || path === '/mcp') return reply.code(403).send({ error: 'blocked_ip', ip });
+    return reply.code(403).type('text/html; charset=utf-8').send(blockedPage(ip));
+  });
   app.addHook('onRequest', async (req, reply) => {
     const path = req.url.split('?')[0]!;
     if (!(path.startsWith('/api/') || path.startsWith('/oauth/') || path === '/mcp') || ALWAYS_OPEN.some((p) => path.startsWith(p))) return;

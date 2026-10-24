@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { OperatorsCard } from '../coverage/Operators';
 import { OpenedCheck, SaveCheckButton, SavedChecksCard, type SavedCheck } from '../coverage/SavedChecks';
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
-import { LinkSimCard } from '../coverage/LinkSim';
+import { PtpMode } from '../coverage/LinkSim';
 import { toast } from '../lib/toast';
 import { drawFresnelLink, pointPicker, simulationOverlay, towards, MAP_COLORS as C } from '../map/leaflet';
 import { openLink3d, openSimulation3d } from '../map/map3d';
@@ -157,6 +157,14 @@ export function CoverageAdmin() {
   const onAbPicking = useCallback((on: boolean) => {
     abPicking.current = on;
   }, []);
+  // Collegamento PTP A → B: shown like an AP and a customer, its dock over the map
+  const [ptp, setPtp] = useState(false);
+  const ptpOn = useRef(false);
+  ptpOn.current = ptp;
+  const [stage, setStage] = useState<HTMLDivElement | null>(null);
+  const onPtpResult = useCallback((l: Record<string, unknown> | null) => {
+    view3d.current.link = l;
+  }, []);
 
   // CPE height: starts from the default of Impostazioni server, changed for every check
   useEffect(() => {
@@ -173,7 +181,8 @@ export function CoverageAdmin() {
   cur.current = { height, cpe, radius, point, link, aps };
   handlers.current = {
     onPick: (la, lo) => {
-      if (abPicking.current) {
+      // the PTP link is open: the map belongs to A and B
+      if (abPicking.current || ptpOn.current) {
         if (!cur.current.point) ctl?.picker.arm();
         return;
       }
@@ -500,9 +509,9 @@ export function CoverageAdmin() {
           </>
         }
       >
-        <div className="map-stage">
+        <div className="map-stage" ref={setStage}>
           <MapView tall zoom={9} fitMode="never" onReady={onReady} draw={() => []} />
-          {link && point && <LinkDock link={link} point={point} cpe={cpe} cpeModels={cpeModels} height={Number(String(height).replace(',', '.'))} dockRef={dockRef} onCpe={(v) => (setCpe(v), recheck({ cpe: v }))} onHeight={changeHeight} on3d={show3dLink} onClose={closeLink} />}
+          {!ptp && link && point && <LinkDock link={link} point={point} cpe={cpe} cpeModels={cpeModels} height={Number(String(height).replace(',', '.'))} dockRef={dockRef} onCpe={(v) => (setCpe(v), recheck({ cpe: v }))} onHeight={changeHeight} on3d={show3dLink} onClose={closeLink} />}
         </div>
         <Legend
           items={[
@@ -529,9 +538,34 @@ export function CoverageAdmin() {
           >
             Nuovo punto sulla mappa
           </Button>
+          <Button
+            icon="explore"
+            variant={ptp ? 'primary' : 'secondary'}
+            onClick={() => {
+              if (ptp) return setPtp(false);
+              closeLink();
+              setPtp(true);
+            }}
+          >
+            {ptp ? 'Chiudi il collegamento PTP' : 'Collegamento PTP (A → B)'}
+          </Button>
         </div>
         {sim && <SimulationPanel sim={sim} mode={simMode} onMode={setSimMode} onClear={() => setSim(null)} on3d={sim3d} />}
       </Card>
+
+      {ptp && (
+        <PtpMode
+          map={ctl?.map ?? null}
+          L={ctl?.L ?? null}
+          linkLayer={ctl?.link ?? null}
+          stage={stage}
+          aps={aps as Array<{ id?: string; name: string; lat: number; lon: number }>}
+          point={point}
+          onPicking={onAbPicking}
+          onResult={onPtpResult}
+          onClose={() => setPtp(false)}
+        />
+      )}
 
       {result?.loading && (
         <Card>
@@ -579,7 +613,6 @@ export function CoverageAdmin() {
         }}
       />
 
-      <LinkSimCard map={ctl?.map ?? null} L={ctl?.L ?? null} onPicking={onAbPicking} />
 
       <Card>
         <Segmented label="Strumenti" options={TABS} value={tab} onChange={setTab} />

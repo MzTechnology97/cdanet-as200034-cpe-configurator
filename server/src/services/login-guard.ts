@@ -43,25 +43,45 @@ function channelOf(req: FastifyRequest): string {
   return req.headers['x-cda-client'] ? 'app' : 'web';
 }
 
-export function createLoginGuard(db: Db, opts: { ignore?: string; notify?: (html: string) => void } = {}) {
+/** An IPv4 address seen through an IPv6 socket (::ffff:a.b.c.d) as plain IPv4. */
+export const plainIp = (ip: string) => ip.replace(/^::ffff:/, '');
+
+/** Adds an address or a network (a.b.c.d/nn, ipv6/nn) to [list]; false when it is not one. */
+export function addNet(list: BlockList, item: string): boolean {
+  const [addr, bits, more] = item.trim().split('/');
+  const fam = isIP(addr ?? '');
+  if (!fam || more !== undefined) return false;
+  const type = fam === 6 ? 'ipv6' : 'ipv4';
+  if (bits === undefined) {
+    list.addAddress(addr!, type);
+    return true;
+  }
+  const n = Number(bits);
+  if (!/^\d{1,3}$/.test(bits) || n > (fam === 6 ? 128 : 32)) return false;
+  list.addSubnet(addr!, n, type);
+  return true;
+}
+
+/**
+ * The networks never banned by IP: loopback, the private networks (the containers, the trusted
+ * LANs) and LOGIN_BAN_IGNORE. Also those that CrowdSec never blocks (services/crowdsec.ts).
+ */
+export function trustedNets(ignore = ''): (ip: string) => boolean {
   const exempt = new BlockList();
   exempt.addSubnet('127.0.0.0', 8);
   exempt.addAddress('::1', 'ipv6');
   for (const [net, bits] of [['10.0.0.0', 8], ['172.16.0.0', 12], ['192.168.0.0', 16], ['100.64.0.0', 10]] as const) exempt.addSubnet(net, bits);
   exempt.addSubnet('fc00::', 7, 'ipv6');
-  for (const item of (opts.ignore ?? '').split(/[\s,]+/).filter(Boolean)) {
-    const [addr, bits] = item.split('/');
-    const fam = isIP(addr ?? '');
-    if (!fam) continue;
-    if (bits) exempt.addSubnet(addr!, Number(bits), fam === 6 ? 'ipv6' : 'ipv4');
-    else exempt.addAddress(addr!, fam === 6 ? 'ipv6' : 'ipv4');
-  }
-  const plainIp = (ip: string) => ip.replace(/^::ffff:/, '');
-  const ipExempt = (ip: string) => {
+  for (const item of ignore.split(/[\s,]+/).filter(Boolean)) addNet(exempt, item);
+  return (ip: string) => {
     const p = plainIp(ip);
     const fam = isIP(p);
     return !fam || exempt.check(p, fam === 6 ? 'ipv6' : 'ipv4');
   };
+}
+
+export function createLoginGuard(db: Db, opts: { ignore?: string; notify?: (html: string) => void } = {}) {
+  const ipExempt = trustedNets(opts.ignore);
 
   // the bans in force, kept in memory (checked on every request)
   const active = new Map<string, { id: number; until: string }>();

@@ -83,6 +83,15 @@ describe('Rapporto di collaudo in PDF', () => {
     const ownText = pdfText(own.rawPayload);
     assert.ok(!ownText.includes('UISP'), 'never the name of the data source to installers');
     assert.ok(ownText.includes('In rete'));
+    // the speed test on a cable to the router (USB-C Ethernet adapter): the report says so
+    const viaCable = await call('PUT', `/api/provisioning/jobs/${job}/acceptance`, {
+      verdict: 'ok', measuredAt: new Date().toISOString(), samples: 10,
+      cpe: { model: 'LiteBeam 5AC Gen2', firmware: 'WA.v8.7.4', apName: 'N2-D01' }, radio: { signal: -60, cinrRx: 28, chains: [-61, -62] },
+      internet: { tested: true, pingMs: 12, downloadMbps: 25.1, uploadMbps: 5 }, checks: [], wifi: { cable: true },
+    }, T);
+    assert.equal(viaCable.statusCode, 200, viaCable.body);
+    const cableText = pdfText((await call('GET', mine, undefined, T)).rawPayload);
+    assert.ok(cableText.includes('cavo Ethernet'), `measured on the cable: ${cableText.slice(cableText.indexOf('Rete'), cableText.indexOf('Rete') + 200)}`);
     assert.ok(!ownText.includes('Segreta-PPPoE-9') && !own.rawPayload.toString('latin1').includes('Segreta-PPPoE-9'));
     // ?view=1: opened in the browser instead of downloaded
     assert.match(String((await call('GET', `${mine}?view=1`, undefined, T)).headers['content-disposition']), /^inline; filename=/);

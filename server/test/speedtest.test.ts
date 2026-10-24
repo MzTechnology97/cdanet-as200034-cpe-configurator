@@ -62,6 +62,9 @@ describe('Speedtest del collaudo e degli interventi', () => {
     assert.equal((await call('POST', '/api/speedtests', { context: 'cpe', mac: 'AA:BB:CC:00:00:09', downMbps: 1, upMbps: 1 }, O)).statusCode, 403);
     // as a network tool, without a CPE: kept, no comparison
     assert.equal((await call('POST', '/api/speedtests', { context: 'tool', downMbps: 50, upMbps: 10 }, O)).json().passed, null);
+    // on a cable to the router's LAN (USB-C Ethernet adapter): no Wi-Fi to describe, only that it ran on the cable
+    const cable = await call('POST', '/api/speedtests', { context: 'tool', downMbps: 90, upMbps: 18, wifi: { cable: true } }, O);
+    assert.equal(cable.statusCode, 201, cable.body);
 
     const list = (await call('GET', `/api/speedtests?jobId=${job}`)).json().items;
     assert.equal(list.length, 3);

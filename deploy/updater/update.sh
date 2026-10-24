@@ -9,7 +9,7 @@
 # needed again for upgrades.
 #
 # It also applies the infrastructure settings requested from the console
-# (Impostazioni server → Infrastruttura): the app writes /appdata/infra/request.env,
+# (Impostazioni server → Infrastruttura, CrowdSec included): the app writes /appdata/infra/request.env,
 # this script validates every line, updates .env, restarts what is needed and
 # writes the outcome to /appdata/infra/status.env.
 set -eu
@@ -93,6 +93,7 @@ sync_deploy() {
   rm -rf "$new"
   log "deploy files updated:$changed"
   case "$changed" in *docker-compose.yml*|*Caddyfile*) compose up -d --no-deps --remove-orphans caddy >/dev/null 2>&1 || log "caddy restart failed" ;; esac
+  case "$changed" in *docker-compose.yml*) crowdsec_on && { compose up -d --no-deps crowdsec >/dev/null 2>&1 || log "crowdsec restart failed"; } ;; esac
   case "$changed" in *docker-compose.yml*|*update.sh*) log "restarting the updater with the new files"; restart_self ;; esac
 }
 
@@ -130,7 +131,7 @@ check_once() {
 }
 
 # ---- Infrastructure settings requested from the console ------------------------------------
-INFRA_KEYS="APP_LISTEN HTTPS_SITES HTTPS_DEFAULT_SNI AUTOUPDATE UPDATE_INTERVAL UPDATE_WINDOW CDANET_CHANNEL MAP_MODE MAP_REGION MAP_BBOX NOMINATIM_REGION"
+INFRA_KEYS="APP_LISTEN HTTPS_SITES HTTPS_DEFAULT_SNI AUTOUPDATE UPDATE_INTERVAL UPDATE_WINDOW CDANET_CHANNEL MAP_MODE MAP_REGION MAP_BBOX NOMINATIM_REGION CROWDSEC"
 
 valid() {
   case "$1" in
@@ -144,6 +145,7 @@ valid() {
     MAP_MODE) printf '%s' "$2" | grep -Eq '^(local|off)$' ;;
     MAP_REGION) printf '%s' "$2" | grep -Eq '^(sicilia|isole|sud|centro|nord-est|nord-ovest|italia|custom)$' ;;
     NOMINATIM_REGION) printf '%s' "$2" | grep -Eq '^(sicilia|isole|sud|centro|nord-est|nord-ovest|italia)$' ;;
+    CROWDSEC) printf '%s' "$2" | grep -Eq '^[01]$' ;;
     MAP_BBOX) printf '%s' "$2" | grep -Eq '^-?[0-9]{1,3}(\.[0-9]+)?,-?[0-9]{1,2}(\.[0-9]+)?,-?[0-9]{1,3}(\.[0-9]+)?,-?[0-9]{1,2}(\.[0-9]+)?$' ;;
     *) return 1 ;;
   esac
@@ -174,6 +176,45 @@ geocoder_reimport() {
   compose up -d nominatim >/dev/null 2>&1
 }
 
+# CrowdSec is on unless turned off (CROWDSEC=0): on by default (titolare, 24/10/2026).
+crowdsec_on() { [ "$(get_env CROWDSEC)" != 0 ]; }
+
+# Optional services in use: the local geocoder, CrowdSec (same rule as the installer).
+set_profiles() {
+  p=""
+  [ "$(get_env GEOCODER_MODE)" = local ] && p=geocoder
+  crowdsec_on && p="${p:+$p,}crowdsec"
+  set_env COMPOSE_PROFILES "$p"
+}
+
+# CrowdSec on: its key generated once (the app is its bouncer), the container started (the image
+# is downloaded the first time). Off: the container removed, its data kept for when it comes back.
+crowdsec_apply() {
+  if crowdsec_on; then
+    [ -n "$(get_env CROWDSEC_API_KEY)" ] || set_env CROWDSEC_API_KEY "$(head -c 32 /dev/urandom | od -An -tx1 | tr -d ' \n')"
+    set_profiles
+    write_current
+    status running "avvio di CrowdSec (al primo avvio scarica l'immagine e le regole: un paio di minuti)"
+    compose up -d --no-deps crowdsec </dev/null >/tmp/crowdsec.log 2>&1
+  else
+    set_profiles
+    compose --profile crowdsec rm -sf crowdsec >/dev/null 2>&1 || true
+  fi
+}
+
+# The key of the app at CrowdSec's local API, in the data volume (the app reads it from there):
+# present only while CrowdSec is on.
+crowdsec_key() {
+  f="$INFRA/crowdsec.key"
+  k=$(get_env CROWDSEC_API_KEY)
+  if crowdsec_on && [ -n "$k" ]; then
+    [ "$(cat "$f" 2>/dev/null)" = "$k" ] && return 0
+    (umask 077; printf '%s\n' "$k" >"$f.tmp") && chown 1000:1000 "$f.tmp" 2>/dev/null; mv -f "$f.tmp" "$f"
+  else
+    rm -f "$f"
+  fi
+}
+
 # Value in use: .env, otherwise the compose default.
 effective() {
   case "$1" in
@@ -181,7 +222,7 @@ effective() {
     *) v=$(get_env "$1")
        case "$1" in
          APP_LISTEN) echo "${v:-:80}" ;; HTTPS_SITES) echo "${v:-https://localhost}" ;; HTTPS_DEFAULT_SNI) echo "${v:-localhost}" ;;
-         CDANET_CHANNEL) echo "${v:-stable}" ;; MAP_MODE) echo "${v:-off}" ;; *) echo "$v" ;;
+         CDANET_CHANNEL) echo "${v:-stable}" ;; MAP_MODE) echo "${v:-off}" ;; CROWDSEC) echo "${v:-1}" ;; *) echo "$v" ;;
        esac ;;
   esac
 }
@@ -194,6 +235,7 @@ write_current() {
   printf 'GEOCODER_MODE=%s\nAGENT=1\n' "$(get_env GEOCODER_MODE)" >>"$t"
   cmp -s "$t" "$INFRA/current.env" || { cat "$t" >"$INFRA/current.env"; chmod 0644 "$INFRA/current.env" 2>/dev/null || true; }
   rm -f "$t"
+  crowdsec_key
 }
 
 status() {
@@ -237,6 +279,10 @@ apply_request() {
     elif geocoder_reimport; then geo=started
     else geo=fail; fi
   fi
+  cs=""
+  case "$changed" in *CROWDSEC*)
+    if crowdsec_apply; then cs=ok; else cs=fail; fi ;;
+  esac
   map=""
   case "$changed" in *MAP_REGION*|*MAP_BBOX*|*MAP_MODE*) map=1 ;; esac
   [ "$action" = map_update ] && map=1
@@ -253,11 +299,13 @@ apply_request() {
   elif [ "$map" = fail ]; then status error "download della mappa non riuscito: $(tail -n 1 /tmp/maptiles.log | tr -d '\r')"
   elif [ "$geo" = fail ]; then status error "riavvio di OpenStreetMap locale non riuscito"
   elif [ "$geo" = notlocal ]; then status error "OpenStreetMap locale non installato su questo server (si installa con l'installer)"
+  elif [ "$cs" = fail ]; then status error "avvio di CrowdSec non riuscito: $(tail -n 1 /tmp/crowdsec.log | tr -d '\r')"
   else
     m=""
     [ "$map" = ok ] && m=" · mappa aggiornata"
     [ "$map" = removed ] && m=" · mappa locale rimossa"
     [ "$geo" = started ] && m="$m · import OpenStreetMap avviato (da 20 minuti a qualche ora)"
+    [ "$cs" = ok ] && { crowdsec_on && m="$m · CrowdSec avviato" || m="$m · CrowdSec fermato"; }
     status ok "applicato:${changed:- nessuna modifica}$m"
   fi
 }
@@ -267,6 +315,13 @@ apply_request() {
 if [ -d /appdata ]; then mkdir -p "$INFRA" && chown 1000:1000 "$INFRA" 2>/dev/null || true; fi
 write_current 2>/dev/null || true
 log "auto-updater started: project=$PROJECT interval=$(interval)s window=$(window) autoupdate=$(autoupdate)"
+# CrowdSec on by default: a server that never chose (installed or updated before v1.36.18) gets it now
+if [ -z "$(get_env CROWDSEC)" ] && [ -d /appdata ]; then
+  set_env CROWDSEC 1
+  log "CrowdSec acceso di serie"
+  if crowdsec_apply; then status ok "CrowdSec acceso di serie (si spegne da Infrastruttura)"; else status error "avvio di CrowdSec non riuscito: $(tail -n 1 /tmp/crowdsec.log | tr -d '\r')"; fi
+  write_current 2>/dev/null || true
+fi
 # Let the installer / compose finish starting the stack before the first check.
 start=$(date +%s)
 while [ $(( $(date +%s) - start )) -lt "${UPDATE_START_DELAY:-120}" ]; do apply_request || true; sleep 10; done

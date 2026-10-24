@@ -52,6 +52,8 @@ const resultBody = z
         neighborsSameChannel: z.number().int().min(0).max(500).optional(),
         neighborsOverlapping: z.number().int().min(0).max(500).optional(),
         suggestedChannel: z.number().int().min(1).max(233).optional(),
+        // measured on a cable to the router's LAN (USB-C Ethernet adapter), not on its Wi-Fi
+        cable: z.boolean().optional(),
       })
       .strict()
       .default({}),

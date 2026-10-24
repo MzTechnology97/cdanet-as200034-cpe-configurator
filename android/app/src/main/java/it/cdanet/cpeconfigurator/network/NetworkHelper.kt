@@ -14,6 +14,7 @@ import kotlinx.coroutines.sync.withLock
 import java.net.Inet4Address
 
 data class LinkInfo(
+    /** "Wi-Fi", "Ethernet" (cable, USB-C adapter), "Cellulare", "VPN", "Rete". */
     val transport: String,
     val interfaceName: String?,
     val addresses: List<String>,
@@ -26,12 +27,14 @@ data class LinkInfo(
     val wifiRssi: Int?,
     val wifiFrequency: Int?,
     val linkSpeedMbps: Int?,
-)
+) {
+    val isCable: Boolean get() = transport == "Ethernet"
+}
 
 /**
- * Network selection. When the phone joins the CPE management Wi-Fi (no Internet)
- * while mobile data is on, Android keeps cellular as the default network: local
- * operations must therefore be explicitly bound to the Wi-Fi network.
+ * Network selection. When the phone joins the CPE management Wi-Fi (no Internet), or a cable
+ * through a USB-C Ethernet adapter, while mobile data is on, Android keeps cellular as the default
+ * network: local operations must therefore be explicitly bound to that local network.
  */
 /** airOS management Wi-Fi: «<model>:<end of the MAC>», e.g. «Loco5AC:1C6A1BCA95C3», «LBE-5AC-Gen2:A1B2C3». */
 internal fun isCpeSsid(ssid: String?): Boolean = ssid != null && Regex("^[A-Za-z0-9._ -]+:[0-9A-Fa-f]{6,12}$").matches(ssid.trim('"'))
@@ -41,9 +44,12 @@ class NetworkHelper(context: Context) {
     private val wifi = context.applicationContext.getSystemService(WifiManager::class.java)
     private val bindMutex = Mutex()
 
-    /** True while the phone is connected to a Wi-Fi network (with or without Internet). */
-    private val _wifiConnected = kotlinx.coroutines.flow.MutableStateFlow(false)
-    val wifiConnected: kotlinx.coroutines.flow.StateFlow<Boolean> = _wifiConnected
+    /**
+     * True while the phone is on a local network: a Wi-Fi or a cable (USB-C Ethernet adapter), with
+     * or without Internet.
+     */
+    private val _localConnected = kotlinx.coroutines.flow.MutableStateFlow(false)
+    val localConnected: kotlinx.coroutines.flow.StateFlow<Boolean> = _localConnected
 
     /**
      * True while some network of the phone reaches Internet (validated). Back to true after a roof
@@ -66,16 +72,23 @@ class NetworkHelper(context: Context) {
     }
 
     init {
-        _wifiConnected.value = wifiNetwork() != null
-        runCatching {
-            cm.registerNetworkCallback(
-                android.net.NetworkRequest.Builder().addTransportType(NetworkCapabilities.TRANSPORT_WIFI).build(),
-                object : ConnectivityManager.NetworkCallback() {
-                    override fun onAvailable(network: Network) { _wifiConnected.value = true }
-                    // the lost network can still be listed while this runs: left out explicitly
-                    override fun onLost(network: Network) { _wifiConnected.value = wifiNetwork(except = network) != null }
-                },
-            )
+        _localConnected.value = localNetwork() != null
+        // Wi-Fi and cable alike: a USB-C Ethernet adapter plugged in unlocks the same screens
+        listOf(NetworkCapabilities.TRANSPORT_WIFI, NetworkCapabilities.TRANSPORT_ETHERNET).forEach { transport ->
+            runCatching {
+                cm.registerNetworkCallback(
+                    android.net.NetworkRequest.Builder().addTransportType(transport)
+                        // an Ethernet without Internet (the CPE, a LAN) is a network all the same
+                        .removeCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+                        .build(),
+                    object : ConnectivityManager.NetworkCallback() {
+                        override fun onAvailable(network: Network) { _localConnected.value = true }
+                        override fun onLinkPropertiesChanged(network: Network, lp: LinkProperties) { _localConnected.value = localNetwork() != null }
+                        // the lost network can still be listed while this runs: left out explicitly
+                        override fun onLost(network: Network) { _localConnected.value = localNetwork(except = network) != null }
+                    },
+                )
+            }
         }
     }
 
@@ -114,7 +127,7 @@ class NetworkHelper(context: Context) {
             override fun onAvailable(network: Network) {
                 cpeNet = network
                 _cpeWifi.value = CpeWifi.Connected
-                _wifiConnected.value = true
+                _localConnected.value = true
             }
             override fun onUnavailable() {
                 cpeCallback = null
@@ -123,7 +136,7 @@ class NetworkHelper(context: Context) {
             override fun onLost(network: Network) {
                 if (network == cpeNet) cpeNet = null
                 _cpeWifi.value = CpeWifi.Lost
-                _wifiConnected.value = wifiNetwork(except = network) != null
+                _localConnected.value = localNetwork(except = network) != null
             }
         }
         cpeCallback = cb
@@ -145,20 +158,43 @@ class NetworkHelper(context: Context) {
         cpeCallback = null
         cpeNet = null
         if (_cpeWifi.value != CpeWifi.Idle) _cpeWifi.value = CpeWifi.Idle
-        _wifiConnected.value = wifiNetwork() != null
+        _localConnected.value = localNetwork() != null
     }
 
-    /** The Wi-Fi the CPE steps use: the CPE's one joined from the app first, else the phone's Wi-Fi. */
+    /**
+     * The local network the CPE steps and the network tools use: the CPE's Wi-Fi joined from the
+     * app first, then a cable (USB-C Ethernet adapter, plugged in on purpose), then the phone's Wi-Fi.
+     */
+    fun localNetwork(except: Network? = null): Network? =
+        cpeNet?.takeIf { it != except && cm.getNetworkCapabilities(it) != null } ?: ethernetNetwork(except) ?: wifiNetwork(except)
+
+    /** The phone's Wi-Fi only (the Wi-Fi Analyzer, the CPE's Wi-Fi joined from the app first). */
     fun wifiNetwork(except: Network? = null): Network? = cpeNet?.takeIf { it != except && cm.getNetworkCapabilities(it) != null } ?: cm.allNetworksCompat().firstOrNull {
         it != except && cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
     }
 
+    /** A cable through a USB-C Ethernet adapter (or a dock), with or without Internet. */
+    fun ethernetNetwork(except: Network? = null): Network? = cm.allNetworksCompat().firstOrNull {
+        it != except && cm.getNetworkCapabilities(it)?.let { c -> c.hasTransport(NetworkCapabilities.TRANSPORT_ETHERNET) && !c.hasTransport(NetworkCapabilities.TRANSPORT_VPN) } == true
+    }
+
+    /**
+     * The cable is in but the phone got no IPv4 address: nothing on the other end gives one (a CPE
+     * still at its factory settings has no DHCP server). Android does not let an app set a static
+     * address, so the CPE is reached on its Wi-Fi instead, or behind a router.
+     */
+    fun ethernetWithoutAddress(): Boolean = ethernetNetwork()?.let { n ->
+        cm.getLinkProperties(n)?.linkAddresses?.none { it.address is Inet4Address } ?: true
+    } == true
+
     @Suppress("DEPRECATION")
     private fun ConnectivityManager.allNetworksCompat(): List<Network> = allNetworks.toList()
 
-    /** Runs [block] with the whole process bound to Wi-Fi (sockets, DNS, WebView). */
-    suspend fun <T> onWifi(block: suspend () -> T): T = bindMutex.withLock {
-        val net = wifiNetwork() ?: throw IllegalStateException("Nessuna rete Wi-Fi collegata")
+    /** Runs [block] with the whole process bound to the local network (sockets, DNS, WebView). */
+    suspend fun <T> onLocal(block: suspend () -> T): T = bindMutex.withLock {
+        val net = localNetwork() ?: throw IllegalStateException(
+            if (ethernetWithoutAddress()) NO_CABLE_ADDRESS else "Nessuna rete locale: collegati alla Wi-Fi o con il cavo (adattatore USB-C Ethernet)",
+        )
         val previous = cm.boundNetworkForProcess
         cm.bindProcessToNetwork(net)
         try {
@@ -168,7 +204,7 @@ class NetworkHelper(context: Context) {
         }
     }
 
-    fun bindToWifi(): Boolean = wifiNetwork()?.let { cm.bindProcessToNetwork(it) } ?: false
+    fun bindToLocal(): Boolean = localNetwork()?.let { cm.bindProcessToNetwork(it) } ?: false
 
     fun unbind() {
         cm.bindProcessToNetwork(null)
@@ -197,15 +233,22 @@ class NetworkHelper(context: Context) {
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
     }
 
+    /** The local network as the screens show it (Wi-Fi or cable). */
+    fun localLink(): LinkInfo? = localNetwork()?.let { describe(it) }
+
+    /** The phone's Wi-Fi only (the Wi-Fi Analyzer). */
     fun wifiLink(): LinkInfo? = wifiNetwork()?.let { describe(it) }
 
     /**
-     * The customer's router Wi-Fi for the speed test: a Wi-Fi the phone joined itself (never the
-     * CPE's one joined from the app, never mobile data). Null when the phone is on no such Wi-Fi.
+     * The customer's router for the speed test: a cable to one of its LAN ports first (the most
+     * faithful measure, no radio of the phone in the way), else a Wi-Fi the phone joined itself
+     * (never the CPE's one joined from the app, never mobile data). Null when neither is there.
      */
-    fun routerWifi(): Pair<Network, LinkInfo>? = cm.allNetworksCompat().filter {
-        it != cpeNet && cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
-    }.map { it to describe(it) }.firstOrNull { !isCpeSsid(it.second.wifiSsid) }
+    fun routerLink(): Pair<Network, LinkInfo>? =
+        ethernetNetwork()?.let { it to describe(it) }?.takeIf { it.second.addresses.any { a -> a.contains('.') } }
+            ?: cm.allNetworksCompat().filter {
+                it != cpeNet && cm.getNetworkCapabilities(it)?.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) == true
+            }.map { it to describe(it) }.firstOrNull { !isCpeSsid(it.second.wifiSsid) }
 
     /** The phone is on a CPE's management Wi-Fi joined from the settings (not from the app). */
     fun onCpeSsid(): Boolean = cm.allNetworksCompat().any {
@@ -263,4 +306,8 @@ class NetworkHelper(context: Context) {
     fun multicastLock(): WifiManager.MulticastLock = wifi.createMulticastLock("cda-discovery").apply { setReferenceCounted(false) }
 
     val wifiManager: WifiManager get() = wifi
+
+    companion object {
+        const val NO_CABLE_ADDRESS = "Cavo collegato ma il telefono non ha ricevuto un indirizzo: dall'altra parte nessuno lo assegna (una CPE di fabbrica non ha DHCP). Usa la Wi-Fi della CPE, oppure collega il cavo a un router o a una CPE già configurata con il DHCP."
+    }
 }

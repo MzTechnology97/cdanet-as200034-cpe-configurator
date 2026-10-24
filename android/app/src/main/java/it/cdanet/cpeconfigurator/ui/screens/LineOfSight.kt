@@ -28,6 +28,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.foundation.gestures.awaitEachGesture
+import androidx.compose.foundation.gestures.awaitFirstDown
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -295,6 +298,11 @@ internal fun SignalBar(e: SignalEstimateDto?) {
     }
 }
 
+/**
+ * The elevation profile of a link with the first Fresnel zone. A touch (or a drag) on it shows that
+ * point: distance from both ends, line of sight above the ground, buildings or trees, Fresnel radius
+ * and how much of it is free, altitude of the ground (as the console's chart under the mouse).
+ */
 @Composable
 internal fun ProfileChart(d: LosDto, ends: Pair<String, String> = "CPE" to "AP") {
     val st = StatusPalette
@@ -318,11 +326,31 @@ internal fun ProfileChart(d: LosDto, ends: Pair<String, String> = "CPE" to "AP")
     // at least ±2 m: on a link of a few tens of metres the zone is under a metre
     val span = ceil(maxOf(maxR * 2.4, 2.0))
     val above = pts.maxOf { (it.top ?: it.ground) - it.los }
+    // the point under the finger (index in the chart), kept after the finger leaves
+    var touched by remember(d) { mutableStateOf<Int?>(null) }
     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         FilterChip(selected = !zoom, onClick = { zoom = false }, label = { Text("Profilo intero") })
         FilterChip(selected = zoom, onClick = { zoom = true }, label = { Text("Zona di Fresnel") })
     }
-    Canvas(Modifier.fillMaxWidth().height(230.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceContainerLow)) {
+    val chartModifier = Modifier.fillMaxWidth().height(230.dp).clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceContainerLow)
+        .pointerInput(d) {
+            val padX = 8.dp.toPx()
+            fun pick(px: Float) {
+                val at = ((px - padX) / (size.width - 2 * padX)).coerceIn(0f, 1f) * total
+                touched = pts.indices.minByOrNull { abs(pts[it].d - at) }
+            }
+            // the touch does not consume the events: the screen still scrolls vertically
+            awaitEachGesture {
+                val down = awaitFirstDown(requireUnconsumed = false)
+                pick(down.position.x)
+                while (true) {
+                    val change = awaitPointerEvent().changes.firstOrNull() ?: break
+                    if (!change.pressed) break
+                    pick(change.position.x)
+                }
+            }
+        }
+    Canvas(chartModifier) {
         val lo = if (zoom) -span else fullLo
         val hi = if (zoom) span else fullHi
         val padL = 8.dp.toPx()
@@ -377,7 +405,9 @@ internal fun ProfileChart(d: LosDto, ends: Pair<String, String> = "CPE" to "AP")
         val label = android.graphics.Paint().apply { isAntiAlias = true; textSize = 11.dp.toPx(); isFakeBoldText = true; color = ink.toArgb() }
         listOf(pts.first() to ends.first, pts.last() to ends.second).forEachIndexed { i, (p, name) ->
             drawLine(ink, Offset(x(p.d), y(p, p.ground)), Offset(x(p.d), y(p, p.los)), strokeWidth = 2.dp.toPx())
-            drawCircle(DataColors.CpeEnd, 5.dp.toPx(), Offset(x(p.d), y(p, p.los)))
+            // A (the CPE side) orange, B (the AP side) blue on a white ring, as on the console's map
+            drawCircle(Color.White, 6.5.dp.toPx(), Offset(x(p.d), y(p, p.los)))
+            drawCircle(if (i == 0) DataColors.CpeEnd else DataColors.ApEnd, 5.dp.toPx(), Offset(x(p.d), y(p, p.los)))
             label.textAlign = if (i == 0) android.graphics.Paint.Align.LEFT else android.graphics.Paint.Align.RIGHT
             drawContext.canvas.nativeCanvas.drawText("$name ${fmt(p.los - p.ground)} m", x(p.d) + if (i == 0) 6.dp.toPx() else -6.dp.toPx(), y(p, p.los) - 8.dp.toPx(), label)
         }
@@ -386,6 +416,17 @@ internal fun ProfileChart(d: LosDto, ends: Pair<String, String> = "CPE" to "AP")
             val top = maxOf(p.ground, p.top ?: p.ground)
             drawLine(st.bad, Offset(x(p.d), y(p, top)), Offset(x(p.d), y(p, p.los)), strokeWidth = 1.5.dp.toPx(), pathEffect = PathEffect.dashPathEffect(floatArrayOf(6f, 6f)))
             drawCircle(st.bad, 5.dp.toPx(), Offset(x(p.d), y(p, top)))
+        }
+        // the touched point: from the top of what stands there to the line of sight
+        touched?.let { i ->
+            val p = pts[i]
+            val top = maxOf(p.ground, p.top ?: p.ground)
+            val clear = p.los - top
+            val tone = if (clear < 0) st.bad else if (clear < 0.6 * r[i]) st.warn else st.good
+            drawLine(muted.copy(alpha = 0.6f), Offset(x(p.d), 0f), Offset(x(p.d), hgt), strokeWidth = 1.dp.toPx())
+            drawLine(tone, Offset(x(p.d), y(p, top)), Offset(x(p.d), y(p, p.los)), strokeWidth = 3.dp.toPx())
+            drawCircle(tone, 4.dp.toPx(), Offset(x(p.d), y(p, top)))
+            drawCircle(sight, 4.dp.toPx(), Offset(x(p.d), y(p, p.los)))
         }
         // Fresnel view: the scale (metres from the line) and what is cut at the top
         if (zoom) {
@@ -396,6 +437,34 @@ internal fun ProfileChart(d: LosDto, ends: Pair<String, String> = "CPE" to "AP")
                 label.textAlign = android.graphics.Paint.Align.RIGHT
                 drawContext.canvas.nativeCanvas.drawText("ostacolo fino a ${above.toInt()} m sopra la linea", size.width - padR - 4.dp.toPx(), 14.dp.toPx(), label)
             }
+        }
+    }
+    val i = touched
+    if (i == null) {
+        Text("Tocca il profilo per vedere un punto del collegamento.", style = MaterialTheme.typography.labelSmall, color = muted)
+    } else {
+        val p = pts[i]
+        val top = maxOf(p.ground, p.top ?: p.ground)
+        val clear = p.los - top
+        val free = if (r[i] > 0) (clear / r[i] * 100).roundToInt().coerceIn(0, 100) else 100
+        val lines = listOfNotNull(
+            "${km(p.d)} da ${ends.first} · ${km(maxOf(0, pts.last().d - p.d))} da ${ends.second}",
+            if (p.los >= p.ground) "Linea di vista a ${fmt(p.los - p.ground)} m dal suolo" else "Linea di vista ${fmt(p.ground - p.los)} m sotto il suolo",
+            if (p.obstacle != null && p.top != null && p.top > p.ground) {
+                "${if (p.obstacle == "edificio") "Edificio" else "Alberi"} di ${fmt(p.top - p.ground)} m: linea " +
+                    if (clear >= 0) "${fmt(clear)} m sopra" else "${fmt(-clear)} m dentro"
+            } else if (clear < 0) {
+                "Terreno ${fmt(-clear)} m sopra la linea"
+            } else {
+                null
+            },
+            "Fresnel: raggio ${fmt(r[i])} m · libera $free%" + if (clear < 0.6 * r[i]) (if (clear < 0) " · ostruita" else " · invasa") else "",
+            "Suolo ${p.ground.roundToInt()} m s.l.m.",
+        )
+        Column(
+            Modifier.fillMaxWidth().clip(RoundedCornerShape(10.dp)).background(MaterialTheme.colorScheme.surfaceContainerHigh).padding(horizontal = 10.dp, vertical = 6.dp),
+        ) {
+            lines.forEachIndexed { n, l -> Text(l, style = MaterialTheme.typography.bodySmall, fontWeight = if (n == 0) FontWeight.Bold else FontWeight.Normal) }
         }
     }
 }

@@ -1013,7 +1013,8 @@ data class RosSectionDto(val id: String, val title: String, val commands: List<R
 data class RosCatalogDto(val sections: List<RosSectionDto>)
 
 @Serializable
-data class ApiErrorDto(val error: String = "", val minVersion: String? = null, val missing: List<String>? = null, val extra: JsonElement? = null)
+/** [ip]: with `blocked_ip`, the address the server sees (CrowdSec blocked it). */
+data class ApiErrorDto(val error: String = "", val minVersion: String? = null, val missing: List<String>? = null, val extra: JsonElement? = null, val ip: String? = null)
 
 /** Line of sight towards an AP over the terrain (chart points in metres). */
 @Serializable

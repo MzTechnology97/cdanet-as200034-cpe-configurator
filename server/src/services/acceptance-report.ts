@@ -227,7 +227,10 @@ export function acceptanceReportPdf(r: ReportData): Buffer {
     ]);
   }
   const wf = obj(a.wifi);
-  if (Object.keys(wf).length) {
+  if (wf.cable === true) {
+    section('Rete del router del cliente');
+    grid([['Collegamento del telefono', 'cavo Ethernet (adattatore USB-C) a una porta LAN del router: speedtest senza il Wi-Fi in mezzo']]);
+  } else if (Object.keys(wf).length) {
     section('Wi-Fi del router del cliente');
     grid([
       ['Rete', str(wf.ssid)],

@@ -30,6 +30,7 @@ ctx.victronSync.start();
 ctx.warehouse.start();
 ctx.platformHealth.start();
 ctx.nas.start();
+ctx.crowdsec.start();
 ctx.proactive.start();
 ctx.apLoad.start();
 ctx.optimizer.start();
@@ -45,6 +46,7 @@ const shutdown = async (signal: string) => {
   app.log.info({ signal }, 'shutting down');
   ctx.notify.stop();
   ctx.nas.stop();
+  ctx.crowdsec.stop();
   ctx.outages.stop();
   ctx.crmSync.stop();
   ctx.victronSync.stop();

@@ -33,6 +33,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.google.mlkit.vision.codescanner.GmsBarcodeScanning
 import it.cdanet.cpeconfigurator.core.AppContainer
+import it.cdanet.cpeconfigurator.network.NetworkHelper
 import it.cdanet.cpeconfigurator.data.JobDto
 import it.cdanet.cpeconfigurator.data.TemplateDto
 import it.cdanet.cpeconfigurator.provisioning.Phase
@@ -295,11 +296,11 @@ fun ProvisionApplyStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
     val state by c.provisioning.state.collectAsState()
     val pkg = state.pkg ?: return
     var now by remember { mutableStateOf(Instant.now()) }
-    var wifi by remember { mutableStateOf(c.network.wifiLink()) }
+    var wifi by remember { mutableStateOf(c.network.localLink()) }
     LaunchedEffect(Unit) {
         while (true) {
             now = Instant.now()
-            wifi = c.network.wifiLink()
+            wifi = c.network.localLink()
             delay(2000)
         }
     }
@@ -328,9 +329,10 @@ fun ProvisionApplyStep(c: AppContainer, onOpenCpeWeb: () -> Unit) {
     if (pkg.needsCpe || pkg.scannedOnSite) SiteCpeCard(c, pkg, enabled = !applying)
 
     SectionCard("1 · Collegati alla CPE") {
-        Text("Collega il telefono alla Wi-Fi di management della CPE (IP ${pkg.target.host}). Se Android avvisa che la rete non ha Internet, scegli di restare connesso.",
+        Text("Collega il telefono alla Wi-Fi di management della CPE (IP ${pkg.target.host}). Se Android avvisa che la rete non ha Internet, scegli di restare connesso. Con il cavo (adattatore USB-C Ethernet) alla LAN di una CPE che assegna indirizzi, l'app la trova con la discovery.",
             style = MaterialTheme.typography.bodySmall)
-        KeyValue("Wi-Fi attuale", wifi?.let { "${it.wifiSsid ?: "connessa"} · ${it.addresses.firstOrNull { a -> !a.contains(':') } ?: "senza IPv4"}" } ?: "nessuna")
+        KeyValue("Rete attuale", wifi?.let { "${if (it.isCable) "cavo Ethernet" else it.wifiSsid ?: "Wi-Fi connessa"} · ${it.addresses.firstOrNull { a -> !a.contains(':') } ?: "senza IPv4"}" } ?: "nessuna")
+        if (c.network.ethernetWithoutAddress()) Text(NetworkHelper.NO_CABLE_ADDRESS, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
         SecondaryButton(onClick = {
             val i = if (Build.VERSION.SDK_INT >= 29) Intent(AndroidSettings.Panel.ACTION_WIFI) else Intent(AndroidSettings.ACTION_WIFI_SETTINGS)
             context.startActivity(i)

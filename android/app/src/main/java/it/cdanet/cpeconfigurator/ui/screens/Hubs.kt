@@ -126,8 +126,8 @@ fun TabbedHub(tabs: List<HubTab>, selected: Int, onSelect: (Int) -> Unit) {
     }
 }
 
-private const val CPE_WIFI_HUB = "alla Wi-Fi della CPE (management, es. \"LBE-5AC-Gen2:xxxx\") oppure a quella del router del cliente"
-private const val LAN_WIFI = "alla Wi-Fi della rete locale da analizzare"
+private const val CPE_WIFI_HUB = "alla Wi-Fi della CPE (management, es. \"LBE-5AC-Gen2:xxxx\") oppure a quella del router del cliente, o con il cavo alla LAN (adattatore USB-C Ethernet)"
+private const val LAN_WIFI = "alla Wi-Fi della rete locale da analizzare, o con il cavo (adattatore USB-C Ethernet)"
 
 /** "Le mie installazioni": what is left to do, the history and the state of the installed CPEs. */
 @Composable
@@ -188,7 +188,7 @@ fun CpeHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit, onAcceptance
     // the CPE every tab works on, found by the discovery (or picked from its list), above the tabs
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (tabs.isNotEmpty()) Box(Modifier.padding(horizontal = 16.dp).padding(top = 8.dp)) {
-            WifiRequired(c, CPE_WIFI_HUB, "La discovery cerca la CPE nella rete locale della Wi-Fi.") { ConnectedCpeBar(c, onOpenWeb) }
+            WifiRequired(c, CPE_WIFI_HUB, "La discovery cerca la CPE nella rete locale (Wi-Fi o cavo).") { ConnectedCpeBar(c, onOpenWeb) }
         }
         Box(Modifier.weight(1f)) { TabbedHub(tabs, selected, onSelect) }
     }
@@ -215,7 +215,7 @@ fun hubTabTitles(s: Screen, m: Map<String, Boolean>, admin: Boolean): List<Strin
 @Composable
 fun LanHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit, onPortScan: (String) -> Unit) {
     val tabs = listOf(
-        HubTab(LAN_TABS[0], R.drawable.ic_radar, scroll = false) { WifiRequired(c, LAN_WIFI, "Lo scanner esamina la subnet della Wi-Fi collegata.") { IpScannerScreen(c, onPortScan = onPortScan) } },
+        HubTab(LAN_TABS[0], R.drawable.ic_radar, scroll = false) { WifiRequired(c, LAN_WIFI, "Lo scanner esamina la subnet della rete collegata (Wi-Fi o cavo).") { IpScannerScreen(c, onPortScan = onPortScan) } },
         HubTab(LAN_TABS[1], R.drawable.ic_device_hub) { ReadingColumn { WifiRequired(c, LAN_WIFI, "La discovery funziona solo sulla stessa LAN.") { LanDiscoveryScreen(c) } } },
         HubTab(LAN_TABS[2], R.drawable.ic_manage_search) { ReadingColumn { WifiRequired(c, LAN_WIFI, "Le porte di host privati si verificano dalla stessa rete locale.") { PortScannerScreen(c) } } },
     )
@@ -247,7 +247,7 @@ fun DevicesHub(c: AppContainer, selected: Int, onSelect: (Int) -> Unit) {
     TabbedHub(
         listOf(
             HubTab(DEVICES_TABS[0], R.drawable.ic_memory) { WifiRequired(c, LAN_WIFI, "Gli apparati SNMP si interrogano in rete locale.") { SnmpScreen(c) } },
-            HubTab(DEVICES_TABS[1], R.drawable.ic_videocam) { WifiRequired(c, "alla Wi-Fi della rete delle telecamere", "ONVIF, SADP e RTSP funzionano sulla rete locale.") { CameraScreen(c) } },
+            HubTab(DEVICES_TABS[1], R.drawable.ic_videocam) { WifiRequired(c, "alla Wi-Fi della rete delle telecamere, o con il cavo", "ONVIF, SADP e RTSP funzionano sulla rete locale.") { CameraScreen(c) } },
         ),
         selected,
         onSelect,

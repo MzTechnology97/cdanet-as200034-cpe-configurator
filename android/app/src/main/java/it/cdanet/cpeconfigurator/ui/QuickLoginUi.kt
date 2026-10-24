@@ -97,6 +97,9 @@ private fun dropOffline(c: AppContainer) {
 /** This phone is blocked on the server (failed logins): the key stays, the offline session goes. */
 private fun banned(e: Throwable) = (e as? ApiException)?.code == "banned"
 
+/** The server's protection blocks the address of this network (CrowdSec): said as it is, not as «no network». */
+private fun blockedIp(e: Throwable) = (e as? ApiException)?.code == "blocked_ip"
+
 /**
  * No Internet to sign in: the session of the last contact with the server, kept on the phone for
  * the hours the admin allows, for the same account the phone remembers. [lock]: fingerprint/face
@@ -131,7 +134,7 @@ suspend fun autoLogin(c: AppContainer): String? {
         if (keyGone(e)) keyRefused(c)
         else if (banned(e)) dropOffline(c)
         // no server (closed app, phone off, roof without signal): go on with the session on the phone
-        else if (e is java.io.IOException && (c.session.isOffline || resumeOffline(c, lock = false))) return null
+        else if (e is java.io.IOException && !blockedIp(e) && (c.session.isOffline || resumeOffline(c, lock = false))) return null
         e.message ?: e.toString()
     }
 }

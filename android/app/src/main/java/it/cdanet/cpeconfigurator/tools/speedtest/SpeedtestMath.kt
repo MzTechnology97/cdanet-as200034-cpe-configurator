@@ -35,6 +35,8 @@ data class RouterWifi(
     val neighborsSameChannel: Int? = null,
     val neighborsOverlapping: Int? = null,
     val suggestedChannel: Int? = null,
+    /** The test ran on a cable to the router's LAN (USB-C Ethernet adapter), not on its Wi-Fi. */
+    val cable: Boolean? = null,
 )
 
 /** Rules of the speed test (pure, tested). */

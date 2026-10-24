@@ -12,9 +12,10 @@
 #   sudo cdanet-cpe geocoder [logs|reset]   local OpenStreetMap (Nominatim) status
 #   sudo cdanet-cpe map [update|remove]     console maps (Protomaps basemap)
 #   sudo cdanet-cpe https-ca                 CA of the self-signed HTTPS (to trust it on PCs/phones)
+#   sudo cdanet-cpe crowdsec [decisions|alerts|logs|cscli ...]   CrowdSec status and its blocks
 set -eu
 DEPLOY_DIR="${DEPLOY_DIR:-/opt/cdanet-cpe}"
-case "${1:-}" in ""|-h|--help|help) sed -n '2,14p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
+case "${1:-}" in ""|-h|--help|help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//'; exit 0 ;; esac
 [ "$(id -u)" -eq 0 ] || { echo "Usa: sudo cdanet-cpe $*" >&2; exit 1; }
 dc() { docker compose -f "$DEPLOY_DIR/docker-compose.yml" --project-directory "$DEPLOY_DIR" "$@"; }
 case "${1:-}" in
@@ -54,6 +55,19 @@ case "${1:-}" in
           dc logs --tail=15 nominatim
         fi
         ;;
+    esac
+    ;;
+  crowdsec)
+    if [ -z "$(dc ps -q crowdsec 2>/dev/null || true)" ]; then
+      echo "CrowdSec non attivo. Si attiva dalla console (Impostazioni server → Infrastruttura) o con: sudo CDANET_CROWDSEC=1 ./deploy/install-debian.sh"
+      exit 1
+    fi
+    case "${2:-status}" in
+      decisions) dc exec -T crowdsec cscli decisions list ;;
+      alerts) dc exec -T crowdsec cscli alerts list ;;
+      logs) dc logs -f --tail=100 crowdsec ;;
+      cscli) shift 2; dc exec -T crowdsec cscli "$@" ;;
+      *) dc exec -T crowdsec cscli metrics show acquisition scenarios decisions bouncers 2>/dev/null || dc exec -T crowdsec cscli metrics ;;
     esac
     ;;
   https-ca)

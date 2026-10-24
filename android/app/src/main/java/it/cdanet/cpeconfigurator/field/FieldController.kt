@@ -269,7 +269,7 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
         val host = c.baseUrl.substringAfter("://").substringBefore('/').substringBefore(':')
         stop()
         try {
-            network.onWifi { it.cdanet.cpeconfigurator.install.CpeRelinker(onStage).relink(host, listOfNotNull(sshPort, discoveredSshPort, access?.sshPort, 22).distinct(), cr.username, cr.password, ssid, psk, lockMac) }
+            network.onLocal { it.cdanet.cpeconfigurator.install.CpeRelinker(onStage).relink(host, listOfNotNull(sshPort, discoveredSshPort, access?.sshPort, 22).distinct(), cr.username, cr.password, ssid, psk, lockMac) }
         } finally {
             client = null
         }
@@ -288,11 +288,11 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
         try {
             block {
                 // the Wi-Fi may be a new network after a reboot: bind to the current one each time
-                network.onWifi {
+                network.onLocal {
                     var last: Exception? = null
                     for (p in ports) {
                         try {
-                            return@onWifi it.cdanet.cpeconfigurator.ssh.SshConnection.connect(host, p, cr.username, cr.password)
+                            return@onLocal it.cdanet.cpeconfigurator.ssh.SshConnection.connect(host, p, cr.username, cr.password)
                         } catch (e: java.io.IOException) {
                             if (e.message.orEmpty().startsWith("Autenticazione")) throw e
                             last = e
@@ -317,8 +317,8 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
         val a = access
         val m = manual
         if (a == null && m == null) throw IllegalStateException("Credenziali CPE non disponibili: apri lo strumento una volta con Internet attivo (dopo l'accesso) oppure inseriscile a mano")
-        val wifi = network.wifiNetwork() ?: throw IllegalStateException("Collegati alla Wi-Fi della CPE o del router del cliente")
-        val link = network.wifiLink()
+        val wifi = network.localNetwork() ?: throw IllegalStateException(if (network.ethernetWithoutAddress()) it.cdanet.cpeconfigurator.network.NetworkHelper.NO_CABLE_ADDRESS else "Collegati alla Wi-Fi della CPE o del router del cliente, o con il cavo (adattatore USB-C Ethernet)")
+        val link = network.localLink()
         val hosts = (listOfNotNull(manualHost) + listOfNotNull(link?.gateway) + (a?.hosts ?: listOf("192.168.1.20"))).distinct().filter { Ip.isPrivate(it) }
         // typed by hand first, then the CDA Net standard ones, then factory airOS (ubnt/ubnt)
         val creds = listOfNotNull(
@@ -378,6 +378,6 @@ class FieldController(private val api: ApiClient, private val network: NetworkHe
                 else "La CPE rifiuta le credenziali CDA Net e quelle di fabbrica (ubnt/ubnt): inserisci quelle della CPE",
             )
         }
-        throw IllegalStateException("Nessuna CPE trovata: né la discovery Ubiquiti né ${hosts.joinToString()} rispondono. Verifica la Wi-Fi a cui sei collegato o usa «IP manuale»")
+        throw IllegalStateException("Nessuna CPE trovata: né la discovery Ubiquiti né ${hosts.joinToString()} rispondono. Verifica la Wi-Fi o il cavo a cui sei collegato o usa «IP manuale»")
     }
 }

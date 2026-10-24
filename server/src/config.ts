@@ -23,6 +23,11 @@ const envSchema = z.object({
   TRUST_PROXY: z.string().default('loopback,uniquelocal'),
   // never banned by IP after failed logins (besides loopback and the private networks): IPs or CIDRs
   LOGIN_BAN_IGNORE: z.string().default(''),
+  // CrowdSec (optional container): its local API. The key of this app as a bouncer is the one the
+  // updater writes in the infra directory while CrowdSec is on (not CROWDSEC_API_KEY of .env, which
+  // stays there when it is turned off); CROWDSEC_BOUNCER_KEY only for a setup without the updater.
+  CROWDSEC_URL: z.string().default('http://crowdsec:8080'),
+  CROWDSEC_BOUNCER_KEY: z.string().default(''),
   DB_PATH: z.string().default('./data/cdanet.sqlite'),
   // airOS firmware images for the field upgrade (default: 'firmware' next to the database).
   FIRMWARE_DIR: z.string().optional(),
@@ -150,6 +155,7 @@ export interface Config {
   logLevel: Env['LOG_LEVEL'];
   trustProxy: string;
   loginBanIgnore: string;
+  crowdsec: { url: string; apiKey: string };
   dbPath: string;
   photosDir: string;
   firmwareDir: string;
@@ -273,6 +279,7 @@ export function loadConfig(source: NodeJS.ProcessEnv = process.env, masterKey?: 
     logLevel: e.LOG_LEVEL,
     trustProxy: e.TRUST_PROXY,
     loginBanIgnore: e.LOGIN_BAN_IGNORE,
+    crowdsec: { url: e.CROWDSEC_URL.replace(/\/+$/, ''), apiKey: e.CROWDSEC_BOUNCER_KEY },
     dbPath: e.DB_PATH,
     ouiDir: e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-oui-${process.pid}`) : join(dirname(e.DB_PATH), 'oui'),
     dem: { url: e.DEM_URL, dir: e.DB_PATH === ':memory:' ? join(tmpdir(), `cdanet-dem-${process.pid}`) : join(dirname(e.DB_PATH), 'dem') },
