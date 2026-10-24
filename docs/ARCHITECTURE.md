@@ -33,7 +33,7 @@ Tutte sotto `/api`, tranne il connettore MCP (`/mcp`, `/.well-known/oauth-*`, `/
 
 | Area | Percorsi | Chi |
 |---|---|---|
-| Pubbliche | `/api/health`, `/api/auth/login`, `/api/auth/login/totp`, `/api/auth/device-login`, `/api/mobile/update`, `/api/mobile/apk` | pubblico, con limiti e blocco degli accessi |
+| Pubbliche | `/api/health`, `/api/auth/login`, `/api/auth/login/totp`, `/api/auth/device-login`, `/api/mobile/update`, `/api/mobile/apk`, `/privacy` | pubblico, con limiti e blocco degli accessi |
 | Account | `/api/auth/*` (me, sessioni, verifica in due passaggi, accesso rapido, scorciatoie), `/api/meta` | utente |
 | Provisioning | `/api/provisioning/plan`, `/jobs`, `/jobs/:id/result`, `/templates`, collaudo, foto, rapporto PDF, `/api/wireless-networks`, sostituzione | utente (installazioni CDA Net: `requireCdaWork`); il pacchetto del job solo all'app (`X-CDA-Client: android/x.y.z` ≥ versione minima) |
 | Campo | `/api/field/*` (credenziali della CPE, ripuntamento, registrazione di una CPE, eventi offline, diagnosi dell'intervento), `/api/speedtest*`, `/api/firmware/*` | utente |

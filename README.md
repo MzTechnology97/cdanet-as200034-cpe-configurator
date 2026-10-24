@@ -67,7 +67,7 @@ Per la console con il ricaricamento immediato: `cd console && npm run dev` (vedi
 
 Per l'app Android:
 - apri `android/` in Android Studio (Gradle 8.11.1 da `gradle-wrapper.properties`);
-- oppure, con Gradle installato: `gradle -p android testDebugUnitTest assembleDebug lintRelease`. Con `CDA_DEFAULT_BACKEND=http://10.0.2.2:<porta>` la build di debug parla con un server locale dall'emulatore.
+- oppure, con Gradle installato: `gradle -p android testServerDebugUnitTest assembleServerDebug lintServerRelease lintPlayRelease` (bundle per Google Play: `bundlePlayRelease`, vedi [docs/GOOGLE-PLAY.md](docs/GOOGLE-PLAY.md)). Con `CDA_DEFAULT_BACKEND=http://10.0.2.2:<porta>` la build di debug parla con un server locale dall'emulatore.
 
 ## Documentazione
 
@@ -83,6 +83,7 @@ Per l'app Android:
 - [docs/MCP.md](docs/MCP.md): Connetti il tuo Claude
 - [docs/ACCESSI-BLOCCATI.md](docs/ACCESSI-BLOCCATI.md), [SECURITY.md](SECURITY.md)
 - [docs/DEPLOY.md](docs/DEPLOY.md): installazione Debian, auto-update, firma APK, backup
+- [docs/GOOGLE-PLAY.md](docs/GOOGLE-PLAY.md): pubblicazione dell'app su Google Play
 - [docs/ROADMAP.md](docs/ROADMAP.md): cosa è uscito, cosa resta da fare e da verificare sul campo
 - [docs/MIGRATION-v1.md](docs/MIGRATION-v1.md): passaggio dalla v0.5.x (storico)
 - Guide d'uso: guida installatore (`/wiki/` del server, anche dall'app) e guida amministratore (nella console)
